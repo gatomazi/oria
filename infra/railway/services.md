@@ -13,6 +13,37 @@ Projeto Railway: **Oria** (novo) · três services apontando para o **mesmo** re
 > [`../../docs/operations/railway-bootstrap.md`](../../docs/operations/railway-bootstrap.md);
 > estratégia de cutover no runbook, §20.
 
+## Comandos finais por service (rodada 22)
+
+O primeiro deploy falhou com **"No start command detected"** porque foi construído a partir da **raiz**
+do monorepo. A raiz é orquestradora: o `package.json` dela só chama subprocessos e **não tem** `start`
+— e não vai ter. Cada service constrói a partir do seu **Root Directory**.
+
+| service | Root Directory | Build Command | Start Command | Pre-deploy | Healthcheck |
+|---|---|---|---|---|---|
+| `oria-panel` | `apps/panel` | `npm ci && npm run build` | `npm start` | bloco do runbook §8.2 | `GET /` (não há `/health`) |
+| `oria-creatives` | `apps/creative-generator` | `pip install -r requirements.txt` | `gunicorn 'creative_core.service:create_app()'` | — | `GET /v1/health` |
+| `oria-whatsapp` | `services/whatsapp` | *(Dockerfile do próprio serviço)* | *(Dockerfile: `CMD ["./webhook"]`)* | — | `GET /health` |
+
+Por que cada um é assim:
+
+- **`oria-panel`** — `package.json` com `start` (`node server.js`), `build` (instala e builda o admin) e
+  `engines.node >= 20.11` (OPS-15; declarado na rodada 22, antes o Railpack escolheria a versão).
+  `package-lock.json` está na raiz do service, e o admin tem o dele em `admin/package-lock.json`.
+  O `postinstall` já buildaria o admin; o Build Command repete `npm run build` de propósito, para o
+  `admin/dist` existir mesmo se o builder instalar com scripts desligados.
+- **`oria-creatives`** — a pasta tem `requirements.txt` (Pillow, openai, gunicorn), `pyproject.toml`
+  e `.python-version` (3.12). **O Build Command precisa ser explícito:** o `pyproject` declara só
+  `Pillow` como dependência de runtime (openai e gunicorn são o extra `service`, porque o core é uma
+  biblioteca pura), então um build que instale pelo `pyproject` subiria **sem gunicorn** e o start
+  quebraria. Instalar pelo `requirements.txt` resolve, e é o mesmo comando do serviço legado.
+  O start vem do `Procfile` (`web: gunicorn 'creative_core.service:create_app()'`); o bind e os
+  workers ficam em `gunicorn.conf.py`, sem `$PORT` no comando.
+- **`oria-whatsapp`** — tem `Dockerfile` multi-stage com `go.mod`/`go.sum` na mesma pasta. Railway
+  constrói pelo Dockerfile; não há Build/Start para configurar.
+
+Nenhum runtime foi unificado e nenhum componente virou "aplicação da raiz".
+
 ## Visão geral
 
 | service | root directory | runtime | público? | banco | volume |

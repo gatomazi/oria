@@ -35,10 +35,12 @@ ou novo".
 
 ### 4. Service `oria-panel`
 
-- [ ] Source: repositório `gatomazi/oria`, **Root Directory** `apps/panel`.
+- [ ] Source: repositório `gatomazi/oria`, **Root Directory** `apps/panel`. **Sem Root Directory, o
+      build sai da raiz e falha com "No start command detected"** — a raiz é orquestradora e não tem `start`.
 - [ ] Watch Paths: `/apps/panel/**` (e `/contracts/**`, se quiser rebuild ao mudar contrato).
-- [ ] Build: padrão (o `postinstall` builda o admin).
-- [ ] Start: `npm start`.
+- [ ] Build Command: `npm ci && npm run build` (o `postinstall` já buildaria o admin; repetir garante
+      o `admin/dist` mesmo com scripts desligados).
+- [ ] Start Command: `npm start` (`node server.js`). Node vem de `engines.node >= 20.11`.
 - [ ] Healthcheck: o painel **não tem** `/health` hoje — usar `GET /` ou deixar sem healthcheck até
       existir um endpoint próprio (`infra/railway/services.md`).
 - [ ] Ingress público: sim.
@@ -46,8 +48,10 @@ ou novo".
 ### 5. Service `oria-creatives`
 
 - [ ] Root Directory `apps/creative-generator`; Watch Paths `/apps/creative-generator/**`.
-- [ ] Runtime Python 3.12 (`.python-version` + `requirements.txt`).
-- [ ] Start: `gunicorn 'creative_core.service:create_app()'`.
+- [ ] Runtime Python 3.12 (`.python-version`).
+- [ ] Build Command **explícito**: `pip install -r requirements.txt`. Sem isso, um build pelo
+      `pyproject.toml` instala só Pillow (gunicorn e openai são o extra `service`) e o start quebra.
+- [ ] Start Command: `gunicorn 'creative_core.service:create_app()'` (do `Procfile`).
 - [ ] Healthcheck: `/v1/health`.
 - [ ] **Sem domínio público** (OPS-01). Só rede privada.
 - [ ] Variável `CREATIVE_CORE_SERVICE_TOKEN` (≥ 32) antes do primeiro deploy: sem ela o serviço não sobe.
@@ -55,7 +59,7 @@ ou novo".
 ### 6. Service `oria-whatsapp`
 
 - [ ] Root Directory `services/whatsapp`; Watch Paths `/services/whatsapp/**`.
-- [ ] Build pelo `Dockerfile` do próprio serviço.
+- [ ] Build pelo `Dockerfile` do próprio serviço (nada a configurar: `CMD ["./webhook"]`).
 - [ ] Healthcheck: `/health`.
 - [ ] Ingress público: **sim** (webhook da Meta).
 

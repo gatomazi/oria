@@ -40,6 +40,9 @@
     "extract:gentilico:dry": "node extract-gentilico.mjs usesul --dry",
     "test:unit": "node --test test/*.test.js"
   },
+  "engines": {
+    "node": ">=20.11"
+  },
   "dependencies": {
     "express": "^4.19.2",
     "node-pg-migrate": "^9.0.0",
