@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/Persona.schema.json",
+  "title": "Persona",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "label"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "age_range": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "appearance": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "style": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "behavior": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "automatic",
+        "custom"
+      ]
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "id": "use_origens",
+  "name": "Use Origens",
+  "description": "Marca de camisetas premium de identidade regional (Use Sul / Use Centro / Use Norte). Configuração da marca como cliente do core — nenhuma regra desta marca vive no código do core.",
+  "positioning": [
+    "regional contemporâneo",
+    "premium acessível",
+    "não souvenir",
+    "camisetas premium de identidade regional para quem tem orgulho de onde veio"
+  ],
+  "audience": [
+    "pessoas com orgulho da cidade ou do estado de origem",
+    "quem mora longe da cidade natal e quer vestir a origem",
+    "quem presenteia alguém com a cidade dele"
+  ],
+  "tone": ["emocional", "direto", "elegante", "regional sem caricatura"],
+  "visualStyle": ["editorial", "clean", "natural", "lifestyle", "premium"],
+  "colors": ["#4d543d", "#d6ba8d", "#1a1e14", "#f4efe6"],
+  "typographyNotes": ["headline serifada de alto contraste (Playfair Display)", "apoio em sans geométrica limpa (Inter)"],
+  "preferredContexts": [
+    "ruas, praças e arquitetura reais da cidade",
+    "cotidiano contemporâneo da região",
+    "luz natural e paleta da própria região"
+  ],
+  "avoid": [
+    "caricatura regional",
+    "excesso de símbolos",
+    "souvenir turístico",
+    "excesso de texto",
+    "mapas ou silhuetas geográficas como ornamento",
+    "campanha turística de estado"
+  ],
+  "manualNotes": [
+    "Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.",
+    "Cuia de chimarrão só no Sul (RS/SC/PR)."
+  ],
+  "enabledAngles": [
+    "IDENTIDADE_ORIGEM", "LIFESTYLE_COTIDIANO", "ORGULHO_DISCRETO", "PERTENCIMENTO", "NOSTALGIA_ORIGEM",
+    "CABIDE", "PRODUTO_ESTAMPA", "CAIMENTO", "CLOSE_ESTAMPA", "CLOSE_BOLSO", "PREMIUM_ESTILO",
+    "CREATOR_STYLE", "PRESENTE_AFETO"
+  ],
+  "angleLabels": {
+    "IDENTIDADE_ORIGEM": "Identidade / Origem",
+    "LIFESTYLE_COTIDIANO": "Lifestyle cotidiano",
+    "ORGULHO_DISCRETO": "Orgulho discreto",
+    "PERTENCIMENTO": "Pertencimento",
+    "NOSTALGIA_ORIGEM": "Nostalgia / Origem",
+    "CABIDE": "Cabide",
+    "PRODUTO_ESTAMPA": "Flatlay",
+    "CAIMENTO": "Caimento",
+    "CLOSE_ESTAMPA": "Close na estampa",
+    "CLOSE_BOLSO": "Close no bolso / peito esquerdo",
+    "PREMIUM_ESTILO": "Premium / Estilo",
+    "CREATOR_STYLE": "Creator-style",
+    "PRESENTE_AFETO": "Presente / Afeto"
+  },
+  "headlineStyle": ["curta e afetiva", "fala de origem sem clichê", "nunca urgência falsa"],
+  "ctaStyle": ["descreve a próxima ação real", "ex.: Procure a sua no site →"],
+  "strategyRules": {
+    "REMARKETING": {"signatureByRegion": {"Sul": "USE SUL", "Centro-Oeste": "USE CENTRO", "Norte": "USE NORTE"}}
+  },
+  "defaultNicheKitId": "fashion",
+  "defaultContextProvider": "geographic",
+  "schemaVersion": 1,
+  "version": 1
+}

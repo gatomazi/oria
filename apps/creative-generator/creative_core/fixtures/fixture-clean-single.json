@@ -1,0 +1,66 @@
+{
+  "name": "fixture-clean-single",
+  "description": "Ângulos Limpos, 1 produto, cliente Use Origens (Brand Kit use_origens + Niche Kit fashion), contexto geográfico explícito (SC / Vale Europeu). Imagem sem overlay; funil só na copy externa.",
+  "input": {
+    "creative_id": "11111111-1111-4111-8111-111111111111",
+    "strategy": "CLEAN_ANGLES",
+    "product_mode": "single_product",
+    "products": [
+      {
+        "id": "prod-blumenau",
+        "brandId": "use_origens",
+        "name": "Camiseta Blumenau",
+        "type": "camiseta",
+        "description": "estampa de mapa da cidade no peito",
+        "referenceImages": ["tenant-demo/products/prod-blumenau/front.png"],
+        "metadata": {"city": "Blumenau", "state": "SC"}
+      }
+    ],
+    "brand_kit_id": "use_origens",
+    "angle_id": "LIFESTYLE_COTIDIANO",
+    "placement_id": "FEED_4X5",
+    "persona_mode": "automatic",
+    "context": {
+      "mode": "geographic",
+      "subject": {"name": "Blumenau", "metadata": {"city": "Blumenau", "state": "SC"}},
+      "context_id": "vale_europeu"
+    },
+    "copy": {"generate": true, "funnel_stages": ["TOFU", "MOFU", "BOFU"]},
+    "quality": "medium",
+    "seed": 3
+  },
+  "expected_plan": {
+    "strategy": "CLEAN_ANGLES",
+    "internal_strategy_id": "ANGULOS_LIMPOS",
+    "product_mode": "single_product",
+    "funnel_stage": null,
+    "remarketing_intent": null,
+    "layout": null,
+    "overlay.allowed": false,
+    "overlay.headline": null,
+    "overlay.cta": null,
+    "context.context_id": "geo:SC:vale_europeu",
+    "context.provider": "geographic",
+    "angle.label": "Lifestyle cotidiano",
+    "placement.width": 1080,
+    "placement.height": 1350,
+    "model.model": "gpt-image-2",
+    "model.size": "1088x1360",
+    "brand_kit.id": "use_origens",
+    "niche_kit.id": "fashion",
+    "copy.generate": true,
+    "references.0.role": "product_art"
+  },
+  "expected_output": {
+    "status": "completed",
+    "asset.mime_type": "image/png",
+    "asset.width": 1080,
+    "asset.height": 1350,
+    "metadata.strategy": "CLEAN_ANGLES",
+    "metadata.product_mode": "single_product",
+    "metadata.funnel_stage": null
+  },
+  "validations": ["clean_angles_has_no_overlay", "product_count_within_limits", "context_profile_approved"],
+  "prompt_must_contain": ["MODO ÂNGULOS LIMPOS", "Camiseta Blumenau", "FORMATO: Feed 4:5"],
+  "prompt_must_not_contain": ["TEXTO NO CRIATIVO", "HEADLINE:", "CTA —"]
+}

@@ -1,0 +1,664 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/CreativePlan.schema.json",
+  "title": "CreativePlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "plan_id",
+    "creative_id",
+    "schema_version",
+    "strategy",
+    "internal_strategy_id",
+    "product_mode",
+    "products",
+    "angle",
+    "placement",
+    "context",
+    "brand_kit",
+    "niche_kit",
+    "overlay",
+    "copy",
+    "references",
+    "prompt",
+    "model",
+    "versions",
+    "validations",
+    "warnings"
+  ],
+  "properties": {
+    "plan_id": {
+      "type": "string"
+    },
+    "creative_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
+    "strategy": {
+      "type": "string",
+      "enum": [
+        "CLEAN_ANGLES",
+        "REMARKETING",
+        "FUNNEL_VISUAL"
+      ]
+    },
+    "internal_strategy_id": {
+      "type": "string"
+    },
+    "product_mode": {
+      "type": "string",
+      "enum": [
+        "single_product",
+        "multi_product"
+      ]
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CreativeProduct"
+      },
+      "minItems": 1
+    },
+    "angle": {
+      "$ref": "#/$defs/Angle"
+    },
+    "placement": {
+      "$ref": "#/$defs/Placement"
+    },
+    "persona": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Persona"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "context": {
+      "$ref": "#/$defs/ResolvedContext"
+    },
+    "brand_kit": {
+      "$ref": "#/$defs/KitRef"
+    },
+    "niche_kit": {
+      "$ref": "#/$defs/KitRef"
+    },
+    "funnel_stage": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "TOFU",
+            "MOFU",
+            "BOFU"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "remarketing_intent": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "site_visitor",
+            "product_view",
+            "collection_discovery",
+            "cart",
+            "checkout",
+            "social_proof",
+            "objection"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "layout": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "overlay": {
+      "$ref": "#/$defs/OverlaySpec"
+    },
+    "copy": {
+      "$ref": "#/$defs/CopyOptions"
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ReferenceRole"
+      }
+    },
+    "prompt": {
+      "$ref": "#/$defs/PromptInfo"
+    },
+    "model": {
+      "$ref": "#/$defs/ModelSelection"
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "validations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ValidationCheck"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "Angle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "uses_person",
+        "apparel_only",
+        "multi_product_limit"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "IDENTIDADE_ORIGEM",
+            "LIFESTYLE_COTIDIANO",
+            "ORGULHO_DISCRETO",
+            "PERTENCIMENTO",
+            "NOSTALGIA_ORIGEM",
+            "CABIDE",
+            "PRODUTO_ESTAMPA",
+            "CAIMENTO",
+            "CLOSE_ESTAMPA",
+            "CLOSE_BOLSO",
+            "PREMIUM_ESTILO",
+            "CREATOR_STYLE",
+            "PRESENTE_AFETO"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "uses_person": {
+          "type": "boolean"
+        },
+        "apparel_only": {
+          "type": "boolean"
+        },
+        "multi_product_limit": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "CopyOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generate"
+      ],
+      "properties": {
+        "generate": {
+          "type": "boolean"
+        },
+        "funnel_stages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "TOFU",
+              "MOFU",
+              "BOFU"
+            ]
+          },
+          "maxItems": 3
+        }
+      }
+    },
+    "CreativeProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "type",
+        "referenceImages"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "brandId": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "referenceImages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "KitRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "ModelSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task",
+        "model",
+        "quality",
+        "size"
+      ],
+      "properties": {
+        "task": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "quality": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "size": {
+          "type": "string"
+        }
+      }
+    },
+    "OverlaySpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed",
+        "clean"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "headline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subheadline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "badges": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "benefits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "search_bar_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chips": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "text_density": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "minimal",
+                "balanced",
+                "commercial"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cta_emphasis": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "subtle",
+                "medium",
+                "strong"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clean": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Persona": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "age_range": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "appearance": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "style": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "behavior": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "custom"
+          ]
+        }
+      }
+    },
+    "Placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "width",
+        "height",
+        "api_size"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "FEED_4X5",
+            "STORY_9X16"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "api_size": {
+          "type": "string"
+        }
+      }
+    },
+    "PromptInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "sections",
+        "sha256",
+        "prompt_version"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PromptSection"
+          }
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "prompt_version": {
+          "type": "integer"
+        }
+      }
+    },
+    "PromptSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "length"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "length": {
+          "type": "integer"
+        }
+      }
+    },
+    "ReferenceRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "product_id",
+        "role",
+        "order"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "product_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "product_art",
+            "layout_only"
+          ]
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "ResolvedContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_id",
+        "context_type",
+        "provider",
+        "scene",
+        "status",
+        "profile_version"
+      ],
+      "properties": {
+        "context_id": {
+          "type": "string"
+        },
+        "context_type": {
+          "type": "string",
+          "enum": [
+            "geographic",
+            "niche",
+            "custom",
+            "bond",
+            "neutral"
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "scene": {
+          "type": "string"
+        },
+        "supporting_element": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "avoid": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "approved",
+            "rejected"
+          ]
+        },
+        "profile_version": {
+          "type": "integer"
+        }
+      }
+    },
+    "ValidationCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule",
+        "passed"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

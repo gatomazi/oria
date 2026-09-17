@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/ContextProfile.schema.json",
+  "title": "ContextProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contextId",
+    "contextType",
+    "subject",
+    "status",
+    "schemaVersion",
+    "promptVersion",
+    "profileVersion"
+  ],
+  "properties": {
+    "contextId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "contextType": {
+      "type": "string",
+      "enum": [
+        "geographic",
+        "niche",
+        "custom",
+        "bond",
+        "neutral"
+      ]
+    },
+    "subject": {
+      "$ref": "#/$defs/ContextSubject"
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "sceneContexts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "visualSignatures": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "activities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "environment": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "domainElements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "avoid": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "approved",
+        "rejected"
+      ]
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "promptVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "profileVersion": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "$defs": {
+    "ContextSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

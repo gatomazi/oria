@@ -1,0 +1,904 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/CreativeRequest.schema.json",
+  "title": "CreativeRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "strategy",
+    "product_mode",
+    "products",
+    "angle_id",
+    "placement_id"
+  ],
+  "properties": {
+    "creative_id": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "strategy": {
+      "type": "string",
+      "enum": [
+        "CLEAN_ANGLES",
+        "REMARKETING",
+        "FUNNEL_VISUAL"
+      ]
+    },
+    "product_mode": {
+      "type": "string",
+      "enum": [
+        "single_product",
+        "multi_product"
+      ]
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CreativeProduct"
+      },
+      "minItems": 1,
+      "maxItems": 6
+    },
+    "brand_kit": {
+      "$ref": "#/$defs/BrandKit"
+    },
+    "brand_kit_id": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "niche_kit": {
+      "$ref": "#/$defs/NicheKit"
+    },
+    "niche_kit_id": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "angle_id": {
+      "type": "string",
+      "enum": [
+        "IDENTIDADE_ORIGEM",
+        "LIFESTYLE_COTIDIANO",
+        "ORGULHO_DISCRETO",
+        "PERTENCIMENTO",
+        "NOSTALGIA_ORIGEM",
+        "CABIDE",
+        "PRODUTO_ESTAMPA",
+        "CAIMENTO",
+        "CLOSE_ESTAMPA",
+        "CLOSE_BOLSO",
+        "PREMIUM_ESTILO",
+        "CREATOR_STYLE",
+        "PRESENTE_AFETO"
+      ]
+    },
+    "placement_id": {
+      "type": "string",
+      "enum": [
+        "FEED_4X5",
+        "STORY_9X16"
+      ]
+    },
+    "persona_mode": {
+      "type": "string",
+      "enum": [
+        "automatic",
+        "custom",
+        "none"
+      ]
+    },
+    "persona": {
+      "$ref": "#/$defs/Persona"
+    },
+    "context": {
+      "$ref": "#/$defs/ContextSelection"
+    },
+    "funnel_stage": {
+      "type": "string",
+      "enum": [
+        "TOFU",
+        "MOFU",
+        "BOFU"
+      ]
+    },
+    "remarketing": {
+      "$ref": "#/$defs/RemarketingOptions"
+    },
+    "funnel": {
+      "$ref": "#/$defs/FunnelOptions"
+    },
+    "copy": {
+      "$ref": "#/$defs/CopyOptions"
+    },
+    "quality": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "history_hints": {
+      "$ref": "#/$defs/HistoryHints"
+    }
+  },
+  "$defs": {
+    "BrandKit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "schemaVersion",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "positioning": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "audience": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "tone": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "visualStyle": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "colors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "typographyNotes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "preferredContexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "avoid": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "manualNotes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "enabledAngles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "IDENTIDADE_ORIGEM",
+              "LIFESTYLE_COTIDIANO",
+              "ORGULHO_DISCRETO",
+              "PERTENCIMENTO",
+              "NOSTALGIA_ORIGEM",
+              "CABIDE",
+              "PRODUTO_ESTAMPA",
+              "CAIMENTO",
+              "CLOSE_ESTAMPA",
+              "CLOSE_BOLSO",
+              "PREMIUM_ESTILO",
+              "CREATOR_STYLE",
+              "PRESENTE_AFETO"
+            ]
+          }
+        },
+        "angleLabels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "headlineStyle": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "ctaStyle": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "strategyRules": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "defaultNicheKitId": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "defaultContextProvider": {
+          "type": "string",
+          "enum": [
+            "geographic",
+            "niche",
+            "custom"
+          ]
+        },
+        "suggestedPersonas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Persona"
+          },
+          "maxItems": 50
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "ContextProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contextId",
+        "contextType",
+        "subject",
+        "status",
+        "schemaVersion",
+        "promptVersion",
+        "profileVersion"
+      ],
+      "properties": {
+        "contextId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "contextType": {
+          "type": "string",
+          "enum": [
+            "geographic",
+            "niche",
+            "custom",
+            "bond",
+            "neutral"
+          ]
+        },
+        "subject": {
+          "$ref": "#/$defs/ContextSubject"
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "sceneContexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "visualSignatures": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "activities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "materials": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "environment": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "domainElements": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "avoid": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "approved",
+            "rejected"
+          ]
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "promptVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "profileVersion": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "ContextSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "geographic",
+            "niche",
+            "custom"
+          ]
+        },
+        "profile": {
+          "$ref": "#/$defs/ContextProfile"
+        },
+        "subject": {
+          "$ref": "#/$defs/ContextSubject"
+        },
+        "context_id": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    },
+    "ContextSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "CopyOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generate"
+      ],
+      "properties": {
+        "generate": {
+          "type": "boolean"
+        },
+        "funnel_stages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "TOFU",
+              "MOFU",
+              "BOFU"
+            ]
+          },
+          "maxItems": 3
+        }
+      }
+    },
+    "CreativeProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "type",
+        "referenceImages"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "brandId": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "referenceImages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "FunnelOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "headline": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "subheadline": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "cta": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "badges": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "maxItems": 3
+        },
+        "benefits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "maxItems": 3
+        },
+        "search_bar_text": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "chips": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "maxItems": 6
+        },
+        "text_density": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "balanced",
+            "commercial"
+          ]
+        },
+        "cta_emphasis": {
+          "type": "string",
+          "enum": [
+            "subtle",
+            "medium",
+            "strong"
+          ]
+        },
+        "clean_mode": {
+          "type": "boolean"
+        }
+      }
+    },
+    "HistoryHints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "recent_scenes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 50
+        },
+        "recent_personas": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxItems": 50
+        }
+      }
+    },
+    "NicheKit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "schemaVersion",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "audienceBehaviors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "commonUsageScenarios": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "activities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "sceneContexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "materials": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "visualCliches": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "avoid": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "recommendedAngles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "IDENTIDADE_ORIGEM",
+              "LIFESTYLE_COTIDIANO",
+              "ORGULHO_DISCRETO",
+              "PERTENCIMENTO",
+              "NOSTALGIA_ORIGEM",
+              "CABIDE",
+              "PRODUTO_ESTAMPA",
+              "CAIMENTO",
+              "CLOSE_ESTAMPA",
+              "CLOSE_BOLSO",
+              "PREMIUM_ESTILO",
+              "CREATOR_STYLE",
+              "PRESENTE_AFETO"
+            ]
+          }
+        },
+        "strategyRules": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "angleLabels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "productTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "maxItems": 100
+        },
+        "supportsApparelAngles": {
+          "type": "boolean"
+        },
+        "suggestedPersonas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Persona"
+          },
+          "maxItems": 50
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Persona": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "age_range": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "appearance": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "style": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "behavior": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "custom"
+          ]
+        }
+      }
+    },
+    "RemarketingOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intent"
+      ],
+      "properties": {
+        "intent": {
+          "type": "string",
+          "enum": [
+            "site_visitor",
+            "product_view",
+            "collection_discovery",
+            "cart",
+            "checkout",
+            "social_proof",
+            "objection"
+          ]
+        },
+        "products_source": {
+          "type": "string",
+          "enum": [
+            "catalog",
+            "basket"
+          ]
+        },
+        "stage_override": {
+          "type": "string",
+          "enum": [
+            "TOFU",
+            "MOFU",
+            "BOFU"
+          ]
+        },
+        "text_density": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "balanced",
+            "commercial"
+          ]
+        },
+        "cta_emphasis": {
+          "type": "string",
+          "enum": [
+            "subtle",
+            "medium",
+            "strong"
+          ]
+        },
+        "clean_mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "always",
+            "never"
+          ]
+        },
+        "headline": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "subheadline": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "cta": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "benefits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "maxItems": 3
+        },
+        "social_proof_facts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxItems": 5
+        }
+      }
+    }
+  }
+}

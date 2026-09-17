@@ -1,0 +1,94 @@
+{
+  "RS": {
+    "Alegrete": {
+      "atmosphere": [
+        "luminosidade natural ampla",
+        "sensação de horizonte aberto",
+        "ritmo visual sereno",
+        "contraste suave entre tons terrosos e claros"
+      ],
+      "landscape": [
+        "planícies e campos de grande escala visual",
+        "horizontes baixos e extensos",
+        "vegetação campestre discreta",
+        "paisagem de transição entre área urbana de baixa densidade e espaços abertos"
+      ],
+      "architecture": [
+        "escala urbana predominantemente baixa",
+        "fachadas simples com composição horizontal",
+        "superfícies rebocadas em tons claros",
+        "presença possível de edificações históricas integradas ao cotidiano"
+      ],
+      "materials": [
+        "reboco mineral fosco",
+        "madeira de acabamento simples",
+        "pedra em tonalidade clara",
+        "concreto de textura suave",
+        "tecidos naturais de aparência tátil"
+      ],
+      "color_mood": [
+        "off-white",
+        "areia",
+        "bege mineral",
+        "verde seco",
+        "azul acinzentado",
+        "terracota suave"
+      ],
+      "core_regional_references": [
+        "amplitude espacial associada às paisagens do oeste do Rio Grande do Sul",
+        "horizontalidade das composições",
+        "paleta mineral e terrosa de baixa saturação",
+        "luz natural ampla e limpa",
+        "arquitetura urbana de escala baixa"
+      ],
+      "optional_cultural_elements": [
+        "chimarrão em contexto cotidiano autêntico",
+        "cavalo quando houver justificativa documental ou narrativa específica",
+        "referências à tradição campeira tratadas de forma contemporânea",
+        "materialidade de construções rurais ou urbanas locais devidamente validada"
+      ],
+      "use_with_care": [
+        "bombacha ou pilcha completa",
+        "galpão como síntese visual da cidade",
+        "fogo de chão",
+        "acúmulo de elementos campeiros",
+        "composições que reduzam Alegrete exclusivamente ao ambiente rural"
+      ],
+      "avoid_elements": [
+        "monumentos inventados ou atribuídos incorretamente à cidade",
+        "paisagens litorâneas apresentadas como contexto de Alegrete",
+        "arquitetura colonial estrangeira sem vínculo local comprovado",
+        "cenografia de parque temático",
+        "mistura indiscriminada de símbolos de diferentes regiões do Sul"
+      ],
+      "creative_notes": [
+        "Priorizar amplitude, horizontalidade, luz e materialidade em vez de símbolos literais.",
+        "Manter a estampa de Alegrete como principal marcador de origem.",
+        "Em composições clean, traduzir o território por tons minerais, superfícies foscas e espaço negativo.",
+        "Usar no máximo duas referências regionais secundárias por imagem.",
+        "Evitar qualquer associação automática entre identidade local e um conjunto de costumes gaúchos."
+      ],
+      "source": "ai_approved",
+      "status": "approved",
+      "confidence": 0.68,
+      "created_at": "2026-08-19T20:30:48.853325+00:00",
+      "requires_validation": [
+        {
+          "claim": "A amplitude dos campos e os horizontes baixos são referências adequadas para representar visualmente Alegrete.",
+          "reason": "A associação é coerente com a localização regional, mas deve ser confirmada por repertório visual local aprovado."
+        },
+        {
+          "claim": "A área urbana de Alegrete apresenta predominância de edificações baixas e fachadas horizontais.",
+          "reason": "A característica é plausível, porém requer validação com documentação arquitetônica e fotografias atuais da cidade."
+        },
+        {
+          "claim": "Reboco mineral, madeira simples e pedra clara são materialidades representativas do contexto local.",
+          "reason": "São sugestões conservadoras para direção de arte, não um inventário validado de materiais específicos de Alegrete."
+        }
+      ],
+      "cenario": "luminosidade natural ampla",
+      "elemento_cultural": "chimarrão em contexto cotidiano autêntico",
+      "updated_at": "2026-08-19T20:30:48.853342+00:00"
+    }
+  }
+}

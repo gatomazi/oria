@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/CreativeResult.schema.json",
+  "title": "CreativeResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "creative_id",
+    "plan_id",
+    "status",
+    "generation_attempt",
+    "metadata",
+    "versions",
+    "created_at"
+  ],
+  "properties": {
+    "creative_id": {
+      "type": "string"
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "failed"
+      ]
+    },
+    "generation_attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "asset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssetInfo"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GenerationError"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "AssetInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mime_type",
+        "width",
+        "height",
+        "byte_size",
+        "sha256",
+        "data_base64"
+      ],
+      "properties": {
+        "mime_type": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        },
+        "byte_size": {
+          "type": "integer"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "data_base64": {
+          "type": "string"
+        }
+      }
+    },
+    "GenerationError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "cause"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "cause": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

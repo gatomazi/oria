@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/Placement.schema.json",
+  "title": "Placement",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "label",
+    "width",
+    "height",
+    "api_size"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "enum": [
+        "FEED_4X5",
+        "STORY_9X16"
+      ]
+    },
+    "label": {
+      "type": "string"
+    },
+    "width": {
+      "type": "integer"
+    },
+    "height": {
+      "type": "integer"
+    },
+    "api_size": {
+      "type": "string"
+    }
+  }
+}

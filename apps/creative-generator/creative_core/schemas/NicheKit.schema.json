@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/NicheKit.schema.json",
+  "title": "NicheKit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "schemaVersion",
+    "version"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "audienceBehaviors": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "commonUsageScenarios": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "activities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "sceneContexts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "visualCliches": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "avoid": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "recommendedAngles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "IDENTIDADE_ORIGEM",
+          "LIFESTYLE_COTIDIANO",
+          "ORGULHO_DISCRETO",
+          "PERTENCIMENTO",
+          "NOSTALGIA_ORIGEM",
+          "CABIDE",
+          "PRODUTO_ESTAMPA",
+          "CAIMENTO",
+          "CLOSE_ESTAMPA",
+          "CLOSE_BOLSO",
+          "PREMIUM_ESTILO",
+          "CREATOR_STYLE",
+          "PRESENTE_AFETO"
+        ]
+      }
+    },
+    "strategyRules": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "angleLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "productTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100
+    },
+    "supportsApparelAngles": {
+      "type": "boolean"
+    },
+    "suggestedPersonas": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Persona"
+      },
+      "maxItems": 50
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "$defs": {
+    "Persona": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "age_range": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "appearance": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "style": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "behavior": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "custom"
+          ]
+        }
+      }
+    }
+  }
+}

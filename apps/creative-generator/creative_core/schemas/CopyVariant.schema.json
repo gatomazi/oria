@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/CopyVariant.schema.json",
+  "title": "CopyVariant",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "funnel_stage",
+    "primary_text",
+    "headline",
+    "description"
+  ],
+  "properties": {
+    "funnel_stage": {
+      "type": "string",
+      "enum": [
+        "TOFU",
+        "MOFU",
+        "BOFU"
+      ]
+    },
+    "primary_text": {
+      "type": "string"
+    },
+    "headline": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}

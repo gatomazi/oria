@@ -1,0 +1,123 @@
+{
+  "_schema": "core_angles_v1",
+  "_doc": "Catálogo genérico dos 13 ângulos do core. IDs estáveis (não renomear). Prosa sem assumir camiseta nem região — marca e nicho trocam o rótulo via angleLabels. `scene` / `scene_multi` são os blocos de prompt dos motores públicos (CLEAN_ANGLES, REMARKETING, FUNNEL_VISUAL). Placeholders: {produto}, {produtos}, {n}, {cenario}, {persona}, {pessoas}.",
+  "angles": {
+    "IDENTIDADE_ORIGEM": {
+      "label": "Identidade de marca",
+      "description": "Pessoa usando o produto integrada ao lugar/ambiente que representa a identidade da marca — comunica 'isso é meu' sem pose.",
+      "uses_person": true,
+      "apparel_only": false,
+      "remarketing_angle": "identity_origin",
+      "scene": "ÂNGULO IDENTIDADE: {persona} usando {produto} de forma natural, integrada ao cenário ({cenario}). Enquadramento médio, a pessoa ocupa ~40% do quadro e o produto é claramente legível. Nada de pose de catálogo: parece um registro autêntico do cotidiano de quem se identifica com a marca.",
+      "scene_multi": "ÂNGULO IDENTIDADE (GRUPO): {pessoas} integradas ao cenário ({cenario}), cada pessoa usando um produto diferente — {produtos}. Composição equilibrada, todos os {n} produtos legíveis, nenhum escondido atrás de outra pessoa."
+    },
+    "LIFESTYLE_COTIDIANO": {
+      "label": "Lifestyle cotidiano",
+      "description": "Pessoa em ação no dia a dia com o produto — nunca parada olhando para o nada.",
+      "uses_person": true,
+      "apparel_only": false,
+      "remarketing_angle": "lifestyle",
+      "scene": "ÂNGULO LIFESTYLE: {persona} em movimento, fazendo algo cotidiano com {produto} ({cenario}). Momento real e espontâneo, luz natural, produto nítido e em uso verdadeiro.",
+      "scene_multi": "ÂNGULO LIFESTYLE (GRUPO): {pessoas} vivendo um momento cotidiano juntas ({cenario}), cada uma com um produto diferente — {produtos}. Interação natural, todos os {n} produtos legíveis."
+    },
+    "ORGULHO_DISCRETO": {
+      "label": "Retrato confiante",
+      "description": "Retrato de postura segura, cenário simples e desfocado — o foco é a pessoa com o produto.",
+      "uses_person": true,
+      "apparel_only": false,
+      "remarketing_angle": "premium",
+      "scene": "ÂNGULO RETRATO CONFIANTE: retrato de {persona} com postura segura usando {produto}. Fundo simples e desfocado inspirado em {cenario}, luz suave lateral, produto em foco absoluto.",
+      "scene_multi": "ÂNGULO RETRATO CONFIANTE (GRUPO): {pessoas} lado a lado com postura segura, cada uma com um produto diferente — {produtos}. Fundo discreto, todos os {n} produtos em foco."
+    },
+    "PERTENCIMENTO": {
+      "label": "Pertencimento",
+      "description": "Pessoa com o produto interagindo com outras pessoas — conexão genuína, não pose de grupo.",
+      "uses_person": true,
+      "apparel_only": false,
+      "remarketing_angle": "belonging",
+      "scene": "ÂNGULO PERTENCIMENTO: {persona} usando {produto} em interação real com uma a três outras pessoas ({cenario}) — conversando, rindo. Só {produto} é protagonista; as outras pessoas não usam produtos em destaque.",
+      "scene_multi": "ÂNGULO PERTENCIMENTO (GRUPO): {pessoas} em interação real ({cenario}), cada uma com um produto diferente — {produtos}. Conexão genuína, sem pose para a câmera."
+    },
+    "NOSTALGIA_ORIGEM": {
+      "label": "Memória afetiva",
+      "description": "Momento contemplativo e emocional com o produto — sempre com pessoa.",
+      "uses_person": true,
+      "apparel_only": false,
+      "remarketing_angle": "nostalgia",
+      "scene": "ÂNGULO MEMÓRIA AFETIVA: {persona} num momento contemplativo com {produto} (janela, varanda ou luz de fim de tarde inspirada em {cenario}). Clima de memória e afeto, produto legível.",
+      "scene_multi": "ÂNGULO MEMÓRIA AFETIVA (GRUPO): {pessoas} juntas num momento contemplativo ({cenario}), cada uma com um produto diferente — {produtos}."
+    },
+    "CABIDE": {
+      "label": "Cabide",
+      "description": "Peça pendurada, sem pessoa — foco total no produto.",
+      "uses_person": false,
+      "apparel_only": true,
+      "remarketing_angle": "hanger",
+      "scene": "ÂNGULO CABIDE: {produto} pendurado(a) em cabide, sem pessoa, inteiro(a) no quadro e centralizado(a). Fundo e luz inspirados em {cenario}, sem competir com a peça.",
+      "scene_multi": "ÂNGULO CABIDE (VÁRIAS PEÇAS): {n} peças penduradas lado a lado — {produtos}. Nenhuma peça girada a ponto de deformar o produto, todas legíveis, sem pessoa. Fundo inspirado em {cenario}."
+    },
+    "PRODUTO_ESTAMPA": {
+      "label": "Flatlay",
+      "description": "Produto fotografado de cima, sem pessoa — melhor leitura de detalhe e material.",
+      "uses_person": false,
+      "apparel_only": false,
+      "remarketing_angle": "flatlay",
+      "scene": "ÂNGULO FLATLAY: {produto} fotografado(a) de cima sobre superfície coerente com {cenario}, sem pessoa. Composição limpa, detalhe e material do produto nítidos, sombra suave e realista.",
+      "scene_multi": "ÂNGULO FLATLAY (VÁRIOS PRODUTOS): {n} produtos fotografados de cima em composição organizada — {produtos}. Sem pessoa, todos legíveis, espaçamento equilibrado, superfície coerente com {cenario}."
+    },
+    "CAIMENTO": {
+      "label": "Caimento",
+      "description": "Registro técnico de vestibilidade: silhueta, largura, comprimento.",
+      "uses_person": true,
+      "apparel_only": true,
+      "remarketing_angle": "fit",
+      "scene": "ÂNGULO CAIMENTO: {persona} vestindo {produto}, corpo inteiro ou 3/4, pose neutra que mostra silhueta, largura e comprimento reais da peça. Fundo limpo inspirado em {cenario}. Registro técnico, não editorial de moda.",
+      "scene_multi": "ÂNGULO CAIMENTO (GRUPO): {pessoas} lado a lado, cada uma vestindo uma peça diferente — {produtos} — em pose neutra que mostra o caimento de cada peça."
+    },
+    "CLOSE_ESTAMPA": {
+      "label": "Close no detalhe",
+      "description": "Pessoa usando o produto em plano fechado, com o detalhe principal grande e legível.",
+      "uses_person": true,
+      "apparel_only": true,
+      "remarketing_angle": "print_closeup",
+      "scene": "ÂNGULO CLOSE NO DETALHE: plano fechado em {persona} usando {produto}, com o detalhe principal do produto grande e totalmente legível no centro do quadro. Rosto pode ficar parcial. Fundo desfocado inspirado em {cenario}.",
+      "scene_multi": "ÂNGULO CLOSE NO DETALHE (GRUPO): {pessoas} lado a lado em plano fechado, cada uma com um produto diferente — {produtos} — com o detalhe principal de cada produto legível."
+    },
+    "CLOSE_BOLSO": {
+      "label": "Close no detalhe pequeno",
+      "description": "Plano próximo com foco num detalhe pequeno do produto (bolso, peito, etiqueta).",
+      "uses_person": true,
+      "apparel_only": true,
+      "remarketing_angle": "print_closeup",
+      "scene": "ÂNGULO CLOSE NO DETALHE PEQUENO: plano próximo do torso superior de {persona} usando {produto}, foco no detalhe pequeno do produto (bolso, peito esquerdo, etiqueta), nítido e na posição real. Fundo desfocado inspirado em {cenario}.",
+      "scene_multi": "ÂNGULO CLOSE NO DETALHE PEQUENO (GRUPO): {pessoas} lado a lado em plano próximo, cada uma com um produto diferente — {produtos} — foco no detalhe pequeno de cada um."
+    },
+    "PREMIUM_ESTILO": {
+      "label": "Premium / Estilo",
+      "description": "Produto em cenário editorial sofisticado, sem pessoa.",
+      "uses_person": false,
+      "apparel_only": false,
+      "remarketing_angle": "premium",
+      "scene": "ÂNGULO PREMIUM: {produto} em cenário editorial sofisticado inspirado em {cenario}, sem pessoa. Luz trabalhada, composição de marca de alto padrão, produto protagonista e legível.",
+      "scene_multi": "ÂNGULO PREMIUM (VÁRIOS PRODUTOS): {n} produtos em composição editorial sofisticada — {produtos}. Sem pessoa, luz trabalhada, todos legíveis."
+    },
+    "CREATOR_STYLE": {
+      "label": "Creator-style",
+      "description": "Linguagem de rede social (selfie, foto de amigo) — nunca finge depoimento.",
+      "uses_person": true,
+      "apparel_only": false,
+      "remarketing_angle": "creator",
+      "scene": "ÂNGULO CREATOR-STYLE: foto estilo rede social — selfie de espelho ou braço estendido — de {persona} com {produto} ({cenario}). Estética espontânea, produto legível, sem texto de depoimento ou avaliação.",
+      "scene_multi": "ÂNGULO CREATOR-STYLE (GRUPO): selfie de grupo estilo rede social com {pessoas}, cada uma com um produto diferente — {produtos}. Espontâneo, sem simular depoimento."
+    },
+    "PRESENTE_AFETO": {
+      "label": "Presente / Afeto",
+      "description": "Momento de presentear ou uso compartilhado entre duas pessoas — valor emocional.",
+      "uses_person": true,
+      "apparel_only": false,
+      "remarketing_angle": "gift",
+      "scene": "ÂNGULO PRESENTE: duas pessoas num momento de presentear {produto} ({cenario}). {persona} entrega ou recebe o produto; emoção genuína, produto claramente visível.",
+      "scene_multi": "ÂNGULO PRESENTE (KIT): kit com {n} produtos organizados como conjunto de presente — {produtos}. Foco no valor emocional; embalagem discreta, sem texto."
+    }
+  }
+}

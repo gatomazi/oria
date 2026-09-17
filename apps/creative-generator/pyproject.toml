@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "creative-core"
+version = "1.1.0"
+description = "Creative generator core (plans, prompts, kits, context intelligence) and its HTTP service for Oria"
+requires-python = ">=3.12"
+dependencies = ["Pillow>=10.0.0,<13"]
+
+[project.optional-dependencies]
+service = ["openai>=1.50.0,<3", "gunicorn>=22.0.0,<24"]
+
+[tool.setuptools.packages.find]
+include = ["creative_core*"]
+
+[tool.setuptools.package-data]
+creative_core = [
+  "kits/brand/*.json", "kits/niche/*.json", "templates/*.json", "data/*.json",
+  "schemas/*.json", "schemas/*.d.ts", "fixtures/*.json",
+]

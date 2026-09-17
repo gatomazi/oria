@@ -1,0 +1,44 @@
+{
+  "id": "generic_commerce",
+  "name": "Comércio genérico",
+  "audienceBehaviors": [
+    "quer entender rapidamente o que é o produto e para que serve",
+    "confia em imagem nítida e realista do produto",
+    "responde a benefício concreto mais do que a promessa vaga"
+  ],
+  "commonUsageScenarios": [
+    "uso em casa",
+    "uso no trabalho",
+    "presente para alguém próximo",
+    "rotina do dia a dia"
+  ],
+  "activities": ["usar o produto na rotina", "abrir a embalagem", "mostrar o produto a alguém", "organizar o espaço"],
+  "sceneContexts": [
+    "bancada ou mesa de madeira clara com luz natural lateral",
+    "sala de estar contemporânea e organizada",
+    "ambiente de trabalho iluminado e neutro",
+    "superfície neutra de estúdio com sombra suave"
+  ],
+  "materials": ["textura real do material do produto", "embalagem discreta", "superfície de apoio neutra"],
+  "visualCliches": ["fundo branco chapado sem sombra", "mão genérica segurando produto flutuando", "excesso de props"],
+  "avoid": [
+    "produto distorcido ou com proporção irreal",
+    "logotipos de terceiros visíveis",
+    "texto inventado no produto ou no cenário"
+  ],
+  "recommendedAngles": ["PRODUTO_ESTAMPA", "LIFESTYLE_COTIDIANO", "PREMIUM_ESTILO", "PRESENTE_AFETO", "CREATOR_STYLE"],
+  "strategyRules": {},
+  "angleLabels": {
+    "IDENTIDADE_ORIGEM": "Identidade de marca",
+    "PRODUTO_ESTAMPA": "Produto de cima (flatlay)",
+    "NOSTALGIA_ORIGEM": "Memória afetiva"
+  },
+  "productTypes": [],
+  "supportsApparelAngles": false,
+  "suggestedPersonas": [
+    {"id": "generic_adult", "label": "Adulto 30-40 anos, estilo casual", "age_range": "30-40", "appearance": "aparência natural", "style": "casual contemporâneo", "behavior": "usa o produto com naturalidade", "source": "automatic"},
+    {"id": "generic_young", "label": "Adulto jovem 20-30 anos", "age_range": "20-30", "appearance": "aparência natural", "style": "casual", "behavior": "espontâneo", "source": "automatic"}
+  ],
+  "schemaVersion": 1,
+  "version": 1
+}

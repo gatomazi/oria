@@ -1,0 +1,68 @@
+{
+  "name": "fixture-remarketing-multi",
+  "description": "Remarketing collection_discovery multipeça (4 produtos) para cliente não regional (fitness_brand_x inline + Niche Kit fashion) com Context Profile customizado aprovado. Layout de coleção escolhido pelo número de produtos.",
+  "input": {
+    "creative_id": "44444444-4444-4444-8444-444444444444",
+    "strategy": "REMARKETING",
+    "product_mode": "multi_product",
+    "products": [
+      {"id": "top-azul", "name": "Top Azul", "type": "top fitness", "referenceImages": ["fit/p/top-azul.png"]},
+      {"id": "top-verde", "name": "Top Verde", "type": "top fitness", "referenceImages": ["fit/p/top-verde.png"]},
+      {"id": "legging-preta", "name": "Legging Preta", "type": "legging", "referenceImages": ["fit/p/legging-preta.png"]},
+      {"id": "shorts-cinza", "name": "Shorts Cinza", "type": "shorts", "referenceImages": ["fit/p/shorts-cinza.png"]}
+    ],
+    "brand_kit": {
+      "id": "fitness_brand_x",
+      "name": "Fitness Brand X",
+      "positioning": ["roupa de treino que acompanha a rotina"],
+      "visualStyle": ["energia", "luz dura de manhã", "contraste"],
+      "defaultContextProvider": "custom",
+      "schemaVersion": 1,
+      "version": 1
+    },
+    "niche_kit_id": "fashion",
+    "angle_id": "PRODUTO_ESTAMPA",
+    "placement_id": "FEED_4X5",
+    "context": {
+      "mode": "custom",
+      "profile": {
+        "contextId": "ctx-studio-treino",
+        "contextType": "custom",
+        "subject": {"name": "Estúdio de treino"},
+        "summary": "estúdio funcional com piso emborrachado",
+        "sceneContexts": ["piso emborrachado cinza de estúdio funcional com luz lateral"],
+        "materials": ["borracha", "metal escovado"],
+        "avoid": ["academia lotada"],
+        "status": "approved",
+        "schemaVersion": 1,
+        "promptVersion": 1,
+        "profileVersion": 2
+      }
+    },
+    "remarketing": {"intent": "collection_discovery", "products_source": "catalog"},
+    "seed": 8
+  },
+  "expected_plan": {
+    "strategy": "REMARKETING",
+    "product_mode": "multi_product",
+    "remarketing_intent": "collection_discovery",
+    "funnel_stage": "MOFU",
+    "layout": "flatlay_grid",
+    "persona": null,
+    "overlay.headline": "Não achou o seu ainda?",
+    "overlay.subheadline": "Várias opções disponíveis",
+    "overlay.cta": "Ver todas →",
+    "context.provider": "custom",
+    "context.context_id": "ctx-studio-treino",
+    "context.profile_version": 2,
+    "brand_kit.id": "fitness_brand_x"
+  },
+  "expected_output": {
+    "status": "completed",
+    "metadata.product_mode": "multi_product",
+    "metadata.layout": "flatlay_grid"
+  },
+  "validations": ["remarketing_multi_product_allowed_for_intent", "references_are_product_art_only"],
+  "prompt_must_contain": ["LAYOUT FLATLAY GRADE: 4 produtos", "4 produtos DIFERENTES", "piso emborrachado"],
+  "prompt_must_not_contain": ["Use Origens", "chimarrão"]
+}

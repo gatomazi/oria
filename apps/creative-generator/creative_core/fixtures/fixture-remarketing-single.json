@@ -1,0 +1,48 @@
+{
+  "name": "fixture-remarketing-single",
+  "description": "Remarketing product_view, 1 produto, Use Origens, ângulo Cabide -> layout single_hanger. Funil na arte (BOFU pela intenção) com headline/CTA informados.",
+  "input": {
+    "creative_id": "33333333-3333-4333-8333-333333333333",
+    "strategy": "REMARKETING",
+    "product_mode": "single_product",
+    "products": [
+      {"id": "prod-chapeco", "name": "Camiseta Chapecó", "type": "Camiseta (Algodão Peruano Premium)", "referenceImages": ["tenant-demo/products/prod-chapeco/front.png"], "metadata": {"city": "Chapecó", "state": "SC"}}
+    ],
+    "brand_kit_id": "use_origens",
+    "niche_kit_id": "fashion",
+    "angle_id": "CABIDE",
+    "placement_id": "FEED_4X5",
+    "context": {"mode": "geographic", "subject": {"name": "Chapecó", "metadata": {"city": "Chapecó", "state": "SC"}}, "context_id": "oeste_meio_oeste"},
+    "remarketing": {
+      "intent": "product_view",
+      "headline": "Ainda pensando nela?",
+      "cta": "Ver a sua →",
+      "benefits": ["Algodão peruano", "Troca fácil"]
+    },
+    "seed": 5
+  },
+  "expected_plan": {
+    "strategy": "REMARKETING",
+    "internal_strategy_id": "REMARKETING",
+    "product_mode": "single_product",
+    "remarketing_intent": "product_view",
+    "funnel_stage": "BOFU",
+    "layout": "single_hanger",
+    "persona": null,
+    "overlay.allowed": true,
+    "overlay.headline": "Ainda pensando nela?",
+    "overlay.cta": "Ver a sua →",
+    "overlay.text_density": "commercial",
+    "overlay.cta_emphasis": "strong",
+    "overlay.benefits": ["Algodão peruano", "Troca fácil"],
+    "context.context_id": "geo:SC:oeste_meio_oeste"
+  },
+  "expected_output": {
+    "status": "completed",
+    "metadata.remarketing_intent": "product_view",
+    "metadata.layout": "single_hanger"
+  },
+  "validations": ["remarketing_multi_product_allowed_for_intent", "context_profile_approved"],
+  "prompt_must_contain": ["LAYOUT CABIDE ÚNICO", "HEADLINE: \"Ainda pensando nela?\"", "CTA — ênfase strong", "POSICIONAMENTO DA ESTAMPA NO CABIDE"],
+  "prompt_must_not_contain": ["MODO ÂNGULOS LIMPOS"]
+}

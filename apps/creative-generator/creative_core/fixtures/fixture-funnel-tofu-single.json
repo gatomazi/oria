@@ -1,0 +1,39 @@
+{
+  "name": "fixture-funnel-tofu-single",
+  "description": "Funil por Criativo TOFU, 1 produto, Use Origens, contexto automático. A cidade não tem contexto regional cadastrado: o core NÃO sorteia um contexto da UF — usa o contexto do nicho e registra warning.",
+  "input": {
+    "creative_id": "55555555-5555-4555-8555-555555555555",
+    "strategy": "FUNNEL_VISUAL",
+    "product_mode": "single_product",
+    "products": [
+      {"id": "prod-maringa", "name": "Camiseta Maringá", "type": "camiseta", "referenceImages": ["tenant-demo/products/prod-maringa/front.png"], "metadata": {"city": "Maringá", "state": "PR"}}
+    ],
+    "brand_kit_id": "use_origens",
+    "angle_id": "IDENTIDADE_ORIGEM",
+    "placement_id": "FEED_4X5",
+    "funnel_stage": "TOFU",
+    "context": {"mode": "automatic"},
+    "seed": 2
+  },
+  "expected_plan": {
+    "strategy": "FUNNEL_VISUAL",
+    "internal_strategy_id": "FUNIL_VISUAL",
+    "funnel_stage": "TOFU",
+    "overlay.allowed": true,
+    "overlay.headline": "Feito para o seu dia a dia",
+    "overlay.cta": null,
+    "overlay.text_density": "minimal",
+    "overlay.cta_emphasis": "subtle",
+    "overlay.badges": [],
+    "context.provider": "niche",
+    "angle.label": "Identidade / Origem",
+    "warnings": ["geographic_context_unresolved_used_niche_context"]
+  },
+  "expected_output": {
+    "status": "completed",
+    "metadata.funnel_stage": "TOFU"
+  },
+  "validations": ["funnel_stage_in_image"],
+  "prompt_must_contain": ["ETAPA TOFU", "ETAPA DO FUNIL NA ARTE — TOFU", "HEADLINE: \"Feito para o seu dia a dia\""],
+  "prompt_must_not_contain": ["BADGES", "BARRA DE BUSCA", "MODO ÂNGULOS LIMPOS"]
+}

@@ -1,0 +1,623 @@
+"""Public contracts of the creative core — schema first.
+
+Contracts are declared once as field specs and used for three things:
+  1. runtime validation (unknown fields rejected — whitelist strategy);
+  2. JSON Schema export (schemas/*.schema.json) for any consumer runtime;
+  3. TypeScript declaration export (schemas/contracts.d.ts) for the Oria panel.
+
+Naming: the four interfaces defined verbatim by the Etapa 1 spec (BrandKit,
+NicheKit, ContextProfile, CreativeProduct) keep the spec's camelCase. Contracts
+created by the core (request, plan, result, history, persona...) use
+snake_case, matching the persistence fields listed in the Etapa 2 spec.
+"""
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .errors import GenerationError
+
+ANGLE_IDS = (
+    "IDENTIDADE_ORIGEM", "LIFESTYLE_COTIDIANO", "ORGULHO_DISCRETO", "PERTENCIMENTO",
+    "NOSTALGIA_ORIGEM", "CABIDE", "PRODUTO_ESTAMPA", "CAIMENTO", "CLOSE_ESTAMPA",
+    "CLOSE_BOLSO", "PREMIUM_ESTILO", "CREATOR_STYLE", "PRESENTE_AFETO",
+)
+PUBLIC_STRATEGIES = ("CLEAN_ANGLES", "REMARKETING", "FUNNEL_VISUAL")
+INTERNAL_STRATEGIES = (
+    "FUNNEL_VISUAL", "STATE_COLLECTION", "REMARKETING", "CLEAN_ANGLES", "MULTI_PRODUCT_INTERNAL", "ORGANIC",
+)
+PRODUCT_MODES = ("single_product", "multi_product")
+PUBLIC_PLACEMENTS = ("FEED_4X5", "STORY_9X16")
+FUNNEL_STAGES = ("TOFU", "MOFU", "BOFU")
+REMARKETING_INTENTS = (
+    "site_visitor", "product_view", "collection_discovery", "cart", "checkout", "social_proof", "objection",
+)
+CONTEXT_TYPES = ("geographic", "niche", "custom", "bond", "neutral")
+CONTEXT_MODES = ("automatic", "geographic", "niche", "custom")
+CONTEXT_PROVIDERS = ("geographic", "niche", "custom")
+PROFILE_STATUS = ("draft", "approved", "rejected")
+QUALITIES = ("low", "medium", "high")
+TEXT_DENSITIES = ("minimal", "balanced", "commercial")
+CTA_EMPHASES = ("subtle", "medium", "strong")
+CLEAN_MODES = ("auto", "always", "never")
+PRODUCTS_SOURCES = ("catalog", "basket")
+PERSONA_MODES = ("automatic", "custom", "none")
+PERSONA_SOURCES = ("automatic", "custom")
+RESULT_STATUS = ("completed", "failed")
+REFERENCE_ROLES = ("product_art", "layout_only")
+MAX_PRODUCTS = 6
+
+
+@dataclass(frozen=True)
+class F:
+    """Field spec. `type` is one of string/integer/number/boolean/object/array/ref/map."""
+
+    type: str
+    required: bool = False
+    nullable: bool = False
+    enum: tuple | None = None
+    items: "F | None" = None
+    ref: str | None = None
+    minimum: float | None = None
+    maximum: float | None = None
+    min_items: int | None = None
+    max_items: int | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    description: str = ""
+
+
+def S(**kw) -> F:
+    return F("string", **kw)
+
+
+def I(**kw) -> F:
+    return F("integer", **kw)
+
+
+def B(**kw) -> F:
+    return F("boolean", **kw)
+
+
+def N(**kw) -> F:
+    return F("number", **kw)
+
+
+def A(items: F, **kw) -> F:
+    return F("array", items=items, **kw)
+
+
+def R(ref: str, **kw) -> F:
+    return F("ref", ref=ref, **kw)
+
+
+def O(**kw) -> F:
+    """Free-form object (Record<string, unknown>)."""
+    return F("object", **kw)
+
+
+def M(**kw) -> F:
+    """Map of string -> string."""
+    return F("map", **kw)
+
+
+STR_LIST = A(S(max_length=500), max_items=100)
+ID = S(required=True, min_length=1, max_length=120)
+
+CONTRACTS: dict[str, dict[str, F]] = {
+    "Persona": {
+        "id": S(max_length=120),
+        "label": S(required=True, min_length=1, max_length=200),
+        "age_range": S(max_length=80),
+        "appearance": S(max_length=1000),
+        "style": S(max_length=1000),
+        "behavior": S(max_length=1000),
+        "notes": S(max_length=1000),
+        "source": S(enum=PERSONA_SOURCES),
+    },
+    "BrandKit": {
+        "id": ID,
+        "name": S(required=True, min_length=1, max_length=200),
+        "description": S(max_length=2000),
+        "positioning": STR_LIST,
+        "audience": STR_LIST,
+        "tone": STR_LIST,
+        "visualStyle": STR_LIST,
+        "colors": STR_LIST,
+        "typographyNotes": STR_LIST,
+        "preferredContexts": STR_LIST,
+        "avoid": STR_LIST,
+        "manualNotes": STR_LIST,
+        "enabledAngles": A(S(enum=ANGLE_IDS)),
+        "angleLabels": M(),
+        "headlineStyle": STR_LIST,
+        "ctaStyle": STR_LIST,
+        "strategyRules": O(),
+        "defaultNicheKitId": S(max_length=120),
+        "defaultContextProvider": S(enum=CONTEXT_PROVIDERS),
+        "suggestedPersonas": A(R("Persona"), max_items=50),
+        "schemaVersion": I(required=True, minimum=1),
+        "version": I(required=True, minimum=1),
+    },
+    "NicheKit": {
+        "id": ID,
+        "name": S(required=True, min_length=1, max_length=200),
+        "audienceBehaviors": STR_LIST,
+        "commonUsageScenarios": STR_LIST,
+        "activities": STR_LIST,
+        "sceneContexts": STR_LIST,
+        "materials": STR_LIST,
+        "visualCliches": STR_LIST,
+        "avoid": STR_LIST,
+        "recommendedAngles": A(S(enum=ANGLE_IDS)),
+        "strategyRules": O(),
+        "angleLabels": M(),
+        "productTypes": STR_LIST,
+        "supportsApparelAngles": B(),
+        "suggestedPersonas": A(R("Persona"), max_items=50),
+        "schemaVersion": I(required=True, minimum=1),
+        "version": I(required=True, minimum=1),
+    },
+    "ContextSubject": {
+        "name": S(required=True, min_length=1, max_length=200),
+        "metadata": O(),
+    },
+    "ContextProfile": {
+        "contextId": ID,
+        "contextType": S(required=True, enum=CONTEXT_TYPES),
+        "subject": R("ContextSubject", required=True),
+        "summary": S(max_length=2000),
+        "sceneContexts": STR_LIST,
+        "visualSignatures": STR_LIST,
+        "activities": STR_LIST,
+        "materials": STR_LIST,
+        "environment": STR_LIST,
+        "domainElements": STR_LIST,
+        "avoid": STR_LIST,
+        "sources": STR_LIST,
+        "confidence": N(minimum=0, maximum=1),
+        "status": S(required=True, enum=PROFILE_STATUS),
+        "schemaVersion": I(required=True, minimum=1),
+        "promptVersion": I(required=True, minimum=1),
+        "profileVersion": I(required=True, minimum=1),
+    },
+    "CreativeProduct": {
+        "id": ID,
+        "brandId": S(max_length=120),
+        "name": S(required=True, min_length=1, max_length=200),
+        "type": S(required=True, min_length=1, max_length=120),
+        "description": S(max_length=2000),
+        "referenceImages": A(S(min_length=1, max_length=500), required=True, min_items=1, max_items=4),
+        "metadata": O(),
+    },
+    "Angle": {
+        "id": S(required=True, enum=ANGLE_IDS),
+        "label": S(required=True),
+        "description": S(),
+        "uses_person": B(required=True),
+        "apparel_only": B(required=True),
+        "multi_product_limit": I(required=True, minimum=1),
+    },
+    "Placement": {
+        "id": S(required=True, enum=PUBLIC_PLACEMENTS),
+        "label": S(required=True),
+        "width": I(required=True),
+        "height": I(required=True),
+        "api_size": S(required=True),
+    },
+    "ContextSelection": {
+        "mode": S(required=True, enum=CONTEXT_MODES),
+        "profile": R("ContextProfile"),
+        "subject": R("ContextSubject"),
+        "context_id": S(max_length=120),
+    },
+    "RemarketingOptions": {
+        "intent": S(required=True, enum=REMARKETING_INTENTS),
+        "products_source": S(enum=PRODUCTS_SOURCES),
+        "stage_override": S(enum=FUNNEL_STAGES),
+        "text_density": S(enum=TEXT_DENSITIES),
+        "cta_emphasis": S(enum=CTA_EMPHASES),
+        "clean_mode": S(enum=CLEAN_MODES),
+        "headline": S(max_length=120),
+        "subheadline": S(max_length=200),
+        "cta": S(max_length=60),
+        "benefits": A(S(max_length=80), max_items=3),
+        "social_proof_facts": A(S(max_length=200), max_items=5),
+    },
+    "FunnelOptions": {
+        "headline": S(max_length=120),
+        "subheadline": S(max_length=200),
+        "cta": S(max_length=60),
+        "badges": A(S(max_length=40), max_items=3),
+        "benefits": A(S(max_length=80), max_items=3),
+        "search_bar_text": S(max_length=80),
+        "chips": A(S(max_length=40), max_items=6),
+        "text_density": S(enum=TEXT_DENSITIES),
+        "cta_emphasis": S(enum=CTA_EMPHASES),
+        "clean_mode": B(),
+    },
+    "CopyOptions": {
+        "generate": B(required=True),
+        "funnel_stages": A(S(enum=FUNNEL_STAGES), max_items=3),
+    },
+    "HistoryHints": {
+        "recent_scenes": A(S(max_length=500), max_items=50),
+        "recent_personas": A(S(max_length=200), max_items=50),
+    },
+    "CreativeRequest": {
+        "creative_id": S(max_length=120),
+        "strategy": S(required=True, enum=PUBLIC_STRATEGIES),
+        "product_mode": S(required=True, enum=PRODUCT_MODES),
+        "products": A(R("CreativeProduct"), required=True, min_items=1, max_items=MAX_PRODUCTS),
+        "brand_kit": R("BrandKit"),
+        "brand_kit_id": S(max_length=120),
+        "niche_kit": R("NicheKit"),
+        "niche_kit_id": S(max_length=120),
+        "angle_id": S(required=True, enum=ANGLE_IDS),
+        "placement_id": S(required=True, enum=PUBLIC_PLACEMENTS),
+        "persona_mode": S(enum=PERSONA_MODES),
+        "persona": R("Persona"),
+        "context": R("ContextSelection"),
+        "funnel_stage": S(enum=FUNNEL_STAGES),
+        "remarketing": R("RemarketingOptions"),
+        "funnel": R("FunnelOptions"),
+        "copy": R("CopyOptions"),
+        "quality": S(enum=QUALITIES),
+        "seed": I(minimum=0),
+        "history_hints": R("HistoryHints"),
+    },
+    "KitRef": {
+        "id": S(required=True),
+        "version": I(required=True),
+    },
+    "ResolvedContext": {
+        "context_id": S(required=True),
+        "context_type": S(required=True, enum=CONTEXT_TYPES),
+        "provider": S(required=True),
+        "scene": S(required=True),
+        "supporting_element": S(nullable=True),
+        "avoid": A(S()),
+        "status": S(required=True, enum=PROFILE_STATUS),
+        "profile_version": I(required=True),
+    },
+    "OverlaySpec": {
+        "allowed": B(required=True),
+        "headline": S(nullable=True),
+        "subheadline": S(nullable=True),
+        "cta": S(nullable=True),
+        "badges": A(S()),
+        "benefits": A(S()),
+        "search_bar_text": S(nullable=True),
+        "chips": A(S()),
+        "text_density": S(nullable=True, enum=TEXT_DENSITIES),
+        "cta_emphasis": S(nullable=True, enum=CTA_EMPHASES),
+        "clean": B(required=True),
+    },
+    "ReferenceRole": {
+        "ref": S(required=True),
+        "product_id": S(required=True),
+        "role": S(required=True, enum=REFERENCE_ROLES),
+        "order": I(required=True, minimum=1),
+    },
+    "PromptSection": {
+        "name": S(required=True),
+        "length": I(required=True),
+    },
+    "PromptInfo": {
+        "text": S(required=True),
+        "sections": A(R("PromptSection"), required=True),
+        "sha256": S(required=True),
+        "prompt_version": I(required=True),
+    },
+    "ModelSelection": {
+        "task": S(required=True),
+        "model": S(required=True),
+        "quality": S(required=True, enum=QUALITIES),
+        "size": S(required=True),
+    },
+    "ValidationCheck": {
+        "rule": S(required=True),
+        "passed": B(required=True),
+    },
+    "CreativePlan": {
+        "plan_id": S(required=True),
+        "creative_id": S(required=True),
+        "schema_version": I(required=True),
+        "strategy": S(required=True, enum=PUBLIC_STRATEGIES),
+        "internal_strategy_id": S(required=True),
+        "product_mode": S(required=True, enum=PRODUCT_MODES),
+        "products": A(R("CreativeProduct"), required=True, min_items=1),
+        "angle": R("Angle", required=True),
+        "placement": R("Placement", required=True),
+        "persona": R("Persona", nullable=True),
+        "context": R("ResolvedContext", required=True),
+        "brand_kit": R("KitRef", required=True),
+        "niche_kit": R("KitRef", required=True),
+        "funnel_stage": S(nullable=True, enum=FUNNEL_STAGES),
+        "remarketing_intent": S(nullable=True, enum=REMARKETING_INTENTS),
+        "layout": S(nullable=True),
+        "overlay": R("OverlaySpec", required=True),
+        "copy": R("CopyOptions", required=True),
+        "references": A(R("ReferenceRole"), required=True),
+        "prompt": R("PromptInfo", required=True),
+        "model": R("ModelSelection", required=True),
+        "versions": O(required=True),
+        "validations": A(R("ValidationCheck"), required=True),
+        "warnings": A(S(), required=True),
+    },
+    "GenerationError": {
+        "code": S(required=True),
+        "message": S(required=True),
+        "retryable": B(required=True),
+        "cause": S(required=True),
+        "details": O(),
+    },
+    "AssetInfo": {
+        "mime_type": S(required=True),
+        "width": I(required=True),
+        "height": I(required=True),
+        "byte_size": I(required=True),
+        "sha256": S(required=True),
+        "data_base64": S(required=True),
+    },
+    "CreativeResult": {
+        "creative_id": S(required=True),
+        "plan_id": S(required=True),
+        "status": S(required=True, enum=RESULT_STATUS),
+        "generation_attempt": I(required=True, minimum=1),
+        "asset": R("AssetInfo", nullable=True),
+        "metadata": O(required=True),
+        "versions": O(required=True),
+        "error": R("GenerationError", nullable=True),
+        "created_at": S(required=True),
+    },
+    "CopyVariant": {
+        "funnel_stage": S(required=True, enum=FUNNEL_STAGES),
+        "primary_text": S(required=True),
+        "headline": S(required=True),
+        "description": S(required=True),
+    },
+    "GenerationRecord": {
+        "creative_id": S(required=True),
+        "strategy": S(required=True),
+        "internal_strategy_id": S(nullable=True),
+        "product_mode": S(nullable=True),
+        "product_ids": A(S(), nullable=True),
+        "angle": S(nullable=True),
+        "context": S(nullable=True),
+        "persona": S(nullable=True),
+        "placement": S(nullable=True),
+        "brand_kit": S(nullable=True),
+        "niche_kit": S(nullable=True),
+        "funnel_stage": S(nullable=True),
+        "remarketing_intent": S(nullable=True),
+        "quality": S(nullable=True),
+        "asset": S(nullable=True),
+        "schema_version": I(nullable=True),
+        "prompt_version": I(nullable=True),
+        "brand_kit_version": I(nullable=True),
+        "niche_kit_version": I(nullable=True),
+        "context_profile_version": I(nullable=True),
+        "strategy_version": I(nullable=True),
+        "core_version": S(nullable=True),
+        "extra": O(nullable=True),
+        "created_at": S(required=True),
+    },
+}
+
+# Contracts whose schema file is exported (sub-objects are embedded via $defs).
+EXPORTED_CONTRACTS = (
+    "BrandKit", "NicheKit", "ContextProfile", "CreativeProduct", "Persona", "Angle", "Placement",
+    "CreativeRequest", "CreativePlan", "CreativeResult", "GenerationError", "GenerationRecord", "CopyVariant",
+)
+
+_PY_TYPES = {
+    "string": str, "integer": int, "number": (int, float), "boolean": bool, "object": dict, "map": dict,
+    "array": list,
+}
+
+
+def _check(spec: F, value: Any, path: str, errors: list[str]) -> None:
+    if value is None:
+        if not spec.nullable:
+            errors.append(f"{path}: must not be null")
+        return
+    if spec.type == "ref":
+        _validate_object(spec.ref or "", value, path, errors)
+        return
+    expected = _PY_TYPES[spec.type]
+    # bool is a subclass of int — reject it where a number is expected.
+    if isinstance(value, bool) and spec.type in ("integer", "number"):
+        errors.append(f"{path}: expected {spec.type}")
+        return
+    if not isinstance(value, expected):
+        errors.append(f"{path}: expected {spec.type}")
+        return
+    if spec.enum is not None and value not in spec.enum:
+        errors.append(f"{path}: value not allowed")
+    if spec.type == "string":
+        if spec.min_length is not None and len(value) < spec.min_length:
+            errors.append(f"{path}: too short")
+        if spec.max_length is not None and len(value) > spec.max_length:
+            errors.append(f"{path}: too long")
+    if spec.type in ("integer", "number"):
+        if spec.minimum is not None and value < spec.minimum:
+            errors.append(f"{path}: below minimum")
+        if spec.maximum is not None and value > spec.maximum:
+            errors.append(f"{path}: above maximum")
+    if spec.type == "array":
+        if spec.min_items is not None and len(value) < spec.min_items:
+            errors.append(f"{path}: too few items")
+        if spec.max_items is not None and len(value) > spec.max_items:
+            errors.append(f"{path}: too many items")
+        for i, item in enumerate(value):
+            _check(spec.items, item, f"{path}[{i}]", errors)  # type: ignore[arg-type]
+    if spec.type == "map":
+        for k, v in value.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                errors.append(f"{path}: map entries must be string -> string")
+                break
+
+
+def _validate_object(name: str, payload: Any, path: str, errors: list[str]) -> None:
+    fields = CONTRACTS[name]
+    if not isinstance(payload, dict):
+        errors.append(f"{path or name}: expected object")
+        return
+    for key in payload:
+        if key not in fields:
+            # Whitelist: unknown fields are rejected, never silently carried along.
+            errors.append(f"{path + '.' if path else ''}{key}: unknown field")
+    for key, spec in fields.items():
+        field_path = f"{path + '.' if path else ''}{key}"
+        if key not in payload:
+            if spec.required:
+                errors.append(f"{field_path}: required")
+            continue
+        _check(spec, payload[key], field_path, errors)
+
+
+def validate(name: str, payload: Any) -> list[str]:
+    """Returns a list of error strings (field paths + reason, never values)."""
+    if name not in CONTRACTS:
+        raise KeyError(name)
+    errors: list[str] = []
+    _validate_object(name, payload, "", errors)
+    return errors
+
+
+def ensure_valid(name: str, payload: Any, code: str = "INVALID_INPUT") -> dict:
+    errors = validate(name, payload)
+    if errors:
+        raise GenerationError(code, {"contract": name, "errors": errors[:50]})
+    return payload
+
+
+# ------------------------------------------------------------------ export
+def _schema_for(spec: F) -> dict:
+    if spec.type == "ref":
+        base: dict = {"$ref": f"#/$defs/{spec.ref}"}
+    elif spec.type == "object":
+        base = {"type": "object", "additionalProperties": True}
+    elif spec.type == "map":
+        base = {"type": "object", "additionalProperties": {"type": "string"}}
+    elif spec.type == "array":
+        base = {"type": "array", "items": _schema_for(spec.items)}  # type: ignore[arg-type]
+        if spec.min_items is not None:
+            base["minItems"] = spec.min_items
+        if spec.max_items is not None:
+            base["maxItems"] = spec.max_items
+    else:
+        base = {"type": spec.type}
+        if spec.enum is not None:
+            base["enum"] = list(spec.enum)
+        if spec.min_length is not None:
+            base["minLength"] = spec.min_length
+        if spec.max_length is not None:
+            base["maxLength"] = spec.max_length
+        if spec.minimum is not None:
+            base["minimum"] = spec.minimum
+        if spec.maximum is not None:
+            base["maximum"] = spec.maximum
+    if spec.nullable:
+        return {"anyOf": [base, {"type": "null"}]}
+    return base
+
+
+def _refs(name: str, seen: set[str]) -> None:
+    if name in seen:
+        return
+    seen.add(name)
+    for spec in CONTRACTS[name].values():
+        cur: F | None = spec
+        while cur is not None:
+            if cur.type == "ref" and cur.ref:
+                _refs(cur.ref, seen)
+            cur = cur.items
+
+
+def _object_schema(name: str) -> dict:
+    fields = CONTRACTS[name]
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [k for k, f in fields.items() if f.required],
+        "properties": {k: _schema_for(f) for k, f in fields.items()},
+    }
+
+
+def json_schema(name: str) -> dict:
+    from .versions import SCHEMA_VERSION
+
+    deps: set[str] = set()
+    _refs(name, deps)
+    deps.discard(name)
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"creative-core/v{SCHEMA_VERSION}/{name}.schema.json",
+        "title": name,
+        **_object_schema(name),
+    }
+    if deps:
+        schema["$defs"] = {d: _object_schema(d) for d in sorted(deps)}
+    return schema
+
+
+def _ts_type(spec: F) -> str:
+    if spec.type == "ref":
+        t = spec.ref or "unknown"
+    elif spec.type == "object":
+        t = "Record<string, unknown>"
+    elif spec.type == "map":
+        t = "Record<string, string>"
+    elif spec.type == "array":
+        inner = _ts_type(spec.items)  # type: ignore[arg-type]
+        t = f"Array<{inner}>"
+    elif spec.enum is not None:
+        t = " | ".join(json.dumps(v) for v in spec.enum)
+    else:
+        t = {"string": "string", "integer": "number", "number": "number", "boolean": "boolean"}[spec.type]
+    return f"{t} | null" if spec.nullable else t
+
+
+def typescript_declarations() -> str:
+    from .versions import CORE_VERSION, SCHEMA_VERSION
+
+    lines = [
+        "// Generated by creative_core.contracts.export_all — do not edit by hand.",
+        f"// core_version {CORE_VERSION} · schema_version {SCHEMA_VERSION}",
+        "",
+        f"export type ProductMode = {' | '.join(json.dumps(m) for m in PRODUCT_MODES)};",
+        f"export type PublicStrategy = {' | '.join(json.dumps(m) for m in PUBLIC_STRATEGIES)};",
+        f"export type AngleId = {' | '.join(json.dumps(m) for m in ANGLE_IDS)};",
+        "",
+    ]
+    for name, fields in CONTRACTS.items():
+        lines.append(f"export interface {name} {{")
+        for key, spec in fields.items():
+            opt = "" if spec.required else "?"
+            lines.append(f"  {key}{opt}: {_ts_type(spec)};")
+        lines.append("}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def export_all(target: Path | None = None) -> list[Path]:
+    target = target or Path(__file__).parent / "schemas"
+    target.mkdir(parents=True, exist_ok=True)
+    written = []
+    for name in EXPORTED_CONTRACTS:
+        path = target / f"{name}.schema.json"
+        path.write_text(json.dumps(json_schema(name), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        written.append(path)
+    ts = target / "contracts.d.ts"
+    ts.write_text(typescript_declarations(), encoding="utf-8")
+    written.append(ts)
+    return written
+
+
+if __name__ == "__main__":
+    for p in export_all():
+        print(p)

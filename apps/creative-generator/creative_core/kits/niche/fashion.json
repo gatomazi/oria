@@ -1,0 +1,43 @@
+{
+  "id": "fashion",
+  "name": "Moda / Vestuário",
+  "audienceBehaviors": [
+    "compra pelo caimento e pelo estilo, não só pela estampa",
+    "quer ver a peça vestida em corpo real",
+    "compara tecido, acabamento e tamanho antes de decidir"
+  ],
+  "commonUsageScenarios": [
+    "uso no dia a dia da cidade",
+    "encontro com amigos",
+    "trabalho casual",
+    "fim de semana ao ar livre"
+  ],
+  "activities": ["caminhar pela rua", "sair de um café", "conversar com amigos", "se arrumar em frente ao espelho"],
+  "sceneContexts": [
+    "rua urbana com arquitetura contemporânea e luz natural",
+    "café ou livraria com luz de janela",
+    "provador ou quarto com espelho e luz suave",
+    "parque urbano no fim da tarde"
+  ],
+  "materials": ["algodão", "trama de tecido visível", "costuras e acabamento", "etiqueta discreta"],
+  "visualCliches": ["pose de catálogo rígida", "fundo infinito colorido", "sorriso de banco de imagem"],
+  "avoid": [
+    "peça deformada ou com proporção irreal",
+    "tecido liso como vetor, sem trama",
+    "produto parecendo adesivo colado na foto"
+  ],
+  "recommendedAngles": [
+    "LIFESTYLE_COTIDIANO", "CAIMENTO", "CABIDE", "PRODUTO_ESTAMPA", "CLOSE_ESTAMPA", "PREMIUM_ESTILO", "CREATOR_STYLE"
+  ],
+  "strategyRules": {},
+  "angleLabels": {},
+  "productTypes": ["camiseta", "regata", "moletom", "hoodie", "cropped", "body infantil", "vestuário"],
+  "supportsApparelAngles": true,
+  "suggestedPersonas": [
+    {"id": "fashion_adult_f", "label": "Mulher 30 anos, estilo casual urbano", "age_range": "28-35", "appearance": "cabelo preso, pele morena, traços naturais", "style": "casual urbano, jeans e tênis", "behavior": "gestos naturais, em movimento", "source": "automatic"},
+    {"id": "fashion_adult_m", "label": "Homem 35 anos, estilo minimalista", "age_range": "32-40", "appearance": "barba curta, cabelo curto", "style": "minimalista, peças neutras", "behavior": "postura relaxada, olhar fora da câmera", "source": "automatic"},
+    {"id": "fashion_young", "label": "Jovem 22 anos, estilo streetwear leve", "age_range": "20-25", "appearance": "cabelo cacheado curto", "style": "streetwear leve", "behavior": "espontâneo, rindo", "source": "automatic"}
+  ],
+  "schemaVersion": 1,
+  "version": 1
+}

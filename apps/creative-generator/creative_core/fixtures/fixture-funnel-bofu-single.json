@@ -1,0 +1,52 @@
+{
+  "name": "fixture-funnel-bofu-single",
+  "description": "Funil por Criativo BOFU, 1 produto, Use Origens + fashion, persona customizada, benefícios e badges informados, Story.",
+  "input": {
+    "creative_id": "77777777-7777-4777-8777-777777777777",
+    "strategy": "FUNNEL_VISUAL",
+    "product_mode": "single_product",
+    "products": [
+      {"id": "prod-floripa", "name": "Camiseta Florianópolis", "type": "camiseta premium", "referenceImages": ["tenant-demo/products/prod-floripa/front.png"], "metadata": {"city": "Florianópolis", "state": "SC"}}
+    ],
+    "brand_kit_id": "use_origens",
+    "niche_kit_id": "fashion",
+    "angle_id": "CAIMENTO",
+    "placement_id": "STORY_9X16",
+    "funnel_stage": "BOFU",
+    "persona_mode": "custom",
+    "persona": {"label": "Homem 40 anos, barba grisalha", "age_range": "38-45", "style": "casual elegante"},
+    "funnel": {
+      "headline": "A sua cidade no peito",
+      "cta": "Comprar a minha →",
+      "benefits": ["Algodão peruano", "Envio para todo o Brasil", "Troca fácil"],
+      "badges": ["Frete grátis acima de R$ 199"]
+    },
+    "context": {"mode": "geographic", "subject": {"name": "Florianópolis", "metadata": {"city": "Florianópolis", "state": "SC"}}, "context_id": "grande_florianopolis_ilha"},
+    "quality": "high",
+    "seed": 9
+  },
+  "expected_plan": {
+    "strategy": "FUNNEL_VISUAL",
+    "funnel_stage": "BOFU",
+    "persona.label": "Homem 40 anos, barba grisalha",
+    "persona.source": "custom",
+    "overlay.headline": "A sua cidade no peito",
+    "overlay.cta": "Comprar a minha →",
+    "overlay.text_density": "commercial",
+    "overlay.cta_emphasis": "strong",
+    "overlay.benefits": ["Algodão peruano", "Envio para todo o Brasil", "Troca fácil"],
+    "overlay.badges": ["Frete grátis acima de R$ 199"],
+    "context.context_id": "geo:SC:grande_florianopolis_ilha",
+    "model.quality": "high",
+    "model.size": "1024x1824"
+  },
+  "expected_output": {
+    "status": "completed",
+    "asset.height": 1920,
+    "metadata.funnel_stage": "BOFU",
+    "metadata.quality": "high"
+  },
+  "validations": ["funnel_stage_in_image", "context_profile_approved"],
+  "prompt_must_contain": ["ETAPA DO FUNIL NA ARTE — BOFU", "BENEFÍCIOS", "BADGES", "Preserve o TIPO DE PEÇA", "ÁREA SEGURA"],
+  "prompt_must_not_contain": ["ETAPA TOFU", "MODO ÂNGULOS LIMPOS"]
+}

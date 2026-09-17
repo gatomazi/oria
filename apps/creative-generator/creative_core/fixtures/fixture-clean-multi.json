@@ -1,0 +1,62 @@
+{
+  "name": "fixture-clean-multi",
+  "description": "Ângulos Limpos multipeça (3 produtos), cliente NÃO regional com Brand Kit inline (tenant) + Niche Kit generic_commerce, contexto automático (nicho). Prova que o mesmo fluxo atende outro cliente e que multipeça é product_mode, não estratégia.",
+  "input": {
+    "creative_id": "22222222-2222-4222-8222-222222222222",
+    "strategy": "CLEAN_ANGLES",
+    "product_mode": "multi_product",
+    "products": [
+      {"id": "vela-lavanda", "name": "Vela Lavanda", "type": "vela aromática", "referenceImages": ["tenant-aroma/p/vela-lavanda.png"]},
+      {"id": "vela-cedro", "name": "Vela Cedro", "type": "vela aromática", "referenceImages": ["tenant-aroma/p/vela-cedro.png"]},
+      {"id": "vela-alecrim", "name": "Vela Alecrim", "type": "vela aromática", "referenceImages": ["tenant-aroma/p/vela-alecrim.png"]}
+    ],
+    "brand_kit": {
+      "id": "casa_aroma",
+      "name": "Casa Aroma",
+      "positioning": ["velas artesanais para rotina calma"],
+      "tone": ["acolhedor", "simples"],
+      "visualStyle": ["minimalista", "luz natural", "tons claros"],
+      "colors": ["areia", "verde sálvia"],
+      "avoid": ["excesso de props", "chamas exageradas"],
+      "angleLabels": {"PRODUTO_ESTAMPA": "Mesa posta de cima"},
+      "defaultContextProvider": "niche",
+      "schemaVersion": 1,
+      "version": 3
+    },
+    "niche_kit_id": "generic_commerce",
+    "angle_id": "PRODUTO_ESTAMPA",
+    "placement_id": "STORY_9X16",
+    "context": {"mode": "automatic"},
+    "copy": {"generate": true},
+    "quality": "low",
+    "seed": 11
+  },
+  "expected_plan": {
+    "strategy": "CLEAN_ANGLES",
+    "product_mode": "multi_product",
+    "funnel_stage": null,
+    "layout": null,
+    "overlay.allowed": false,
+    "persona": null,
+    "context.provider": "niche",
+    "context.context_id": "niche:generic_commerce",
+    "angle.label": "Mesa posta de cima",
+    "angle.uses_person": false,
+    "brand_kit.id": "casa_aroma",
+    "brand_kit.version": 3,
+    "niche_kit.id": "generic_commerce",
+    "placement.height": 1920,
+    "references.2.product_id": "vela-alecrim",
+    "references.2.order": 3
+  },
+  "expected_output": {
+    "status": "completed",
+    "asset.width": 1080,
+    "asset.height": 1920,
+    "metadata.product_mode": "multi_product",
+    "metadata.product_ids": ["vela-lavanda", "vela-cedro", "vela-alecrim"]
+  },
+  "validations": ["clean_angles_has_no_overlay", "references_are_product_art_only"],
+  "prompt_must_contain": ["3 produtos DIFERENTES", "Vela Cedro", "ÁREA SEGURA", "ATMOSFERA"],
+  "prompt_must_not_contain": ["camiseta", "TEXTO NO CRIATIVO", "Preserve o TIPO DE PEÇA"]
+}

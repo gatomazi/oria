@@ -1,0 +1,77 @@
+{
+  "_schema": "core_communication_v1",
+  "_doc": "Blocos de comunicação dos motores públicos (REMARKETING, FUNNEL_VISUAL) e regras textuais genéricas. Sem região, sem camiseta. Textos padrão só entram quando o consumidor não informa headline/subheadline/CTA; benefícios, badges, chips e prova social NUNCA têm padrão — só entram quando informados (nada de claim inventado).",
+  "core_rules": [
+    "Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.",
+    "O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.",
+    "Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.",
+    "Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).",
+    "Fotografia realista, alta qualidade, formato vertical."
+  ],
+  "apparel_rules": [
+    "A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.",
+    "Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D."
+  ],
+  "tofu_rule": "ETAPA TOFU: a imagem deve parecer uma publicação social plausível, NUNCA um anúncio tradicional. Sem molduras promocionais, preços, descontos ou cupons, e sem simular depoimento ou experiência de compra de um cliente real.",
+  "clean_angles_rule": "MODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.",
+  "text_rule": "TEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.",
+  "placements": {
+    "FEED_4X5": "FORMATO: Feed 4:5 vertical (1080×1350).",
+    "STORY_9X16": "FORMATO: Stories 9:16 vertical (1080×1920). ÁREA SEGURA: os 14% superiores e os 20% inferiores do quadro ficam livres de texto, CTA e elementos importantes."
+  },
+  "remarketing": {
+    "direction": "DIREÇÃO: criativo de REMARKETING para quem já conhece a marca — fotografia realista + camada tipográfica integrada, produto protagonista, sem cara de banner promocional genérico. O LAYOUT abaixo manda na composição; o ÂNGULO define o clima da cena.",
+    "layouts": {
+      "single_model": "LAYOUT MODELO ÚNICO: uma pessoa com o produto em destaque, ocupando 55–65% do quadro; texto numa zona de respiro lateral ou superior; CTA logo abaixo do texto.",
+      "hero_support_models": "LAYOUT HERO + APOIO: pessoa principal com o Produto 1 em primeiro plano (50–65% do peso visual) e {n_apoios} pessoa(s) de apoio levemente desfocada(s) com os demais produtos; texto no topo, CTA na base.",
+      "multi_model_same_scene": "LAYOUT GRUPO NA MESMA CENA: {n} pessoas na mesma cena, cada uma com um produto diferente, composição equilibrada e natural; texto no topo; CTA centralizado na base.",
+      "flatlay_grid": "LAYOUT FLATLAY GRADE: {n} produtos vistos diretamente de cima em grade solta, pouquíssimo overlap, cada produto inteiro legível; headline e subheadline no topo; CTA centralizado abaixo dos produtos.",
+      "flatlay_hero_stack": "LAYOUT FLATLAY HERO + PILHA: Produto 1 em destaque visto de cima; os outros {n_restantes} empilhados ou ao lado, identificáveis; texto numa faixa lateral; CTA na base dessa faixa.",
+      "single_hanger": "LAYOUT CABIDE ÚNICO: um único produto pendurado em cabide central, inteiro e centralizado, fundo limpo sem outras peças em destaque; texto acima; CTA abaixo.",
+      "product_closeup": "LAYOUT CLOSE DO PRODUTO: plano fechado no detalhe principal do produto em uso; texto numa zona de respiro; CTA discreto.",
+      "full_body_fit": "LAYOUT CORPO INTEIRO: pessoa de corpo inteiro com o produto, mostrando proporção real; texto lateral; CTA abaixo do texto."
+    },
+    "apparel_layouts": ["single_hanger", "full_body_fit"],
+    "basket_layouts": ["hero_support_models", "flatlay_hero_stack", "flatlay_grid"],
+    "intents": {
+      "site_visitor": {"headline": "Ainda pensando em nós?", "subheadline": "Tem novidades esperando por você", "cta": "Ver a coleção →"},
+      "product_view": {"headline": "Ainda pensando nele?", "subheadline": "O produto que você viu continua disponível", "cta": "Ver o produto →"},
+      "collection_discovery": {"headline": "Não achou o seu ainda?", "subheadline": "Várias opções disponíveis", "cta": "Ver todas →"},
+      "cart": {"headline": "Seu carrinho está esperando", "subheadline": "Finalize quando quiser", "cta": "Voltar ao carrinho →"},
+      "checkout": {"headline": "Falta pouco", "subheadline": "Seu pedido está quase pronto", "cta": "Finalizar compra →"},
+      "social_proof": {"headline": "Escolhido por quem já conhece", "subheadline": "Veja o que tem de novo", "cta": "Conhecer →"},
+      "objection": {"headline": "Ficou alguma dúvida?", "subheadline": "Tamanhos, trocas e envio explicados no site", "cta": "Tirar dúvidas →"}
+    }
+  },
+  "funnel": {
+    "stages": {
+      "TOFU": "ETAPA DO FUNIL NA ARTE — TOFU (descoberta): composição de publicação social plausível; texto mínimo (headline curta e, no máximo, CTA em texto + seta); nada de botão sólido, preço, cupom ou selo.",
+      "MOFU": "ETAPA DO FUNIL NA ARTE — MOFU (consideração): mostrar opções e contexto de uso; headline + subheadline curta + CTA discreto; chips e barra de busca somente quando listados no bloco de texto.",
+      "BOFU": "ETAPA DO FUNIL NA ARTE — BOFU (decisão): clareza de ação; headline + subheadline + CTA forte; benefícios e badges somente quando listados no bloco de texto."
+    },
+    "defaults": {
+      "single_product": {
+        "TOFU": {"headline": "Feito para o seu dia a dia", "subheadline": "", "cta": ""},
+        "MOFU": {"headline": "Conheça de perto", "subheadline": "Detalhes que fazem diferença", "cta": "Ver detalhes →"},
+        "BOFU": {"headline": "Garanta o seu", "subheadline": "Escolha e finalize no site", "cta": "Comprar agora →"}
+      },
+      "multi_product": {
+        "TOFU": {"headline": "Uma coleção inteira para você", "subheadline": "", "cta": ""},
+        "MOFU": {"headline": "Várias opções disponíveis", "subheadline": "Escolha a sua favorita", "cta": "Ver opções →"},
+        "BOFU": {"headline": "Escolha a sua", "subheadline": "Todas as opções no site", "cta": "Comprar agora →"}
+      }
+    },
+    "extras": {
+      "badges": "BADGES (selos pequenos, texto literal, no máximo 3, alinhados e discretos, nunca sobre o produto): {itens}",
+      "search_bar": "BARRA DE BUSCA estilizada (campo arredondado com ícone de lupa) contendo o texto literal: \"{texto}\"",
+      "chips": "CHIPS (pílulas pequenas lado a lado, texto literal): {itens}"
+    }
+  },
+  "copy": {
+    "stages": {
+      "TOFU": "TOFU (descoberta): desperta identificação e curiosidade; sem oferta, sem urgência.",
+      "MOFU": "MOFU (consideração): explica o produto, variedade, qualidade ou uso real.",
+      "BOFU": "BOFU (decisão): convida à compra com clareza; benefícios só se forem reais e informados."
+    }
+  }
+}

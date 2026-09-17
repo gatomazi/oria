@@ -1,0 +1,55 @@
+{
+  "name": "fixture-funnel-mofu-multi",
+  "description": "Funil por Criativo MOFU multipeça (3 produtos), cliente não regional (inline) + generic_commerce, com chips e barra de busca.",
+  "input": {
+    "creative_id": "66666666-6666-4666-8666-666666666666",
+    "strategy": "FUNNEL_VISUAL",
+    "product_mode": "multi_product",
+    "products": [
+      {"id": "caneca-azul", "name": "Caneca Azul", "type": "caneca de cerâmica", "referenceImages": ["loja-ceramica/caneca-azul.png"]},
+      {"id": "caneca-terracota", "name": "Caneca Terracota", "type": "caneca de cerâmica", "referenceImages": ["loja-ceramica/caneca-terracota.png", "loja-ceramica/caneca-terracota-lado.png"]},
+      {"id": "caneca-creme", "name": "Caneca Creme", "type": "caneca de cerâmica", "referenceImages": ["loja-ceramica/caneca-creme.png"]}
+    ],
+    "brand_kit": {
+      "id": "ceramica_sol",
+      "name": "Cerâmica Sol",
+      "tone": ["caloroso"],
+      "visualStyle": ["artesanal", "luz de manhã"],
+      "schemaVersion": 1,
+      "version": 1
+    },
+    "niche_kit_id": "generic_commerce",
+    "angle_id": "PREMIUM_ESTILO",
+    "placement_id": "FEED_4X5",
+    "funnel_stage": "MOFU",
+    "funnel": {
+      "chips": ["Azul", "Terracota", "Creme"],
+      "search_bar_text": "caneca de cerâmica"
+    },
+    "context": {"mode": "niche"},
+    "seed": 4
+  },
+  "expected_plan": {
+    "strategy": "FUNNEL_VISUAL",
+    "product_mode": "multi_product",
+    "funnel_stage": "MOFU",
+    "overlay.headline": "Várias opções disponíveis",
+    "overlay.subheadline": "Escolha a sua favorita",
+    "overlay.cta": "Ver opções →",
+    "overlay.chips": ["Azul", "Terracota", "Creme"],
+    "overlay.search_bar_text": "caneca de cerâmica",
+    "overlay.text_density": "balanced",
+    "context.provider": "niche",
+    "references.2.order": 3,
+    "references.2.product_id": "caneca-terracota",
+    "references.3.product_id": "caneca-creme"
+  },
+  "expected_output": {
+    "status": "completed",
+    "metadata.funnel_stage": "MOFU",
+    "metadata.product_mode": "multi_product"
+  },
+  "validations": ["funnel_stage_in_image"],
+  "prompt_must_contain": ["BARRA DE BUSCA", "CHIPS", "3 produtos DIFERENTES", "imagens 2, 3"],
+  "prompt_must_not_contain": ["camiseta", "ETAPA TOFU"]
+}

@@ -1,0 +1,6 @@
+# Runtime of the creative core HTTP service (Railway service "creative-core").
+# The core package itself only needs Pillow; openai is imported lazily by the
+# service to build per-request BYOK clients; gunicorn serves the WSGI app.
+Pillow>=10.0.0,<13
+openai>=1.50.0,<3
+gunicorn>=22.0.0,<24

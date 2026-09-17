@@ -1,0 +1,1092 @@
+{
+  "RS": {
+    "nome": "Rio Grande do Sul",
+    "regiao": "Sul",
+    "contextos": {
+      "pampa_campanha_fronteira": {
+        "descricao": "Campanha, Fronteira Oeste e áreas de Pampa",
+        "cenario": [
+          "campos amplos e horizonte aberto, relevo suavemente ondulado",
+          "estância ou propriedade rural com madeira e paisagem aberta",
+          "estrada rural de terra com campo ao redor",
+          "varanda ou ambiente interno voltado para paisagem de campanha"
+        ],
+        "elementos_culturais": [
+          "cuia de chimarrão",
+          "cavalo como elemento secundário da paisagem",
+          "madeira, couro e lã em detalhes discretos"
+        ],
+        "usar_com_cuidado": [
+          "bombacha ou pilcha completa",
+          "fogo de chão",
+          "churrasco",
+          "galpão extremamente cenográfico"
+        ],
+        "evitar": [
+          "acumular cavalo, chimarrão, bombacha, fogo e bandeira na mesma cena"
+        ]
+      },
+      "serra_gaucha": {
+        "descricao": "Serra Gaúcha e região de altitude",
+        "cenario": [
+          "paisagem serrana verde, vales e relevo acidentado",
+          "casa ou pousada acolhedora com madeira e luz natural",
+          "rua de cidade serrana com arquitetura residencial discreta",
+          "ambiente de inverno contemporâneo, janela e vegetação ao fundo"
+        ],
+        "elementos_culturais": [
+          "madeira natural",
+          "café ou chimarrão como elemento cotidiano",
+          "mantas e texturas de lã discretas"
+        ],
+        "usar_com_cuidado": [
+          "arquitetura italiana ou alemã excessivamente temática",
+          "parreirais quando não houver contexto confirmado"
+        ],
+        "evitar": [
+          "praia",
+          "cenário de Pampa aberto como referência principal"
+        ]
+      },
+      "metropolitana_urbana": {
+        "descricao": "Porto Alegre, Região Metropolitana e contexto urbano",
+        "cenario": [
+          "rua urbana contemporânea com árvores e arquitetura residencial",
+          "café, livraria ou ambiente interno contemporâneo",
+          "orla urbana ou parque, sem monumentos obrigatórios",
+          "apartamento ou varanda com luz natural"
+        ],
+        "elementos_culturais": [
+          "chimarrão em contexto cotidiano",
+          "livro, café, mochila ou bicicleta"
+        ],
+        "usar_com_cuidado": [
+          "monumentos específicos",
+          "símbolos campeiros"
+        ],
+        "evitar": [
+          "transformar Porto Alegre em cenário rural"
+        ]
+      },
+      "missoes_noroeste": {
+        "descricao": "Missões e Noroeste gaúcho",
+        "cenario": [
+          "paisagem rural verde e horizonte amplo",
+          "cidade de interior com praça arborizada",
+          "arquitetura baixa e ambiente urbano tranquilo",
+          "estradas e propriedades agrícolas discretas"
+        ],
+        "elementos_culturais": [
+          "chimarrão",
+          "madeira e fibras naturais"
+        ],
+        "usar_com_cuidado": [
+          "ruínas missioneiras sem confirmação da cidade",
+          "referências indígenas ou religiosas específicas"
+        ],
+        "evitar": [
+          "usar patrimônio missioneiro genericamente para qualquer cidade da região"
+        ]
+      },
+      "litoral": {
+        "descricao": "Litoral Norte e litoral gaúcho",
+        "cenario": [
+          "praia ampla com dunas e vegetação costeira",
+          "calçadão ou rua litorânea tranquila",
+          "casa de praia com madeira e luz natural",
+          "lagoa ou ambiente costeiro com horizonte aberto"
+        ],
+        "elementos_culturais": [
+          "mate em contexto cotidiano",
+          "cadeira ou toalha de praia discreta"
+        ],
+        "usar_com_cuidado": [
+          "elementos campeiros fortes"
+        ],
+        "evitar": [
+          "serra",
+          "vinhedos",
+          "galpão campeiro como cenário principal"
+        ]
+      }
+    },
+    "paleta": ["#d6ba8d", "#4d543d"]
+  },
+
+  "SC": {
+    "nome": "Santa Catarina",
+    "regiao": "Sul",
+    "contextos": {
+      "litoral": {
+        "descricao": "Florianópolis, litoral norte, centro e sul catarinense",
+        "cenario": [
+          "praia catarinense com areia clara, vegetação costeira e mar",
+          "rua residencial próxima ao litoral com luz natural",
+          "varanda, café ou ambiente interno com clima praiano contemporâneo",
+          "costão, morro ou vegetação de Mata Atlântica ao fundo"
+        ],
+        "elementos_culturais": [
+          "nenhum objeto obrigatório",
+          "prancha, bolsa de praia ou óculos como elementos cotidianos discretos"
+        ],
+        "usar_com_cuidado": [
+          "rede de pesca",
+          "barco de pesca",
+          "referências açorianas"
+        ],
+        "evitar": [
+          "chimarrão como símbolo obrigatório",
+          "arquitetura enxaimel",
+          "cenário de serra"
+        ]
+      },
+      "grande_florianopolis_ilha": {
+        "descricao": "Florianópolis e identidade de ilha",
+        "cenario": [
+          "bairro residencial com morro e vegetação ao fundo",
+          "orla, baía ou mar com contexto urbano discreto",
+          "rua de bairro tradicional da ilha sem monumentos obrigatórios",
+          "ambiente contemporâneo com referências sutis à vida costeira"
+        ],
+        "elementos_culturais": [
+          "elementos ligados à pesca artesanal quando coerentes",
+          "renda ou fibras naturais apenas como detalhe",
+          "café, livro ou objetos cotidianos"
+        ],
+        "usar_com_cuidado": [
+          "barco açoriano",
+          "rede de pesca",
+          "tainha como elemento gráfico ou culinário"
+        ],
+        "evitar": [
+          "misturar com Oktoberfest, enxaimel ou estética serrana"
+        ]
+      },
+      "serra": {
+        "descricao": "Serra Catarinense e áreas de altitude",
+        "cenario": [
+          "serra catarinense com araucárias e relevo de montanha",
+          "campo de altitude com neblina leve",
+          "chalé ou casa contemporânea de madeira e pedra",
+          "ambiente interno acolhedor com janela voltada para paisagem serrana"
+        ],
+        "elementos_culturais": [
+          "cuia de mate",
+          "madeira, lã e pedra natural",
+          "café quente em recipiente simples"
+        ],
+        "usar_com_cuidado": [
+          "cavalo",
+          "elementos tropeiros"
+        ],
+        "evitar": [
+          "praia",
+          "arquitetura enxaimel automática",
+          "elementos náuticos"
+        ]
+      },
+      "vale_europeu": {
+        "descricao": "Vale do Itajaí e cidades com influência germânica/europeia",
+        "cenario": [
+          "rua urbana arborizada no Vale do Itajaí",
+          "arquitetura residencial com referências germânicas discretas",
+          "rio, vale e vegetação verde",
+          "café ou ambiente contemporâneo de cidade de médio porte"
+        ],
+        "elementos_culturais": [
+          "madeira natural",
+          "caneca ou café em contexto cotidiano"
+        ],
+        "usar_com_cuidado": [
+          "enxaimel muito evidente",
+          "trajes típicos",
+          "elementos de Oktoberfest"
+        ],
+        "evitar": [
+          "transformar qualquer cidade do Vale em cenário de festa alemã"
+        ]
+      },
+      "oeste_meio_oeste": {
+        "descricao": "Oeste e Meio-Oeste catarinense",
+        "cenario": [
+          "cidade de interior contemporânea, arborizada e organizada",
+          "paisagem agrícola ondulada",
+          "varanda ou casa com madeira e luz natural",
+          "estrada rural ou propriedade moderna ao fundo"
+        ],
+        "elementos_culturais": [
+          "cuia de mate",
+          "madeira e materiais naturais",
+          "café em contexto cotidiano"
+        ],
+        "usar_com_cuidado": [
+          "elementos rurais excessivos",
+          "chapéu ou estética country"
+        ],
+        "evitar": [
+          "praia",
+          "cenário açoriano",
+          "enxaimel como regra"
+        ]
+      }
+    },
+    "paleta": ["#d6ba8d", "#4d543d"]
+  },
+
+  "PR": {
+    "nome": "Paraná",
+    "regiao": "Sul",
+    "contextos": {
+      "curitiba_metropolitana": {
+        "descricao": "Curitiba e Região Metropolitana",
+        "cenario": [
+          "rua urbana arborizada com arquitetura contemporânea",
+          "café, livraria ou apartamento minimalista",
+          "parque urbano com vegetação abundante",
+          "dia nublado ou luz suave, estética urbana premium"
+        ],
+        "elementos_culturais": [
+          "café",
+          "livro",
+          "bicicleta ou mochila"
+        ],
+        "usar_com_cuidado": [
+          "araucária",
+          "monumentos curitibanos"
+        ],
+        "evitar": [
+          "cenário rural tropeiro como padrão"
+        ]
+      },
+      "campos_gerais_tropeiro": {
+        "descricao": "Campos Gerais e áreas ligadas ao tropeirismo",
+        "cenario": [
+          "campos amplos, relevo ondulado e araucárias",
+          "estrada rural histórica ou paisagem de campo",
+          "fazenda ou construção de pedra e madeira",
+          "cidade histórica de interior com arquitetura baixa"
+        ],
+        "elementos_culturais": [
+          "cuia de mate",
+          "madeira e couro em detalhes"
+        ],
+        "usar_com_cuidado": [
+          "cavalo",
+          "chapéu",
+          "elementos tropeiros explícitos"
+        ],
+        "evitar": [
+          "praia",
+          "cafezal como referência obrigatória"
+        ]
+      },
+      "norte_cafeeiro": {
+        "descricao": "Norte e Norte Pioneiro",
+        "cenario": [
+          "cafezal em relevo suave",
+          "cidade de interior arborizada e ensolarada",
+          "casa ou varanda com jardim",
+          "paisagem agrícola organizada"
+        ],
+        "elementos_culturais": [
+          "xícara de café",
+          "grãos ou ramo de café discretos"
+        ],
+        "usar_com_cuidado": [
+          "sacos de café ou cenografia rural excessiva"
+        ],
+        "evitar": [
+          "praia",
+          "tropeirismo como contexto principal"
+        ]
+      },
+      "oeste_sudoeste": {
+        "descricao": "Oeste e Sudoeste paranaense",
+        "cenario": [
+          "paisagem agrícola contemporânea",
+          "cidade de interior organizada",
+          "estrada rural ou propriedade moderna",
+          "área verde com relevo suave"
+        ],
+        "elementos_culturais": [
+          "mate ou café em contexto cotidiano",
+          "madeira natural"
+        ],
+        "usar_com_cuidado": [
+          "maquinário agrícola",
+          "estética country"
+        ],
+        "evitar": [
+          "litoral",
+          "arquitetura histórica genérica"
+        ]
+      },
+      "litoral_serra_do_mar": {
+        "descricao": "Litoral do Paraná e Serra do Mar",
+        "cenario": [
+          "Mata Atlântica densa e montanhas costeiras",
+          "baía, litoral ou praia com vegetação",
+          "rua histórica litorânea quando confirmada",
+          "ambiente de casa ou pousada tropical discreta"
+        ],
+        "elementos_culturais": [
+          "nenhum objeto obrigatório",
+          "fibras naturais e madeira"
+        ],
+        "usar_com_cuidado": [
+          "barcos",
+          "elementos caiçaras"
+        ],
+        "evitar": [
+          "cafezal",
+          "cenário tropeiro"
+        ]
+      }
+    },
+    "paleta": ["#d6ba8d", "#4d543d"]
+  },
+
+  "MT": {
+    "nome": "Mato Grosso",
+    "regiao": "Centro-Oeste",
+    "contextos": {
+      "pantanal": {
+        "descricao": "Pantanal mato-grossense",
+        "cenario": [
+          "planície pantaneira com áreas alagadas",
+          "beira de rio com vegetação e aves",
+          "fazenda pantaneira em contexto natural",
+          "passarela, deck ou varanda voltada para paisagem"
+        ],
+        "elementos_culturais": [
+          "viola de cocho",
+          "binóculo ou câmera para observação de fauna",
+          "chapéu de campo discreto"
+        ],
+        "usar_com_cuidado": [
+          "gado",
+          "cavalo",
+          "estética de peão"
+        ],
+        "evitar": [
+          "misturar Pantanal com lavoura de soja"
+        ]
+      },
+      "cuiaba_urbana": {
+        "descricao": "Cuiabá e contexto urbano contemporâneo",
+        "cenario": [
+          "arquitetura urbana contemporânea",
+          "café, rooftop ou varanda",
+          "rua arborizada sob luz quente",
+          "ambiente interno com materiais naturais"
+        ],
+        "elementos_culturais": [
+          "frutas regionais em contexto culinário discreto",
+          "mochila, celular ou café"
+        ],
+        "usar_com_cuidado": [
+          "viola de cocho como decoração"
+        ],
+        "evitar": [
+          "fazenda automática"
+        ]
+      },
+      "chapada_cerrado": {
+        "descricao": "Chapada dos Guimarães e Cerrado",
+        "cenario": [
+          "cerrado nativo",
+          "paredões e relevo de chapada ao fundo quando pertinente",
+          "trilha e vegetação baixa",
+          "mirante natural sem infraestrutura cenográfica"
+        ],
+        "elementos_culturais": [
+          "frutas do cerrado",
+          "mochila ou câmera"
+        ],
+        "usar_com_cuidado": [
+          "mirantes específicos"
+        ],
+        "evitar": [
+          "chamar Chapada dos Guimarães de cidade colonial"
+        ]
+      },
+      "agro_interior": {
+        "descricao": "Interior agrícola e polos do agronegócio",
+        "cenario": [
+          "lavoura contemporânea de grãos",
+          "estrada rural ampla",
+          "cidade do interior moderna",
+          "propriedade rural com arquitetura contemporânea"
+        ],
+        "elementos_culturais": [
+          "nenhum objeto obrigatório"
+        ],
+        "usar_com_cuidado": [
+          "máquinas agrícolas",
+          "chapéu de campo"
+        ],
+        "evitar": [
+          "transformar todo MT em Pantanal"
+        ]
+      }
+    },
+    "paleta": ["#8c3b1f", "#5a2e1b", "#3e5f3c", "#e39a2d", "#e6d6c3"]
+  },
+
+  "MS": {
+    "nome": "Mato Grosso do Sul",
+    "regiao": "Centro-Oeste",
+    "contextos": {
+      "pantanal": {
+        "descricao": "Pantanal sul-mato-grossense",
+        "cenario": [
+          "área alagada pantaneira",
+          "beira de rio",
+          "fazenda pantaneira integrada à paisagem",
+          "vegetação e aves em plano secundário"
+        ],
+        "elementos_culturais": [
+          "tereré",
+          "binóculo ou câmera",
+          "chapéu de campo discreto"
+        ],
+        "usar_com_cuidado": [
+          "gado",
+          "cavalo",
+          "visual de peão"
+        ],
+        "evitar": [
+          "misturar Pantanal e Bonito na mesma cena"
+        ]
+      },
+      "bonito_bodoquena": {
+        "descricao": "Bonito e Serra da Bodoquena",
+        "cenario": [
+          "rio cristalino em vegetação densa",
+          "deck ou trilha de ecoturismo",
+          "mata ciliar",
+          "paisagem natural com água transparente"
+        ],
+        "elementos_culturais": [
+          "mochila de trilha",
+          "máscara ou snorkel apenas quando coerente"
+        ],
+        "usar_com_cuidado": [
+          "equipamentos de mergulho muito evidentes"
+        ],
+        "evitar": [
+          "curral",
+          "fazenda pantaneira como cenário automático"
+        ]
+      },
+      "campo_grande_urbana": {
+        "descricao": "Campo Grande e entorno urbano",
+        "cenario": [
+          "avenida arborizada",
+          "café ou rooftop contemporâneo",
+          "parque urbano",
+          "arquitetura residencial moderna"
+        ],
+        "elementos_culturais": [
+          "tereré",
+          "mochila ou celular"
+        ],
+        "usar_com_cuidado": [
+          "pequi como prop"
+        ],
+        "evitar": [
+          "cenário pantaneiro obrigatório"
+        ]
+      },
+      "fronteira_sul": {
+        "descricao": "Sul e fronteira com Paraguai",
+        "cenario": [
+          "cidade de fronteira contemporânea",
+          "paisagem de interior e campos",
+          "praça ou rua comercial tranquila",
+          "ambiente residencial com luz quente"
+        ],
+        "elementos_culturais": [
+          "tereré",
+          "guampa e bomba em uso cotidiano"
+        ],
+        "usar_com_cuidado": [
+          "referências paraguaias explícitas sem CityContext confirmado"
+        ],
+        "evitar": [
+          "estereótipo pantaneiro automático"
+        ]
+      }
+    },
+    "paleta": ["#8c3b1f", "#5a2e1b", "#3e5f3c", "#e39a2d", "#e6d6c3"]
+  },
+
+  "GO": {
+    "nome": "Goiás",
+    "regiao": "Centro-Oeste",
+    "contextos": {
+      "goiania_urbana": {
+        "descricao": "Goiânia e região metropolitana",
+        "cenario": [
+          "arquitetura urbana contemporânea",
+          "parque urbano muito arborizado",
+          "café, rooftop ou apartamento",
+          "rua com vegetação abundante"
+        ],
+        "elementos_culturais": [
+          "frutas do cerrado em contexto gastronômico discreto",
+          "café, celular ou mochila"
+        ],
+        "usar_com_cuidado": [
+          "pequi como prop literal"
+        ],
+        "evitar": [
+          "roça automática"
+        ]
+      },
+      "cidades_historicas": {
+        "descricao": "Goiás, Pirenópolis e cidades históricas",
+        "cenario": [
+          "casario colonial baixo",
+          "rua de pedra",
+          "praça histórica",
+          "fachadas coloridas discretas"
+        ],
+        "elementos_culturais": [
+          "artesanato local discreto",
+          "viola caipira quando coerente"
+        ],
+        "usar_com_cuidado": [
+          "folias e festas religiosas",
+          "decoração festiva"
+        ],
+        "evitar": [
+          "usar cenário colonial para qualquer cidade de Goiás"
+        ]
+      },
+      "cerrado_chapadas": {
+        "descricao": "Cerrado e regiões naturais",
+        "cenario": [
+          "cerrado nativo",
+          "trilha",
+          "chapada e formações rochosas",
+          "vegetação baixa e céu amplo"
+        ],
+        "elementos_culturais": [
+          "frutos do cerrado",
+          "mochila ou câmera"
+        ],
+        "usar_com_cuidado": [
+          "cachoeiras específicas"
+        ],
+        "evitar": [
+          "agronegócio quando o conceito é natureza"
+        ]
+      },
+      "agro_interior": {
+        "descricao": "Interior agrícola goiano",
+        "cenario": [
+          "lavouras contemporâneas",
+          "fazenda moderna",
+          "estrada rural",
+          "cidade do interior arborizada"
+        ],
+        "elementos_culturais": [
+          "viola caipira em contexto cultural",
+          "chapéu de campo discreto"
+        ],
+        "usar_com_cuidado": [
+          "visual sertanejo genérico"
+        ],
+        "evitar": [
+          "excesso de estética country"
+        ]
+      }
+    },
+    "paleta": ["#8c3b1f", "#5a2e1b", "#3e5f3c", "#e39a2d", "#e6d6c3"]
+  },
+
+  "DF": {
+    "nome": "Distrito Federal",
+    "regiao": "Centro-Oeste",
+    "contextos": {
+      "brasilia_modernista": {
+        "descricao": "Plano Piloto e linguagem modernista de Brasília",
+        "cenario": [
+          "arquitetura modernista de concreto e grandes vãos",
+          "superquadra arborizada",
+          "espaços urbanos amplos e geometria arquitetônica",
+          "café ou ambiente contemporâneo com linhas minimalistas"
+        ],
+        "elementos_culturais": [
+          "livro, mochila, bicicleta ou café",
+          "cobogós e brises como materialidade arquitetônica"
+        ],
+        "usar_com_cuidado": [
+          "monumentos icônicos específicos"
+        ],
+        "evitar": [
+          "cenário rural",
+          "arquitetura colonial europeia"
+        ]
+      },
+      "regioes_administrativas": {
+        "descricao": "Contexto urbano cotidiano fora do eixo monumental",
+        "cenario": [
+          "rua urbana contemporânea",
+          "praça, comércio ou café",
+          "arquitetura residencial moderna",
+          "parque e vegetação de cerrado urbano"
+        ],
+        "elementos_culturais": [
+          "celular, mochila ou bicicleta"
+        ],
+        "usar_com_cuidado": [],
+        "evitar": [
+          "reduzir todo o DF aos monumentos do Plano Piloto"
+        ]
+      }
+    },
+    "paleta": ["#8c3b1f", "#5a2e1b", "#3e5f3c", "#e39a2d", "#e6d6c3"]
+  },
+
+  "AM": {
+    "nome": "Amazonas",
+    "regiao": "Norte",
+    "contextos": {
+      "manaus_urbana": {
+        "descricao": "Manaus urbana",
+        "cenario": [
+          "rua urbana tropical com vegetação intensa",
+          "arquitetura histórica integrada à cidade contemporânea",
+          "mercado urbano ou café",
+          "orla urbana voltada para o Rio Negro"
+        ],
+        "elementos_culturais": [
+          "frutas amazônicas",
+          "café ou suco regional",
+          "fibras naturais discretas"
+        ],
+        "usar_com_cuidado": [
+          "Teatro Amazonas",
+          "artesanato com grafismos indígenas"
+        ],
+        "evitar": [
+          "transformar Manaus em aldeia ou floresta isolada"
+        ]
+      },
+      "rios_ribeirinho": {
+        "descricao": "Comunidades e paisagens ribeirinhas",
+        "cenario": [
+          "rio amplo com floresta nas margens",
+          "casa de madeira elevada",
+          "trapiche ou deck",
+          "barcos regionais em plano secundário"
+        ],
+        "elementos_culturais": [
+          "cesto de fibras",
+          "frutas regionais"
+        ],
+        "usar_com_cuidado": [
+          "artesanato tradicional específico"
+        ],
+        "evitar": [
+          "apropriação de grafismos indígenas"
+        ]
+      },
+      "floresta": {
+        "descricao": "Floresta Amazônica e ecoturismo",
+        "cenario": [
+          "trilha em floresta densa",
+          "vegetação amazônica úmida",
+          "igarapé",
+          "deck ou estrutura de ecoturismo discreta"
+        ],
+        "elementos_culturais": [
+          "mochila, câmera ou garrafa"
+        ],
+        "usar_com_cuidado": [],
+        "evitar": [
+          "cenário fantasioso de selva"
+        ]
+      }
+    },
+    "paleta": ["#D4B873", "#234b50", "#B2713D", "#3b7a57", "#964b00", "#a8c686"]
+  },
+
+  "PA": {
+    "nome": "Pará",
+    "regiao": "Norte",
+    "contextos": {
+      "belem_urbana": {
+        "descricao": "Belém e contexto urbano amazônico",
+        "cenario": [
+          "rua histórica tropical de Belém",
+          "mercado e contexto urbano ribeirinho",
+          "casario com vegetação intensa",
+          "café ou ambiente contemporâneo"
+        ],
+        "elementos_culturais": [
+          "açaí em recipiente tradicional simples",
+          "tacacá em cuia apropriada",
+          "frutas como bacuri e cupuaçu"
+        ],
+        "usar_com_cuidado": [
+          "Ver-o-Peso como fundo obrigatório"
+        ],
+        "evitar": [
+          "confundir cuia de tacacá com chimarrão"
+        ]
+      },
+      "marajo": {
+        "descricao": "Ilha do Marajó",
+        "cenario": [
+          "campos alagáveis",
+          "fazenda marajoara integrada à paisagem",
+          "rios e canais",
+          "vegetação aberta amazônica"
+        ],
+        "elementos_culturais": [
+          "cerâmica marajoara discreta quando validada",
+          "fibras naturais"
+        ],
+        "usar_com_cuidado": [
+          "búfalo",
+          "grafismos marajoaras"
+        ],
+        "evitar": [
+          "usar grafismos culturais apenas como decoração aleatória"
+        ]
+      },
+      "ilhas_ribeirinho": {
+        "descricao": "Ilhas e comunidades ribeirinhas",
+        "cenario": [
+          "rio e floresta",
+          "trapiche",
+          "casa de madeira",
+          "barco regional discreto"
+        ],
+        "elementos_culturais": [
+          "frutas regionais",
+          "cestos de fibras"
+        ],
+        "usar_com_cuidado": [],
+        "evitar": [
+          "cenografia amazônica artificial"
+        ]
+      }
+    },
+    "paleta": ["#D4B873", "#234b50", "#B2713D", "#3b7a57", "#964b00", "#a8c686"]
+  },
+
+  "AC": {
+    "nome": "Acre",
+    "regiao": "Norte",
+    "contextos": {
+      "rio_branco_urbana": {
+        "descricao": "Rio Branco urbana",
+        "cenario": [
+          "cidade tropical contemporânea",
+          "parque ou área arborizada",
+          "café ou varanda urbana",
+          "beira de rio integrada ao ambiente urbano"
+        ],
+        "elementos_culturais": [
+          "frutas amazônicas",
+          "fibras naturais"
+        ],
+        "usar_com_cuidado": [
+          "referências à borracha como decoração"
+        ],
+        "evitar": [
+          "floresta como único retrato possível da cidade"
+        ]
+      },
+      "seringal_floresta": {
+        "descricao": "História da borracha e floresta acreana",
+        "cenario": [
+          "trilha em seringal",
+          "floresta amazônica ocidental",
+          "casa de madeira simples",
+          "rio ou igarapé"
+        ],
+        "elementos_culturais": [
+          "tigela de coleta de látex",
+          "instrumentos de extração de seringa quando coerentes"
+        ],
+        "usar_com_cuidado": [
+          "facão ou ferramentas em destaque"
+        ],
+        "evitar": [
+          "transformar contexto histórico em fantasia"
+        ]
+      }
+    },
+    "paleta": ["#D4B873", "#234b50", "#B2713D", "#3b7a57", "#964b00", "#a8c686"]
+  },
+
+  "RO": {
+    "nome": "Rondônia",
+    "regiao": "Norte",
+    "contextos": {
+      "porto_velho_madeira": {
+        "descricao": "Porto Velho e Rio Madeira",
+        "cenario": [
+          "orla do Rio Madeira",
+          "cidade tropical contemporânea",
+          "café ou varanda urbana",
+          "vegetação amazônica integrada à cidade"
+        ],
+        "elementos_culturais": [
+          "castanhas ou frutas regionais",
+          "madeira e fibras naturais"
+        ],
+        "usar_com_cuidado": [
+          "referências ferroviárias específicas"
+        ],
+        "evitar": [
+          "fazenda automática para Porto Velho"
+        ]
+      },
+      "interior_agro": {
+        "descricao": "Interior agropecuário de Rondônia",
+        "cenario": [
+          "propriedade rural contemporânea",
+          "paisagem agrícola",
+          "estrada rural",
+          "cidade do interior"
+        ],
+        "elementos_culturais": [
+          "chapéu de trabalho rural discreto"
+        ],
+        "usar_com_cuidado": [
+          "gado",
+          "maquinário"
+        ],
+        "evitar": [
+          "estética western genérica"
+        ]
+      },
+      "floresta_rios": {
+        "descricao": "Floresta e rios amazônicos de Rondônia",
+        "cenario": [
+          "floresta densa",
+          "rio ou igarapé",
+          "trapiche",
+          "trilha ecológica"
+        ],
+        "elementos_culturais": [
+          "frutas e sementes regionais"
+        ],
+        "usar_com_cuidado": [],
+        "evitar": [
+          "misturar com cenário agro na mesma composição sem motivo"
+        ]
+      }
+    },
+    "paleta": ["#D4B873", "#234b50", "#B2713D", "#3b7a57", "#964b00", "#a8c686"]
+  },
+
+  "RR": {
+    "nome": "Roraima",
+    "regiao": "Norte",
+    "contextos": {
+      "boa_vista_urbana": {
+        "descricao": "Boa Vista urbana",
+        "cenario": [
+          "cidade planejada com avenidas amplas",
+          "orla do Rio Branco",
+          "praça ou parque urbano",
+          "café contemporâneo"
+        ],
+        "elementos_culturais": [
+          "frutas regionais",
+          "mochila, bicicleta ou café"
+        ],
+        "usar_com_cuidado": [],
+        "evitar": [
+          "Monte Roraima como fundo automático de Boa Vista"
+        ]
+      },
+      "lavrado": {
+        "descricao": "Lavrado roraimense",
+        "cenario": [
+          "savana amazônica aberta",
+          "campos naturais e céu amplo",
+          "serras distantes",
+          "rios e buritizais"
+        ],
+        "elementos_culturais": [
+          "nenhum objeto obrigatório"
+        ],
+        "usar_com_cuidado": [
+          "gado extensivo"
+        ],
+        "evitar": [
+          "floresta densa como única paisagem de RR"
+        ]
+      },
+      "serras_tepuis": {
+        "descricao": "Regiões serranas e tepuis",
+        "cenario": [
+          "formações montanhosas e vegetação de altitude",
+          "trilhas naturais",
+          "paisagem ampla e dramática"
+        ],
+        "elementos_culturais": [
+          "mochila ou câmera"
+        ],
+        "usar_com_cuidado": [
+          "Monte Roraima especificamente"
+        ],
+        "evitar": [
+          "usar grafismos indígenas sem validação"
+        ]
+      }
+    },
+    "paleta": ["#D4B873", "#234b50", "#B2713D", "#3b7a57", "#964b00", "#a8c686"]
+  },
+
+  "AP": {
+    "nome": "Amapá",
+    "regiao": "Norte",
+    "contextos": {
+      "macapa_urbana": {
+        "descricao": "Macapá urbana",
+        "cenario": [
+          "orla do Amazonas",
+          "cidade tropical contemporânea",
+          "parque ou praça urbana",
+          "café ou ambiente urbano"
+        ],
+        "elementos_culturais": [
+          "frutas regionais",
+          "fibras naturais"
+        ],
+        "usar_com_cuidado": [
+          "Marco Zero",
+          "Fortaleza de São José"
+        ],
+        "evitar": [
+          "usar monumentos como padrão em toda geração"
+        ]
+      },
+      "amazonas_ribeirinho": {
+        "descricao": "Contexto ribeirinho do Amazonas",
+        "cenario": [
+          "rio muito amplo",
+          "trapiche",
+          "barcos discretos",
+          "vegetação amazônica"
+        ],
+        "elementos_culturais": [
+          "frutas regionais",
+          "cestos de fibras"
+        ],
+        "usar_com_cuidado": [],
+        "evitar": [
+          "cenografia tropical genérica"
+        ]
+      },
+      "natureza_amapaense": {
+        "descricao": "Floresta, cerrado e áreas naturais do Amapá",
+        "cenario": [
+          "floresta amazônica",
+          "áreas de cerrado amapaense",
+          "praia fluvial",
+          "trilhas naturais"
+        ],
+        "elementos_culturais": [
+          "nenhum objeto obrigatório"
+        ],
+        "usar_com_cuidado": [],
+        "evitar": [
+          "assumir que todo Amapá é floresta densa"
+        ]
+      }
+    },
+    "paleta": ["#D4B873", "#234b50", "#B2713D", "#3b7a57", "#964b00", "#a8c686"]
+  },
+
+  "TO": {
+    "nome": "Tocantins",
+    "regiao": "Norte",
+    "contextos": {
+      "palmas_urbana": {
+        "descricao": "Palmas urbana",
+        "cenario": [
+          "cidade planejada contemporânea",
+          "avenidas amplas e arborizadas",
+          "orla ou praia fluvial urbana",
+          "café ou rooftop moderno"
+        ],
+        "elementos_culturais": [
+          "frutos do cerrado",
+          "mochila ou café"
+        ],
+        "usar_com_cuidado": [
+          "capim dourado como decoração automática"
+        ],
+        "evitar": [
+          "Jalapão como fundo obrigatório para Palmas"
+        ]
+      },
+      "jalapao": {
+        "descricao": "Jalapão",
+        "cenario": [
+          "dunas douradas",
+          "cerrado",
+          "veredas e fervedouros quando pertinente",
+          "paisagem aberta com serras ao fundo"
+        ],
+        "elementos_culturais": [
+          "artesanato de capim dourado",
+          "mochila ou câmera"
+        ],
+        "usar_com_cuidado": [
+          "fervedouros específicos"
+        ],
+        "evitar": [
+          "cenário urbano"
+        ]
+      },
+      "araguaia_bananal": {
+        "descricao": "Araguaia, Ilha do Bananal e entorno",
+        "cenario": [
+          "rio amplo",
+          "praia fluvial",
+          "vegetação de transição Cerrado-Amazônia",
+          "paisagem natural aberta"
+        ],
+        "elementos_culturais": [
+          "nenhum objeto obrigatório"
+        ],
+        "usar_com_cuidado": [
+          "referências indígenas específicas"
+        ],
+        "evitar": [
+          "grafismos ou artefatos indígenas sem contexto validado"
+        ]
+      },
+      "cidades_historicas": {
+        "descricao": "Natividade e cidades históricas tocantinenses",
+        "cenario": [
+          "casario histórico baixo",
+          "rua tranquila",
+          "igreja ou praça apenas quando confirmada",
+          "arquitetura tradicional integrada ao Cerrado"
+        ],
+        "elementos_culturais": [
+          "artesanato local discreto"
+        ],
+        "usar_com_cuidado": [
+          "elementos religiosos ou festivos específicos"
+        ],
+        "evitar": [
+          "usar estética colonial para todo Tocantins"
+        ]
+      }
+    },
+    "paleta": ["#D4B873", "#234b50", "#B2713D", "#3b7a57", "#964b00", "#a8c686"]
+  }
+}

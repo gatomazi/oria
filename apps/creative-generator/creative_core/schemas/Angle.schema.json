@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/Angle.schema.json",
+  "title": "Angle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "label",
+    "uses_person",
+    "apparel_only",
+    "multi_product_limit"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "enum": [
+        "IDENTIDADE_ORIGEM",
+        "LIFESTYLE_COTIDIANO",
+        "ORGULHO_DISCRETO",
+        "PERTENCIMENTO",
+        "NOSTALGIA_ORIGEM",
+        "CABIDE",
+        "PRODUTO_ESTAMPA",
+        "CAIMENTO",
+        "CLOSE_ESTAMPA",
+        "CLOSE_BOLSO",
+        "PREMIUM_ESTILO",
+        "CREATOR_STYLE",
+        "PRESENTE_AFETO"
+      ]
+    },
+    "label": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "uses_person": {
+      "type": "boolean"
+    },
+    "apparel_only": {
+      "type": "boolean"
+    },
+    "multi_product_limit": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}
