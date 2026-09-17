@@ -66,6 +66,56 @@ function extrairSnapshotLegado(destino, nome) {
   return destino;
 }
 
+// Sobe um processo do painel e espera ele começar a escutar.
+//
+// A porta é sorteada, e entre o sorteio e o `listen` outro processo pode tomá-la. Quando isso
+// acontece, o painel morre com EADDRINUSE e o teste só descobre 30 s depois, como "não escutou" —
+// um flake que no CI é indistinguível de regressão (aconteceu no primeiro push do monorepo). Aqui,
+// porta ocupada é o ÚNICO caso que gera nova tentativa; qualquer outra saída continua reprovando,
+// com a saída do processo no erro.
+//
+//   const { filho, base } = await h.subirProcessoDoPainel(
+//     (porta) => spawn(process.execPath, [SERVER], { env: { ..., PORT: String(porta) } }),
+//     { aoLer: (pedaco, { reiniciando }) => { saida = reiniciando ? '' : saida + pedaco; } },
+//   );
+async function subirProcessoDoPainel(criar, { aoLer = () => {}, tentativas = 4, limiteMs = 30000, pronto = /na porta/ } = {}) {
+  let ultimoErro;
+  for (let tentativa = 1; tentativa <= tentativas; tentativa += 1) {
+    const porta = 20000 + Math.floor(Math.random() * 20000);
+    if (tentativa > 1) aoLer('', { reiniciando: true });
+    const filho = criar(porta);
+    let saida = '';
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve, reject) => {
+        const limite = setTimeout(() => reject(new Error(`não escutou:\n${saida.slice(-3000)}`)), limiteMs);
+        const ler = (pedaco) => {
+          saida += pedaco;
+          aoLer(String(pedaco), { reiniciando: false });
+          if (pronto.test(saida)) { clearTimeout(limite); resolve(); return; }
+          if (/EADDRINUSE/.test(saida)) {
+            clearTimeout(limite);
+            reject(Object.assign(new Error(`porta ${porta} ocupada`), { portaOcupada: true }));
+          }
+        };
+        filho.stdout.on('data', ler);
+        filho.stderr.on('data', ler);
+        filho.on('exit', (codigo) => {
+          clearTimeout(limite);
+          const erro = new Error(`saiu com ${codigo}:\n${saida.slice(-3000)}`);
+          reject(/EADDRINUSE/.test(saida) ? Object.assign(erro, { portaOcupada: true }) : erro);
+        });
+      });
+      return { filho, porta, base: `http://127.0.0.1:${porta}`, saida };
+    } catch (err) {
+      filho.kill('SIGKILL');
+      if (!err.portaOcupada) throw err;
+      ultimoErro = err;
+    }
+  }
+  throw new Error(`o painel não subiu em ${tentativas} tentativas: ${ultimoErro.message}`);
+}
+
 // Carrega o módulo SOB TESTE. Sempre por aqui — nunca `require` relativo.
 function sujeito(caminhoRelativo) {
   // eslint-disable-next-line global-require, import/no-dynamic-require
@@ -217,6 +267,7 @@ function chaveMestraDeTeste(semente = 'a') {
 
 module.exports = {
   RAIZ_REPO,
+  subirProcessoDoPainel,
   RAIZ_SUJEITO,
   extrairSnapshotLegado,
   sujeito,

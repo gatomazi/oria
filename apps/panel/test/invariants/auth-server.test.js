@@ -93,8 +93,8 @@ test('auth · processo real: login individual, CSRF nas rotas existentes, logout
   }
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oria-auth-srv-'));
-  const porta = 20000 + Math.floor(Math.random() * 20000);
-  const filho = spawn(process.execPath, [SERVER], {
+  let saida = '';
+  const processo = await h.subirProcessoDoPainel((porta) => spawn(process.execPath, [SERVER], {
     cwd: h.RAIZ_REPO,
     env: {
       PATH: process.env.PATH, HOME: process.env.HOME, STORAGE_DIR: dir, UPLOADS_DIR: path.join(dir, 'uploads'),
@@ -104,17 +104,14 @@ test('auth · processo real: login individual, CSRF nas rotas existentes, logout
       // A senha compartilhada existe no ambiente, mas sem a flag não autentica ninguém.
       ADMIN_PASSWORD: 'senha-compartilhada-antiga',
     },
+  }), {
+    aoLer: (pedaco, { reiniciando }) => { saida = reiniciando ? '' : saida + pedaco; },
+    limiteMs: 20000,
   });
-  let saida = '';
+  const filho = processo.filho;
   t.after(() => filho.kill('SIGKILL'));
-  await new Promise((resolve, reject) => {
-    const limite = setTimeout(() => reject(new Error(`não escutou:\n${saida.slice(-2000)}`)), 20000);
-    const ler = (b) => { saida += b; if (/na porta/.test(saida)) { clearTimeout(limite); resolve(); } };
-    filho.stdout.on('data', ler);
-    filho.stderr.on('data', ler);
-  });
   if (extraDoProcesso.DB_ENFORCE_APP_ROLE) assert.match(saida, /role da aplicação oria_app_auth_\w+ verificada/);
-  const base = `http://127.0.0.1:${porta}`;
+  const base = processo.base;
   const req = (metodo, caminho, { cookie, csrf, corpo } = {}) => fetch(base + caminho, {
     method: metodo,
     headers: {

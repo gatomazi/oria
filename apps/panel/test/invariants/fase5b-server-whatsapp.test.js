@@ -162,8 +162,7 @@ test.before(async () => {
   const urlGo = await subirGoFalso();
   mockLog = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'oria-f5b-mock-')), 'chamadas.jsonl');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oria-f5b-srv-'));
-  const porta = 20000 + Math.floor(Math.random() * 20000);
-  filho = spawn(process.execPath, ['--require', MOCK, SERVER], {
+  const processo = await h.subirProcessoDoPainel((porta) => spawn(process.execPath, ['--require', MOCK, SERVER], {
     cwd: h.RAIZ_SUJEITO,
     env: {
       PATH: process.env.PATH, HOME: process.env.HOME, STORAGE_DIR: dir, UPLOADS_DIR: path.join(dir, 'uploads'),
@@ -179,15 +178,12 @@ test.before(async () => {
       WHATSAPP_SENDER_RESOLVER_KEY: CHAVE_RESOLVER,
       WHATSAPP_CONTEXT_RATE_PER_MIN: String(LIMITE_CONTEXTO),
     },
+  }), {
+    aoLer: (pedaco, { reiniciando }) => { saida = reiniciando ? '' : saida + pedaco; },
+    limiteMs: 30000,
   });
-  await new Promise((resolve, reject) => {
-    const limite = setTimeout(() => reject(new Error(`não escutou:\n${saida.slice(-3000)}`)), 30000);
-    const ler = (b) => { saida += b; if (/na porta/.test(saida)) { clearTimeout(limite); resolve(); } };
-    filho.stdout.on('data', ler);
-    filho.stderr.on('data', ler);
-    filho.on('exit', (code) => { clearTimeout(limite); reject(new Error(`saiu com ${code}:\n${saida.slice(-3000)}`)); });
-  });
-  base = `http://127.0.0.1:${porta}`;
+  filho = processo.filho;
+  base = processo.base;
 });
 
 test.after(async () => {
