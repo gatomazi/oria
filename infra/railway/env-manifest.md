@@ -1,8 +1,9 @@
 # Railway — manifesto de variáveis do projeto Oria
 
-Rodada 20. **Só nomes.** Nenhum valor real aparece aqui, e nenhum segredo foi copiado dos projetos
-antigos. Os nomes vieram do código importado (`process.env` no painel, `getEnv` no Go, `Procfile` e
-`gunicorn.conf.py` no Gerador).
+Rodada 20, conferido na rodada 21 contra `apps/panel/scripts/release/preflight.mjs` (VARS_PAINEL,
+FLAGS, LEGADAS, VARS_GO) e `services/whatsapp/*.go`. **Só nomes.** Nenhum valor real aparece aqui, e
+nenhum segredo foi copiado dos projetos antigos. Os nomes vieram do código importado (`process.env` no
+painel, `getEnv` no Go, `Procfile` e `gunicorn.conf.py` no Gerador).
 
 ## Princípios
 
@@ -20,9 +21,9 @@ antigos. Os nomes vieram do código importado (`process.env` no painel, `getEnv`
 
 | variável | usada por | observação |
 |---|---|---|
-| `NODE_ENV` / `APP_ENV` | painel / Go | `production` em produção. O painel muda de comportamento (fail-fast) por causa dela |
+| `NODE_ENV` / `APP_ENV` | painel / Go | `production` em produção. O painel muda de comportamento (fail-fast) por causa dela. No Go, `RAILWAY_ENVIRONMENT_NAME` (injetada pela plataforma) cumpre o mesmo papel se `APP_ENV` faltar |
 | `META_APP_ID` | painel, Go | id público do App da plataforma |
-| `META_APP_SECRET` | Go (verificação HMAC), painel (OAuth Meta) | **OPS-27**: precisa pertencer ao mesmo App |
+| `META_APP_SECRET` | Go (verificação HMAC), painel (OAuth Meta) | segredo **da plataforma / do App Meta**, nunca credencial de tenant. **OPS-27 VERIFIED (17/09/2026)**: pertence ao mesmo App do `META_APP_ID`; o HMAC continua obrigatório. Nenhum valor aqui |
 | `META_API_VERSION` | painel, Go | versão da Graph API |
 
 ## PANEL ONLY
@@ -71,12 +72,14 @@ A chave da OpenAI é **BYOK**: vem por request, do cofre do painel. Não existe 
 |---|---|---|
 | `DATABASE_URL` | sim | Postgres próprio do serviço |
 | `API_KEY` | sim | autenticação service-to-service |
-| `META_APP_SECRET`, `META_APP_ID` | sim | HMAC do webhook (OPS-27) |
-| `META_VERIFY_TOKEN` | sim | verificação do webhook na Meta |
-| `PANEL_SENDER_RESOLVER_URL`, `PANEL_SENDER_RESOLVER_KEY` | sim | resolver do remetente e contexto (5b/5c) |
+| `META_APP_SECRET` | sim (boot aborta em produção) | HMAC do webhook — **OPS-27 VERIFIED**; precisa ser o App Secret do mesmo App do `META_APP_ID` |
+| `META_APP_ID` | sim (preflight exige em todo estágio) | id público do App; o código sobe sem ela, o preflight não deixa |
+| `META_VERIFY_TOKEN` | sim, em **qualquer** ambiente | `mustEnv`: sem ela o processo não sobe nem em dev |
+| `PANEL_SENDER_RESOLVER_URL`, `PANEL_SENDER_RESOLVER_KEY` | sim | resolver do remetente e contexto (5b/5c); URL em https, chave ≥ 32 |
 | `WEBHOOK_FORWARD_URL`, `WEBHOOK_FORWARD_SECRET` | sim (quando há repasse) | URL **sem** query; segredo ≥ 32 |
 | `PORT`, `META_API_VERSION` | não | padrões no código |
-| `WEBHOOK_QUEUE_BATCH`, `WEBHOOK_QUEUE_LEASE` | não | ajuste da fila |
+| `META_SEND_INTERVAL_MS` | não | intervalo mínimo entre envios à Meta (padrão 1000; `0` desliga o pacer) |
+| `WEBHOOK_FORWARD_LEGACY_QUERY_SECRET` | não | flag de transição do repasse (OPS-09); ver LEGACY TEMPORARY |
 
 ## PRE-DEPLOY ONLY (painel)
 
@@ -108,11 +111,34 @@ Só o *Pre-deploy Command* precisa: `TENANCY_MAPPING_JSON` (conteúdo do mapeame
 ## Só em teste/desenvolvimento (nunca em produção)
 
 `TEST_DATABASE_URL`, `INVARIANTS_DATABASE_URL`, `INVARIANTS_APP_DATABASE_URL`,
-`WEBHOOK_TEST_DATABASE_URL`, `TEST_PG_CONTAINER`, `TEST_PG_IMAGE`, `TEST_PG_KEEP`, `TEST_APP_ROLE`,
-`WHATSAPP_GO_DIR`, `CREATIVE_PYTHON`, `ORIA_LEGACY_PANEL_REPO`, `INTERNAL_TOOLS_ENABLED`,
-`META_GRAPH_BASE_URL` (o preflight **bloqueia** esta no Go em produção — OPS-35).
+`WEBHOOK_TEST_DATABASE_URL`, `WEBHOOK_TEST_SCHEMA`, `TEST_PG_CONTAINER`, `TEST_PG_IMAGE`,
+`TEST_PG_KEEP`, `TEST_APP_ROLE`, `WHATSAPP_GO_DIR`, `CREATIVE_PYTHON`, `ORIA_LEGACY_PANEL_REPO`,
+`INTERNAL_TOOLS_ENABLED`, `META_GRAPH_BASE_URL` (o preflight **bloqueia** esta no Go em produção —
+OPS-35).
+
+Só do arreio de teste do Go (processos-filho dos testes de fila e inbox; **não** são ajuste de
+produção): `WEBHOOK_QUEUE_BATCH`, `WEBHOOK_QUEUE_LEASE`, `WEBHOOK_QUEUE_CRASH`, `WEBHOOK_QUEUE_START`,
+`WEBHOOK_QUEUE_WORKER`, `WEBHOOK_QUEUE_WORKER_OUT`, `WEBHOOK_INBOX_LEASE`, `WEBHOOK_INBOX_CHILD`,
+`WEBHOOK_INBOX_CRASH`, `WEBHOOK_INBOX_ADDR_FILE`, `WEBHOOK_INBOX_FORWARD_URL`,
+`WEBHOOK_BOOT_TEST_CHILD`. Configurá-las no Railway não tem efeito nenhum sobre o serviço.
 
 ## Conferência
 
 `npm run release:preflight -- --from-env-file <export> [--service painel|go]` lê um export do Railway
 e confere **nomes e requisitos** (nunca valores). É o que decide se um estágio do runbook pode seguir.
+
+**Conferência da rodada 21** — este manifesto foi comparado, nome a nome, com as listas do preflight
+(`VARS_PAINEL`, `FLAGS_PAINEL`, `FLAGS_GO`, `LEGADAS_PAINEL`, `VARS_GO`, `LEGADAS_GO`) e com o que o
+serviço Go realmente lê fora dos testes. Resultado:
+
+- **Variáveis das rodadas 18 e 19 presentes:** `WHATSAPP_WEBHOOK_SECRET` ↔ `WEBHOOK_FORWARD_SECRET`
+  (repasse assinado em header), `WHATSAPP_WEBHOOK_LEGACY_QUERY_TOLERATED` (painel) e
+  `WEBHOOK_FORWARD_LEGACY_QUERY_SECRET` (Go) da transição do repasse, `ENTITLEMENTS_SEED_PROFILE`
+  (perfil versionado), `MIGRATION_DATABASE_URL` + `DB_ENFORCE_APP_ROLE` (OPS-14) e
+  `ADMIN_SESSION_SECRET` (rotação final, OPS-36).
+- **Corrigido:** `WEBHOOK_QUEUE_BATCH`/`WEBHOOK_QUEUE_LEASE` estavam listadas como ajuste opcional de
+  produção; elas só existem no arreio de teste do Go e foram movidas para a seção de teste.
+- **Acrescentado:** `META_SEND_INTERVAL_MS` (pacer de envio), `RAILWAY_ENVIRONMENT_NAME` (nota),
+  `WEBHOOK_TEST_SCHEMA` e as demais variáveis de processo-filho dos testes.
+- **Esclarecido:** `META_VERIFY_TOKEN` é obrigatória em qualquer ambiente (`mustEnv`), não só em
+  produção; `META_APP_ID` é exigida pelo preflight, mas não derruba o boot.
