@@ -64,6 +64,8 @@ function relatorioGoDoPainel(extra = {}) {
 }
 
 const GO_VERDE = { vet: 0, build: 0, test: 0, race: true, pass: 105, fail: 0, skipped: [], head: 'abc1234' };
+// Monorepo Oria: terceiro componente do gate (apps/creative-generator/run_tests.py).
+const GERADOR_VERDE = { exit: 0, suites: 7, falhas: 0, python: '/x/.venv/bin/python' };
 
 function dirVazio(prefixo) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefixo));
@@ -85,6 +87,7 @@ function consolidarVerde(opcoes = {}) {
     relatorioGo: relatorioGoDoPainel(),
     goTestes: GO_VERDE,
     goHead: null,
+    geradorTestes: GERADOR_VERDE,
     dirEvidencia: dirVazio('oria-gate-ev-'),
     ...opcoes,
   });
@@ -165,6 +168,21 @@ test('gate · testes Go: ausentes = NOT VERIFIED; pulado, falha, sem -race ou co
   const rel = { ...relatorioGoDoPainel(), go_tests: GO_VERDE };
   assert.equal(lib.avaliarTestesGo(null, { relatorioGo: rel, goHead: 'abc1234' }).status, lib.PASS);
   assert.equal(lib.avaliarTestesGo(null, { relatorioGo: rel, goHead: 'fff9999' }).status, lib.FAIL);
+});
+
+test('gate · Gerador de Criativos: ausente = NOT VERIFIED; exit ≠ 0, suíte faltando ou erro = FAIL', () => {
+  assert.equal(lib.avaliarTestesDoGerador(null).status, lib.NAO_VERIFICADO);
+  assert.equal(lib.avaliarTestesDoGerador(GERADOR_VERDE).status, lib.PASS);
+  assert.equal(lib.avaliarTestesDoGerador({ ...GERADOR_VERDE, exit: 1 }).status, lib.FAIL);
+  assert.equal(lib.avaliarTestesDoGerador({ ...GERADOR_VERDE, falhas: 2 }).status, lib.FAIL);
+  assert.equal(lib.avaliarTestesDoGerador({ ...GERADOR_VERDE, suites: 0 }).status, lib.FAIL);
+  assert.equal(lib.avaliarTestesDoGerador({ erro: 'python3: not found' }).status, lib.FAIL);
+  // No consolidado, o componente bloqueia o bloco CODE como qualquer outro.
+  assert.equal(statusDe(consolidarVerde(), 'creative-generator'), lib.PASS);
+  const semGerador = consolidarVerde({ geradorTestes: null });
+  assert.equal(statusDe(semGerador, 'creative-generator'), lib.NAO_VERIFICADO);
+  assert.notEqual(semGerador.exit, lib.EXIT.PRONTO);
+  assert.equal(statusDe(consolidarVerde({ geradorTestes: { exit: 1, suites: 7, falhas: 1 } }), 'creative-generator'), lib.FAIL);
 });
 
 test('gate · go test -json: só o processo-filho conhecido pode pular', () => {
@@ -278,7 +296,8 @@ function dirProntoParaFechar() {
 function violacoesDeSaida(alvo) {
   const verde = {
     raiz: RAIZ_REPO, suite: suiteVerde(), eventosEstaticos: estaticosVerdes(), goDir: null,
-    relatorioGo: relatorioGoDoPainel(), goTestes: GO_VERDE, goHead: null, agora: AGORA_FECHADO,
+    relatorioGo: relatorioGoDoPainel(), goTestes: GO_VERDE, goHead: null, geradorTestes: GERADOR_VERDE,
+    agora: AGORA_FECHADO,
   };
   const pronto = dirProntoParaFechar();
   const semOps27 = dirProntoParaFechar();

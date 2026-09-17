@@ -107,10 +107,12 @@ function rodarSuite(tmp, goDir, saidaParaStderr) {
     }
     const { exitCode } = JSON.parse(fs.readFileSync(exitArq, 'utf8'));
     const goArq = path.join(tmp, 'go-tests.json');
+    const geradorArq = path.join(tmp, 'gerador-tests.json');
     return {
       exitCode,
       eventos: lerEventos(path.join(tmp, 'suite.jsonl')),
       goTestes: fs.existsSync(goArq) ? JSON.parse(fs.readFileSync(goArq, 'utf8')) : null,
+      geradorTestes: fs.existsSync(geradorArq) ? JSON.parse(fs.readFileSync(geradorArq, 'utf8')) : null,
     };
   });
 }
@@ -148,12 +150,14 @@ async function main() {
 
     let suite = null;
     let goTestes = null;
+    let geradorTestes = null;
     if (!o['skip-suite']) {
       // O E2E da suíte (fase5c-e2e-whatsapp) e as cópias de contrato leem WHATSAPP_GO_DIR.
       if (temGo) process.env.WHATSAPP_GO_DIR = goDir;
       const r = await rodarSuite(tmp, temGo && !o['no-go-tests'] ? goDir : null, Boolean(o.json));
       suite = { exitCode: r.exitCode, eventos: r.eventos };
       goTestes = r.goTestes;
+      geradorTestes = r.geradorTestes;
     }
 
     const goHead = headDoGo(goDir);
@@ -175,6 +179,7 @@ async function main() {
       relatorioGo,
       goTestes,
       goHead,
+      geradorTestes,
       dirEvidencia,
       soRelatorio: Boolean(o['report-only']),
     });

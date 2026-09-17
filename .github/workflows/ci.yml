@@ -1,0 +1,136 @@
+name: CI
+
+# Monorepo Oria: um job por componente, mais os contratos cross-service.
+#
+# Regra herdada do painel: teste pulado é verde na saída do CI, e isso é exatamente o modo de falha
+# que a productização combate. Por isso o Postgres é efêmero, as migrations rodam do zero e nenhum
+# passo aceita "não rodou" como sucesso.
+#
+# Limite conhecido: quatro testes de contrato do painel rodam o código REAL de commits antigos
+# (releases do runbook) e precisam do repositório legado `orgulhoregional` em disco. O runner não o
+# tem, então eles ficam fora do job do painel (PAINEL_SEM_LEGADO) e são cobertos pelo
+# `npm run productization:gate` na máquina do operador, que roda a suíte inteira. Quando o legado
+# estiver disponível no CI, basta remover a exclusão.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    name: contratos cross-service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-contracts.mjs
+
+  panel:
+    name: painel (Node)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # scripts/test-db.mjs usa TEST_DATABASE_URL e pula o Docker quando ela existe.
+      TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+      WHATSAPP_GO_DIR: ${{ github.workspace }}/services/whatsapp
+    defaults:
+      run:
+        working-directory: apps/panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/whatsapp/go.sum
+
+      - run: npm ci --ignore-scripts
+
+      - name: migrations do zero
+        run: npm run migrate:up
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: migrations são idempotentes
+        run: npm run migrate:up
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      # Sem o repositório legado, os contratos que rodam commits antigos não podem ser executados.
+      - name: suíte do painel (sem os contratos que exigem o histórico legado)
+        run: |
+          node scripts/test-db.mjs run -- node --test --test-concurrency=1 \
+            $(ls test/*.test.js) \
+            $(ls test/invariants/*.test.js \
+              | grep -v -e 'r19-contrato-repasse-transicao' \
+                        -e 'r19-release-b-contrato' \
+                        -e 'r19-runbook-dry-run' \
+                        -e 'ops22-creative-release-b')
+
+      - name: suíte sob a role da aplicação (oria_app)
+        run: npm run test:app-role
+        env:
+          TEST_APP_ROLE: '1'
+
+      - name: build do admin
+        run: npm run build
+
+  creatives:
+    name: gerador de criativos (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/creative-generator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: run_tests.py
+        run: python run_tests.py
+
+  whatsapp:
+    name: serviço de whatsapp (Go)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      WEBHOOK_TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/postgres
+    defaults:
+      run:
+        working-directory: services/whatsapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/whatsapp/go.sum
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test -race -count=1 ./...

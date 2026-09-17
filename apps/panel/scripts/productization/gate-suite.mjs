@@ -85,6 +85,34 @@ async function rodarGo(goDir, out) {
   fs.writeFileSync(path.join(out, 'go-tests.json'), JSON.stringify(r, null, 2));
 }
 
+// Gerador de Criativos (monorepo Oria): run_tests.py com o interpretador declarado. O caminho e o
+// interpretador vêm do monorepo; sem Python utilizável, o gate recebe o erro e reprova.
+function rodarGerador(out) {
+  const app = path.resolve(RAIZ, '..', 'creative-generator');
+  if (!fs.existsSync(path.join(app, 'run_tests.py'))) {
+    fs.writeFileSync(path.join(out, 'gerador-tests.json'), JSON.stringify({ erro: `run_tests.py não encontrado em ${app}` }));
+    return;
+  }
+  const venv = path.join(app, '.venv', 'bin', 'python');
+  const python = process.env.CREATIVE_PYTHON || (fs.existsSync(venv) ? venv : 'python3');
+  console.log(`[gate] Gerador de Criativos: ${python} run_tests.py`);
+  const r = spawnSync(python, ['run_tests.py'], { cwd: app, encoding: 'utf8', env: envLimpo(), maxBuffer: 64 * 1024 * 1024 });
+  const saida = `${r.stdout || ''}${r.stderr || ''}`;
+  if (r.error) {
+    fs.writeFileSync(path.join(out, 'gerador-tests.json'), JSON.stringify({ erro: `${python}: ${r.error.message}` }));
+    return;
+  }
+  const resumo = /suítes:\s*(\d+)\/(\d+)\s*OK/.exec(saida);
+  const ok = resumo ? Number(resumo[1]) : null;
+  const total = resumo ? Number(resumo[2]) : null;
+  const dados = {
+    exit: r.status, suites: total, falhas: total === null || ok === null ? null : total - ok, python,
+  };
+  console.log(`[gate] Gerador: exit ${r.status} · ${ok ?? '?'}/${total ?? '?'} suítes OK`);
+  if (r.status !== 0) console.log(saida.slice(-2000));
+  fs.writeFileSync(path.join(out, 'gerador-tests.json'), JSON.stringify(dados, null, 2));
+}
+
 async function main() {
   const out = arg('--out');
   if (!out) { console.error('uso: gate-suite.mjs --out <dir> [--go-dir <dir>]'); return 64; }
@@ -93,6 +121,7 @@ async function main() {
   fs.writeFileSync(path.join(out, 'suite-exit.json'), JSON.stringify({ exitCode }));
   const goDir = arg('--go-dir');
   if (goDir) await rodarGo(goDir, out);
+  rodarGerador(out);
   // O código de saída da suíte é informação para o gate, não o resultado deste executor.
   return 0;
 }

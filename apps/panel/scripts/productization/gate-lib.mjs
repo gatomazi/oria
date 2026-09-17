@@ -21,9 +21,9 @@ export const PASS = 'PASS';
 export const FAIL = 'FAIL';
 export const NAO_VERIFICADO = 'NOT VERIFIED';
 
-// Piso de testes da suíte completa (bfd00a6: 710; rodada 18: 806; rodada 19 consolidada, trilhas E–H: 894). Só sobe: uma
+// Piso de testes da suíte completa (bfd00a6: 710; rodada 18: 806; rodada 19: 894; rodada 20, monorepo Oria: 895). Só sobe: uma
 // suíte que encolheu em silêncio é o mesmo modo de falha de um teste que se pula.
-export const MINIMO_DE_TESTES = 894;
+export const MINIMO_DE_TESTES = 895;
 
 // Contratos painel ↔ Go. A versão esperada é declarada aqui de propósito: mudar o contrato exige
 // mudar o gate junto, e o gate confere que os dois lados carregam a mesma cópia.
@@ -504,6 +504,23 @@ function checarContratosGo(raiz, { goDir, relatorioGo }) {
 
 // Resultado de `go vet` / `go build` / `go test -race -json`, quando o gate os roda (--run-go) ou
 // quando o relatório do Go os traz. Sem nenhum dos dois: NOT VERIFIED.
+// Monorepo Oria (rodada 20): o gate valida os TRÊS componentes. A suíte do Gerador de Criativos
+// (apps/creative-generator/run_tests.py) roda no executor e chega aqui como resultado. Ausente =
+// NOT VERIFIED, nunca silêncio.
+export function avaliarTestesDoGerador(resultado) {
+  if (!resultado) {
+    return { status: NAO_VERIFICADO, detalhes: ['suíte do Gerador de Criativos não executada (suíte pulada ou interpretador Python ausente)'] };
+  }
+  if (resultado.erro) return { status: FAIL, detalhes: [`Gerador de Criativos: ${resultado.erro}`] };
+  const problemas = [];
+  if (resultado.exit !== 0) problemas.push(`run_tests.py saiu com ${resultado.exit}`);
+  if (!Number.isInteger(resultado.suites) || resultado.suites < 1) problemas.push('nenhuma suíte executada');
+  if (Number.isInteger(resultado.falhas) && resultado.falhas > 0) problemas.push(`${resultado.falhas} suíte(s) com falha`);
+  return problemas.length
+    ? { status: FAIL, detalhes: problemas }
+    : { status: PASS, detalhes: [`run_tests.py: ${resultado.suites} suíte(s) OK${resultado.python ? ` · ${resultado.python}` : ''}`] };
+}
+
 export function avaliarTestesGo(goTestes, { relatorioGo, goHead } = {}) {
   const fonte = goTestes || (relatorioGo && !relatorioGo.invalido ? relatorioGo.go_tests : null);
   if (!fonte) return { status: NAO_VERIFICADO, detalhes: ['go vet/build/test -race não executados (suíte pulada, --no-go-tests ou Go ausente, e nenhum --go-report com go_tests)'] };
@@ -676,7 +693,8 @@ export function codigoDeSaidaDoGate({ codeStatus, overall }) {
 }
 
 export function consolidar({
-  raiz, suite, eventosEstaticos, goDir, relatorioGo, goTestes, goHead, dirEvidencia, soRelatorio = false, agora = new Date(),
+  raiz, suite, eventosEstaticos, goDir, relatorioGo, goTestes, goHead, geradorTestes, dirEvidencia,
+  soRelatorio = false, agora = new Date(),
 }) {
   const s = avaliarSuite(suite, { raiz }).partes;
   const go = checarContratosGo(raiz, { goDir, relatorioGo });
@@ -697,6 +715,7 @@ export function consolidar({
     ['go-contract-fixtures', 'Go contract fixtures aligned', juntar(go.fixtures, s.goE2e)],
     ['go-contract-version', 'Go 5b/5c contract version', go.versao],
     ['go-tests', 'Go vet/build/test -race', avaliarTestesGo(goTestes, { relatorioGo, goHead })],
+    ['creative-generator', 'Gerador de Criativos · run_tests.py', avaliarTestesDoGerador(geradorTestes)],
     ['no-global-tenant-credential', 'no global tenant credential request-path usage', e('credencial')],
     ['no-unsafe-truncate', 'no unsafe TRUNCATE tenant tables', juntar(e('truncate'), checarTruncate(raiz))],
     ['no-legacy-ink-route', 'no legacy Ink runtime route', juntar(e('ink'), checarRotaInk(raiz))],
