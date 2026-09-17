@@ -2,8 +2,8 @@
   "contract": "oria-whatsapp-forward-auth",
   "version": 1,
   "copies": [
-    "orgulhoregional: test/fixtures/whatsapp/forward-auth-v1.json",
-    "whatsapp-webhook-go: testdata/forward-auth-v1.json"
+    "apps/panel: test/fixtures/whatsapp/forward-auth-v1.json",
+    "services/whatsapp: testdata/forward-auth-v1.json"
   ],
   "request": {
     "method": "POST",

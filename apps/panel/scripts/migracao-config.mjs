@@ -11,19 +11,17 @@ import crypto from 'crypto';
 import sharp from 'sharp';
 
 export const INK = 'https://api.reserva.ink';  // mesmo INK_API_BASE de server.js:54
-// Os diretórios de arte e de gentílicos vivem FORA do monorepo (material da operação). Não existe
-// caminho padrão: sem a variável, o script para na hora, em vez de ler a pasta errada de alguém.
-function exigirDiretorio(nome) {
-  const valor = (process.env[nome] || '').trim();
-  if (!valor) {
-    console.error(`[migracao] defina ${nome} com o diretório local (ele não mora no repositório).`);
-    process.exit(2);
-  }
-  return valor;
+// Acervos locais do operador (8 GB de artes; banco de gentílicos), fora do repositório e fora do
+// git. Sempre por variável de ambiente, nunca com caminho embutido: um caminho de máquina no código
+// faz o script funcionar só para quem o escreveu e falhar sem explicação em qualquer outro lugar.
+// A leitura é tardia de propósito — `migracao-diagnostico.mjs` importa daqui só o `INK`.
+export function acervoLocal(variavel) {
+  const dir = process.env[variavel];
+  if (!dir) throw new Error(`${variavel} não configurado — esta etapa só roda na máquina que tem o acervo local`);
+  return dir;
 }
-
-export const ARTES = exigirDiretorio('MIGRACAO_ARTES_DIR');
-export const GENTILICOS = exigirDiretorio('MIGRACAO_GENTILICOS_DIR');
+export const ARTES = () => acervoLocal('MIGRACAO_ARTES_DIR');
+export const GENTILICOS = () => acervoLocal('MIGRACAO_GENTILICOS_DIR');
 
 export const CORES_ESCURAS = ['Bordeaux', 'Vermelho', 'Marinho', 'Preta', 'Verde'];
 export const CORES_CLARAS = ['Cinza', 'Rosa', 'Branca'];
@@ -91,13 +89,14 @@ export const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, 
 // ── Acervo ───────────────────────────────────────────────────────────────────────────────────
 // Varre a árvore de diretórios. NÃO abre PNG nenhum (são 8 GB) — isso só acontece por item.
 export function indexarAcervo() {
+  const raizArtes = ARTES();
   const acervo = new Map();
-  for (const modelo of fs.readdirSync(ARTES)) {
+  for (const modelo of fs.readdirSync(raizArtes)) {
     const cfg = MODELOS[modelo];
-    if (!cfg || !fs.statSync(path.join(ARTES, modelo)).isDirectory()) continue;
-    for (const uf of fs.readdirSync(path.join(ARTES, modelo))) {
+    if (!cfg || !fs.statSync(path.join(raizArtes, modelo)).isDirectory()) continue;
+    for (const uf of fs.readdirSync(path.join(raizArtes, modelo))) {
       if (!REGIAO[uf.toUpperCase()]) continue;
-      const dir = path.join(ARTES, modelo, uf);
+      const dir = path.join(raizArtes, modelo, uf);
       for (const arquivo of fs.readdirSync(dir)) {
         if (!arquivo.toLowerCase().endsWith('.png')) continue;
         const p = arquivo.slice(0, -4).split('_');
@@ -126,7 +125,7 @@ export function indexarAcervo() {
 const cacheGent = new Map();
 function dicionarioGentilicos(uf) {
   if (!cacheGent.has(uf)) {
-    const arq = path.join(GENTILICOS, `gentilicos_${uf.toLowerCase()}.json`);
+    const arq = path.join(GENTILICOS(), `gentilicos_${uf.toLowerCase()}.json`);
     const lista = fs.existsSync(arq) ? JSON.parse(fs.readFileSync(arq, 'utf8')) : [];
     cacheGent.set(uf, new Map(lista.map((x) => [norm(x.municipio), x])));
   }

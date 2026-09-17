@@ -1,9 +1,11 @@
 # creative-core (Oria · `apps/creative-generator`)
 
 Core do Gerador de Criativos (planos, prompts, Brand/Niche Kits, Context Intelligence, Model Router) e o serviço HTTP
-que o painel Node consome. **Fonte única da verdade** — o gerador interno (projeto estamparia-criativos, fora do
-monorepo) mantém um espelho byte a byte verificado por `scripts/check_core_mirror.py` daquele projeto. Até esse script
-ser atualizado, ele procura o core no caminho legado (`orgulhoregional/services/creative-core`).
+que o painel Node consome. **Fonte única da verdade** — o gerador interno (o app Streamlit, projeto separado, FORA
+deste monorepo) mantém um espelho byte a byte do core e o verifica com um script próprio,
+`scripts/check_core_mirror.py`, que vive naquele projeto e não neste. Nada aqui — runtime, build, testes ou CI — o
+importa, chama ou depende dele; a menção é histórica. Enquanto aquele script não for atualizado, ele ainda procura o
+core no caminho do repositório antigo, e isso é problema dele, não do Oria.
 
 ## Rodar local
 
@@ -42,4 +44,5 @@ Contrato completo: [`apps/panel/docs/creative-generator/GENERATOR_HANDOFF_CONTRA
 ## Dados regionais
 
 `creative_core/data/{regioes,cidades}.json` é snapshot do gerador interno. Atualizar com
-`python scripts/sync_data.py /caminho/estamparia-criativos` (ou `--check`).
+`python scripts/sync_data.py <checkout-do-gerador-interno>` (ou `--check`). O caminho é argumento: nada no monorepo
+assume onde aquele projeto está.

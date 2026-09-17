@@ -2,8 +2,8 @@
   "contract": "oria-whatsapp-sender",
   "version": 1,
   "copies": [
-    "orgulhoregional: test/fixtures/whatsapp/sender-contract-v1.json",
-    "whatsapp-webhook-go: testdata/sender-contract-v1.json"
+    "apps/panel: test/fixtures/whatsapp/sender-contract-v1.json",
+    "services/whatsapp: testdata/sender-contract-v1.json"
   ],
   "auth": {
     "header": "X-Api-Key",

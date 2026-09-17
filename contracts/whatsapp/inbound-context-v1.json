@@ -2,8 +2,8 @@
   "contract": "oria-whatsapp-context",
   "version": 1,
   "copies": [
-    "orgulhoregional: test/fixtures/whatsapp/inbound-context-v1.json",
-    "whatsapp-webhook-go: testdata/inbound-context-v1.json"
+    "apps/panel: test/fixtures/whatsapp/inbound-context-v1.json",
+    "services/whatsapp: testdata/inbound-context-v1.json"
   ],
   "auth": {
     "header": "X-Api-Key",

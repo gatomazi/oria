@@ -1,11 +1,12 @@
 """Refreshes the regional catalog snapshot shipped with the core.
 
-The internal generator (Streamlit app, outside this monorepo) owns and edits
-config/regioes.json and config/cidades.json at runtime. The service ships a
-snapshot in creative_core/data/. Run this after changing the generator data:
+The internal generator — a separate project, outside this monorepo — owns and
+edits config/regioes.json and config/cidades.json at runtime. The service ships
+a snapshot in creative_core/data/, so nothing here reads that project at run
+time. Point this script at a checkout of it after the generator data changes:
 
-    python scripts/sync_data.py <dir do gerador Streamlit>   # copy
-    python scripts/sync_data.py <dir do gerador Streamlit> --check  # exit 1 if stale
+    python scripts/sync_data.py <generator-checkout>          # copy
+    python scripts/sync_data.py <generator-checkout> --check  # exit 1 if stale
 """
 from __future__ import annotations
 
