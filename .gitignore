@@ -1,0 +1,31 @@
+# Dependências e builds
+node_modules/
+dist/
+build/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+coverage/
+
+# Segredos e ambiente local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.claude/settings.local.json
+
+# Estado local / dados operacionais
+uploads/
+outputs/
+*.dump
+*.sql.gz
+*.tgz
+tmp/
+
+# Sistema / editores
+.DS_Store
+.idea/
+.vscode/
