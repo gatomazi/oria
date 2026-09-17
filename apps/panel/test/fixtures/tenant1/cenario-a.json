@@ -1,0 +1,28 @@
+{
+  "versao": 1,
+  "cenario": "A",
+  "rollout": false,
+  "mapeamentoTenancy": "../tenancy/cenario-a.json",
+  "creativeTenantLegado": "default",
+  "organizations": [
+    { "id": "a1000000-0000-4000-8000-000000000001", "entitlements": ["financial", "whatsapp", "creative_generator"] },
+    { "id": "a1000000-0000-4000-8000-000000000002", "entitlements": ["financial"] },
+    { "id": "a1000000-0000-4000-8000-000000000003", "entitlements": [] }
+  ],
+  "owners": [
+    { "email": "dono.sul@ensaio.oria", "passwordHashEnv": "TENANT1_OWNER_SUL_HASH", "organizations": ["a1000000-0000-4000-8000-000000000001"] },
+    { "email": "dono.centro@ensaio.oria", "passwordHashEnv": "TENANT1_OWNER_CENTRO_HASH", "organizations": ["a1000000-0000-4000-8000-000000000002"] },
+    { "email": "dono.norte@ensaio.oria", "passwordHashEnv": "TENANT1_OWNER_NORTE_HASH", "organizations": ["a1000000-0000-4000-8000-000000000003"] }
+  ],
+  "whatsapp": {
+    "waba": { "id": "1200000000001", "organizationId": "a1000000-0000-4000-8000-000000000001" },
+    "phoneNumber": { "id": "5511900000001", "organizationId": "a1000000-0000-4000-8000-000000000001" }
+  },
+  "inkWebhook": {
+    "organizations": [
+      "a1000000-0000-4000-8000-000000000001",
+      "a1000000-0000-4000-8000-000000000002",
+      "a1000000-0000-4000-8000-000000000003"
+    ]
+  }
+}

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=1080"/>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,600&family=Inter:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px; height: 1920px;
+    background: #1a1208;
+    font-family: 'Inter', sans-serif;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden; position: relative;
+  }
+
+  /* noise */
+  body::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+    pointer-events: none; z-index: 3; opacity: 0.45;
+  }
+
+  .bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 70% 55% at 15% 25%, rgba(160,120,80,0.22) 0%, transparent 65%),
+      radial-gradient(ellipse 55% 45% at 85% 80%, rgba(214,186,141,0.1) 0%, transparent 60%);
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image: repeating-linear-gradient(
+      0deg, transparent, transparent 59px, rgba(160,120,80,0.04) 60px
+    );
+  }
+
+  /* horario */
+  .time {
+    position: absolute;
+    top: 92px; right: 100px;
+    font-size: 22px; font-weight: 500;
+    letter-spacing: 0.08em;
+    color: rgba(214,186,141,0.3);
+    z-index: 2;
+  }
+
+  .inner {
+    position: relative; z-index: 2;
+    padding: 0 110px;
+    text-align: left;
+    width: 100%;
+  }
+
+  .line1 {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 54px;
+    color: rgba(245,240,232,0.5);
+    line-height: 1.35;
+    margin-bottom: 60px;
+    letter-spacing: -0.01em;
+  }
+
+  /* linha separadora */
+  .sep {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, rgba(160,120,80,0.35), transparent);
+    margin-bottom: 60px;
+  }
+
+  .line2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 900;
+    font-size: 108px;
+    line-height: 1.0;
+    color: #faf4ec;
+    letter-spacing: -0.03em;
+  }
+  .line2 em { font-style: italic; color: #c8a06a; }
+
+  .divider {
+    width: 64px; height: 3px;
+    background: #a07850;
+    border-radius: 2px;
+    margin-top: 72px;
+  }
+
+  .brand-tag {
+    position: absolute; bottom: 100px; left: 0; right: 0;
+    text-align: center;
+    font-size: 20px; font-weight: 700;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(255,255,255,0.22);
+    z-index: 2;
+  }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grid"></div>
+  <span class="time">23h de domingo</span>
+  <div class="inner">
+    <p class="line1">Amanhã começa<br/>a semana.</p>
+    <div class="sep"></div>
+    <h1 class="line2">Mas o lugar<br/>onde você<br/><em>cresceu</em><br/>não some.</h1>
+    <div class="divider"></div>
+  </div>
+  <div class="brand-tag">@usecentro.oficial</div>
+</body>
+</html>

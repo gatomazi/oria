@@ -1,0 +1,351 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Admin Shell — sidebar, topbar, container de conteúdo (DESIGN.md › Layout, Navigation, Top Bar)
+
+   Estrutura: sidebar fixa de 240px (≥1024px) ou drawer (<1024px) + coluna principal com topbar
+   sticky de 56px e conteúdo alinhado à esquerda até 1600px. Topbar e conteúdo compartilham o
+   mesmo container, então ações e conteúdo terminam na mesma margem direita.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ad-shell { min-height: 100vh; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+.ad-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: var(--z-sidebar);
+  width: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.ad-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--topbar-height);
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.ad-sidebar__logo {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 11px/1 var(--font-sans);
+  letter-spacing: 0.02em;
+}
+.ad-sidebar__brand-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+/* Nome do tenant é assinatura da loja: único lugar do wordmark (Wordmark Only Rule). */
+.ad-sidebar__brand-nome {
+  font: 500 15px/20px var(--font-wordmark);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ad-sidebar__brand-tagline { font: var(--type-caption); color: var(--text-muted); }
+.ad-sidebar__close { display: none; }
+
+.ad-nav {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2) var(--space-3) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ad-nav__group { display: flex; flex-direction: column; gap: 2px; }
+.ad-nav__group-label {
+  padding: var(--space-4) var(--space-2) var(--space-1);
+  font: 500 12px/16px var(--font-sans);
+  color: var(--text-muted);
+}
+
+.ad-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font: var(--type-label);
+}
+.ad-nav__item:hover { background: var(--surface-2); color: var(--text-primary); }
+.ad-nav__item:focus-visible { outline-offset: -2px; }
+.ad-nav__icon { display: flex; flex-shrink: 0; color: var(--text-muted); }
+.ad-nav__label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Ativo por tom (sem faixa lateral nem borda verde): fundo sutil, texto claro, ícone em accent. */
+.ad-nav__item--active,
+.ad-nav__item--active:hover { background: var(--surface-2); color: var(--text-primary); }
+.ad-nav__item--active .ad-nav__icon { color: var(--accent); }
+
+/* ── Coluna principal ────────────────────────────────────────────── */
+.ad-main { min-width: 0; }
+
+.ad-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-topbar);
+  height: var(--topbar-height);
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 var(--gutter);
+}
+.ad-topbar__inner {
+  height: 100%;
+  max-width: var(--content-max);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.ad-topbar__menu { display: none; }
+.ad-topbar__actions { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+
+.ad-breadcrumb { min-width: 0; }
+.ad-breadcrumb ol {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font: var(--type-body-dense);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.ad-breadcrumb li { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.ad-breadcrumb li svg { color: var(--text-disabled); flex-shrink: 0; }
+.ad-breadcrumb a { color: var(--text-secondary); text-decoration: none; border-radius: var(--radius-xs); }
+.ad-breadcrumb a:hover { color: var(--text-primary); }
+.ad-breadcrumb [aria-current='page'] { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; }
+
+.ad-scope { max-width: 200px; }
+
+/* Menu da loja (1 licença = 1 loja; sem usuário pessoal) */
+.ad-store-menu {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  max-width: 260px;
+  padding: 0 var(--space-2) 0 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.ad-store-menu:hover,
+.ad-store-menu[data-state='open'] { background: var(--surface-2); }
+.ad-store-menu__avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 11px/1 var(--font-sans);
+  color: var(--text-primary);
+}
+.ad-store-menu__nome { font: var(--type-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ad-store-menu svg { color: var(--text-muted); flex-shrink: 0; }
+
+/* ── Conteúdo ────────────────────────────────────────────────────── */
+.ad-content { padding: var(--space-6) var(--gutter) var(--space-12); }
+.ad-content__inner { max-width: var(--content-max); min-width: 0; }
+
+/* Carregando o shell (configurações do produto ainda não chegaram) */
+.ad-shell-skeleton { display: flex; flex-direction: column; gap: var(--space-3); max-width: 520px; }
+
+/* ── Drawer (<1024px) ────────────────────────────────────────────── */
+.ad-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-sidebar) - 1);
+  background: var(--scrim);
+}
+
+@media (max-width: 1023.98px) {
+  .ad-sidebar {
+    width: min(280px, calc(100vw - 48px));
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform var(--motion-exit) var(--ease-in), visibility 0s linear var(--motion-exit);
+    box-shadow: var(--shadow-overlay);
+  }
+  .ad-shell--nav-open .ad-sidebar {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform var(--motion-slow) var(--ease-out), visibility 0s;
+  }
+  .ad-shell--nav-open .ad-scrim { display: block; }
+  .ad-sidebar__close { display: inline-flex; margin-left: auto; }
+  .ad-topbar__menu { display: inline-flex; margin-left: calc(var(--space-2) * -1); }
+}
+
+@media (min-width: 1024px) {
+  .ad-main { margin-left: var(--sidebar-width); }
+}
+
+@media (max-width: 599.98px) {
+  .ad-store-menu__nome { display: none; }
+  .ad-store-menu { padding-right: 4px; }
+  .ad-scope { max-width: 140px; }
+  .ad-breadcrumb li:not(:last-child) { display: none; }
+  .ad-breadcrumb li:last-child > svg { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ad-sidebar,
+  .ad-shell--nav-open .ad-sidebar { transition: none; }
+}
+
+/* ── Login ───────────────────────────────────────────────────────── */
+.ad-login-root {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--gutter) var(--space-12);
+}
+.ad-login { width: 100%; max-width: 360px; }
+.ad-login__panel {
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.ad-login__title { margin: 0; font: var(--type-page-title); color: var(--text-primary); }
+.ad-login__erro { margin: 0; font: var(--type-body-dense); color: var(--danger); }
+.ad-login__erro:empty { display: none; }
+
+/* ── Legado reutilizado por páginas ──────────────────────────────── */
+/* Tag de status reutilizada em Visão Geral, Eventos e Integrações */
+.pa-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-xs);
+  font: var(--type-micro);
+}
+.pa-tag--ok { background: var(--success-tint); color: var(--success); }
+.pa-tag--pendente { background: var(--warning-tint); color: var(--warning); }
+.pa-tag--erro { background: var(--danger-tint); color: var(--danger); }
+
+/* Bolinha de status (3 estados) — saúde de integração, status de template da Meta etc. */
+.ad-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.ad-status-dot--ok { background: var(--success); }
+.ad-status-dot--pendente { background: var(--warning); }
+.ad-status-dot--erro { background: var(--danger); }
+
+/* Ação de WhatsApp reutilizada em Visão Geral (carrinhos quentes) e Carrinhos */
+.pa-lista__acoes a {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-h-sm);
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: var(--type-label);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.pa-lista__acoes a:hover { background: var(--accent-hover); }
+
+/* ── Toast (canto da tela) ───────────────────────────────────────── */
+/* z-index acima de qualquer overlay — um erro disparado com modal/drawer aberto (ex:
+   ConfirmDialog cujo onConfirm falha) precisa aparecer por cima. Fundo elevado + ícone
+   semântico; fundo saturado com texto branco reprovava contraste. */
+.ad-toast-container {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: calc(100vw - 32px);
+}
+/* No celular o toast desce do topo: embaixo ele cobria as ações de diálogos e rodapés fixos. */
+@media (max-width: 599px) {
+  .ad-toast-container { top: calc(var(--topbar-height) + var(--space-2)); bottom: auto; left: 16px; right: 16px; }
+  .ad-toast { width: auto; }
+}
+.ad-toast {
+  animation: ad-toast-in var(--motion-base) var(--ease-out);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 360px;
+  max-width: 100%;
+  padding: 10px 10px 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-overlay);
+  font: var(--type-body-dense);
+  color: var(--text-primary);
+}
+.ad-toast__icon { display: flex; flex-shrink: 0; margin-top: 1px; }
+.ad-toast--erro .ad-toast__icon { color: var(--danger); }
+.ad-toast--sucesso .ad-toast__icon { color: var(--success); }
+.ad-toast__texto { flex: 1; word-break: break-word; padding-top: 1px; }
+.ad-toast__fechar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+.ad-toast__fechar:hover { color: var(--text-primary); background: var(--surface-2); }
+
+/* Toast: entra deslizando curto a partir da borda onde vive e sai com fade (classe aplicada em toast.ts). */
+@keyframes ad-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ad-toast-out { from { opacity: 1; } to { opacity: 0; } }
+@media (max-width: 599px) {
+  @keyframes ad-toast-in-topo { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .ad-toast { animation-name: ad-toast-in-topo; }
+}
+.ad-toast.ad-toast--saindo { animation: ad-toast-out var(--motion-exit) var(--ease-in) forwards; }
+
+/* Escolha de workspace (Fase 3) — mesmo painel do login */
+.ad-workspace__texto { margin: 0; font: var(--type-body-dense); color: var(--text-secondary); }
+.ad-workspace__lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.ad-workspace__lista .ds-btn { justify-content: space-between; }
+.ad-workspace__papel { font: var(--type-body-dense); color: var(--text-muted); }

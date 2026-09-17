@@ -1,0 +1,38 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/utm — UTM Tracker (Builder, campanhas salvas, presets). Só o
+   que não é coberto por components.css: lista de presets e sugestões
+   rápidas. A prévia da URL reaproveita .ds-code-block (Fase 9).
+   ═══════════════════════════════════════════════════════════════════ */
+
+.utm-preset-lista { display: flex; flex-direction: column; }
+.utm-preset-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+.utm-preset-row:first-child { padding-top: 0; }
+.utm-preset-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.utm-preset-row__nome { font: var(--type-body-dense); font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.utm-preset-row__combo { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); font: 400 12px/16px var(--font-mono); color: var(--text-muted); }
+
+.utm-chip-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.utm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 28px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--type-caption);
+  cursor: pointer;
+}
+.utm-chip:hover { border-style: solid; border-color: var(--accent); color: var(--text-primary); }
+.utm-chip:disabled { opacity: .5; cursor: default; border-style: solid; }
+
+.utm-secao-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }

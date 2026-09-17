@@ -1,0 +1,430 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-13T06:00:00-03:00",
+  "title": "Design System: Painel Operacional",
+  "extensions": {
+    "colorMeta": {
+      "bg-sidebar": {
+        "role": "neutral",
+        "displayName": "Grafite Sidebar",
+        "canonical": "#070C11",
+        "tonalRamp": [
+          "#070C11",
+          "#0B121A",
+          "#111A24",
+          "#16212D",
+          "#1B2734",
+          "#2A3A4B",
+          "#566271",
+          "#8390A0"
+        ]
+      },
+      "bg-app": {
+        "role": "neutral",
+        "displayName": "Grafite Base",
+        "canonical": "#0B121A",
+        "tonalRamp": [
+          "#070C11",
+          "#0B121A",
+          "#111A24",
+          "#16212D",
+          "#1B2734",
+          "#2A3A4B",
+          "#566271",
+          "#8390A0"
+        ]
+      },
+      "surface-1": {
+        "role": "neutral",
+        "displayName": "Painel",
+        "canonical": "#111A24"
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Painel Sutil",
+        "canonical": "#16212D"
+      },
+      "surface-3": {
+        "role": "neutral",
+        "displayName": "Painel Elevado",
+        "canonical": "#1B2734"
+      },
+      "control-bg": {
+        "role": "neutral",
+        "displayName": "Controle Recuado",
+        "canonical": "#0D151E"
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Texto Principal",
+        "canonical": "#F3F6F9"
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Texto Secundário",
+        "canonical": "#A9B4C0"
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Texto Discreto",
+        "canonical": "#8390A0"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Verde Operacional",
+        "canonical": "#35D07F",
+        "tonalRamp": [
+          "#0B2A19",
+          "#12472A",
+          "#1C6B40",
+          "#29A863",
+          "#35D07F",
+          "#4FD98F",
+          "#86E6B2",
+          "#C4F4DA"
+        ]
+      },
+      "info": {
+        "role": "secondary",
+        "displayName": "Ciano Informativo",
+        "canonical": "#34B7EB",
+        "tonalRamp": [
+          "#08263A",
+          "#0E3F5E",
+          "#16608C",
+          "#2490C4",
+          "#34B7EB",
+          "#5CC8F0",
+          "#95DCF6",
+          "#CDEFFB"
+        ]
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Âmbar Atenção",
+        "canonical": "#F2A516",
+        "tonalRamp": [
+          "#2E1F04",
+          "#4D3407",
+          "#7A520B",
+          "#B77B10",
+          "#F2A516",
+          "#F5B94A",
+          "#F8D185",
+          "#FCE8C2"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Vermelho Crítico",
+        "canonical": "#FF6B6B",
+        "tonalRamp": [
+          "#330E0E",
+          "#5A1A1A",
+          "#8C2828",
+          "#C93A3A",
+          "#FF6B6B",
+          "#FF8C8C",
+          "#FFB3B3",
+          "#FFD9D9"
+        ]
+      },
+      "premium": {
+        "role": "tertiary",
+        "displayName": "Violeta Plano",
+        "canonical": "#A78BFA",
+        "tonalRamp": [
+          "#1E1336",
+          "#33205E",
+          "#4C2E91",
+          "#6D43D4",
+          "#8B5CF6",
+          "#A78BFA",
+          "#C4B2FC",
+          "#E2D9FE"
+        ]
+      },
+      "neutral-tint": {
+        "role": "semantic",
+        "displayName": "Neutro Tintado",
+        "canonical": "rgba(169, 180, 192, 0.12)"
+      },
+      "danger-solid-hover": {
+        "role": "semantic",
+        "displayName": "Vermelho Sólido Hover",
+        "canonical": "#B53333"
+      }
+    },
+    "typographyMeta": {
+      "kpi": {
+        "displayName": "KPI",
+        "purpose": "Valor principal de métrica; tabular."
+      },
+      "page-title": {
+        "displayName": "Título de página",
+        "purpose": "h1 único no PageHeader."
+      },
+      "section-title": {
+        "displayName": "Título de seção",
+        "purpose": "Painel, seção de formulário, drawer."
+      },
+      "body": {
+        "displayName": "Corpo",
+        "purpose": "Texto de interface e valor de input."
+      },
+      "body-dense": {
+        "displayName": "Corpo denso",
+        "purpose": "Células de tabela, listas, dropdown."
+      },
+      "label": {
+        "displayName": "Rótulo",
+        "purpose": "Campo, botão, aba, navegação."
+      },
+      "caption": {
+        "displayName": "Legenda",
+        "purpose": "Hint, metadado, eixo de gráfico."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Badge e contador."
+      },
+      "code": {
+        "displayName": "Literal técnico",
+        "purpose": "Variável de ambiente, código Pix, nome de evento e preview do formato mono do WhatsApp."
+      },
+      "wordmark": {
+        "displayName": "Wordmark do tenant",
+        "purpose": "Exclusivo para identidade da loja; nunca conteúdo operacional."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 12px 32px rgba(3, 7, 11, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06)",
+        "purpose": "Diálogo, drawer, dropdown, toast."
+      },
+      {
+        "name": "tooltip",
+        "value": "0 4px 12px rgba(3, 7, 11, 0.45)",
+        "purpose": "Tooltip e popover pequeno."
+      },
+      {
+        "name": "scrim",
+        "value": "rgba(3, 7, 11, 0.64)",
+        "purpose": "Fundo atrás de diálogo e drawer."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 2px solid #35D07F; outline-offset: 2px",
+        "purpose": "Foco de teclado via :focus-visible global; inputs usam borda accent + 0 0 0 1px no :focus."
+      }
+    ],
+    "motion": [
+      {
+        "name": "duration-fast",
+        "value": "120ms",
+        "purpose": "Hover, cor, borda."
+      },
+      {
+        "name": "duration-base",
+        "value": "180ms",
+        "purpose": "Abrir dropdown, tooltip, tabs."
+      },
+      {
+        "name": "duration-slow",
+        "value": "240ms",
+        "purpose": "Drawer e diálogo."
+      },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Entrada de overlays e mudança de estado."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação primária única da região; texto escuro sobre verde.",
+      "html": "<button class=\"ds-btn-primary\">Salvar alterações</button>",
+      "css": ".ds-btn-primary { height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid #35D07F; background: #35D07F; color: #06140C; font: 500 13px/18px 'DM Sans', system-ui, sans-serif; cursor: pointer; transition: background-color 120ms ease; } .ds-btn-primary:hover { background: #4FD98F; border-color: #4FD98F; } .ds-btn-primary:active { background: #29A863; border-color: #29A863; } .ds-btn-primary:focus-visible { outline: none; outline: 2px solid #35D07F; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ação padrão; a maioria dos botões do produto.",
+      "html": "<button class=\"ds-btn-secondary\">Exportar</button>",
+      "css": ".ds-btn-secondary { height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.09); background: #16212D; color: #F3F6F9; font: 500 13px/18px 'DM Sans', system-ui, sans-serif; cursor: pointer; transition: border-color 120ms ease, background-color 120ms ease; } .ds-btn-secondary:hover { border-color: rgba(255,255,255,0.14); } .ds-btn-secondary:active { background: #1B2734; } .ds-btn-secondary:focus-visible { outline: none; outline: 2px solid #35D07F; outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Ação destrutiva fora de diálogo de confirmação.",
+      "html": "<button class=\"ds-btn-danger\">Reembolsar</button>",
+      "css": ".ds-btn-danger { height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid rgba(255,107,107,0.3); background: rgba(255,84,84,0.14); color: #FF6B6B; font: 500 13px/18px 'DM Sans', system-ui, sans-serif; cursor: pointer; } .ds-btn-danger:hover { border-color: rgba(255,107,107,0.55); } .ds-btn-danger:focus-visible { outline: none; outline: 2px solid #35D07F; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Rótulo associado, controle recuado, hint.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-f1\">Nome da campanha</label><input id=\"ds-f1\" class=\"ds-input\" placeholder=\"ex: Reativação 90 dias\" /><span class=\"ds-field-hint\">Visível só para você.</span></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; max-width: 360px; font-family: 'DM Sans', system-ui, sans-serif; } .ds-field-label { font: 500 13px/18px 'DM Sans', system-ui, sans-serif; color: #A9B4C0; } .ds-input { height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.09); background: #0D151E; color: #F3F6F9; font: 400 14px/20px 'DM Sans', system-ui, sans-serif; transition: border-color 120ms ease; } .ds-input::placeholder { color: #8390A0; } .ds-input:hover { border-color: rgba(255,255,255,0.14); } .ds-input:focus-visible { outline: none; border-color: #35D07F; outline: 2px solid #35D07F; outline-offset: 2px; } .ds-field-hint { font: 400 12px/16px 'DM Sans', system-ui, sans-serif; color: #8390A0; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Status resolvido por statusMap; tons semânticos tintados.",
+      "html": "<span class=\"ds-badge ds-badge-success\">Pago</span> <span class=\"ds-badge ds-badge-warning\">Aguardando pagamento</span> <span class=\"ds-badge ds-badge-info\">Em trânsito</span> <span class=\"ds-badge ds-badge-danger\">Recusado</span> <span class=\"ds-badge\">Rascunho</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 4px; background: rgba(169,180,192,0.12); color: #A9B4C0; font: 500 11px/14px 'DM Sans', system-ui, sans-serif; white-space: nowrap; } .ds-badge-success { background: rgba(53,208,127,0.14); color: #35D07F; } .ds-badge-warning { background: rgba(242,165,22,0.14); color: #F2A516; } .ds-badge-info { background: rgba(52,183,235,0.14); color: #34B7EB; } .ds-badge-danger { background: rgba(255,84,84,0.14); color: #FF6B6B; }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Itens de 32px; ativo por tom, sem faixa colorida.",
+      "html": "<nav class=\"ds-nav\"><div class=\"ds-nav-group\">Operação</div><a class=\"ds-nav-item is-active\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\"/><path d=\"M3 6h18\"/><path d=\"M16 10a4 4 0 0 1-8 0\"/></svg>Pedidos</a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12a9 9 0 1 1-3-6.7L21 8\"/><path d=\"M21 3v5h-5\"/></svg>Recuperação</a></nav>",
+      "css": ".ds-nav { width: 216px; padding: 12px; background: #070C11; display: flex; flex-direction: column; gap: 2px; font-family: 'DM Sans', system-ui, sans-serif; } .ds-nav-group { font: 500 12px/16px 'DM Sans', system-ui, sans-serif; color: #8390A0; padding: 16px 8px 4px; } .ds-nav-item { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border-radius: 6px; color: #A9B4C0; text-decoration: none; font: 500 13px/18px 'DM Sans', system-ui, sans-serif; } .ds-nav-item svg { color: #8390A0; } .ds-nav-item:hover { background: #16212D; color: #F3F6F9; } .ds-nav-item.is-active { background: #16212D; color: #F3F6F9; } .ds-nav-item.is-active svg { color: #35D07F; } .ds-nav-item:focus-visible { outline: none; outline: 2px solid #35D07F; outline-offset: -2px; }"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "table-row",
+      "description": "Painel flush, linhas de 44px, números à direita e tabulares.",
+      "html": "<div class=\"ds-panel-flush\"><table class=\"ds-table\"><thead><tr><th>Pedido</th><th>Cliente</th><th class=\"num\">Valor</th><th>Status</th></tr></thead><tbody><tr><td>#1840203</td><td>Diego Arruda</td><td class=\"num\">R$ 99,90</td><td><span class=\"ds-badge-w\">Aguardando pagamento</span></td></tr><tr><td>#1840204</td><td>Patrícia Lemos</td><td class=\"num\">R$ 169,90</td><td><span class=\"ds-badge-s\">Entregue</span></td></tr></tbody></table></div>",
+      "css": ".ds-panel-flush { background: #111A24; border: 1px solid rgba(255,255,255,0.09); border-radius: 8px; overflow: hidden; font-family: 'DM Sans', system-ui, sans-serif; } .ds-table { width: 100%; border-collapse: collapse; font: 400 13px/18px 'DM Sans', system-ui, sans-serif; color: #F3F6F9; font-variant-numeric: tabular-nums; } .ds-table th { height: 36px; padding: 0 12px; text-align: left; font: 500 12px/16px 'DM Sans', system-ui, sans-serif; color: #A9B4C0; border-bottom: 1px solid rgba(255,255,255,0.09); } .ds-table td { height: 44px; padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; } .ds-table tr:last-child td { border-bottom: none; } .ds-table tbody tr:hover { background: #16212D; } .ds-table .num { text-align: right; } .ds-badge-w, .ds-badge-s { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 4px; font: 500 11px/14px 'DM Sans', system-ui, sans-serif; } .ds-badge-w { background: rgba(242,165,22,0.14); color: #F2A516; } .ds-badge-s { background: rgba(53,208,127,0.14); color: #35D07F; }"
+    },
+    {
+      "name": "Callout",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "Alerta de página tintado, sem faixa lateral grossa.",
+      "html": "<div class=\"ds-callout\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/></svg><div class=\"ds-callout-body\"><strong>18 pedidos com problema de pagamento</strong><span>Recusa, expiração ou reembolso nos últimos 30 dias.</span></div><button class=\"ds-callout-cta\">Ver pedidos</button></div>",
+      "css": ".ds-callout { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; background: rgba(242,165,22,0.14); border: 1px solid rgba(242,165,22,0.3); color: #F2A516; font-family: 'DM Sans', system-ui, sans-serif; } .ds-callout-body { flex: 1; display: flex; flex-direction: column; gap: 2px; } .ds-callout-body strong { font: 600 13px/18px 'DM Sans', system-ui, sans-serif; color: #F3F6F9; } .ds-callout-body span { font: 400 12px/16px 'DM Sans', system-ui, sans-serif; color: #A9B4C0; } .ds-callout-cta { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.09); background: #16212D; color: #F3F6F9; font: 500 13px/18px 'DM Sans', system-ui, sans-serif; cursor: pointer; } .ds-callout-cta:hover { border-color: rgba(255,255,255,0.14); } .ds-callout-cta:focus-visible { outline: none; outline: 2px solid #35D07F; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A Bancada de Operação",
+    "overview": "Uma bancada digital de trabalho para quem administra a operação inteira do negócio. Densa sem ser carregada, sóbria e extremamente legível: tudo o que importa fica acessível e compreensível num relance. A interface prioriza ação, contexto e estado. Dashboards existem para orientar decisões, não para decorar.\n\nO acabamento é premium e técnico, na linha de precisão de produtos como Linear e Stripe, sem copiar nenhum deles. A personalidade própria vive nos detalhes: o verde operacional usado com parcimônia, números tabulares impecáveis, estados honestos (\"Indisponível\", \"Não configurado\") tratados com o mesmo cuidado que os dados. O fundo é dark-first em azul-grafite frio. A profundidade vem de camadas tonais e bordas finas, não de sombras, brilho ou vidro.\n\nA marca da loja (tenant) aparece como contexto dentro do produto: nome, wordmark e logo. Ela não define o design system. O SaaS tem identidade tipográfica própria, neutra e consistente.",
+    "keyCharacteristics": [
+      "Dark-first em uma única família de cinzas frios (hue ≈ 210°).",
+      "Uma cor de ação (verde); as demais cores são estritamente semânticas.",
+      "DM Sans em toda a interface; Fraunces só em wordmark do tenant.",
+      "Densidade operacional: controles de 36px, linhas de tabela de 44px, texto de dados de 13px.",
+      "Superfícies planas separadas por tom e borda de 1px; sombra só em overlays.",
+      "Raio contido: 6px em controles, 8px em painéis, 12px só em diálogos.",
+      "Todo componente tem estados default, hover, focus-visible, active, disabled, loading e error."
+    ],
+    "rules": [
+      {
+        "name": "The One Green Rule",
+        "body": "Por região de tela existe no máximo um elemento preenchido de verde, que é a ação primária. Navegação ativa, links, sucesso e gráficos não usam verde preenchido.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic-Only Rule",
+        "body": "Ciano, âmbar, vermelho e violeta só aparecem quando representam o estado que nomeiam. Ícone de KPI, cabeçalho de seção e série decorativa não recebem cor.",
+        "section": "colors"
+      },
+      {
+        "name": "The Same-Status Same-Color Rule",
+        "body": "Um status tem um único rótulo e uma única cor em todo o produto, resolvidos por admin/src/lib/statusMap.ts. Rótulo cru da API (paid, waiting_payment) nunca chega à tela.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Weights Rule",
+        "body": "Pesos permitidos: 400, 500 e 600. Os pesos 620, 650 e 700 saem do sistema.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "Rótulos, grupos da navegação, badges e botões usam caixa de sentença. Maiúsculas espaçadas ficam proibidas, inclusive \"EM BREVE\" e grupos da sidebar.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Numbers Rule",
+        "body": "Tabela, KPI, valor monetário, contagem, data e ID de pedido usam font-variant-numeric: tabular-nums. Valores numéricos em coluna alinham à direita.",
+        "section": "typography"
+      },
+      {
+        "name": "The Wordmark Only Rule",
+        "body": "Fraunces nunca aparece em título, navegação, card, tabela, métrica, formulário ou conteúdo operacional.",
+        "section": "typography"
+      },
+      {
+        "name": "The Code Literal Rule",
+        "body": "Monoespaçada (--font-mono, 12px) só para literal técnico que o usuário copia ou compara caractere a caractere e para o preview do formato mono do WhatsApp. Nunca para rótulo, ID de pedido ou dado de tabela.",
+        "section": "typography"
+      },
+      {
+        "name": "The Stack Owns Spacing Rule",
+        "body": "Componentes não têm margem externa. A distância entre blocos é do contêiner (PageStack, Stack, grid gap).",
+        "section": "layout"
+      },
+      {
+        "name": "The Content-Width Rule",
+        "body": "Nenhuma grade assume a largura da viewport. Em 1024px com sidebar, o conteúdo tem cerca de 750px e tudo precisa caber sem overflow horizontal.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-At-Rest Rule",
+        "body": "Nada que está no fluxo da página tem sombra. Glow, gradiente decorativo, glassmorphism e backdrop-filter estão fora do sistema.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No Nesting Rule",
+        "body": "Painel dentro de painel é proibido. Dentro de um painel, a subdivisão é feita com Section (título + divisória border-subtle) ou bloco em surface-2 sem borda.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No Pill Rule",
+        "body": "Botão, input, busca, seletor de loja, stepper e badge não usam raio de cápsula.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do usar on-accent (#06140C) como texto de qualquer superfície verde preenchida.",
+      "Do resolver distância entre blocos com PageStack (gap de 24px) e deixar componentes sem margem externa.",
+      "Do manter um h1 por página via PageHeader, inclusive em páginas de criação e assistentes.",
+      "Do alinhar números à direita com tabular-nums em tabelas, KPIs e valores monetários.",
+      "Do tirar rótulo e cor de status sempre de statusMap.ts.",
+      "Do mostrar estados honestos (\"Indisponível\", \"Não configurado\") com o mesmo acabamento dos dados.",
+      "Do dimensionar grades pela largura do conteúdo (auto-fit/container queries) e verificar 1024px com sidebar aberta.",
+      "Do usar o Focus Ring em todo elemento interativo via :focus-visible.",
+      "Do escrever erros como problema + recuperação, na linguagem do lojista."
+    ],
+    "donts": [
+      "Don't colocar texto branco sobre o verde #35D07F ou sobre #FF5454, porque ambos reprovam contraste AA.",
+      "Don't aninhar painel dentro de painel nem pôr borda de tabela dentro de painel com borda.",
+      "Don't usar glow, gradiente decorativo, glassmorphism, backdrop-filter ou sombra em elemento em repouso.",
+      "Don't usar raio de cápsula em botão, input, busca, seletor, stepper ou badge.",
+      "Don't colorir ícone de KPI, cabeçalho ou série de gráfico sem significado de estado. Violeta só significa plano/premium.",
+      "Don't usar maiúsculas espaçadas em rótulos, grupos de navegação ou badges.",
+      "Don't usar glifos Unicode (☰, ?, •, ×, ↑↓, →) como ícone.",
+      "Don't usar Fraunces fora do wordmark do tenant, nem pesos 620/650/700.",
+      "Don't disparar toast para falha de carregamento, nem expor variável de ambiente, SQL ou enum cru da API na interface.",
+      "Don't mostrar controles decorativos ou não implementados (busca desabilitada, ajuda e notificações sem função) em posição nobre.",
+      "Don't criar tokens com novos prefixos (--ds-*, --surface-* paralelos). Existe um único namespace de tokens.",
+      "Don't estilizar com style={{}} inline valores que pertencem ao sistema (cor, espaçamento, tipografia, raio)."
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/clientes — migrado pro design system (DS.pageHeader/dataTable/
+   statusBadge). Reaproveita .pc-nota de pedidos-central.css.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ad-clientes-filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.ad-clientes-filtros input,
+.ad-clientes-filtros select { min-width: 200px; }

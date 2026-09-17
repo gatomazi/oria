@@ -1,0 +1,66 @@
+:root {
+  color-scheme: dark;
+  --fundo: #0e141b;
+  --card: #151e28;
+  --sutil: #1b2632;
+  --borda: rgba(255, 255, 255, 0.08);
+  --texto: #e8edf2;
+  --texto-2: #a9b4c0;
+  --texto-3: #7a8795;
+  --verde: #35d07f;
+  --verde-bg: rgba(53, 208, 127, 0.14);
+  --ambar: #f2a516;
+  --ambar-bg: rgba(242, 165, 22, 0.14);
+  --vermelho: #ff5454;
+  --vermelho-bg: rgba(255, 84, 84, 0.14);
+  --ciano: #34b7eb;
+  --ciano-bg: rgba(52, 183, 235, 0.14);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fundo); color: var(--texto); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.app { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { margin: 0; font-size: 18px; }
+h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.sub { margin: 2px 0 0; color: var(--texto-3); font-size: 12px; }
+.card { padding: 14px; border: 1px solid var(--borda); border-radius: 10px; background: var(--card); }
+.detalhe { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.numeros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.numeros div { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 8px; background: var(--sutil); }
+.numeros strong { font-size: 18px; }
+.numeros span { color: var(--texto-3); font-size: 11px; }
+.acoes, .linha { display: flex; gap: 8px; }
+.linha input { flex: 1; }
+.texto, .aviso { margin: 0 0 10px; color: var(--texto-2); }
+.aviso { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--borda); font-size: 12px; color: var(--texto-3); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+kbd { padding: 0 4px; border: 1px solid var(--borda); border-radius: 4px; background: var(--sutil); font-size: 11px; }
+.badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge--neutro { background: var(--sutil); color: var(--texto-2); }
+.badge--info { background: var(--ciano-bg); color: var(--ciano); }
+.badge--sucesso { background: var(--verde-bg); color: var(--verde); }
+.badge--erro { background: var(--vermelho-bg); color: var(--vermelho); }
+.btn { min-height: 32px; padding: 0 14px; border: 1px solid var(--borda); border-radius: 8px; background: var(--sutil); color: var(--texto); font: inherit; font-weight: 600; cursor: pointer; }
+.btn:hover { border-color: rgba(255, 255, 255, 0.2); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn--primario { border-color: var(--verde); background: var(--verde); color: #06140c; }
+.btn:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--verde); outline-offset: 2px; }
+.campo { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; color: var(--texto-2); font-size: 12px; }
+.campo em { color: var(--texto-3); font-style: normal; }
+input[type="url"], input[type="password"], input[type="number"], input[type="tel"] {
+  width: 100%; min-height: 32px; padding: 0 10px; border: 1px solid var(--borda); border-radius: 8px; background: var(--sutil); color: var(--texto); font: inherit;
+}
+.opcoes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.opcao { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--borda); border-radius: 8px; background: var(--sutil); cursor: pointer; }
+.opcao:has(input:checked) { border-color: var(--verde); background: var(--verde-bg); }
+.opcao span { display: flex; flex-direction: column; gap: 2px; }
+.opcao small { color: var(--texto-3); }
+.avancado { margin-bottom: 10px; }
+.avancado summary { margin-bottom: 8px; color: var(--texto-2); cursor: pointer; }
+.grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 10px; }
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--texto-2); }
+.check:has(input:disabled) { color: var(--texto-3); }
+.dica { margin: -6px 0 10px 24px; color: var(--texto-3); font-size: 11px; }
+.msg { min-height: 1em; margin: 8px 0 0; color: var(--verde); font-size: 12px; }
+.msg:empty { display: none; }
+.msg--erro { color: var(--vermelho); }

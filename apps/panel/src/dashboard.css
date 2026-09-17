@@ -1,0 +1,126 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/dashboard — Visão geral. Só o que não é componente do DS:
+   grades da página, donut, fluxo, recuperação, carrinhos quentes e saúde.
+   KPIs usam <KpiStrip>, avisos usam <Callout>, espaçamento vertical é do
+   <PageStack> (nenhum margin-bottom aqui).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Período (canto superior direito do PageHeader) */
+.ad-periodo-select { min-width: 160px; }
+
+/* ── Grades ── */
+.ad-analytic-grid, .ad-behavior-grid, .ad-operation-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.ad-analytic-grid > *, .ad-behavior-grid > *, .ad-operation-grid > * { min-width: 0; }
+/* Tablet (700–1023px, sem sidebar fixa): painéis curtos em pares em vez de uma pilha longa. */
+@media (min-width: 700px) {
+  .ad-analytic-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ad-analytic-grid__principal { grid-column: 1 / -1; }
+  .ad-behavior-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ad-behavior-grid > :last-child { grid-column: 1 / -1; }
+}
+@media (min-width: 1024px) {
+  .ad-behavior-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ad-behavior-grid > :last-child { grid-column: auto; }
+  .ad-operation-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+}
+@media (min-width: 1360px) {
+  .ad-analytic-grid { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .ad-analytic-grid__principal { grid-column: auto; }
+  .ad-operation-grid { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
+}
+
+/* ── Legenda do gráfico principal (no cabeçalho do painel) ── */
+.ad-chart-legenda { display: flex; align-items: center; gap: var(--space-3); font: var(--type-caption); color: var(--text-secondary); }
+.ad-chart-legenda__item { display: inline-flex; align-items: center; gap: var(--space-1-5); white-space: nowrap; }
+.ad-chart-legenda__item::before { content: ''; display: inline-block; flex-shrink: 0; }
+.ad-chart-legenda__item--barra::before { width: 8px; height: 10px; border-radius: 2px; background: var(--chart-neutral); }
+.ad-chart-legenda__item--linha::before { width: 14px; height: 2px; border-radius: 1px; background: var(--info); }
+.ad-chart-legenda__item--lucro::before { width: 14px; height: 2px; border-radius: 1px; background: var(--success); }
+
+.ad-chart-tooltip {
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) 10px;
+  font: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-overlay);
+}
+.ad-chart-tooltip strong { display: block; color: var(--text-primary); font-weight: 600; margin-bottom: 2px; }
+
+/* ── Donut de status ── */
+.ad-donut { display: flex; flex-direction: column; gap: var(--space-3); }
+/* Donut e legenda lado a lado só quando o painel é largo o bastante (container query, não viewport). */
+.ad-analytic-grid__status .ds-card__body { container-type: inline-size; }
+@container (min-width: 420px) {
+  .ad-donut { flex-direction: row; align-items: center; gap: var(--space-6); }
+  .ad-donut__chart { flex-shrink: 0; width: 180px; }
+  .ad-donut__legenda { flex: 1; min-width: 0; }
+}
+.ad-donut__chart { position: relative; }
+.ad-donut__centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.ad-donut__centro strong { font: 600 22px/1 var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.ad-donut__centro span { font: var(--type-caption); color: var(--text-muted); margin-top: 2px; }
+.ad-donut__legenda { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1-5); }
+.ad-donut__legenda li { display: flex; align-items: center; gap: var(--space-2); font: var(--type-body-dense); color: var(--text-secondary); }
+.ad-donut__dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.ad-donut__label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-donut__valor { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.ad-donut__valor em { font-style: normal; font-weight: 400; color: var(--text-muted); margin-left: var(--space-1); display: inline-block; min-width: 3ch; text-align: right; }
+
+/* ── Recuperação via WhatsApp ── */
+.ad-recuperacao { display: flex; flex-direction: column; gap: var(--space-4); }
+.ad-recuperacao-numeros { margin: 0; }
+.ad-recuperacao-numeros div { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--border-subtle); min-width: 0; }
+.ad-recuperacao-numeros div:first-child { padding-top: 0; }
+.ad-recuperacao-numeros dt { font: var(--type-body-dense); color: var(--text-secondary); min-width: 0; }
+.ad-recuperacao-numeros dd { margin: 0; font: 600 15px/20px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; }
+.ad-recuperacao-grafico { display: flex; flex-direction: column; gap: var(--space-1); }
+.ad-recuperacao-grafico__rotulo { font: var(--type-caption); color: var(--text-muted); }
+
+/* ── Fluxo de pedidos: células com traço superior no tom do estágio ── */
+.ad-flow-row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--space-2); }
+.ad-flow-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "label label" "valor pct";
+  align-items: baseline;
+  gap: 2px var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+  min-width: 0;
+}
+.ad-flow-item::before { content: ''; position: absolute; inset: 0 0 auto; height: 2px; background: var(--estagio-cor); opacity: var(--estagio-opacidade, 1); }
+.ad-flow-label { grid-area: label; font: var(--type-caption); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-flow-valor { grid-area: valor; font: 600 20px/26px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.ad-flow-pct { grid-area: pct; font: var(--type-caption); font-variant-numeric: tabular-nums; color: var(--text-muted); }
+
+/* ── Canais e integrações ── */
+.ad-saude-lista { list-style: none; margin: 0; padding: 0; }
+.ad-saude-item { display: flex; align-items: center; gap: var(--space-2); padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font: var(--type-body-dense); color: var(--text-primary); }
+.ad-saude-item:first-child { padding-top: 0; }
+.ad-saude-item:last-child { border-bottom: none; padding-bottom: 0; }
+.ad-saude-item > span:nth-child(2) { flex: 1; min-width: 0; }
+.ad-saude-status { font: var(--type-caption); color: var(--text-muted); }
+
+/* ── Carrinhos quentes ── */
+.ad-hotcarts { list-style: none; margin: 0; padding: 0; }
+.ad-hotcart-row { display: flex; align-items: center; gap: var(--space-3); padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+.ad-hotcart-row:first-child { padding-top: 0; }
+.ad-hotcart-row:last-child { border-bottom: none; padding-bottom: 0; }
+.ad-hotcart-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ad-hotcart-info strong { font: var(--type-body-dense); font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-hotcart-info span { font: var(--type-caption); color: var(--text-muted); }
+.ad-hotcart-valor { font: var(--type-body-dense); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); flex-shrink: 0; }
+.ad-hotcart-btn { flex-shrink: 0; white-space: nowrap; }
+@media (max-width: 479px) {
+  .ad-hotcart-row { flex-wrap: wrap; }
+  .ad-hotcart-info { flex-basis: calc(100% - 96px); }
+}
+
+/* Financeiro: 2 saldos não precisam da largura toda */
+.ad-kpi-strip--estreita { max-width: 560px; }

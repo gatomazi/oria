@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Política de Privacidade — Orgulho Regional</title>
+  <meta name="description" content="Como o Orgulho Regional coleta, usa, armazena e protege dados pessoais, incluindo os dados obtidos via APIs do Google." />
+  <link rel="canonical" href="https://orgulhoregional.com.br/politica-de-privacidade" />
+  <!-- Página institucional: indexável, mas nunca deve competir com as páginas de cidade na busca. -->
+  <meta name="robots" content="index, follow" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --olive:       #4d543d;
+      --olive-dark:  #1a1e14;
+      --sand:        #d6ba8d;
+      --sand-light:  #f5f0e8;
+      --cream:       #faf8f4;
+      --text:        #1a1a14;
+      --text-muted:  #6b6b58;
+      --border:      #e4ddd3;
+      --white:       #ffffff;
+    }
+
+    body {
+      background: var(--cream);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 17px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Faixa superior: volta pro site sem precisar do botão do navegador. */
+    .topo {
+      background: var(--olive-dark);
+      padding: 18px 24px;
+    }
+    .topo a {
+      color: var(--sand);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+    .topo a:hover, .topo a:focus-visible { color: var(--white); }
+
+    .pagina {
+      margin: 0 auto;
+      max-width: 760px;
+      padding: 56px 24px 96px;
+    }
+
+    header.cabecalho { border-bottom: 1px solid var(--border); margin-bottom: 44px; padding-bottom: 32px; }
+
+    h1 {
+      color: var(--olive-dark);
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(30px, 6vw, 42px);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+    }
+
+    .atualizacao {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 14px;
+    }
+
+    .resumo {
+      background: var(--sand-light);
+      border-left: 3px solid var(--sand);
+      border-radius: 0 6px 6px 0;
+      margin-top: 28px;
+      padding: 20px 24px;
+    }
+    .resumo p { font-size: 16px; }
+    .resumo strong { color: var(--olive-dark); }
+
+    h2 {
+      color: var(--olive-dark);
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(21px, 4vw, 26px);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 48px 0 16px;
+    }
+
+    h3 {
+      color: var(--olive);
+      font-size: 17px;
+      font-weight: 700;
+      margin: 28px 0 10px;
+    }
+
+    p + p { margin-top: 14px; }
+
+    ul { margin: 14px 0 0; padding-left: 22px; }
+    li { margin-bottom: 10px; }
+    li::marker { color: var(--sand); }
+
+    a { color: var(--olive); }
+    a:hover, a:focus-visible { color: var(--olive-dark); }
+
+    strong { font-weight: 600; }
+
+    /* Trecho exigido pelo Google: precisa ficar localizável, não diluído no corpo. */
+    .destaque {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 18px;
+      padding: 22px 24px;
+    }
+
+    .contato {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 18px;
+      padding: 22px 24px;
+    }
+
+    footer.rodape {
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 64px;
+      padding-top: 28px;
+    }
+
+    @media (max-width: 600px) {
+      body { font-size: 16px; }
+      .pagina { padding: 40px 20px 72px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topo"><a href="/">← Orgulho Regional</a></nav>
+
+  <main class="pagina">
+    <header class="cabecalho">
+      <h1>Política de Privacidade</h1>
+      <p class="atualizacao">Última atualização: 15 de setembro de 2026</p>
+
+      <div class="resumo">
+        <p>
+          <strong>Em resumo:</strong> o site do Orgulho Regional serve para você encontrar a estampa
+          da sua cidade — não pedimos cadastro nem dados pessoais para isso. Os dados de quem compra
+          são tratados para entregar o pedido e dar suporte. Não vendemos dados a ninguém.
+        </p>
+      </div>
+    </header>
+
+    <p>
+      Esta política explica quais dados o Orgulho Regional coleta, por que coleta, com quem
+      compartilha e como você pode exercer seus direitos. Ela vale para o site
+      <a href="https://orgulhoregional.com.br/">orgulhoregional.com.br</a> e para o painel
+      administrativo interno usado para operar a loja.
+    </p>
+
+    <h2>1. Quem é o responsável</h2>
+    <p>
+      O Orgulho Regional é o controlador dos dados descritos aqui, nos termos da Lei Geral de
+      Proteção de Dados (Lei nº 13.709/2018). Os contatos estão na seção 10.
+    </p>
+
+    <h2>2. Dados coletados no site público</h2>
+    <p>
+      A busca por cidade e a visualização de estampas não exigem cadastro, login ou qualquer dado
+      pessoal. O que coletamos nessa navegação é estatístico:
+    </p>
+    <ul>
+      <li>
+        <strong>Medição de audiência (Google Analytics 4).</strong> Páginas visitadas, origem do
+        acesso, tipo de dispositivo, região aproximada e interações com a busca. O Google Analytics
+        usa cookies próprios. Esses dados nos dizem quais cidades e estampas têm procura — não
+        identificam você pessoalmente.
+      </li>
+      <li>
+        <strong>Registros técnicos do servidor.</strong> Endereço IP, data, hora e página acessada,
+        gerados automaticamente e usados para segurança e diagnóstico de falhas.
+      </li>
+    </ul>
+    <p>
+      Você pode bloquear cookies nas configurações do navegador. O site continua funcionando — só
+      deixamos de contabilizar a visita.
+    </p>
+
+    <h2>3. Dados de quem compra</h2>
+    <p>
+      A compra em si acontece na plataforma da loja (Reserva Ink), que tem política própria. Para
+      acompanhar e dar suporte aos pedidos, nosso painel recebe e armazena:
+    </p>
+    <ul>
+      <li>nome, telefone, e-mail e, quando a loja exige, CPF ou CNPJ do comprador;</li>
+      <li>itens, valores, status de pagamento e de entrega do pedido;</li>
+      <li>carrinhos iniciados e não finalizados.</li>
+    </ul>
+    <p>
+      Usamos esses dados para confirmar pedidos, avisar sobre pagamento e entrega, atender no
+      pós-venda e lembrar de um carrinho deixado para trás. As mensagens saem por WhatsApp, no
+      número que você informou na compra. Você pode pedir para parar de recebê-las a qualquer
+      momento, respondendo a própria mensagem ou usando os contatos da seção 10.
+    </p>
+    <p>
+      <strong>Não vendemos, alugamos nem cedemos dados pessoais para terceiros</strong>, e não
+      usamos os dados de compradores para publicidade de outras empresas.
+    </p>
+
+    <h2>4. Dados obtidos por APIs do Google</h2>
+    <p>
+      O painel administrativo pode ser conectado a contas Google pela própria pessoa responsável
+      pela loja, sempre por meio da tela de consentimento oficial do Google, e sempre em modo de
+      <strong>somente leitura</strong>. Essa conexão é opcional e pode ser desfeita a qualquer
+      momento.
+    </p>
+
+    <h3>O que acessamos</h3>
+    <ul>
+      <li>
+        <strong>Google Analytics (somente leitura).</strong> Métricas agregadas da propriedade
+        escolhida — sessões, origens de tráfego, conversões — para exibir o desempenho da loja no
+        painel.
+      </li>
+      <li>
+        <strong>Endereço de e-mail e identificador da conta Google.</strong> Apenas para mostrar
+        qual conta está conectada e permitir desconectá-la.
+      </li>
+    </ul>
+
+    <h3>O que fazemos com esses dados</h3>
+    <ul>
+      <li>Exibimos os números dentro do painel, para a própria pessoa que autorizou o acesso.</li>
+      <li>
+        Guardamos um cache temporário dos resultados para não consultar o Google a cada
+        carregamento de tela.
+      </li>
+      <li>
+        Guardamos as credenciais de acesso <strong>criptografadas</strong>, nunca em texto legível,
+        e nunca as enviamos ao navegador.
+      </li>
+    </ul>
+
+    <h3>O que não fazemos</h3>
+    <ul>
+      <li>Não alteramos, criamos nem apagamos nada nas contas Google conectadas.</li>
+      <li>Não transferimos dados obtidos do Google para terceiros.</li>
+      <li>Não usamos esses dados para publicidade nem para treinar modelos de inteligência artificial.</li>
+      <li>Nenhuma pessoa lê esses dados manualmente, salvo com autorização expressa de quem conectou a conta, por exigência legal, ou para investigar um incidente de segurança.</li>
+    </ul>
+
+    <div class="destaque">
+      <p>
+        O uso e a transferência, pelo Orgulho Regional, de informações recebidas das APIs do Google
+        obedecem à
+        <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Política de Dados do Usuário dos Serviços de API do Google</a>,
+        incluindo os requisitos de Uso Limitado.
+      </p>
+    </div>
+
+    <p>
+      Para revogar o acesso: desconecte a conta na tela de integrações do painel, ou remova a
+      permissão diretamente em
+      <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a>.
+      Ao desconectar, apagamos as credenciais armazenadas.
+    </p>
+
+    <h2>5. Dados obtidos por APIs da Meta</h2>
+    <p>
+      Da mesma forma, o painel pode ser conectado a uma conta de anúncios da Meta (Facebook e
+      Instagram), também em <strong>somente leitura</strong>, para exibir o desempenho das campanhas
+      — investimento, alcance, resultados. Não criamos, pausamos nem editamos campanhas. As
+      credenciais ficam criptografadas e o acesso pode ser revogado no painel ou nas configurações
+      de aplicativos da sua conta Meta.
+    </p>
+
+    <h2>6. Com quem compartilhamos</h2>
+    <p>Compartilhamos dados apenas com quem é necessário para a loja funcionar:</p>
+    <ul>
+      <li><strong>Reserva Ink</strong> — plataforma que processa pedidos, pagamentos e produção.</li>
+      <li><strong>Provedores de infraestrutura</strong> — hospedagem e banco de dados, que armazenam os dados em nosso nome.</li>
+      <li><strong>WhatsApp (Meta)</strong> — quando enviamos mensagens sobre seu pedido.</li>
+      <li><strong>Google Analytics</strong> — medição de audiência do site.</li>
+      <li><strong>Autoridades públicas</strong> — quando houver obrigação legal ou ordem judicial.</li>
+    </ul>
+
+    <h2>7. Por quanto tempo guardamos</h2>
+    <p>
+      Dados de pedidos são mantidos pelo prazo exigido pela legislação fiscal e de defesa do
+      consumidor. Dados de carrinhos abandonados são mantidos enquanto forem úteis à recuperação e
+      depois descartados. Credenciais de contas conectadas são apagadas assim que a conta é
+      desconectada. Registros técnicos do servidor são mantidos por período curto, para segurança.
+    </p>
+
+    <h2>8. Segurança</h2>
+    <p>
+      O acesso ao painel é restrito e autenticado. Tokens e credenciais de integrações são
+      armazenados criptografados, com chaves separadas por integração, e nunca trafegam para o
+      navegador. O tráfego do site usa conexão criptografada (HTTPS). Nenhum sistema é
+      inteiramente imune a incidentes; se ocorrer algum que traga risco relevante, comunicaremos os
+      titulares e a autoridade competente conforme a LGPD.
+    </p>
+
+    <h2>9. Seus direitos</h2>
+    <p>
+      A LGPD garante a você o direito de confirmar a existência de tratamento, acessar seus dados,
+      corrigir dados incompletos ou desatualizados, solicitar anonimização, bloqueio ou eliminação
+      de dados desnecessários, pedir a portabilidade, revogar consentimento e se opor a um
+      tratamento. Basta pedir pelos contatos abaixo — responderemos no menor prazo possível.
+    </p>
+
+    <h2>10. Contato</h2>
+    <div class="contato">
+      <p><strong>Orgulho Regional</strong></p>
+      <p>E-mail: <a href="mailto:tomazi.brand@gmail.com">tomazi.brand@gmail.com</a></p>
+      <p>Site: <a href="https://orgulhoregional.com.br/">orgulhoregional.com.br</a></p>
+    </div>
+
+    <h2>11. Mudanças nesta política</h2>
+    <p>
+      Se esta política mudar, atualizamos a data no topo da página. Mudanças relevantes na forma
+      como tratamos dados pessoais serão comunicadas pelos canais de contato que tivermos.
+    </p>
+
+    <footer class="rodape">
+      <p>© 2026 Orgulho Regional. <a href="/">Voltar ao site</a></p>
+    </footer>
+  </main>
+</body>
+</html>

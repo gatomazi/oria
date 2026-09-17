@@ -1,0 +1,6 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/eventos ("Webhooks e logs") — Fase 7, docs/plan.md.
+   Migrado pro design system (DS.pageHeader/dataTable/drawer, ver
+   src/admin/design-system/) — reaproveita .pc-kv* de pedidos-central.css
+   pro drawer de detalhe. Nada específico desta página além disso.
+   ═══════════════════════════════════════════════════════════════════ */

@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+
+  <!-- Primary SEO -->
+  <title>Orgulho Regional — Camiseta da sua cidade | Use Sul, Use Centro & Use Norte</title>
+  <meta name="description" content="Encontre a camiseta da sua cidade. Mais de 2.100 municípios do Sul, Centro-Oeste e Norte do Brasil. Vista seu orgulho regional." />
+  <meta name="keywords" content="camiseta personalizada, camiseta da cidade, orgulho regional, Use Sul, Use Centro, Use Norte, camiseta Paraná, camiseta Santa Catarina, camiseta Rio Grande do Sul, camiseta Goiás, camiseta Mato Grosso, camiseta Amazonas, camiseta Pará" />
+  <link rel="canonical" href="https://orgulhoregional.com.br/" />
+  <meta name="robots" content="index, follow" />
+
+  <!-- Open Graph -->
+  <meta property="fb:app_id" content="948620811335766" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://orgulhoregional.com.br/" />
+  <meta property="og:title" content="Orgulho Regional — Camiseta da sua cidade" />
+  <meta property="og:description" content="Mais de 2.100 cidades do Sul, Centro-Oeste e Norte. Digite o nome da sua cidade e encontre sua estampa." />
+  <meta property="og:image" content="https://orgulhoregional.com.br/assets/og-image.png" />
+  <meta property="og:image:secure_url" content="https://orgulhoregional.com.br/assets/og-image.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Orgulho Regional — Encontre a camiseta da sua cidade" />
+  <meta property="og:locale" content="pt_BR" />
+  <meta property="og:site_name" content="Orgulho Regional" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Orgulho Regional — Camiseta da sua cidade" />
+  <meta name="twitter:description" content="Mais de 2.100 cidades do Sul, Centro-Oeste e Norte. Digite o nome da sua cidade e encontre sua estampa." />
+  <meta name="twitter:image" content="https://orgulhoregional.com.br/assets/og-image.png" />
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Orgulho Regional",
+    "url": "https://orgulhoregional.com.br/",
+    "description": "Encontre a camiseta da sua cidade. Mais de 1.600 municípios do Sul e Centro-Oeste do Brasil.",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "https://orgulhoregional.com.br/?q={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Google Analytics 4 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-FXSS7KQKCN"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-FXSS7KQKCN', { send_page_view: true });
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --olive:       #4d543d;
+      --olive-dark:  #1a1e14;
+      --olive-light: #8a9e6e;
+      --sand:        #d6ba8d;
+      --sand-light:  #f5f0e8;
+      --cream:       #faf8f4;
+      --text:        #1a1a14;
+      --text-muted:  #6b6b58;
+      --border:      #e4ddd3;
+      --white:       #ffffff;
+      --centro:      #6b4f35;
+      --norte:       #234b50;
+      --r:           18px;
+    }
+
+    /* ── TEMAS REGIONAIS ── */
+    body[data-brand="usecentro"] {
+      background: #2a1008;
+    }
+    body[data-brand="usenorte"] {
+      background: #0d1e20;
+    }
+
+    @media (min-width: 600px) {
+      body[data-brand="usecentro"] {
+        background:
+          radial-gradient(ellipse 60% 60% at 30% 40%, rgba(140,59,31,0.25) 0%, transparent 70%),
+          radial-gradient(ellipse 50% 50% at 75% 65%, rgba(227,154,45,0.1) 0%, transparent 60%),
+          #1a0a04;
+      }
+      body[data-brand="usenorte"] {
+        background:
+          radial-gradient(ellipse 60% 60% at 30% 40%, rgba(35,75,80,0.35) 0%, transparent 70%),
+          radial-gradient(ellipse 50% 50% at 75% 65%, rgba(212,184,115,0.1) 0%, transparent 60%),
+          #071214;
+      }
+    }
+
+    body[data-brand="usecentro"] #screen-search { background: #2a1008; }
+    body[data-brand="usenorte"]  #screen-search { background: #0d1e20; }
+
+    body[data-brand="usecentro"] #screen-search::before {
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(196,130,60,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 85%, rgba(227,154,45,0.10) 0%, transparent 55%);
+    }
+    body[data-brand="usenorte"] #screen-search::before {
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(59,122,87,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 85%, rgba(212,184,115,0.10) 0%, transparent 55%);
+    }
+
+    body[data-brand="usecentro"] #screen-search::after {
+      background-image: repeating-linear-gradient(
+        0deg, transparent, transparent 59px, rgba(196,130,60,0.05) 60px
+      );
+    }
+    body[data-brand="usenorte"] #screen-search::after {
+      background-image: repeating-linear-gradient(
+        0deg, transparent, transparent 59px, rgba(59,122,87,0.05) 60px
+      );
+    }
+
+    body[data-brand="usecentro"] .search-input:focus {
+      box-shadow: 0 0 0 3px rgba(227,154,45,0.5), 0 4px 24px rgba(0,0,0,0.3);
+    }
+    body[data-brand="usenorte"] .search-input:focus {
+      box-shadow: 0 0 0 3px rgba(212,184,115,0.5), 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    html {
+      height: 100%;
+    }
+
+    body {
+      min-height: 100%;
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background: var(--olive-dark);
+      display: flex;
+      align-items: stretch;
+      overflow-x: hidden;
+    }
+
+    /* mobile: app ocupa tudo */
+    #app {
+      position: relative;
+      width: 100%;
+      min-height: 100dvh;
+    }
+
+    .screen {
+      position: absolute;
+      inset: 0;
+      min-height: 100dvh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      display: none;
+    }
+
+    .screen.active { display: block; }
+
+    /* card centralizado: 600px–1023px */
+    @media (min-width: 600px) {
+      body {
+        align-items: center;
+        justify-content: center;
+        min-height: 100dvh;
+        background:
+          radial-gradient(ellipse 60% 60% at 30% 40%, rgba(77,84,61,0.25) 0%, transparent 70%),
+          radial-gradient(ellipse 50% 50% at 75% 65%, rgba(214,186,141,0.1) 0%, transparent 60%),
+          #0e1009;
+      }
+
+      #app {
+        width: 420px;
+        min-height: 0;
+        height: 88dvh;
+        max-height: 860px;
+        border-radius: 32px;
+        box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+        overflow: hidden;
+      }
+
+      .screen {
+        min-height: 0;
+        height: 100%;
+      }
+    }
+
+    /* ── TABLET: layout vertical próprio (768px–1023px) ── */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      body { align-items: flex-start; }
+
+      #app {
+        width: min(calc(100% - 40px), 780px);
+        margin: 0 auto;
+        height: auto;
+        min-height: 100dvh;
+        max-height: none;
+        border-radius: 20px;
+        overflow: clip; /* clip visual sem bloquear sticky */
+      }
+
+      .screen {
+        position: relative;
+        inset: auto;
+        height: auto;
+        min-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: visible;
+      }
+
+      /* Hero tablet: altura moderada, produto visível + conteúdo abaixo */
+      .result-image-area {
+        aspect-ratio: auto;
+        height: clamp(320px, 44vh, 460px);
+      }
+
+      /* Models tablet: grid 3 colunas */
+      .models-track {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        overflow: visible;
+        padding: 0;
+        scroll-snap-type: none;
+      }
+
+      .models-track::after { display: none; }
+
+      .model-card {
+        width: auto;
+        scroll-snap-align: none;
+        scroll-snap-stop: normal;
+      }
+
+      .model-img-wrap {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+      }
+
+      .models-section { padding: 16px 24px 16px; }
+      .models-title   { padding: 0; }
+
+      /* CTA sticky no tablet — sempre visível ao rolar */
+      .result-sticky {
+        position: sticky;
+        bottom: 0;
+        padding: 12px 24px max(20px, env(safe-area-inset-bottom));
+        background: var(--cream);
+        box-shadow: 0 -8px 20px rgba(250,248,244,0.95);
+        border-top: 1px solid var(--border);
+        z-index: 10;
+      }
+
+      /* "Buscar outra cidade" inline: tablet usa versão do sticky (estático) */
+      .search-new-page-wrap { display: none; }
+      .result-sticky .btn-other { display: block; }
+
+      /* Conteúdo */
+      .result-content { padding: 24px 24px 12px; }
+      .refs-section   { padding: 20px 24px 32px; }
+    }
+
+    /* desktop: layout nativo (1024px+) */
+    @media (min-width: 1024px) {
+      body { align-items: flex-start; }
+
+      #app {
+        width: min(calc(100% - 80px), 1280px);
+        margin: 0 auto;
+        height: auto;
+        min-height: 100dvh;
+        max-height: none;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
+      }
+
+      .screen {
+        position: relative;
+        inset: auto;
+        height: auto;
+        min-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: visible;
+      }
+
+      /* ── HOME DESKTOP: escala e proporções ── */
+      .search-inner {
+        min-height: 100dvh;
+        padding: 80px 48px 64px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+
+      .hero-logo { font-size: 11px; margin-bottom: 40px; }
+
+      .hero-eyebrow { font-size: 18px; margin-bottom: 14px; }
+
+      .hero-title {
+        font-size: clamp(52px, 5.5vw, 80px);
+        margin-bottom: 40px;
+      }
+
+      .search-wrap { max-width: 600px; }
+
+      .search-hint { margin-top: 24px; }
+
+      .store-links {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .store-link {
+        width: auto;
+        padding: 10px 28px;
+        font-size: 13px;
+      }
+
+      /* ── RESULTADO DESKTOP: grid de 2 colunas em .result-main ── */
+
+      #screen-result.active { display: block; }
+
+      .result-main {
+        display: grid;
+        grid-template-columns: minmax(0, 55fr) minmax(360px, 45fr);
+        /* align-items não definido — result-left usa align-self:stretch */
+        background: var(--cream);
+      }
+
+      /* Coluna esquerda: ocupa toda altura da row, hero fica sticky no topo */
+      .result-left {
+        align-self: stretch;
+        background: var(--cream);   /* canvas claro contínuo com a coluna direita */
+        position: relative;
+        min-width: 0;
+      }
+
+      .result-image-area {
+        position: sticky;
+        top: 0;
+        height: clamp(480px, 78vh, 860px);
+        aspect-ratio: auto;
+        overflow: hidden;
+      }
+
+      /* Coluna direita: fluxo vertical pelo conteúdo */
+      .result-col-right {
+        min-width: 0;
+        background: var(--cream);
+      }
+
+      .result-content { padding: 56px 48px 20px; }
+
+      .result-city-name { font-size: clamp(32px, 3vw, 52px); }
+
+      .models-section { padding: 0 48px 16px; }
+
+      .models-title { padding: 0; margin-bottom: 16px; }
+
+      .model-name  { font-size: 13px; }
+      .model-price { font-size: 12px; }
+
+      /* CTA sticky no desktop — sempre visível ao rolar */
+      .result-sticky {
+        position: sticky;
+        bottom: 0;
+        padding: 16px 48px 40px;
+        background: var(--cream);
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -8px 20px rgba(250,248,244,0.95);
+        z-index: 10;
+      }
+
+      .search-new-page-wrap { display: none; }
+      .result-sticky .btn-other { display: block; }
+
+      /* Refs: full-width abaixo de .result-main */
+      .refs-section {
+        padding: 32px 48px 48px;
+        background: var(--cream);
+        border-top: 1px solid var(--border);
+      }
+
+      .refs-title { padding: 0; margin-bottom: 16px; }
+
+      /* Nota: models-track, model-card, refs-track e ref-card estão
+         nos blocos de final do CSS (após as regras base) — cascade correto. */
+    }
+
+    /* ── TELA: BUSCA ── */
+    #screen-search {
+      background: var(--olive-dark);
+    }
+
+    #screen-search::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(138,158,110,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 85%, rgba(214,186,141,0.10) 0%, transparent 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #screen-search::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(
+        0deg, transparent, transparent 59px, rgba(138,158,110,0.05) 60px
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .search-inner {
+      position: relative;
+      z-index: 1;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 52px 28px 48px;
+      text-align: center;
+      transition: justify-content 0s, padding-top 0.25s;
+    }
+
+    .search-inner.keyboard-open {
+      justify-content: flex-start;
+      padding-top: 72px;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-logo {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--olive-light);
+      margin-bottom: 32px;
+      display: block;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    .hero-eyebrow {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-size: 15px;
+      color: var(--sand);
+      margin-bottom: 10px;
+      animation: fadeUp 0.5s ease 0.08s both;
+    }
+
+    .hero-title {
+      font-family: 'Fraunces', serif;
+      font-weight: 900;
+      font-size: clamp(38px, 11vw, 56px);
+      line-height: 1.0;
+      color: var(--sand-light);
+      margin-bottom: 32px;
+      letter-spacing: -0.02em;
+      animation: fadeUp 0.5s ease 0.15s both;
+    }
+
+    .hero-title em { font-style: italic; color: var(--sand); }
+
+    .search-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+      animation: fadeUp 0.5s ease 0.25s both;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 17px 50px 17px 20px;
+      font-size: 16px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      border: none;
+      border-radius: var(--r);
+      background: rgba(245,240,232,0.96);
+      color: var(--text);
+      outline: none;
+      -webkit-appearance: none;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+      transition: box-shadow 0.2s, background 0.2s;
+    }
+
+    .search-input::placeholder { color: #a09f90; }
+
+    .search-input:focus {
+      background: var(--white);
+      box-shadow: 0 0 0 3px rgba(214,186,141,0.5), 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    .search-icon {
+      position: absolute;
+      right: 16px; top: 50%;
+      transform: translateY(-50%);
+      color: #a09f90;
+      pointer-events: none;
+    }
+
+    /* sugestoes */
+    #suggestions {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0; right: 0;
+      background: var(--white);
+      border-radius: var(--r);
+      overflow-x: hidden;
+      overflow-y: auto;
+      max-height: 340px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+      display: none;
+      z-index: 200;
+    }
+
+    #suggestions.visible {
+      display: block;
+      animation: dropIn 0.15s ease;
+    }
+
+    @keyframes dropIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .suggestion-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 18px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0ece6;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.1s;
+    }
+
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover, .suggestion-item:focus { background: #f9f6f1; outline: none; }
+
+    .suggestion-pin {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: #f0ece6;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--olive);
+    }
+
+    .suggestion-info { flex: 1; min-width: 0; }
+
+    .suggestion-city {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .suggestion-brand { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+    .suggestion-state {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--white);
+      background: var(--olive);
+      border-radius: 5px;
+      padding: 3px 8px;
+    }
+
+    .suggestion-state.centro { background: var(--centro); }
+    .suggestion-state.norte  { background: var(--norte); }
+
+    .no-results { padding: 20px 18px 16px; text-align: center; }
+
+    .no-results-text { font-size: 14px; color: var(--text-muted); margin-bottom: 10px; }
+
+    .no-results-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #25d366;
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: rgba(37,211,102,0.08);
+    }
+
+    .search-hint {
+      margin-top: 18px;
+      font-size: 11px;
+      color: rgba(214,186,141,0.4);
+      letter-spacing: 0.1em;
+      animation: fadeUp 0.5s ease 0.35s both;
+    }
+
+    .store-links {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      animation: fadeUp 0.5s ease 0.42s both;
+    }
+
+    .store-link {
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 8px 18px;
+      border-radius: 20px;
+      transition: opacity 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+      letter-spacing: 0.04em;
+      width: 150px;
+      text-align: center;
+    }
+
+    .store-link:active { transform: scale(0.96); }
+
+    .store-link-sul {
+      color: #f0ece3;
+      background: var(--olive);
+      border: 1.5px solid rgba(255,255,255,0.12);
+    }
+
+    .store-link-centro {
+      color: #f5ede4;
+      background: var(--centro);
+      border: 1.5px solid rgba(255,255,255,0.12);
+    }
+
+    .store-link-norte {
+      color: #e8f0f0;
+      background: var(--norte);
+      border: 1.5px solid rgba(255,255,255,0.12);
+    }
+
+    /* ── TELA: RESULTADO ── */
+    #screen-result {
+      background: var(--cream);
+    }
+
+    .result-image-area {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      overflow: hidden;
+      background: var(--olive-dark);
+      flex-shrink: 0;
+    }
+
+    .result-image-area::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 110px;
+      background: linear-gradient(to bottom, rgba(26,30,20,0.55), transparent);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .result-header {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 20px;
+    }
+
+    .btn-back {
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50%;
+      width: 40px; height: 40px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--white);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .result-header-logo {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+    }
+
+    .result-badge {
+      background: rgba(77,84,61,0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--white);
+      padding: 4px 10px;
+    }
+
+    .result-badge.centro { background: rgba(107,79,53,0.85); }
+    .result-badge.norte  { background: rgba(35,75,80,0.85); }
+
+    .result-image {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .result-image-placeholder {
+      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: linear-gradient(160deg, #2e3323 0%, #1a1e14 100%);
+    }
+
+    .placeholder-city {
+      font-family: 'Fraunces', serif;
+      font-weight: 900;
+      font-style: italic;
+      font-size: clamp(32px, 9vw, 52px);
+      color: var(--sand-light);
+      text-align: center;
+      padding: 0 24px;
+      line-height: 1.1;
+    }
+
+    .placeholder-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--olive-light);
+    }
+
+    .result-content {
+      padding: 20px 24px 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .result-city-name {
+      font-family: 'Fraunces', serif;
+      font-weight: 900;
+      font-size: clamp(30px, 8vw, 42px);
+      line-height: 1.0;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .result-city-state {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .result-actions { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
+
+    /* ── OUTRAS REFERENCIAS DO ESTADO ── */
+    .carousel-section {
+      padding: 20px 24px 8px;
+    }
+
+    .carousel-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+
+    /* ── GRADE DE MODELOS ── */
+    .models-section {
+      padding: 20px 0 0;
+    }
+
+    .models-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 0 24px;
+      margin-bottom: 14px;
+    }
+
+    .models-track {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0 24px;
+    }
+
+    .model-card {
+      width: 100%;
+      min-width: 0;
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .model-img-wrap {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--olive-dark);
+      margin-bottom: 7px;
+      transition: transform 0.15s;
+      position: relative;
+    }
+
+    .model-card:active .model-img-wrap { transform: scale(0.95); }
+
+    .model-img {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+    }
+
+    .model-img-placeholder {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(160deg, #2e3323 0%, #1a1e14 100%);
+      font-family: 'Fraunces', serif;
+      font-size: 11px;
+      font-style: italic;
+      color: rgba(214,186,141,0.4);
+      text-align: center;
+      padding: 8px;
+      line-height: 1.3;
+    }
+
+    .model-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 2px;
+    }
+
+    .model-price {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* ── CARDS DE REFERENCIAS ── */
+    .refs-section {
+      padding: 20px 0 8px;
+    }
+
+    .refs-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 0 24px;
+      margin-bottom: 14px;
+    }
+
+    .refs-track {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 0 24px 4px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      scroll-padding-left: 24px;
+    }
+
+    .refs-track::after {
+      content: '';
+      flex-shrink: 0;
+      width: 14px;
+    }
+
+    .refs-track::-webkit-scrollbar { display: none; }
+
+    .ref-card {
+      flex-shrink: 0;
+      width: 120px;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .ref-img-wrap {
+      width: 120px;
+      height: 120px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--olive-dark);
+      margin-bottom: 7px;
+      transition: transform 0.15s;
+    }
+
+    .ref-card:active .ref-img-wrap { transform: scale(0.95); }
+
+    .ref-img {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+    }
+
+    .ref-name {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .coupon-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--olive);
+      background: rgba(77,84,61,0.08);
+      border-radius: 8px;
+      padding: 7px 12px;
+    }
+
+    .coupon-hint strong {
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    /* barra fixa no rodapé — sempre visível ao rolar */
+    .result-sticky {
+      position: sticky;
+      bottom: 0;
+      left: 0; right: 0;
+      background: var(--cream);
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -8px 20px rgba(250,248,244,0.95);
+      padding: 10px 20px max(14px, env(safe-area-inset-bottom)) 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 10;
+    }
+
+    @media (max-width: 767px) {
+      /* Oculta "Buscar outra cidade" do sticky no mobile */
+      .result-sticky .btn-other { display: none; }
+
+      /* "Buscar outra cidade" inline no fluxo */
+      .search-new-page-wrap {
+        display: block;
+        padding: 4px 20px 12px;
+        text-align: center;
+      }
+
+      /* FAB sobe para não ficar atrás do CTA sempre visível */
+      body.is-result .fab-stack {
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      }
+
+      /* Pequeno padding-bottom para conteúdo final não tocar borda */
+      #screen-result { padding-bottom: 16px; }
+    }
+
+    .btn-primary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      width: 100%;
+      padding: 15px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      color: var(--white);
+      background: var(--olive);
+      border: none;
+      border-radius: var(--r);
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 4px 16px rgba(77,84,61,0.3);
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn-primary:active { opacity: 0.88; transform: scale(0.97); }
+    .btn-primary.centro { background: var(--centro); box-shadow: 0 4px 16px rgba(107,79,53,0.3); }
+    .btn-primary.norte  { background: var(--norte);  box-shadow: 0 4px 16px rgba(35,75,80,0.3); }
+
+    .btn-secondary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      width: 100%;
+      padding: 13px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      color: var(--olive);
+      background: transparent;
+      border: 1.5px solid var(--olive);
+      border-radius: var(--r);
+      cursor: pointer;
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn-secondary:active { transform: scale(0.97); }
+    .btn-secondary.hidden { display: none; }
+    .btn-secondary.centro { color: var(--centro); border-color: var(--centro); }
+
+    .btn-other {
+      text-align: center;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 8px;
+      background: none;
+      border: none;
+      width: 100%;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .fab-stack {
+      position: fixed;
+      bottom: 20px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      z-index: 999;
+    }
+
+    /* FAB: alinhado à direita do card 420px */
+    @media (min-width: 600px) {
+      .fab-stack {
+        bottom: 28px;
+        right: calc(50% - 210px - 16px);
+      }
+      body.is-result .fab-stack {
+        bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+
+    /* FAB: alinhado à direita do app tablet */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .fab-stack {
+        bottom: 20px;
+        right: max(20px, calc((100vw - 780px) / 2 + 16px));
+      }
+      body.is-result .fab-stack {
+        bottom: calc(130px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+
+    /* FAB: alinhado à direita do #app desktop */
+    @media (min-width: 1024px) {
+      .fab-stack {
+        bottom: 32px;
+        right: max(24px, calc((100vw - 1280px) / 2 + 16px));
+      }
+      body.is-result .fab-stack {
+        bottom: calc(145px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+
+    .fab {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      overflow: hidden;
+    }
+
+    .fab:active { transform: scale(0.93); }
+
+    /* FABs regionais removidos de todas as telas — apenas WhatsApp permanece */
+    .fab-sul, .fab-centro, .fab-norte { display: none; }
+
+    .fab-sul   { background: #4d543d; box-shadow: 0 4px 14px rgba(77,84,61,0.45); }
+    .fab-centro{ background: #6b4f35; box-shadow: 0 4px 14px rgba(107,79,53,0.45); }
+    .fab-norte { background: #234b50; box-shadow: 0 4px 14px rgba(35,75,80,0.45); }
+
+    .fab-whatsapp {
+      background: #25d366;
+      box-shadow: 0 4px 16px rgba(37,211,102,0.4);
+    }
+
+    .fab img {
+      width: 26px;
+      height: 26px;
+      object-fit: contain;
+    }
+
+    /* ── ACESSIBILIDADE: FOCO VISÍVEL ── */
+    .fab:focus-visible {
+      outline: 2px solid var(--sand);
+      outline-offset: 3px;
+    }
+
+    .btn-back:focus-visible {
+      outline: 2px solid rgba(255,255,255,0.8);
+      outline-offset: 3px;
+    }
+
+    .btn-primary:focus-visible,
+    .btn-secondary:focus-visible,
+    .btn-other:focus-visible,
+    .store-link:focus-visible {
+      outline: 2px solid var(--sand);
+      outline-offset: 3px;
+    }
+
+    .suggestion-item:focus-visible {
+      background: #f0ece6;
+      outline: 2px solid var(--olive);
+      outline-offset: -2px;
+    }
+
+    .model-card:focus-visible .model-img-wrap,
+    .ref-card:focus-visible .ref-img-wrap {
+      outline: 2px solid var(--olive);
+      outline-offset: 2px;
+      border-radius: 12px;
+    }
+
+    /* ── HOVER DESKTOP ── */
+    @media (hover: hover) {
+      .btn-primary:hover  { opacity: 0.9; }
+      .btn-secondary:hover { background: rgba(77,84,61,0.06); }
+      .store-link:hover   { opacity: 0.85; }
+      .fab:hover          { transform: scale(1.06); }
+      .model-card:hover .model-img-wrap { transform: scale(0.97); }
+      .ref-card:hover .ref-img-wrap     { transform: scale(0.97); }
+    }
+
+    /* ── MODELO SELECIONADO ── */
+    .model-card[aria-selected="true"] .model-img-wrap {
+      outline: 3px solid var(--olive);
+      outline-offset: 2px;
+    }
+    .model-card[aria-selected="true"] .model-name {
+      color: var(--olive);
+      font-weight: 700;
+    }
+
+    /* ── COUPON HINT NO CONTEÚDO ── */
+    .result-coupon {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--olive);
+      background: rgba(77,84,61,0.08);
+      border-radius: 8px;
+      padding: 7px 12px;
+      width: fit-content;
+    }
+    .result-coupon strong { font-weight: 700; letter-spacing: 0.03em; }
+    .result-coupon.centro { color: var(--centro); background: rgba(107,79,53,0.08); }
+    .result-coupon.norte  { color: var(--norte);  background: rgba(35,75,80,0.08); }
+
+    /* ── REFS: indicador de scroll no mobile ── */
+    .refs-section { position: relative; }
+    @media (max-width: 1023px) {
+      .refs-section::after {
+        content: '';
+        position: absolute;
+        top: 0; right: 0; bottom: 12px;
+        width: 40px;
+        background: linear-gradient(to left, var(--cream) 0%, transparent 100%);
+        pointer-events: none;
+        z-index: 1;
+      }
+    }
+
+    /* ── IMAGE LOADING TRANSITION ── */
+    .result-image {
+      transition: opacity 0.25s ease;
+    }
+    .result-image.loading { opacity: 0; }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       BREAKPOINTS RESPONSIVOS — posicionados APÓS as regras base para
+       garantir cascade correto sem necessidade de !important.
+       Ordem: Tablet → Desktop → Desktop Large
+       ═══════════════════════════════════════════════════════════════════════*/
+
+    /* TABLET 768–1023px */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .models-track {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        overflow: visible;
+        overflow-x: visible;
+        padding: 0;
+        scroll-snap-type: none;
+      }
+      .models-track::after { display: none; }
+      .model-card {
+        width: 100%;
+        min-width: 0;
+        flex-shrink: unset;
+        scroll-snap-align: none;
+        scroll-snap-stop: normal;
+      }
+      .model-img-wrap { width: 100%; height: auto; aspect-ratio: 1; }
+    }
+
+    /* DESKTOP >= 1024px */
+    @media (min-width: 1024px) {
+      .models-track {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        overflow: visible;
+        overflow-x: visible;
+        padding: 0;
+        scroll-snap-type: none;
+        flex-wrap: unset;
+        -webkit-overflow-scrolling: unset;
+        scrollbar-width: unset;
+      }
+      .models-track::after { display: none; }
+
+      .model-card {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        flex-shrink: unset;
+        scroll-snap-align: none;
+        scroll-snap-stop: normal;
+      }
+      .model-img-wrap { width: 100%; height: auto; aspect-ratio: 1; }
+
+      .refs-track {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 180px));
+        gap: 20px;
+        overflow: visible;
+        overflow-x: visible;
+        padding: 0;
+        scroll-snap-type: none;
+        justify-content: start;
+      }
+      .refs-track::after { display: none; }
+      .ref-card { width: auto; min-width: 0; scroll-snap-align: none; }
+      .ref-img-wrap { width: 100%; aspect-ratio: 1; height: auto; }
+      .ref-img      { width: 100%; height: 100%; object-fit: cover; }
+    }
+
+    /* DESKTOP LARGE >= 1280px */
+    @media (min-width: 1280px) {
+      .models-track {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      /* Hierarquia interna do card: respiro entre thumbnail, nome e preço */
+      .model-img-wrap { margin-bottom: 10px; }
+      .model-name     { font-size: 13px; line-height: 1.3; margin-bottom: 3px; }
+      .model-price    { font-size: 12px; }
+
+      /* Refs: gap coerente com os modelos */
+      .refs-track { gap: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app">
+
+  <!-- ── TELA: BUSCA ── -->
+  <div id="screen-search" class="screen active">
+    <div class="search-inner">
+      <span class="hero-logo">Orgulho Regional</span>
+      <p class="hero-eyebrow">Todo mundo carrega um lugar.</p>
+      <h1 class="hero-title">Qual é a<br/><em>sua</em> cidade?</h1>
+
+      <div class="search-wrap">
+        <input
+          id="search-input"
+          class="search-input"
+          type="text"
+          placeholder="Carregando cidades..."
+          disabled
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+          inputmode="search"
+        />
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <div id="suggestions" role="listbox"></div>
+      </div>
+
+      <p class="search-hint">ou acesse diretamente</p>
+      <div class="store-links">
+        <a class="store-link store-link-sul" href="https://www.usesul.com.br/usesul" target="_blank" rel="noopener">Use Sul</a>
+        <a class="store-link store-link-centro" href="https://www.usecentro.com.br/usecentro" target="_blank" rel="noopener">Use Centro</a>
+        <a class="store-link store-link-norte" href="https://www.usenorte.com.br/usenorte" target="_blank" rel="noopener">Use Norte</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TELA: RESULTADO ── -->
+  <div id="screen-result" class="screen">
+
+    <!-- result-main: grid de 2 colunas no desktop. Block no mobile/tablet. -->
+    <div class="result-main">
+
+    <!-- result-left: ocupa toda a altura da row no desktop; hero fica sticky no topo -->
+    <div class="result-left">
+    <div class="result-image-area">
+      <div class="result-header">
+        <button class="btn-back" id="btn-back" aria-label="Voltar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+        </button>
+        <span class="result-header-logo">Orgulho Regional</span>
+        <span id="result-badge" class="result-badge"></span>
+      </div>
+
+      <img id="result-img" class="result-image" src="" alt="" style="display:none" />
+      <div id="result-img-placeholder" class="result-image-placeholder">
+        <span class="placeholder-city" id="placeholder-city-name"></span>
+        <span class="placeholder-label">Orgulho Regional</span>
+      </div>
+    </div>
+    </div><!-- .result-left -->
+
+    <!-- Coluna direita: conteúdo, modelos, CTA -->
+    <div class="result-col-right">
+
+      <div class="result-content">
+        <h2 id="result-city" class="result-city-name"></h2>
+        <p id="result-state" class="result-city-state"></p>
+        <div class="result-coupon" id="result-coupon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          Use <strong>PRIMEIRACOMPRA</strong> e ganhe 10% off
+        </div>
+      </div>
+
+      <div class="models-section" id="models-section" style="display:none">
+        <p class="models-title">Escolha o modelo</p>
+        <div class="models-track" id="models-track" role="listbox"></div>
+      </div>
+
+      <!-- CTA logo após modelos — mobile: fica sticky só depois de scrollar past models -->
+      <div class="result-sticky">
+        <a id="btn-loja" class="btn-primary" href="#" target="_blank" rel="noopener">
+          Ver na loja
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+        <button class="btn-other" id="btn-new-search">Buscar outra cidade</button>
+      </div>
+
+      <!-- "Buscar outra cidade" no fluxo — visível só no mobile (sticky esconde .btn-other) -->
+      <div class="search-new-page-wrap" style="display:none">
+        <button class="btn-other" id="btn-new-search-page">Buscar outra cidade</button>
+      </div>
+
+    </div><!-- .result-col-right -->
+    </div><!-- .result-main -->
+
+    <!-- Referências: full-width abaixo de .result-main -->
+    <div class="refs-section" id="refs-section" style="display:none">
+      <p class="refs-title" id="refs-title"></p>
+      <div class="refs-track" id="refs-track"></div>
+    </div>
+
+  </div>
+
+  <script>
+    function track(event, params) {
+      if (typeof gtag === 'function') gtag('event', event, params || {});
+    }
+
+    function serverLog(payload) {
+      fetch('/api/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+
+    // ── ROTEAMENTO ──
+    const BRAND_MAP   = { sul: 'usesul', centro: 'usecentro', norte: 'usenorte' };
+    const MODEL_SLUG  = { origem: 'origem', coordenadas: 'coordenadas', traco: 'traco', tipografia: 'tipografia', legado: 'legado', territorio: 'territorio', 'feito-em': 'feitoEm' };
+    const MODEL_LABEL = { origem: 'Origem', coordenadas: 'Coordenadas', traco: 'Traço', tipografia: 'Tipografia', legado: 'Legado', territorio: 'Território', feitoEm: 'Feito em', gentilico: 'Gentílico' };
+    const BRAND_BASE  = { usesul: 'https://www.usesul.com.br/usesul', usecentro: 'https://www.usecentro.com.br/usecentro', usenorte: 'https://www.usenorte.com.br/usenorte' };
+    const MODEL_PRICE = { tipografia: 'R$109,90', coordenadas: 'R$109,90', origem: 'R$109,90', traco: 'R$109,90', legado: 'R$109,90', territorio: 'R$109,90', feitoEm: 'R$109,90', gentilico: 'R$109,90' };
+    const MODEL_ORDER = ['feitoEm', 'gentilico', 'territorio', 'origem', 'legado', 'traco', 'coordenadas', 'tipografia'];
+    const BRAND_LABEL = { usesul: 'Use Sul', usecentro: 'Use Centro', usenorte: 'Use Norte' };
+
+    const BRAND_THEME = {
+      usesul:   { olive: '#4d543d', oliveDark: '#1a1e14', oliveLight: '#8a9e6e', sand: '#d6ba8d', sandLight: '#f5f0e8' },
+      usecentro:{ olive: '#8c3b1f', oliveDark: '#2a1008', oliveLight: '#c4823c', sand: '#e39a2d', sandLight: '#f5ede0' },
+      usenorte: { olive: '#234b50', oliveDark: '#0d1e20', oliveLight: '#3b7a57', sand: '#D4B873', sandLight: '#eef5f0' },
+    };
+
+    function applyBrandTheme(brand) {
+      const t = BRAND_THEME[brand];
+      if (!t) return;
+      const r = document.documentElement.style;
+      r.setProperty('--olive',       t.olive);
+      r.setProperty('--olive-dark',  t.oliveDark);
+      r.setProperty('--olive-light', t.oliveLight);
+      r.setProperty('--sand',        t.sand);
+      r.setProperty('--sand-light',  t.sandLight);
+    }
+
+    // UFs válidas — usadas no link permanente /uf/cidade (ex.: /sc/tijucas)
+    const UF_LIST = ['ac','al','am','ap','ba','ce','df','es','go','ma','mg','ms','mt','pa','pb','pe','pi','pr','rj','rn','ro','rr','rs','sc','se','sp','to'];
+
+    function parseRoute() {
+      const parts = location.pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+
+      // Link permanente por estado: /sc/tijucas
+      if (parts.length === 2 && !BRAND_MAP[parts[0]] && UF_LIST.includes(parts[0])) {
+        return { brand: null, model: null, citySlug: parts[1], stateCode: parts[0].toUpperCase() };
+      }
+
+      return {
+        brand:     BRAND_MAP[parts[0]]  ?? null,
+        model:     MODEL_SLUG[parts[1]] ?? null,
+        citySlug:  parts[2]             ?? null,
+        stateCode: null,
+      };
+    }
+    const ROUTE = parseRoute();
+
+    if (ROUTE.brand) {
+      applyBrandTheme(ROUTE.brand);
+      document.body.setAttribute('data-brand', ROUTE.brand);
+
+      // esconde links das outras marcas
+      const brandKeys = { usesul: 'sul', usecentro: 'centro', usenorte: 'norte' };
+      document.querySelectorAll('.store-link').forEach(el => {
+        const isCurrent = el.classList.contains(`store-link-${brandKeys[ROUTE.brand]}`);
+        el.style.display = isCurrent ? '' : 'none';
+      });
+      document.querySelector('.search-hint').style.display = 'none';
+    }
+
+    let cities = [];
+    let collections = {};
+
+    async function loadCities() {
+      try {
+        const res = await fetch('/data/cities.json');
+        cities = await res.json();
+      } catch(e) { console.error('cities.json nao encontrado', e); }
+      const searchInput = document.getElementById('search-input');
+      searchInput.disabled = false;
+      searchInput.placeholder = 'Digite sua cidade...';
+      searchInput.focus();
+
+      // contexto de região/modelo no hero
+      if (ROUTE.brand) {
+        const eyebrow = document.querySelector('.hero-eyebrow');
+        const modelName = ROUTE.model ? ` · ${MODEL_LABEL[ROUTE.model]}` : '';
+        eyebrow.textContent = `${BRAND_LABEL[ROUTE.brand]}${modelName}`;
+        document.title = `${BRAND_LABEL[ROUTE.brand]}${modelName} — Orgulho Regional`;
+      }
+
+      // landing direto em cidade+modelo via URL
+      if (ROUTE.citySlug && ROUTE.brand) {
+        const city = cities.find(c => c.brand === ROUTE.brand && c.citySlug === ROUTE.citySlug);
+        if (city) { selectCity(city); return; }
+      }
+
+      // landing via link permanente /uf/cidade (ex.: /sc/tijucas)
+      if (ROUTE.citySlug && ROUTE.stateCode) {
+        const city = cities.find(c => c.citySlug === ROUTE.citySlug && extractState(c) === ROUTE.stateCode);
+        if (city) {
+          applyBrandTheme(city.brand);
+          document.body.setAttribute('data-brand', city.brand);
+          selectCity(city);
+          return;
+        }
+      }
+    }
+
+    async function loadCollections() {
+      try {
+        const res = await fetch('/data/collections.json');
+        collections = await res.json();
+      } catch(e) { /* silencioso se ainda nao existir */ }
+    }
+
+    function normalize(str) {
+      return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    }
+
+    function extractState(city) {
+      if (city.state) return city.state;
+      const url = city.origem?.url || city.coordenadas?.url || '';
+      const m = url.match(/-origem-([a-z]{2})(?:-|$)/i);
+      return m ? m[1].toUpperCase() : null;
+    }
+
+    function searchCities(q) {
+      if (!q || q.length < 2) return [];
+      const pool = ROUTE.brand ? cities.filter(c => c.brand === ROUTE.brand) : cities;
+      const n = normalize(q);
+      const starts   = pool.filter(c => normalize(c.cityName).startsWith(n));
+      const contains = pool.filter(c => !normalize(c.cityName).startsWith(n) && normalize(c.cityName).includes(n));
+      return [...starts, ...contains].slice(0, 8);
+    }
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => {
+        s.classList.remove('active');
+        s.scrollTop = 0;
+      });
+      document.getElementById(id).classList.add('active');
+      // CTA "Ver na loja" fica sempre visível na tela de resultado; FAB reserva espaço via body.is-result
+      document.body.classList.toggle('is-result', id === 'screen-result');
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+
+    const suggestionsEl = document.getElementById('suggestions');
+    const searchInput   = document.getElementById('search-input');
+
+    function setSuggestionsVisible(visible) {
+      suggestionsEl.classList.toggle('visible', visible);
+      const hidden = visible ? 'hidden' : 'visible';
+      document.querySelector('.store-links').style.visibility = hidden;
+      document.querySelector('.search-hint').style.visibility = hidden;
+      document.querySelector('.fab-stack').style.visibility = hidden;
+      document.querySelector('.search-inner').classList.toggle('keyboard-open', visible);
+    }
+
+    function renderSuggestions(items) {
+      suggestionsEl.innerHTML = '';
+
+      if (items.length === 0) {
+        const term = searchInput.value.trim();
+        track('city_not_found', { search_term: term });
+        serverLog({ event: 'city_not_found', term });
+        suggestionsEl.innerHTML = `
+          <div class="no-results">
+            <p class="no-results-text">Cidade não encontrada.</p>
+            <a class="no-results-link" href="https://api.whatsapp.com/send?phone=5548988082581" target="_blank" rel="noopener">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.115.554 4.103 1.523 5.824L.057 23.529a.75.75 0 0 0 .914.914l5.705-1.466A11.95 11.95 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.5-5.222-1.377l-.374-.215-3.876.996.997-3.876-.215-.374A9.955 9.955 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+              </svg>
+              Falar no WhatsApp
+            </a>
+          </div>`;
+        setSuggestionsVisible(true);
+        return;
+      }
+
+      setSuggestionsVisible(true);
+      items.forEach(city => {
+        const isCentro = city.brand === 'usecentro';
+        const isNorte  = city.brand === 'usenorte';
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.setAttribute('role', 'option');
+        item.setAttribute('tabindex', '0');
+        item.innerHTML = `
+          <div class="suggestion-pin">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+          </div>
+          <div class="suggestion-info">
+            <div class="suggestion-city">${city.cityName}</div>
+            <div class="suggestion-brand">${city.brandLabel}</div>
+          </div>
+          <span class="suggestion-state ${isCentro?'centro':isNorte?'norte':''}">${extractState(city)||'—'}</span>`;
+        item.addEventListener('mousedown',  e => { e.preventDefault(); selectCity(city); });
+        let touchStartY = 0;
+        item.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+        item.addEventListener('touchend',   e => {
+          if (Math.abs(e.changedTouches[0].clientY - touchStartY) < 10) {
+            e.preventDefault();
+            selectCity(city);
+          }
+        });
+        item.addEventListener('keydown',    e => { if(e.key==='Enter') selectCity(city); });
+        suggestionsEl.appendChild(item);
+      });
+    }
+
+    function selectCity(city) {
+      const state = extractState(city);
+      track('city_selected', { city_name: city.cityName, state, brand: city.brand });
+      serverLog({ event: 'city_selected', city: city.cityName, state, brand: city.brand });
+      setSuggestionsVisible(false);
+      searchInput.blur();
+
+      // bloqueia toque fantasma: o touchend que vem logo após o touchstart
+      // pode cair sobre os botões do resultado — desabilita por 400ms
+      const resultScreen = document.getElementById('screen-result');
+      resultScreen.style.pointerEvents = 'none';
+      setTimeout(() => { resultScreen.style.pointerEvents = ''; }, 400);
+
+      const isCentro = city.brand === 'usecentro';
+      const isNorte  = city.brand === 'usenorte';
+      const model    = ROUTE.model;
+      const base     = BRAND_BASE[city.brand];
+      // Primeiro imageUrl disponível em qualquer modelo
+      function firstAvailableImg(city) {
+        for (const m of MODEL_ORDER) {
+          if (city[m]?.imageUrl) return city[m].imageUrl;
+        }
+        return '';
+      }
+
+      // CTA sempre aponta para busca da cidade na loja (não produto direto)
+      const searchUrl = `${base}/products?search_filter=${encodeURIComponent(city.cityName)}`;
+
+      let imgSrc, productUrl;
+      if (!model || model === 'origem') {
+        imgSrc     = city.origem?.imageUrl || city.coordenadas?.imageUrl || firstAvailableImg(city);
+        productUrl = searchUrl;
+      } else if (model === 'coordenadas') {
+        imgSrc     = city.coordenadas?.imageUrl || city.origem?.imageUrl || firstAvailableImg(city);
+        productUrl = searchUrl;
+      } else {
+        imgSrc     = city[model]?.imageUrl || firstAvailableImg(city);
+        productUrl = searchUrl;
+      }
+
+      const img         = document.getElementById('result-img');
+      const placeholder = document.getElementById('result-img-placeholder');
+
+      document.getElementById('placeholder-city-name').textContent = city.cityName;
+
+      function loadHeroImage(src, altText) {
+        if (!src) { img.style.display = 'none'; placeholder.style.display = 'flex'; return; }
+        placeholder.style.display = 'flex';
+        img.classList.add('loading');
+        img.style.display = 'block';
+        img.alt = altText;
+        img.src = src;
+        img.onload  = () => { img.classList.remove('loading'); placeholder.style.display = 'none'; };
+        img.onerror = () => { img.style.display = 'none'; placeholder.style.display = 'flex'; };
+      }
+
+      loadHeroImage(imgSrc, `Camiseta ${city.cityName}`);
+
+      document.getElementById('result-city').textContent  = city.cityName;
+      document.getElementById('result-state').textContent = state
+        ? `${stateLabel(state)} · ${city.brandLabel}` : city.brandLabel;
+
+      const badge = document.getElementById('result-badge');
+      badge.textContent = model && MODEL_LABEL[model] ? `${city.brandLabel} · ${MODEL_LABEL[model]}` : city.brandLabel;
+      badge.className   = `result-badge${isCentro?' centro':isNorte?' norte':''}`;
+
+      const btnLoja = document.getElementById('btn-loja');
+      btnLoja.className = `btn-primary${isCentro?' centro':isNorte?' norte':''}`;
+      btnLoja.href = productUrl;
+
+      // Coupon hint agora fica no result-content
+      const coupon = document.getElementById('result-coupon');
+      coupon.className = `result-coupon${isCentro?' centro':isNorte?' norte':''}`;
+
+      // cards de referencias estaduais
+      const refsSection = document.getElementById('refs-section');
+      const refsTrack   = document.getElementById('refs-track');
+      const refsTitle   = document.getElementById('refs-title');
+      const colKey      = `${city.brand}:${state}`;
+      const colData     = collections[colKey];
+
+      // carrossel de modelos — mostra quando não há modelo fixo na URL
+      const modelsSection = document.getElementById('models-section');
+      const modelsTrack   = document.getElementById('models-track');
+      if (!ROUTE.model) {
+        modelsTrack.innerHTML = '';
+        const base = BRAND_BASE[city.brand];
+        let firstCard = null;
+        const defaultModel = MODEL_ORDER.find(m => city[m]?.imageUrl) || MODEL_ORDER[0];
+
+        MODEL_ORDER.forEach(m => {
+          const data  = city[m];
+          if (ROUTE.brand && !data?.url) return;
+          const label = MODEL_LABEL[m] || m;
+          const price = MODEL_PRICE[m] || '';
+          const href  = data?.url
+            || `${base}/products?search_filter=${encodeURIComponent(city.cityName + ' ' + label)}`;
+
+          const card = document.createElement('a');
+          card.className = 'model-card';
+          card.href      = href;
+          card.target    = '_blank';
+          card.rel       = 'noopener';
+          card.setAttribute('role', 'option');
+          card.setAttribute('aria-selected', m === defaultModel ? 'true' : 'false');
+
+          const wrap = document.createElement('div');
+          wrap.className = 'model-img-wrap';
+
+          if (data?.imageUrl) {
+            const mimg = document.createElement('img');
+            mimg.className = 'model-img';
+            mimg.src       = data.imageUrl;
+            mimg.alt       = label;
+            mimg.loading   = 'lazy';
+            mimg.onerror   = function() {
+              const ph = document.createElement('div');
+              ph.className   = 'model-img-placeholder';
+              ph.textContent = label;
+              this.replaceWith(ph);
+            };
+            wrap.appendChild(mimg);
+          } else {
+            const ph = document.createElement('div');
+            ph.className   = 'model-img-placeholder';
+            ph.textContent = label;
+            wrap.appendChild(ph);
+          }
+
+          const nameEl  = document.createElement('div');
+          nameEl.className   = 'model-name';
+          nameEl.textContent = label;
+
+          const priceEl = document.createElement('div');
+          priceEl.className   = 'model-price';
+          priceEl.textContent = price;
+
+          card.append(wrap, nameEl, priceEl);
+
+          card.addEventListener('click', (e) => {
+            const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+            if (isDesktop && data?.imageUrl) {
+              e.preventDefault();
+              // atualiza hero na coluna visual
+              loadHeroImage(data.imageUrl, `Camiseta ${city.cityName} — ${label}`);
+              // CTA mantém search_filter (não produto direto)
+              btnLoja.href = searchUrl;
+              // atualiza seleção
+              modelsTrack.querySelectorAll('.model-card').forEach(c =>
+                c.setAttribute('aria-selected', 'false'));
+              card.setAttribute('aria-selected', 'true');
+            }
+            track('model_card_clicked', { city_name: city.cityName, brand: city.brand, model: m });
+          });
+
+          if (!firstCard) firstCard = card;
+          modelsTrack.appendChild(card);
+        });
+        modelsSection.style.display = 'block';
+      } else {
+        modelsSection.style.display = 'none';
+      }
+
+      if (colData && colData.products.length > 0) {
+        refsTitle.textContent = `Outras referências de ${stateLabel(state) || state}`;
+        refsTrack.innerHTML = '';
+        colData.products.forEach(p => {
+          if (!p.imageUrl) return;
+          const card = document.createElement('a');
+          card.className = 'ref-card';
+          card.href      = p.url;
+          card.target    = '_blank';
+          card.rel       = 'noopener';
+
+          const wrap = document.createElement('div');
+          wrap.className = 'ref-img-wrap';
+
+          const img = document.createElement('img');
+          img.className = 'ref-img';
+          img.src       = p.imageUrl;
+          img.alt       = p.name;
+          img.loading   = 'lazy';
+          img.onerror   = () => { card.style.display = 'none'; };
+          wrap.appendChild(img);
+
+          const nameEl = document.createElement('div');
+          nameEl.className   = 'ref-name';
+          nameEl.textContent = p.name;
+
+          card.append(wrap, nameEl);
+          card.addEventListener('click', () => track('ref_card_clicked', {
+            city_name: city.cityName,
+            state:     state,
+            ref_name:  p.name,
+            brand:     city.brand,
+          }));
+          refsTrack.appendChild(card);
+        });
+        refsSection.style.display = refsTrack.children.length > 0 ? 'block' : 'none';
+      } else {
+        refsSection.style.display = 'none';
+      }
+
+      // URL shareable ao selecionar cidade em contexto regional
+      if (ROUTE.brand) {
+        const regionKey = Object.keys(BRAND_MAP).find(k => BRAND_MAP[k] === ROUTE.brand);
+        const newPath   = ROUTE.model
+          ? `/${regionKey}/${ROUTE.model}/${city.citySlug}`
+          : `/${regionKey}/${city.citySlug}`;
+        history.pushState({ citySlug: city.citySlug }, '', newPath);
+        if (ROUTE.model && MODEL_LABEL[ROUTE.model]) {
+          document.title = `${city.cityName} · ${MODEL_LABEL[ROUTE.model]} | Orgulho Regional`;
+        } else {
+          document.title = `${city.cityName} | Orgulho Regional`;
+        }
+      } else if (state) {
+        // link permanente por estado ao buscar direto na home: /sc/tijucas
+        const newPath = `/${state.toLowerCase()}/${city.citySlug}`;
+        if (location.pathname !== newPath) {
+          history.pushState({ citySlug: city.citySlug, stateCode: state }, '', newPath);
+        }
+        document.title = `${city.cityName} | Orgulho Regional`;
+      }
+
+      showScreen('screen-result');
+    }
+
+    const STATE_COLLECTION = {
+      PR: { sul: 'parana' },
+      SC: { sul: 'santa-catarina' },
+      RS: { sul: 'rio-grande-do-sul' },
+      GO: { centro: 'goias' },
+      MT: { centro: 'mato-grosso' },
+      MS: { centro: 'mato-grosso-do-sul' },
+      DF: { centro: 'distrito-federal' },
+      AM: { norte: 'amazonas' },
+      PA: { norte: 'para' },
+      AC: { norte: 'acre' },
+      RO: { norte: 'rondonia' },
+      RR: { norte: 'roraima' },
+      AP: { norte: 'amapa' },
+      TO: { norte: 'tocantins' },
+    };
+
+    function collectionUrl(brand, state) {
+      if (!state) return null;
+      const map = STATE_COLLECTION[state.toUpperCase()];
+      if (!map) return null;
+      if (brand === 'usesul' && map.sul)
+        return `https://www.usesul.com.br/usesul/collections/${map.sul}`;
+      if (brand === 'usecentro' && map.centro)
+        return `https://www.usecentro.com.br/usecentro/collections/${map.centro}`;
+      if (brand === 'usenorte' && map.norte)
+        return `https://www.usenorte.com.br/usenorte/collections/${map.norte}`;
+      return null;
+    }
+
+    function stateLabel(code) {
+      const map = {
+        PR:'Paraná', SC:'Santa Catarina', RS:'Rio Grande do Sul',
+        GO:'Goiás', MT:'Mato Grosso', MS:'Mato Grosso do Sul', DF:'Distrito Federal',
+        AM:'Amazonas', PA:'Pará', AC:'Acre', RO:'Rondônia',
+        RR:'Roraima', AP:'Amapá', TO:'Tocantins',
+        SP:'São Paulo', RJ:'Rio de Janeiro', MG:'Minas Gerais',
+        BA:'Bahia', CE:'Ceará', PE:'Pernambuco', MA:'Maranhão', PA:'Pará',
+        AM:'Amazonas', RO:'Rondônia', TO:'Tocantins', PI:'Piauí', AL:'Alagoas',
+        SE:'Sergipe', PB:'Paraíba', RN:'Rio Grande do Norte', ES:'Espírito Santo',
+        AC:'Acre', AP:'Amapá', RR:'Roraima',
+      };
+      return map[code?.toUpperCase()] || (code?.toUpperCase() ?? '');
+    }
+
+    let searchDebounce;
+    searchInput.addEventListener('input', () => {
+      const val = searchInput.value;
+      if (val.length < 2) { setSuggestionsVisible(false); return; }
+      renderSuggestions(searchCities(val));
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        const results = searchCities(val);
+        track('city_searched', {
+          search_term:   val.trim(),
+          results_count: results.length,
+          found:         results.length > 0,
+        });
+      }, 800);
+    });
+
+    // Fecha dropdown apenas quando toca fora do container de busca
+    document.addEventListener('touchstart', e => {
+      if (!e.target.closest('.search-wrap') && !e.target.closest('.search-inner')) {
+        setSuggestionsVisible(false);
+      }
+    }, { passive: true });
+    document.addEventListener('mousedown', e => {
+      if (!e.target.closest('.search-wrap') && !e.target.closest('.search-inner')) {
+        setSuggestionsVisible(false);
+      }
+    });
+
+    searchInput.addEventListener('focus', () => searchInput.select());
+
+    function goBackToSearch() {
+      if (ROUTE.brand) {
+        const regionKey = Object.keys(BRAND_MAP).find(k => BRAND_MAP[k] === ROUTE.brand);
+        const backPath  = ROUTE.model ? `/${regionKey}/${ROUTE.model}` : `/${regionKey}`;
+        history.pushState(null, '', backPath);
+        const modelName = ROUTE.model ? ` · ${MODEL_LABEL[ROUTE.model]}` : '';
+        document.title = `${BRAND_LABEL[ROUTE.brand]}${modelName} — Orgulho Regional`;
+      } else if (location.pathname !== '/') {
+        history.pushState(null, '', '/');
+        document.title = 'Orgulho Regional — Camiseta da sua cidade | Use Sul, Use Centro & Use Norte';
+      }
+      showScreen('screen-search');
+      searchInput.value = '';
+      searchInput.focus();
+    }
+
+    document.getElementById('btn-back').addEventListener('click', goBackToSearch);
+    document.getElementById('btn-new-search').addEventListener('click', goBackToSearch);
+    document.getElementById('btn-new-search-page').addEventListener('click', goBackToSearch);
+
+    document.getElementById('btn-loja').addEventListener('click', function() {
+      const cityName = document.getElementById('result-city').textContent;
+      const parts    = document.getElementById('result-state').textContent.split('·');
+      const state    = parts[0].trim();
+      const brand    = this.classList.contains('centro') ? 'usecentro' : this.classList.contains('norte') ? 'usenorte' : 'usesul';
+      track('store_redirect', { city_name: cityName, state, brand });
+      serverLog({ event: 'store_redirect', city: cityName, state, brand });
+    });
+
+    document.querySelectorAll('.store-link').forEach(link => {
+      link.addEventListener('click', () => {
+        track('store_link_clicked', { store: link.textContent.trim() });
+      });
+    });
+
+    loadCities();
+    loadCollections();
+  </script>
+
+  </div><!-- #app -->
+
+  <div class="fab-stack">
+    <a class="fab fab-sul" href="https://www.instagram.com/usesul.oficial" target="_blank" rel="noopener" aria-label="Use Sul no Instagram">
+      <img src="/assets/logo-sul.png" alt="Use Sul" />
+    </a>
+    <a class="fab fab-centro" href="https://www.instagram.com/usecentro.oficial" target="_blank" rel="noopener" aria-label="Use Centro no Instagram">
+      <img src="/assets/logo-centro.png" alt="Use Centro" />
+    </a>
+    <a class="fab fab-norte" href="https://www.instagram.com/usenorte.oficial" target="_blank" rel="noopener" aria-label="Use Norte no Instagram">
+      <img src="/assets/logo-norte.png" alt="Use Norte" />
+    </a>
+    <a class="fab fab-whatsapp" href="https://api.whatsapp.com/send?phone=5548988082581" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+        <path d="M12 0C5.373 0 0 5.373 0 12c0 2.115.554 4.103 1.523 5.824L.057 23.529a.75.75 0 0 0 .914.914l5.705-1.466A11.95 11.95 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.5-5.222-1.377l-.374-.215-3.876.996.997-3.876-.215-.374A9.955 9.955 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+      </svg>
+    </a>
+  </div>
+</body>
+</html>

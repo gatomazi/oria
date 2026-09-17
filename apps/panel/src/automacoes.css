@@ -1,0 +1,42 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/automacoes — switch manual/automático (vínculo evento→template
+   mora em templates.css, compartilhado com /admin/templates). Migrado
+   pro design system (DS.card/field/button/statusBadge).
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ad-automacoes-grid { display: flex; flex-direction: column; gap: 20px; }
+
+
+
+
+.ad-vinculos-lista { display: flex; flex-direction: column; }
+
+.ad-janela-envio { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; font: var(--type-body-dense); color: var(--text-secondary); }
+.ad-janela-envio input { width: 64px; text-align: center; } /* visual vem de .ds-input */
+
+/* ── Sequência de eventos (referência) ──────────────────────────────── */
+.ad-fluxo-eventos { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.ad-fluxo-eventos__origem { display: flex; }
+.ad-fluxo-eventos__ramos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 20px;
+  border-left: 2px solid var(--border-strong);
+  margin-left: 8px;
+}
+.ad-fluxo-eventos__ramo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* Nome de evento técnico (ex: pedido.pago) — literal, por isso mono (DESIGN.md › Code Literal Rule). */
+.ad-fluxo-chip {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  font: 400 12px/16px var(--font-mono);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.ad-fluxo-chip--ok { background: var(--success-tint); border-color: transparent; color: var(--success); }
+.ad-fluxo-chip--erro { background: var(--danger-tint); border-color: transparent; color: var(--danger); }
+.ad-fluxo-seta { color: var(--text-muted); font-size: 13px; }

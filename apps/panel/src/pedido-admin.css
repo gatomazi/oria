@@ -1,0 +1,170 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/pedidos — painel interno de cadastro de pagamentos PIX
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Os valores de cor/raio/fonte que este arquivo definia em :root agora vivem em
+   src/admin/design-system/tokens-base.css (canônico); este arquivo já usa só esses nomes. As
+   classes .pa-* abaixo são legado (admin-old e poucos pontos do painel, ex.: prévias). */
+
+.pa-root, .pa-root *, .pa-root *::before, .pa-root *::after { box-sizing: border-box; }
+.pa-root {
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background: var(--bg-app);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  padding: 24px 16px 64px;
+}
+
+.pa-container { max-width: 640px; margin: 0 auto; }
+
+.pa-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.pa-login { max-width: 340px; width: 100%; margin: 0 auto; }
+
+.pa-field { margin-bottom: 16px; }
+.pa-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.pa-field input[type="text"],
+.pa-field input[type="password"],
+.pa-field input[type="number"],
+.pa-field select,
+.pa-field textarea {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 7px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  font: var(--type-body);
+  color: var(--text-primary);
+}
+
+.pa-field textarea { min-height: 90px; resize: vertical; font-family: monospace; font-size: 13px; }
+.pa-field input:focus, .pa-field select:focus, .pa-field textarea:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent);
+}
+
+.pa-field-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+.pa-file-preview {
+  margin-top: 10px;
+  width: 120px;
+  height: 120px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+  object-fit: contain;
+  display: none;
+}
+
+/* React: a imagem só é montada quando há QR (o vanilla em admin-old alterna display via JS). */
+.pa-file-preview--visivel {
+  display: block;
+  margin-top: 0;
+  width: 160px;
+  height: 160px;
+  padding: var(--space-2);
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+}
+
+.pa-btn {
+  min-height: var(--control-h-coarse);
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+.pa-btn:hover { background: var(--accent-hover); }
+.pa-btn:disabled { background: var(--surface-2); color: var(--text-disabled); cursor: not-allowed; }
+.pa-btn--block { width: 100%; }
+.pa-btn--ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-strong); }
+.pa-btn--danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); min-height: 36px; padding: 0 12px; font-size: 13px; }
+
+.pa-msg { font-size: 13px; margin-top: 10px; }
+.pa-msg--erro { color: var(--danger); }
+.pa-msg--ok { color: var(--success); }
+
+.pa-resultado {
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-top: 16px;
+  display: none;
+}
+.pa-resultado__link {
+  font-family: monospace;
+  font-size: 13px;
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+
+/* /admin/pedidos/vincular — cards lado a lado no desktop */
+/* Achado do refinamento visual: os 2 blocos (pendentes + form manual) empilhavam sempre em
+   coluna única, cada um ocupando a largura toda mesmo em telas largas — a tabela de pendentes é
+   o conteúdo principal (prioridade), o form manual é o caminho alternativo, mais estreito. */
+.ad-vincular-grid { display: flex; flex-direction: column; gap: 20px; margin-top: 16px; }
+@media (min-width: 900px) {
+  .ad-vincular-grid { flex-direction: row; align-items: flex-start; }
+  .ad-vincular-grid > *:first-child { flex: 2; min-width: 0; }
+  .ad-vincular-grid > *:last-child { flex: 1; min-width: 280px; }
+}
+
+.pa-lista { list-style: none; margin: 0; padding: 0; }
+.pa-lista li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+.pa-lista li:last-child { border-bottom: none; }
+.pa-lista__info { font-size: 13px; line-height: 1.5; }
+.pa-lista__info strong { display: block; font-size: 14px; }
+.pa-lista__acoes { display: flex; gap: 8px; flex-shrink: 0; }
+.pa-lista__acoes button { min-height: 36px; padding: 0 12px; border-radius: var(--radius-sm); font-size: 13px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text-primary); cursor: pointer; }
+
+.pa-pedidos-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.pa-pedidos-topo .pa-field-hint { margin: 0; max-width: 420px; }
+.pa-pedidos-topo .pa-lista__acoes { flex-wrap: wrap; }
+
+.pa-vazio { color: var(--text-muted); font-size: 14px; text-align: center; padding: 20px 0; }
+
+.pa-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}

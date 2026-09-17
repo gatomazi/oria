@@ -1,0 +1,168 @@
+/* Meta Ads — só o que a tela acrescenta ao design system. Funil, KPIs, abas, tabela e toolbar vêm
+   prontos de components.css e analytics.css; aqui mora apenas a célula de nome com miniatura, que
+   não existe em nenhuma outra tabela do painel. */
+
+.meta-tabela__nome {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Miniatura do criativo. Tamanho fixo pra todas as linhas terem a mesma altura mesmo com imagens de
+   proporções diferentes; `object-fit: cover` recorta em vez de distorcer a arte. */
+.meta-tabela__thumb {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.meta-tabela__nome-texto {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* ── Criativos (Fase 4) ─────────────────────────────────────────────────────────────────────
+   Card em vez de linha de tabela porque aqui a peça É o dado: a miniatura precisa de tamanho
+   suficiente pra reconhecer a arte, o que uma célula de 28px não dá. */
+
+.meta-criativos {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+}
+
+.meta-criativo {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  min-width: 0;
+}
+
+.meta-criativo__midia { flex: none; }
+
+.meta-criativo__img {
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.meta-criativo__img--vazia { border: 1px dashed var(--border-default); }
+
+.meta-criativo__corpo { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; flex: 1; }
+
+.meta-criativo__topo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+
+.meta-criativo__nome {
+  font: var(--type-body-dense);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+/* Métricas em grade own-line: com 6-7 pares, uma linha só espremeria os números a ponto de
+   perderem a leitura de relance, que é o ponto desta tela. */
+.meta-criativo__metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+.meta-criativo__metricas dt { font: var(--type-micro); color: var(--text-muted); }
+.meta-criativo__metricas dd {
+  font: var(--type-body-dense);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* Retenção de vídeo: quatro marcos com barra curta. Só aparece pra criativo com reprodução. */
+.meta-criativo__retencao { display: flex; gap: var(--space-2); }
+.meta-criativo__marco { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.meta-criativo__marco-trilho {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3, var(--surface-2));
+  overflow: hidden;
+}
+.meta-criativo__marco-preenchimento {
+  display: block;
+  height: 100%;
+  background: var(--info);
+  transform-origin: left center;
+}
+.meta-criativo__marco-rotulo { font: var(--type-micro); color: var(--text-muted); }
+.meta-criativo__marco-valor { font: var(--type-micro); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+.meta-criativo__rodape { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: auto; }
+
+/* Detalhe do anúncio, no drawer */
+.meta-anuncio__thumb {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.meta-anuncio__title { font: var(--type-body-dense); font-weight: 600; color: var(--text-primary); margin: 0; }
+
+/* ── DRE consolidada (Fase 5) ───────────────────────────────────────────────────────────────
+   Três colunas: rótulo, valor, margem. Grade em vez de tabela porque as linhas de subtotal
+   precisam de tratamento visual próprio, e uma <table> não é a semântica certa pra um extrato de
+   resultado (não são dados tabulares comparáveis entre si, é uma cascata). */
+
+.meta-dre { display: flex; flex-direction: column; }
+
+.meta-dre__linha {
+  display: grid;
+  grid-template-columns: 1fr auto 92px;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding-block: var(--space-2);
+  font: var(--type-body-dense);
+  color: var(--text-secondary);
+}
+
+/* Subtotal: a linha que responde a pergunta. Régua acima separa da cascata que a produziu. */
+.meta-dre__linha--destaque {
+  border-top: 1px solid var(--border-default);
+  margin-top: var(--space-1);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.meta-dre__rotulo { display: flex; align-items: baseline; gap: var(--space-1-5); min-width: 0; }
+.meta-dre__sinal { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.meta-dre__valor { font-variant-numeric: tabular-nums; text-align: right; }
+.meta-dre__margem { font: var(--type-caption); color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
+
+.meta-dre__avisos { margin: 0; padding-left: var(--space-4); display: flex; flex-direction: column; gap: 2px; }
+
+@media (max-width: 600px) {
+  /* No celular a coluna de margem vira uma terceira linha em vez de espremer o valor. */
+  .meta-dre__linha { grid-template-columns: 1fr auto; }
+  .meta-dre__margem { grid-column: 2; text-align: right; }
+}
+
+/* Variação vs. período anterior no card de criativo. Mesma linguagem do delta do KPI: cor só quando
+   a métrica tem direção boa definida e a variação é perceptível. */
+.meta-criativo__delta { font: var(--type-micro); color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.meta-criativo__delta--up { color: var(--success); }
+.meta-criativo__delta--down { color: var(--danger); }

@@ -1,0 +1,16 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/trocas — Trocas e devoluções (Fase 4, docs/plan.md)
+   Reaproveita .pc-* (filtros, paginação, kv, timeline) de pedidos-central.css.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.tr-filtros input[type="number"] {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  width: 140px;
+}

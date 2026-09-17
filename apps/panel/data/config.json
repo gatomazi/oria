@@ -1,0 +1,23 @@
+{
+  "whatsapp": {
+    "number": "5548999999999",
+    "_hint": "Substituir pelo número real, formato E.164 sem + (ex: 5548991234567 pra +55 48 99123-4567). Um único número atende as 3 lojas."
+  },
+  "precos": {
+    "sul":    { "base": 119.90, "personalizado": 139.90, "premium": 169.90 },
+    "centro": { "base":  99.90, "personalizado": 119.90, "premium": 149.90 },
+    "norte":  { "base": 119.90, "personalizado": 139.90, "premium": 169.90 },
+    "_hint": "'base' = camiseta padrão. 'personalizado' = com campos preenchidos. 'premium' = algodão peruano."
+  },
+  "freteGratis": {
+    "acima": 199.90,
+    "_hint": "Valor mínimo pro frete grátis (só marketing — negociação real no WhatsApp)."
+  },
+  "campanhaAtiva": {
+    "slug": "dia-dos-pais",
+    "titulo": "Dia dos Pais 2026",
+    "vigenciaInicio": "2026-07-15",
+    "vigenciaFim": "2026-08-10",
+    "urgencia": "Últimos dias — produção sob demanda em até 7 dias úteis"
+  }
+}

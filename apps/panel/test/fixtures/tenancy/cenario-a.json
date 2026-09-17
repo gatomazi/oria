@@ -1,0 +1,89 @@
+{
+  "versao": 1,
+  "organizations": [
+    {
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "nome": "Use Sul",
+      "store": {
+        "id": "a2000000-0000-4000-8000-000000000001",
+        "nome": "Use Sul",
+        "lojaLegada": "sul"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "nome": "Use Centro",
+      "store": {
+        "id": "a2000000-0000-4000-8000-000000000002",
+        "nome": "Use Centro",
+        "lojaLegada": "centro"
+      }
+    },
+    {
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "nome": "Use Norte",
+      "store": {
+        "id": "a2000000-0000-4000-8000-000000000003",
+        "nome": "Use Norte",
+        "lojaLegada": "norte"
+      }
+    }
+  ],
+  "mapeamentos": [
+    {
+      "tipo": "loja",
+      "chave": "sul",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "loja",
+      "chave": "centro",
+      "organizationId": "a1000000-0000-4000-8000-000000000002"
+    },
+    {
+      "tipo": "loja",
+      "chave": "norte",
+      "organizationId": "a1000000-0000-4000-8000-000000000003"
+    },
+    {
+      "tipo": "instalacao",
+      "chave": "*",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "meta",
+      "chave": "*",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "google_ads",
+      "chave": "*",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "audit_log",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "media_assets",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "webhook_eventos",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "whatsapp_web_outbox",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "creative_tenant",
+      "chave": "default",
+      "organizationId": "a1000000-0000-4000-8000-000000000001"
+    }
+  ]
+}

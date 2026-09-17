@@ -1,0 +1,344 @@
+{
+  "usesul:PR": {
+    "brand": "usesul",
+    "state": "PR",
+    "products": [
+      {
+        "name": "Parana",
+        "url": "https://www.usesul.com.br/usesul/product/parana-dca9bbfa-255d-4e35-b5db-cdccb6bb0c36",
+        "imageUrl": "/img/4fb37e5c81fd98adb07e67717f8bec4d.webp"
+      },
+      {
+        "name": "Made In Parana",
+        "url": "https://www.usesul.com.br/usesul/product/made-in-parana-cda5fe30-bb4e-4e2e-b416-01e3ec45649a",
+        "imageUrl": "/img/046b2e5d82e7a522f8f161e02cd60e43.webp"
+      },
+      {
+        "name": "Parana Atlas Do Sul",
+        "url": "https://www.usesul.com.br/usesul/product/parana-atlas-do-sul",
+        "imageUrl": "/img/3b2d0cc4b2465d0c53df1d8117ce6533.webp"
+      },
+      {
+        "name": "Paranaense Essencia",
+        "url": "https://www.usesul.com.br/usesul/product/paranaense-essencia",
+        "imageUrl": "/img/c04ea52816f17bde58c5dcc56f91b68e.webp"
+      },
+      {
+        "name": "Paranaense Se",
+        "url": "https://www.usesul.com.br/usesul/product/paranaense-se-517c5c0a-55d2-4644-b96c-8dd704f2ca27",
+        "imageUrl": "/img/d689c20748c4443335afbe1689f39dd2.webp"
+      },
+      {
+        "name": "Made In Parana",
+        "url": "https://www.usesul.com.br/usesul/product/made-in-parana-846317ad-0a63-4b77-838b-d05fb7e106bb",
+        "imageUrl": "/img/98e69b23b8ee9bb59acf264e1e3bfaad.webp"
+      },
+      {
+        "name": "Frio E Cinza Curitiba",
+        "url": "https://www.usesul.com.br/usesul/product/frio-e-cinza-curitiba",
+        "imageUrl": "/img/fd84e19251b444e6762588e5d50d92e5.webp"
+      },
+      {
+        "name": "Araucaria No Campo",
+        "url": "https://www.usesul.com.br/usesul/product/araucaria-no-campo",
+        "imageUrl": "/img/4c44e106e837c8c17086f4a8515369f5.webp"
+      },
+      {
+        "name": "Paranaense Se Colored",
+        "url": "https://www.usesul.com.br/usesul/product/paranaense-se-colored",
+        "imageUrl": "/img/6b0c26284ab16f62911c5ec812dbf85d.webp"
+      },
+      {
+        "name": "Parana Escritas",
+        "url": "https://www.usesul.com.br/usesul/product/parana-escritas",
+        "imageUrl": "/img/d797e707d788d085be2db5fb7b87672e.webp"
+      }
+    ]
+  },
+  "usesul:SC": {
+    "brand": "usesul",
+    "state": "SC",
+    "products": [
+      {
+        "name": "Santa Catarina",
+        "url": "https://www.usesul.com.br/usesul/product/santa-catarina-50154a2c-e1df-4db1-8993-4ef2de2cc8eb",
+        "imageUrl": "/img/eee888bcb0e3da7860794528cf204a4b.webp"
+      },
+      {
+        "name": "Made In Santa Catarina",
+        "url": "https://www.usesul.com.br/usesul/product/made-in-santa-catarina-60ba13f6-62cf-4309-9d03-490ab9193829",
+        "imageUrl": "/img/afd2db098c9a47df60e9cf4de33a3c7a.webp"
+      },
+      {
+        "name": "Santa Catarina Atlas Do Sul",
+        "url": "https://www.usesul.com.br/usesul/product/santa-catarina-atlas-do-sul",
+        "imageUrl": "/img/68938772950f26f717ba83b62538b7f6.webp"
+      },
+      {
+        "name": "Catarinense Essencia",
+        "url": "https://www.usesul.com.br/usesul/product/catarinense-essencia",
+        "imageUrl": null
+      },
+      {
+        "name": "Catarine Se Stacked",
+        "url": "https://www.usesul.com.br/usesul/product/catarine-se-stacked",
+        "imageUrl": "/img/a77ab116de7564f53a7e962abdc94f8a.webp"
+      },
+      {
+        "name": "Catarine Se Colored",
+        "url": "https://www.usesul.com.br/usesul/product/catarine-se-colored",
+        "imageUrl": "/img/bf3f9a0fa8cad5f8b3d314de68fae662.webp"
+      },
+      {
+        "name": "Vai Da Onda Litoral Catarinense",
+        "url": "https://www.usesul.com.br/usesul/product/vai-da-onda-litoral-catarinense",
+        "imageUrl": "/img/40e70e7367043bb1a34682bc3684ccf5.webp"
+      },
+      {
+        "name": "Catarinense Litoral Essencia",
+        "url": "https://www.usesul.com.br/usesul/product/catarinense-litoral-essencia",
+        "imageUrl": "/img/d1232adc46715e231aa092e73d3b7782.webp"
+      },
+      {
+        "name": "Catarine Se",
+        "url": "https://www.usesul.com.br/usesul/product/catarine-se-7240c603-832d-4633-a63f-bab27280033b",
+        "imageUrl": "/img/40b7fa1f24b102181cdb65ecb3314b5d.webp"
+      },
+      {
+        "name": "Santa Catarina Atlas Do Sul Clean",
+        "url": "https://www.usesul.com.br/usesul/product/santa-catarina-atlas-do-sul-clean",
+        "imageUrl": "/img/900f619c7e37ad0ae707910ba697e66d.webp"
+      }
+    ]
+  },
+  "usesul:RS": {
+    "brand": "usesul",
+    "state": "RS",
+    "products": [
+      {
+        "name": "Rio Grande Do Sul",
+        "url": "https://www.usesul.com.br/usesul/product/rio-grande-do-sul-010dc95c-c57e-4fbd-9f18-960544bd25bc",
+        "imageUrl": "/img/b74d06d8eee90884376949baf8259822.webp"
+      },
+      {
+        "name": "Made In Rio Grande Do Sul",
+        "url": "https://www.usesul.com.br/usesul/product/made-in-rio-grande-do-sul-8834d3a7-4ed3-49a3-8258-d2ba71fa8241",
+        "imageUrl": "/img/52db5367380ecd0e085d1cf3a27087f3.webp"
+      },
+      {
+        "name": "Rio Grande Do Sul Atlas Do Sul",
+        "url": "https://www.usesul.com.br/usesul/product/rio-grande-do-sul-atlas-do-sul",
+        "imageUrl": "/img/f1bee2c798560da6ba8893d511a860e5.webp"
+      },
+      {
+        "name": "Gaucho Essencia",
+        "url": "https://www.usesul.com.br/usesul/product/gaucho-essencia",
+        "imageUrl": "/img/00567ff95cc406943c23904c19bbd058.webp"
+      },
+      {
+        "name": "Gauche Se",
+        "url": "https://www.usesul.com.br/usesul/product/gauche-se-72d4efaf-74f3-4297-bde7-fe16ba436f25",
+        "imageUrl": "/img/cc60e0fe0d14397971d1c3c526e8ef98.webp"
+      },
+      {
+        "name": "Made In Rio Grande Do Sul",
+        "url": "https://www.usesul.com.br/usesul/product/made-in-rio-grande-do-sul-3b84c6e5-5935-4e7b-b8c6-4a101374a2ca",
+        "imageUrl": "/img/ee158c739b1f0326570215f8b9d227d8.webp"
+      },
+      {
+        "name": "Rio Grande Do Sul Atlas Do Sul Clean",
+        "url": "https://www.usesul.com.br/usesul/product/rio-grande-do-sul-atlas-do-sul-clean",
+        "imageUrl": "/img/fc9056d153d0abeafe6f903d845a8fc2.webp"
+      },
+      {
+        "name": "Rio Grande Do Sul Escritas",
+        "url": "https://www.usesul.com.br/usesul/product/rio-grande-do-sul-escritas-075a2cf2-72c0-4d66-b7d1-131f8b0eb681",
+        "imageUrl": "/img/3ce47dcaf1ca5387a65e3b6cd850e2ef.webp"
+      },
+      {
+        "name": "Gauche Se Colored",
+        "url": "https://www.usesul.com.br/usesul/product/gauche-se-colored",
+        "imageUrl": "/img/1e5879ab4c8d067f8b3b1dc2b5923b7f.webp"
+      },
+      {
+        "name": "Gaucho",
+        "url": "https://www.usesul.com.br/usesul/product/gaucho-7d586e06-5e73-4d76-9193-c441df1ce023",
+        "imageUrl": "/img/727320e6888f8129550c585a00f34f2d.webp"
+      }
+    ]
+  },
+  "usecentro:GO": {
+    "brand": "usecentro",
+    "state": "GO",
+    "products": [
+      {
+        "name": "Goias",
+        "url": "https://www.usecentro.com.br/usecentro/product/goias-c3933e80-0301-452e-9d2e-b00aea14fc6e",
+        "imageUrl": "/img/21ea565e9b99279ce4ddc33e31955818.webp"
+      },
+      {
+        "name": "Made In Goias",
+        "url": "https://www.usecentro.com.br/usecentro/product/made-in-goias-de8201e0-bfaa-423c-8221-1a67f1369a71",
+        "imageUrl": "/img/af3c39b9319ef73dddb80191290f30d3.webp"
+      },
+      {
+        "name": "Made In Goias",
+        "url": "https://www.usecentro.com.br/usecentro/product/made-in-goias-e492dfe2-85dd-4edc-86c0-01cb0916893f",
+        "imageUrl": "/img/49068a51a95cc3e04d830e0140ea9d7b.webp"
+      },
+      {
+        "name": "Goiano Essencia",
+        "url": "https://www.usecentro.com.br/usecentro/product/goiano-essencia",
+        "imageUrl": "/img/8773a7694682e70dea5a2c5b4a159ad2.webp"
+      },
+      {
+        "name": "Norte Goiano 062",
+        "url": "https://www.usecentro.com.br/usecentro/product/norte-goiano-062",
+        "imageUrl": "/img/ee8770bf25311eea190fe71be61e2055.webp"
+      },
+      {
+        "name": "Nordeste Goiano 062",
+        "url": "https://www.usecentro.com.br/usecentro/product/nordeste-goiano-062",
+        "imageUrl": "/img/52266d1e13d976a8e77429b3f549d07a.webp"
+      },
+      {
+        "name": "Sul Goiano 064",
+        "url": "https://www.usecentro.com.br/usecentro/product/sul-goiano-064",
+        "imageUrl": "/img/6301db314fd7b069003ed12cdc1fc2eb.webp"
+      },
+      {
+        "name": "Norte Goiano 062 Regional",
+        "url": "https://www.usecentro.com.br/usecentro/product/norte-goiano-062-regional",
+        "imageUrl": "/img/8f856fdf3e3c770aec27b7cb343dfbdd.webp"
+      },
+      {
+        "name": "Nordeste Goiano 062 Regional",
+        "url": "https://www.usecentro.com.br/usecentro/product/nordeste-goiano-062-regional",
+        "imageUrl": "/img/36263f4c54fc031c100946b219f62f36.webp"
+      },
+      {
+        "name": "Sul Goiano 064 Regional",
+        "url": "https://www.usecentro.com.br/usecentro/product/sul-goiano-064-regional",
+        "imageUrl": "/img/b1244bd08d903233b0cd9331c14d453f.webp"
+      }
+    ]
+  },
+  "usecentro:MT": {
+    "brand": "usecentro",
+    "state": "MT",
+    "products": [
+      {
+        "name": "Mato Grosso",
+        "url": "https://www.usecentro.com.br/usecentro/product/mato-grosso-4fbbbdbc-25ee-43fe-a54b-6e0425476e5a",
+        "imageUrl": "/img/270ce271c890ff45eb3be7c1486de22c.webp"
+      },
+      {
+        "name": "Made In Mato Grosso",
+        "url": "https://www.usecentro.com.br/usecentro/product/made-in-mato-grosso-a0ae9d11-d92d-4c20-b0f3-3a13e27e6b82",
+        "imageUrl": "/img/8e6f85174d77925c6e948a508f559e79.webp"
+      },
+      {
+        "name": "Made In Mato Grosso",
+        "url": "https://www.usecentro.com.br/usecentro/product/made-in-mato-grosso-eea7fbac-7047-4041-999d-7a0432d8eab9",
+        "imageUrl": "/img/09255497fc9ae25ffdb0f64b16d4cb55.webp"
+      },
+      {
+        "name": "Mato Grossense Essencia",
+        "url": "https://www.usecentro.com.br/usecentro/product/mato-grossense-essencia",
+        "imageUrl": "/img/43d66eae9383c2bd485fae396c2d63b8.webp"
+      },
+      {
+        "name": "Sudeste Mato Grossense 066",
+        "url": "https://www.usecentro.com.br/usecentro/product/sudeste-mato-grossense-066",
+        "imageUrl": "/img/4e59026e87e7c74f2274227b3551915a.webp"
+      },
+      {
+        "name": "Vale Do Rio Cuiaba 065 Regional",
+        "url": "https://www.usecentro.com.br/usecentro/product/vale-do-rio-cuiaba-065-regional",
+        "imageUrl": "/img/364b3ed21a6cf10866ca411b65fd20e4.webp"
+      },
+      {
+        "name": "Sudeste Mato Grossense 066 Regional",
+        "url": "https://www.usecentro.com.br/usecentro/product/sudeste-mato-grossense-066-regional",
+        "imageUrl": "/img/467b9b58f4b23fb7194751fbddca1271.webp"
+      },
+      {
+        "name": "Norte Mato Grossense 066 Regional",
+        "url": "https://www.usecentro.com.br/usecentro/product/norte-mato-grossense-066-regional",
+        "imageUrl": "/img/0c3779dedcb24024cc27e984fa9010f3.webp"
+      },
+      {
+        "name": "Sul Mato Grossense 066 Regional",
+        "url": "https://www.usecentro.com.br/usecentro/product/sul-mato-grossense-066-regional",
+        "imageUrl": "/img/66e129cc3df0a5a731d9c13f54e41a87.webp"
+      }
+    ]
+  },
+  "usecentro:MS": {
+    "brand": "usecentro",
+    "state": "MS",
+    "products": [
+      {
+        "name": "Mato Grosso Do Sul",
+        "url": "https://www.usecentro.com.br/usecentro/product/mato-grosso-do-sul-bf9344a6-5c61-4483-b912-86636a123123",
+        "imageUrl": "/img/34fbce651aed0c93aba6209642738277.webp"
+      },
+      {
+        "name": "Made In Mato Grosso Do Sul",
+        "url": "https://www.usecentro.com.br/usecentro/product/made-in-mato-grosso-do-sul-990e945e-2c00-4387-9b4a-205fe21f2962",
+        "imageUrl": "/img/8a0a44223edba708d64cb94622f11a85.webp"
+      },
+      {
+        "name": "Made In Mato Grosso Do Sul",
+        "url": "https://www.usecentro.com.br/usecentro/product/made-in-mato-grosso-do-sul-164423ee-a48f-4168-a663-49ab1087afaf",
+        "imageUrl": "/img/dbca525f15166767d869cdde2a5bb633.webp"
+      },
+      {
+        "name": "Pantaneiro Essencia",
+        "url": "https://www.usecentro.com.br/usecentro/product/pantaneiro-essencia",
+        "imageUrl": "/img/bca456e41d79e61551a41a90971aa5a5.webp"
+      },
+      {
+        "name": "Centro Sul Mato Grossense 067 Regional",
+        "url": "https://www.usecentro.com.br/usecentro/product/centro-sul-mato-grossense-067-regional",
+        "imageUrl": "/img/190f71fc2070b600c1e1358d7357f9eb.webp"
+      },
+      {
+        "name": "Leste Sul Mato Grossense 067",
+        "url": "https://www.usecentro.com.br/usecentro/product/leste-sul-mato-grossense-067",
+        "imageUrl": "/img/bee1e0f91f62db7e53a543e04554f101.webp"
+      },
+      {
+        "name": "Sul Mato Grossense 067",
+        "url": "https://www.usecentro.com.br/usecentro/product/sul-mato-grossense-067",
+        "imageUrl": "/img/411df483e88fe3a593373c7346b988cb.webp"
+      }
+    ]
+  },
+  "usecentro:DF": {
+    "brand": "usecentro",
+    "state": "DF",
+    "products": [
+      {
+        "name": "Distrito Federal",
+        "url": "https://www.usecentro.com.br/usecentro/product/distrito-federal",
+        "imageUrl": "/img/9dab0cfb86e0b34a158b8dabf096ab39.webp"
+      },
+      {
+        "name": "Made In Distrito Federal",
+        "url": "https://www.usecentro.com.br/usecentro/product/made-in-distrito-federal-a5e3ed7c-0ee2-4c4c-b2d0-ba6134c22152",
+        "imageUrl": "/img/5e23b860ef679adac04b4a72e023ed7c.webp"
+      },
+      {
+        "name": "Candango Essencia",
+        "url": "https://www.usecentro.com.br/usecentro/product/candango-essencia",
+        "imageUrl": "/img/347fc783918af7e612ee576d7ae1105e.webp"
+      },
+      {
+        "name": "Brasiliense Dizeres",
+        "url": "https://www.usecentro.com.br/usecentro/product/brasiliense-dizeres",
+        "imageUrl": "/img/ecefcc5e1e4e9850c0c751eb3535050e.webp"
+      }
+    ]
+  }
+}

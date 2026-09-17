@@ -1,0 +1,8 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/pix — hub de atalhos pro fluxo de PIX (nenhuma lógica de
+   pagamento real aqui, só organiza acesso a /admin/pedidos*).
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pix-principal { margin-bottom: var(--space-5); }
+.pix-principal .ds-card { border-color: var(--accent); }
+.pix-secundarios { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }

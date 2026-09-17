@@ -1,0 +1,223 @@
+{
+  "uniques": [
+    {
+      "tabela": "ga4_performance_cache",
+      "nome": "ga4_performance_cache_loja_periodo_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (loja, periodo)"
+    },
+    {
+      "tabela": "google_analytics_connections",
+      "nome": "google_analytics_connections_loja_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (loja)"
+    },
+    {
+      "tabela": "pedidos_ink",
+      "nome": "pedidos_ink_loja_ink_order_id_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (loja, ink_order_id)"
+    },
+    {
+      "tabela": "origens_migration_city_uf_map",
+      "nome": "origens_migration_city_uf_map_loja_cidade_normalizada_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (loja, cidade_normalizada)"
+    },
+    {
+      "tabela": "whatsapp_web_outbox",
+      "nome": "uq_wa_web_outbox_dedupe",
+      "tipo": "index",
+      "def": "CREATE UNIQUE INDEX uq_wa_web_outbox_dedupe ON whatsapp_web_outbox USING btree (dedupe_key) WHERE (status = ANY (ARRAY['aguardando_aprovacao'::text, 'pending'::text, 'claimed'::text, 'sent'::text, 'desconhecido'::text]))"
+    },
+    {
+      "tabela": "campaign_recipients",
+      "nome": "campaign_recipients_campaign_id_customer_key_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (campaign_id, customer_key)"
+    },
+    {
+      "tabela": "integration_secrets",
+      "nome": "idx_integration_secrets_integracao_tipo",
+      "tipo": "index",
+      "def": "CREATE UNIQUE INDEX idx_integration_secrets_integracao_tipo ON integration_secrets USING btree (integration_id, tipo)"
+    },
+    {
+      "tabela": "whatsapp_web_mensagens",
+      "nome": "uq_wa_web_mensagens_nome",
+      "tipo": "index",
+      "def": "CREATE UNIQUE INDEX uq_wa_web_mensagens_nome ON whatsapp_web_mensagens USING btree (lower(nome))"
+    },
+    {
+      "tabela": "meta_ad_accounts",
+      "nome": "meta_ad_accounts_meta_account_id_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (meta_account_id)"
+    },
+    {
+      "tabela": "meta_ad_accounts",
+      "nome": "uq_meta_ad_accounts_selecionada",
+      "tipo": "index",
+      "def": "CREATE UNIQUE INDEX uq_meta_ad_accounts_selecionada ON meta_ad_accounts USING btree (selecionada) WHERE selecionada"
+    },
+    {
+      "tabela": "meta_campaigns",
+      "nome": "meta_campaigns_meta_campaign_id_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (meta_campaign_id)"
+    },
+    {
+      "tabela": "meta_adsets",
+      "nome": "meta_adsets_meta_adset_id_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (meta_adset_id)"
+    },
+    {
+      "tabela": "meta_ads",
+      "nome": "meta_ads_meta_ad_id_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (meta_ad_id)"
+    },
+    {
+      "tabela": "meta_creatives",
+      "nome": "meta_creatives_meta_creative_id_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (meta_creative_id)"
+    },
+    {
+      "tabela": "meta_insights_daily",
+      "nome": "meta_insights_daily_meta_account_id_level_entidade_id_data__key",
+      "tipo": "constraint",
+      "def": "UNIQUE (meta_account_id, level, entidade_id, data, attribution_setting)"
+    },
+    {
+      "tabela": "google_ads_customers",
+      "nome": "google_ads_customers_customer_id_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (customer_id)"
+    },
+    {
+      "tabela": "google_ads_customers",
+      "nome": "uq_google_ads_customers_selecionada",
+      "tipo": "index",
+      "def": "CREATE UNIQUE INDEX uq_google_ads_customers_selecionada ON google_ads_customers USING btree (selecionada) WHERE selecionada"
+    },
+    {
+      "tabela": "google_ads_campaigns",
+      "nome": "google_ads_campaigns_customer_id_campaign_id_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (customer_id, campaign_id)"
+    },
+    {
+      "tabela": "google_ads_insights_daily",
+      "nome": "google_ads_insights_daily_customer_id_level_entidade_id_dat_key",
+      "tipo": "constraint",
+      "def": "UNIQUE (customer_id, level, entidade_id, data, contagem_conversao)"
+    },
+    {
+      "tabela": "media_assets",
+      "nome": "idx_media_assets_public_token",
+      "tipo": "index",
+      "def": "CREATE UNIQUE INDEX idx_media_assets_public_token ON media_assets USING btree (public_token) WHERE (public_token IS NOT NULL)"
+    }
+  ],
+  "pks": {
+    "bulk_category_jobs": "PRIMARY KEY (id)",
+    "campaigns": "PRIMARY KEY (id)",
+    "controle_estoque_observacoes": "PRIMARY KEY (id)",
+    "despesas_operacionais": "PRIMARY KEY (id)",
+    "estoque_observacoes": "PRIMARY KEY (id)",
+    "ga4_performance_cache": "PRIMARY KEY (id)",
+    "google_analytics_connections": "PRIMARY KEY (id)",
+    "pedidos_backfill_jobs": "PRIMARY KEY (id)",
+    "pedidos_ink": "PRIMARY KEY (id)",
+    "pedidos_ink_itens": "PRIMARY KEY (loja, item_id)",
+    "produtos_feed": "PRIMARY KEY (loja, produto_id)",
+    "produtos_feed_sync": "PRIMARY KEY (loja)",
+    "produtos_ink": "PRIMARY KEY (loja, produto_id)",
+    "produtos_ink_sync": "PRIMARY KEY (loja)",
+    "sync_estado": "PRIMARY KEY (loja)",
+    "utm_campaigns": "PRIMARY KEY (id)",
+    "origens_migration_city_uf_map": "PRIMARY KEY (id)",
+    "origens_migration_rules": "PRIMARY KEY (id)",
+    "origens_migration_simulations": "PRIMARY KEY (id)",
+    "audit_log": "PRIMARY KEY (id)",
+    "media_assets": "PRIMARY KEY (id)",
+    "webhook_eventos": "PRIMARY KEY (id)",
+    "whatsapp_web_outbox": "PRIMARY KEY (id)",
+    "bulk_category_job_items": "PRIMARY KEY (id)",
+    "campaign_recipients": "PRIMARY KEY (id)",
+    "origens_migration_simulation_items": "PRIMARY KEY (id)",
+    "integration_secrets": "PRIMARY KEY (id)",
+    "integrations": "PRIMARY KEY (id)",
+    "app_config": "PRIMARY KEY (chave)",
+    "custos_api_precos": "PRIMARY KEY (chave)",
+    "segments": "PRIMARY KEY (id)",
+    "utm_presets": "PRIMARY KEY (id)",
+    "whatsapp_web_mensagens": "PRIMARY KEY (id)",
+    "meta_connections": "PRIMARY KEY (id)",
+    "meta_ad_accounts": "PRIMARY KEY (id)",
+    "meta_campaigns": "PRIMARY KEY (id)",
+    "meta_adsets": "PRIMARY KEY (id)",
+    "meta_ads": "PRIMARY KEY (id)",
+    "meta_creatives": "PRIMARY KEY (id)",
+    "meta_insights_daily": "PRIMARY KEY (id)",
+    "meta_sync_logs": "PRIMARY KEY (id)",
+    "google_ads_connections": "PRIMARY KEY (id)",
+    "google_ads_customers": "PRIMARY KEY (id)",
+    "google_ads_campaigns": "PRIMARY KEY (id)",
+    "google_ads_insights_daily": "PRIMARY KEY (id)",
+    "google_ads_sync_logs": "PRIMARY KEY (id)",
+    "creative_settings": "PRIMARY KEY (tenant_id)",
+    "creative_brand_profiles": "PRIMARY KEY (id)",
+    "creative_niche_profiles": "PRIMARY KEY (id)",
+    "creative_context_profiles": "PRIMARY KEY (id)",
+    "creative_personas": "PRIMARY KEY (id)",
+    "creative_products": "PRIMARY KEY (id)",
+    "creative_jobs": "PRIMARY KEY (id)",
+    "creative_generations": "PRIMARY KEY (creative_id)",
+    "creative_assets": "PRIMARY KEY (id)"
+  },
+  "fks": [
+    {
+      "tabela": "bulk_category_job_items",
+      "nome": "bulk_category_job_items_job_id_fkey",
+      "def": "FOREIGN KEY (job_id) REFERENCES bulk_category_jobs(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "campaign_recipients",
+      "nome": "campaign_recipients_campaign_id_fkey",
+      "def": "FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "campaign_recipients",
+      "nome": "campaign_recipients_media_asset_id_fkey",
+      "def": "FOREIGN KEY (media_asset_id) REFERENCES media_assets(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "campaigns",
+      "nome": "campaigns_segmento_id_fkey",
+      "def": "FOREIGN KEY (segmento_id) REFERENCES segments(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "integration_secrets",
+      "nome": "integration_secrets_integration_id_fkey",
+      "def": "FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "origens_migration_simulation_items",
+      "nome": "origens_migration_simulation_items_simulation_id_fkey",
+      "def": "FOREIGN KEY (simulation_id) REFERENCES origens_migration_simulations(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "origens_migration_simulations",
+      "nome": "origens_migration_simulations_job_id_fkey",
+      "def": "FOREIGN KEY (job_id) REFERENCES bulk_category_jobs(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "whatsapp_web_outbox",
+      "nome": "whatsapp_web_outbox_campaign_recipient_id_fkey",
+      "def": "FOREIGN KEY (campaign_recipient_id) REFERENCES campaign_recipients(id) ON DELETE CASCADE"
+    }
+  ]
+}

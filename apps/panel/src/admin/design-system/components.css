@@ -1,0 +1,976 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Design System — componentes (fonte visual: /DESIGN.md)
+
+   Só consome tokens canônicos de tokens-base.css. Mantém todas as classes .ds-* já usadas pelas
+   páginas (mesmo contrato de markup); o que muda é o valor visual. Nenhuma animação nova.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Botões ──────────────────────────────────────────────────────── */
+.ds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1-5);
+  height: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font: var(--type-label);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+.ds-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+.ds-btn--block { display: flex; width: 100%; }
+.ds-btn--sm { height: var(--control-h-sm); min-height: var(--control-h-sm); padding: 0 10px; }
+
+.ds-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.ds-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.ds-btn--primary:active:not(:disabled) { background: var(--accent-pressed); border-color: var(--accent-pressed); }
+
+.ds-btn--secondary { background: var(--surface-2); border-color: var(--border-default); color: var(--text-primary); }
+.ds-btn--secondary:hover:not(:disabled) { border-color: var(--border-strong); }
+.ds-btn--secondary:active:not(:disabled) { background: var(--surface-3); }
+
+.ds-btn--ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
+.ds-btn--ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text-primary); }
+.ds-btn--ghost:active:not(:disabled) { background: var(--surface-3); }
+
+/* Destrutivo fora de confirmação: tintado. Sólido só no confirmar de diálogo destrutivo. */
+.ds-btn--danger { background: var(--danger-tint); border-color: rgba(255, 107, 107, 0.3); color: var(--danger); }
+.ds-btn--danger:hover:not(:disabled) { border-color: rgba(255, 107, 107, 0.55); }
+.ds-btn--danger-solid { background: var(--danger-solid); border-color: var(--danger-solid); color: #fff; }
+.ds-btn--danger-solid:hover:not(:disabled) { background: var(--danger-solid-hover); border-color: var(--danger-solid-hover); }
+
+/* Desabilitado: estado próprio (não opacidade sobre a cor original, que parecia "semi-ativo"). */
+.ds-btn:disabled,
+.ds-btn[aria-disabled='true'] {
+  background: var(--surface-2);
+  border-color: var(--border-subtle);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+.ds-btn--ghost:disabled { background: transparent; border-color: transparent; }
+
+/* ── Campos ──────────────────────────────────────────────────────── */
+.ds-field { display: flex; flex-direction: column; gap: var(--space-1-5); min-width: 0; }
+.ds-field > .ds-btn, .ad-botoes-lista > .ds-btn { align-self: flex-start; }
+.ds-field__label { font: var(--type-label); color: var(--text-secondary); }
+.ds-field__required { color: var(--danger); margin-left: 2px; }
+.ds-field__optional { color: var(--text-muted); font-weight: 400; }
+.ds-field__hint { font: var(--type-caption); color: var(--text-muted); }
+.ds-field__error { font: var(--type-caption); color: var(--danger); }
+
+.ds-input,
+.ds-select,
+.ds-textarea {
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--control-bg);
+  font: var(--type-body);
+  color: var(--text-primary);
+  transition: border-color var(--motion-fast) ease;
+}
+.ds-textarea {
+  height: auto;
+  min-height: 88px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.ds-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238390A0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px 16px;
+}
+.ds-select option { background: var(--surface-3); color: var(--text-primary); }
+
+.ds-input:hover:not(:disabled):not(:focus),
+.ds-select:hover:not(:disabled):not(:focus),
+.ds-textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-strong);
+}
+.ds-input:focus,
+.ds-select:focus,
+.ds-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.ds-input[aria-invalid='true'],
+.ds-select[aria-invalid='true'],
+.ds-textarea[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+.ds-input[aria-invalid='true']:focus,
+.ds-select[aria-invalid='true']:focus,
+.ds-textarea[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 1px var(--danger);
+}
+.ds-input:disabled,
+.ds-select:disabled,
+.ds-textarea:disabled {
+  background-color: var(--surface-2);
+  border-color: var(--border-subtle);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+.ds-input--sm,
+.ds-select--sm { height: var(--control-h-sm); }
+
+/* Busca: input com lupa à esquerda */
+.ds-search { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.ds-search__icon {
+  position: absolute;
+  left: 10px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.ds-search .ds-input { width: 100%; padding-left: 32px; }
+.ds-search .ds-input::-webkit-search-cancel-button { filter: grayscale(1) brightness(1.6); cursor: pointer; }
+
+@media (pointer: coarse) {
+  .ds-btn, .ds-input, .ds-select { height: var(--control-h-coarse); min-height: var(--control-h-coarse); }
+}
+
+/* ── Formulário: estrutura ───────────────────────────────────────── */
+.ds-form { display: flex; flex-direction: column; gap: var(--space-4); max-width: var(--form-max); min-width: 0; }
+.ds-form--wide { max-width: none; }
+.ds-form-section { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.ds-form-section + .ds-form-section { border-top: 1px solid var(--border-subtle); padding-top: var(--space-5); }
+.ds-form-section__header { display: flex; flex-direction: column; gap: 2px; }
+.ds-form-section__title { margin: 0; font: var(--type-section-title); color: var(--text-primary); }
+.ds-form-section__description { margin: 0; font: var(--type-caption); color: var(--text-secondary); max-width: 72ch; }
+.ds-form-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--form-grid-min, 220px)), 1fr));
+}
+/* Linha de campos + ação (ex.: filtro de loja + botão de sincronizar): alinha pelo topo e desce o
+   botão pra altura do controle, então hint embaixo de um campo não desalinha a ação. */
+.ds-form-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-3); margin-top: var(--space-3); }
+.ds-form-row > .ds-field { min-width: 180px; }
+.ds-form-row__action { margin-top: 24px; }
+.ds-form-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); padding-top: var(--space-1); }
+.ds-form-actions__start, .ds-form-actions__end { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ds-form-actions__end { margin-left: auto; }
+/* Texto de apoio longo (URLs, exemplos com {{1}}) quebra em vez de estourar a coluna. */
+.ds-field__hint, .ds-field__error, .ds-form-note, .ds-form-error, .pc-nota { overflow-wrap: anywhere; }
+
+/* Escolha em cartões */
+.ds-radio-cards { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1-5); }
+.ds-radio-cards > legend { padding: 0; margin-bottom: var(--space-1-5); }
+.ds-radio-cards__grid { display: grid; gap: var(--space-2); }
+.ds-radio-cards--2 .ds-radio-cards__grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+.ds-radio-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  cursor: pointer;
+}
+.ds-radio-card:hover { border-color: var(--border-strong); }
+.ds-radio-card input { margin: 2px 0 0; flex-shrink: 0; }
+.ds-radio-card:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ds-radio-card--checked, .ds-radio-card--checked:hover { border-color: var(--accent); background: var(--accent-tint); }
+.ds-radio-card--disabled { cursor: not-allowed; opacity: 1; }
+.ds-radio-card--disabled .ds-radio-card__title, .ds-radio-card--disabled .ds-radio-card__description { color: var(--text-disabled); }
+.ds-radio-card__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ds-radio-card__title { font: 600 13px/18px var(--font-sans); color: var(--text-primary); }
+.ds-radio-card__description { font: var(--type-caption); color: var(--text-secondary); }
+
+/* Checkbox com rótulo */
+.ds-checkbox { display: flex; align-items: flex-start; gap: var(--space-2); }
+.ds-checkbox input { width: 16px; height: 16px; margin: 1px 0 0; flex-shrink: 0; }
+.ds-checkbox__text { display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.ds-checkbox__label { font: var(--type-body-dense); color: var(--text-primary); }
+.ds-checkbox__description { font: var(--type-caption); color: var(--text-muted); }
+
+/* Switch (configuração aplicada na hora) */
+.ds-switch-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.ds-switch-row__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ds-switch-row__label { font: 500 14px/20px var(--font-sans); color: var(--text-primary); }
+.ds-switch-row__description { font: var(--type-caption); color: var(--text-secondary); max-width: 64ch; }
+.ds-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+.ds-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: var(--text-secondary);
+  transition: transform var(--motion-fast) ease, background-color var(--motion-fast) ease;
+}
+.ds-switch--on { background: var(--accent); border-color: var(--accent); }
+.ds-switch--on .ds-switch__thumb { transform: translateX(16px); background: var(--on-accent); }
+.ds-switch:disabled { cursor: not-allowed; background: var(--surface-2); border-color: var(--border-subtle); }
+.ds-switch:disabled .ds-switch__thumb { background: var(--text-disabled); }
+
+/* Detalhe técnico sob demanda */
+.ds-disclosure { font: var(--type-caption); color: var(--text-secondary); }
+.ds-disclosure__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  cursor: pointer;
+  color: var(--text-muted);
+  list-style: none;
+  border-radius: var(--radius-xs);
+}
+.ds-disclosure__summary::-webkit-details-marker { display: none; }
+.ds-disclosure__summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  margin-right: 2px;
+}
+.ds-disclosure__summary::before { transition: transform var(--motion-fast) var(--ease-out); }
+.ds-disclosure[open] > .ds-disclosure__summary::before { transform: rotate(45deg); }
+.ds-disclosure__summary:hover { color: var(--text-primary); }
+.ds-disclosure__body { margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--surface-2); overflow-wrap: anywhere; }
+.ds-disclosure__body code { font-family: var(--font-mono); font-size: 12px; }
+
+/* Valor mascarado */
+.ds-masked { display: inline-flex; align-items: baseline; gap: var(--space-2); }
+.ds-masked__toggle { border: 0; padding: 0; background: none; font: var(--type-caption); color: var(--accent); cursor: pointer; border-radius: var(--radius-xs); }
+.ds-masked__toggle:hover { text-decoration: underline; }
+
+/* ── Badge de status ─────────────────────────────────────────────── */
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-xs);
+  font: var(--type-micro);
+  white-space: nowrap;
+}
+.ds-badge--success { background: var(--success-tint); color: var(--success); }
+.ds-badge--warning  { background: var(--warning-tint); color: var(--warning); }
+.ds-badge--danger   { background: var(--danger-tint); color: var(--danger); }
+.ds-badge--info     { background: var(--info-tint); color: var(--info); }
+.ds-badge--neutral  { background: var(--neutral-tint); color: var(--text-secondary); }
+.ds-badge--premium  { background: var(--premium-tint); color: var(--premium); }
+
+/* ── Painel (Card) ───────────────────────────────────────────────── */
+.ds-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+.ds-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap; /* ação (legenda, link) desce pra baixo do título quando não cabe ao lado */
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-4) var(--space-4) 0;
+}
+.ds-card__header > :first-child { min-width: 0; flex: 1 1 180px; }
+.ds-card__title { font: var(--type-section-title); color: var(--text-primary); margin: 0; }
+.ds-card__description { margin: 2px 0 0; font: var(--type-caption); color: var(--text-secondary); }
+/* Padding completo: sem título o corpo não encosta mais no topo do painel. */
+.ds-card__body { padding: var(--space-4); }
+.ds-card--flush > .ds-card__body { padding: 0; }
+.ds-card--flush > .ds-card__header { padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-subtle); }
+.ds-card--flush .ds-table-wrap { border: 0; border-radius: 0; }
+
+/* ── KPI ─────────────────────────────────────────────────────────── */
+/* KPI Strip: um painel, células com divisória (box-shadow à esquerda e acima, cortado pelo
+   overflow do painel — assim a divisória some sozinha na 1ª coluna e na 1ª linha, em qualquer quebra). */
+.ds-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  min-width: 0;
+}
+.ds-kpi { padding: var(--space-4); min-width: 0; box-shadow: -1px 0 0 var(--border-subtle), 0 -1px 0 var(--border-subtle); }
+.ds-kpi__title { display: flex; align-items: center; gap: var(--space-1-5); margin: 0; font: 500 12px/16px var(--font-sans); color: var(--text-secondary); }
+.ds-kpi__icon { flex-shrink: 0; color: var(--text-muted); }
+.ds-kpi__value-row { display: flex; align-items: flex-end; gap: var(--space-2); margin-top: var(--space-2); min-height: 32px; min-width: 0; }
+.ds-kpi__value { font: var(--type-kpi); letter-spacing: -0.01em; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ds-kpi__title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-kpi__sparkline { flex-shrink: 0; display: flex; margin-left: auto; }
+.ds-kpi__value.ds-kpi__value--texto { font: 600 16px/32px var(--font-sans); color: var(--text-secondary); white-space: normal; }
+.ds-kpi__footer-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1-5); margin-top: var(--space-2); }
+.ds-kpi__delta { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border-radius: var(--radius-xs); font: var(--type-micro); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ds-kpi__delta--up { background: var(--success-tint); color: var(--success); }
+.ds-kpi__delta--down { background: var(--danger-tint); color: var(--danger); }
+.ds-kpi__helper { margin: 0; font: var(--type-caption); color: var(--text-muted); }
+.ds-sparkline { color: var(--info); }
+.ds-sparkline polyline { stroke: currentColor; }
+/* Container query por célula: sparkline só quando cabe junto do rótulo; em célula estreita o rótulo
+   pode ocupar 2 linhas e reserva essa altura, pra os valores ficarem na mesma linha de base. */
+.ds-kpi { container-type: inline-size; }
+@container (max-width: 219px) { .ds-kpi__sparkline { display: none; } }
+@container (max-width: 150px) {
+  .ds-kpi__title { align-items: flex-start; min-height: 32px; }
+  .ds-kpi__title-text { white-space: normal; overflow: visible; }
+  .ds-kpi__value { font-size: 22px; line-height: 28px; }
+}
+@media (max-width: 599px) {
+  .ds-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ds-kpi { padding: var(--space-3); }
+  .ds-kpi__value { font-size: 22px; line-height: 28px; }
+  .ds-kpi__sparkline { display: none; }
+  .ds-kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
+/* ── Estrutura de página ─────────────────────────────────────────── */
+/* PageStack: dono do espaçamento vertical da página (Stack Owns Spacing Rule). */
+.ds-page-stack { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+.ds-stack { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.ds-page-stack > .ds-page-header { margin-bottom: 0; }
+
+.ds-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-6);
+}
+.ds-page-header__main { min-width: 0; flex: 1 1 320px; }
+.ds-page-header__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+  font: var(--type-label);
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-xs);
+}
+.ds-page-header__back:hover { color: var(--text-primary); }
+.ds-page-header__back svg { width: 16px; height: 16px; }
+.ds-page-header__title { font: var(--type-page-title); letter-spacing: -0.005em; margin: 0; color: var(--text-primary); text-wrap: balance; }
+.ds-page-header__description { margin: var(--space-1) 0 0; font: var(--type-body); color: var(--text-secondary); max-width: 72ch; }
+.ds-page-header__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); font: var(--type-caption); color: var(--text-muted); }
+.ds-page-header__actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* Toolbar de filtros (preliminar da Fase 3 — usada pela página piloto). */
+.ds-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.ds-toolbar__end { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.ds-toolbar .ds-search { flex: 1 1 240px; max-width: 320px; }
+/* Mobile: filtros ocupam a largura em grade de 2 (busca e selects largos em linha inteira), em vez de
+   uma pilha de larguras desencontradas. */
+@media (max-width: 599px) {
+  .ds-toolbar > .ds-search, .ds-toolbar > .ds-select { flex: 1 1 100%; max-width: none; }
+  .ds-toolbar > .ds-input[type="date"], .ds-toolbar > .ds-input[type="number"], .ds-toolbar > .ds-input { flex: 1 1 calc(50% - var(--space-1)); min-width: 0; }
+  .ds-toolbar__end { margin-left: 0; width: 100%; }
+}
+.ds-toolbar__meta { font: var(--type-caption); color: var(--text-muted); }
+
+/* Nota contextual discreta (uma linha, com ação opcional) */
+.ds-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font: var(--type-caption);
+  color: var(--text-muted);
+  margin: 0;
+}
+.ds-note--warning { color: var(--warning); }
+
+/* ── Callout (alerta de página) ───────────────────────────────────── */
+.ds-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+}
+.ds-callout__icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.ds-callout__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ds-callout__title { font: 600 13px/18px var(--font-sans); color: var(--text-primary); }
+.ds-callout__text { font: var(--type-body-dense); color: var(--text-secondary); }
+.ds-callout__text p { margin: 0; }
+.ds-callout__action { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; align-self: center; }
+.ds-callout--info { background: var(--info-tint); border-color: rgba(52, 183, 235, 0.3); color: var(--info); }
+.ds-callout--warning { background: var(--warning-tint); border-color: rgba(242, 165, 22, 0.3); color: var(--warning); }
+.ds-callout--danger { background: var(--danger-tint); border-color: rgba(255, 107, 107, 0.3); color: var(--danger); }
+.ds-callout--success { background: var(--success-tint); border-color: rgba(53, 208, 127, 0.3); color: var(--success); }
+@media (max-width: 599.98px) {
+  .ds-callout { flex-wrap: wrap; }
+  .ds-callout__action { width: 100%; padding-left: 28px; }
+}
+
+/* ── Progresso ───────────────────────────────────────────────────── */
+.ds-progress { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.ds-progress__track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.ds-progress__fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: var(--accent);
+}
+.ds-progress__track--info .ds-progress__fill { background: var(--info); }
+.ds-progress__track--danger .ds-progress__fill { background: var(--danger); }
+.ds-progress__value { font: var(--type-caption); color: var(--text-secondary); min-width: 3ch; text-align: right; }
+
+/* ── Stepper (assistentes) ───────────────────────────────────────── */
+.ds-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* Compatibilidade: assistentes ainda fora de PageStack não têm dono do espaçamento vertical. */
+:not(.ds-page-stack):not(.ds-stack) > .ds-stepper { margin-bottom: var(--space-6); }
+.ds-stepper__item { display: flex; align-items: center; gap: var(--space-2); }
+.ds-stepper__item + .ds-stepper__item::before {
+  content: '';
+  width: 16px;
+  height: 1px;
+  background: var(--border-strong);
+}
+.ds-stepper__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: var(--type-label);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+button.ds-stepper__button:not(:disabled) { cursor: pointer; }
+button.ds-stepper__button:not(:disabled):hover { color: var(--text-primary); }
+button.ds-stepper__button:disabled { cursor: default; }
+.ds-stepper__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  font: 600 11px/1 var(--font-sans);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.ds-stepper__item--atual .ds-stepper__button { color: var(--text-primary); }
+.ds-stepper__item--atual .ds-stepper__marker { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.ds-stepper__item--feito .ds-stepper__button { color: var(--text-secondary); }
+.ds-stepper__item--feito .ds-stepper__marker { background: var(--success-tint); border-color: transparent; color: var(--success); }
+
+/* ── Tabela ──────────────────────────────────────────────────────── */
+.ds-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+.ds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--type-body-dense);
+  font-variant-numeric: tabular-nums;
+}
+.ds-table thead th {
+  position: sticky;
+  top: 0;
+  height: 36px;
+  padding: 0 12px;
+  background: var(--surface-1);
+  text-align: left;
+  font: 500 12px/16px var(--font-sans);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-default);
+  white-space: nowrap;
+}
+.ds-table__th--ordenavel { cursor: pointer; user-select: none; }
+.ds-table__th--ordenavel:hover { color: var(--text-primary); }
+.ds-table__th-inner { display: inline-flex; align-items: center; gap: var(--space-1); vertical-align: middle; }
+.ds-table__sort-icon { display: inline-flex; width: 14px; height: 14px; color: var(--text-muted); opacity: 0; }
+.ds-table__sort-icon svg { width: 14px; height: 14px; }
+.ds-table__th--ordenavel:hover .ds-table__sort-icon,
+.ds-table__th--ordenavel:focus-visible .ds-table__sort-icon { opacity: 1; }
+.ds-table__th--ordenavel[aria-sort] { color: var(--text-primary); }
+.ds-table__th--ordenavel[aria-sort] .ds-table__sort-icon { opacity: 1; color: var(--accent); }
+.ds-table__th--ordenavel:focus-visible { outline-offset: -2px; }
+.ds-table tbody td {
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+.ds-table--compact tbody td { height: 40px; padding: 0 10px; }
+.ds-table tbody tr:last-child td { border-bottom: none; }
+.ds-table tbody tr[data-clickable] { cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out); }
+.ds-table tbody tr[data-clickable]:hover { background: var(--surface-2); }
+.ds-table tbody tr[data-clickable]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ds-table .ds-table__cell--right { text-align: right; white-space: nowrap; } /* número, valor e data não quebram (DESIGN.md › Data Table) */
+.ds-table th.ds-table__cell--right .ds-table__th-inner { flex-direction: row-reverse; }
+.ds-table__cell--muted { color: var(--text-secondary); white-space: nowrap; }
+/* Mobile: colunas de apoio saem; a linha mantém o essencial e o detalhe fica no drawer. */
+@media (max-width: 599px) {
+  .ds-table .ds-table__cell--low { display: none; }
+  /* Larguras fixas de coluna (pensadas pro desktop) não empurram as colunas essenciais pra fora. */
+  .ds-table th[style] { width: auto !important; }
+  .ds-table td[style] { max-width: 36vw !important; }
+  /* Status longo ("Aguardando produção") quebra dentro do badge em vez de alargar a tabela. */
+  .ds-table tbody td .ds-badge { white-space: normal; height: auto; min-height: 20px; padding-block: 2px; line-height: 14px; }
+  .ds-table thead th { white-space: normal; height: auto; min-height: 36px; padding-block: var(--space-2); }
+  .ds-table thead th, .ds-table tbody td { padding-inline: var(--space-2); }
+  .ds-table thead th:first-child, .ds-table tbody td:first-child { padding-left: var(--space-3); }
+  .ds-table thead th:last-child, .ds-table tbody td:last-child { padding-right: var(--space-3); }
+}
+/* Tabela mais larga que a tela: sombra na borda indica que há mais colunas rolando (fundo com
+   attachment local cobre a sombra quando se chega ao fim). */
+.ds-table-wrap {
+  background:
+    linear-gradient(to right, var(--surface-1) 30%, transparent) left center / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--surface-1) 30%, transparent) right center / 24px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.45), transparent) left center / 10px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.45), transparent) right center / 10px 100% no-repeat scroll,
+    var(--surface-1);
+}
+.ds-table__truncate { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-table__th--checkbox, .ds-table__td--checkbox { width: 40px; }
+
+/* Paginação (rodapé de tabela) */
+.ds-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  font: var(--type-caption);
+  color: var(--text-secondary);
+}
+.ds-pagination__controls { display: flex; align-items: center; gap: var(--space-2); }
+
+/* ── Drawer lateral ──────────────────────────────────────────────── */
+.ds-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: var(--z-drawer);
+  animation: ds-fade-in var(--motion-base) var(--ease-out);
+}
+.ds-drawer-overlay[data-state="closed"], .ds-modal-overlay[data-state="closed"] { animation: ds-fade-out var(--motion-exit) var(--ease-in) forwards; }
+.ds-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(100vw, 560px);
+  background: var(--surface-3);
+  border-left: 1px solid var(--border-default);
+  box-shadow: var(--shadow-overlay);
+  z-index: calc(var(--z-drawer) + 1);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  animation: ds-slide-in-right var(--motion-slow) var(--ease-out);
+}
+.ds-drawer[data-state="closed"] { animation: ds-slide-out-right var(--motion-exit) var(--ease-in) forwards; }
+.ds-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+.ds-drawer__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.ds-drawer__close:hover { background: var(--surface-2); color: var(--text-primary); }
+.ds-drawer__close svg { width: 18px; height: 18px; }
+.ds-drawer__body { padding: var(--space-5); flex: 1; }
+.ds-drawer__footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-3);
+}
+.ds-drawer__header { position: sticky; top: 0; z-index: 1; background: var(--surface-3); }
+
+/* ── Modal ───────────────────────────────────────────────────────── */
+.ds-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  animation: ds-fade-in var(--motion-base) var(--ease-out);
+}
+.ds-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: calc(var(--z-modal) + 1);
+  width: min(calc(100% - 32px), 480px);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-5);
+  /* Keyframes próprios: um scale() genérico sobrescrevia o translate(-50%, -50%) e o diálogo nascia
+     fora do centro e "pulava" no fim da animação. */
+  animation: ds-modal-in var(--motion-base) var(--ease-out);
+}
+.ds-modal[data-state="closed"] { animation: ds-modal-out var(--motion-exit) var(--ease-in) forwards; }
+.ds-modal__title { margin: 0 0 var(--space-2); font: 600 16px/24px var(--font-sans); color: var(--text-primary); }
+.ds-modal__body { font: var(--type-body); color: var(--text-secondary); min-width: 0; }
+/* Ritmo entre blocos (campos, notas, checkboxes) sem virar flex: descrições com texto + <strong> soltos continuam em linha. */
+.ds-modal__body > * + * { margin-top: var(--space-4); }
+.ds-modal__body > .ds-check-row { padding-block: 0; border-bottom: 0; }
+.ds-modal__actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-5); }
+
+/* ── Tabs ────────────────────────────────────────────────────────── */
+.ds-tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--border-default); margin-bottom: var(--space-4); overflow-x: auto; scrollbar-width: none; }
+.ds-tabs::-webkit-scrollbar { display: none; } /* rola por toque/trackpad sem barra aparente */
+.ds-tab {
+  height: 36px;
+  border: none;
+  background: none;
+  padding: 0 12px;
+  font: var(--type-label);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.ds-tab:hover { color: var(--text-primary); }
+.ds-tab:focus-visible { outline-offset: -2px; }
+.ds-tab--ativa { color: var(--text-primary); border-bottom-color: var(--accent); }
+.ds-tab__count { display: inline-flex; align-items: center; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: var(--radius-xs); background: var(--neutral-tint); font: var(--type-micro); color: var(--text-secondary); }
+
+/* ── Ícone-botão (trigger de menu de ações, etc.) ───────────────────── */
+.ds-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.ds-icon-btn:hover { background: var(--surface-2); color: var(--text-primary); }
+.ds-icon-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+.ds-icon-btn--info { width: 20px; height: 20px; color: var(--text-muted); }
+.ds-icon-btn--info svg { width: 14px; height: 14px; }
+
+/* ── Tooltip ─────────────────────────────────────────────────────── */
+.ds-tooltip {
+  max-width: 280px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-tooltip);
+  padding: 6px 8px;
+  font: var(--type-caption);
+  color: var(--text-secondary);
+  z-index: var(--z-dropdown);
+  animation: ds-fade-in var(--motion-fast) var(--ease-out);
+}
+.ds-tooltip[data-state="closed"] { animation: ds-fade-out var(--motion-exit) var(--ease-in) forwards; }
+.ds-tooltip__texto { white-space: pre-wrap; }
+.ds-tooltip__arrow { fill: var(--surface-3); }
+
+/* ── Dropdown (menu de ações, menu da loja) ─────────────────────────── */
+.ds-dropdown {
+  min-width: 180px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-1);
+  z-index: var(--z-dropdown);
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+  animation: ds-scale-in var(--motion-fast) var(--ease-out);
+}
+.ds-dropdown[data-state="closed"] { animation: ds-fade-out var(--motion-exit) var(--ease-in) forwards; }
+.ds-dropdown__label { padding: 6px 8px; }
+.ds-dropdown__label strong { display: block; font: var(--type-label); color: var(--text-primary); }
+.ds-dropdown__label span { font: var(--type-caption); color: var(--text-muted); }
+.ds-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font: var(--type-body-dense);
+  color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+.ds-dropdown__item svg { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+.ds-dropdown__item[data-highlighted] { background: var(--surface-2); }
+.ds-dropdown__item[data-disabled] { color: var(--text-disabled); cursor: not-allowed; }
+.ds-dropdown__item--danger { color: var(--danger); }
+.ds-dropdown__item--danger[data-highlighted] { background: var(--danger-tint); }
+.ds-dropdown__separator { height: 1px; background: var(--border-default); margin: var(--space-1) 4px; }
+
+/* ── Toast (mesmo visual/API de .ad-toast — nome novo pra código novo) */
+.ds-toast-container {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+}
+.ds-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-overlay);
+  font: var(--type-body-dense);
+  max-width: 360px;
+  color: var(--text-primary);
+}
+.ds-toast--sucesso { color: var(--text-primary); }
+.ds-toast--erro { color: var(--text-primary); }
+.ds-toast--info { color: var(--text-primary); }
+
+/* ── Empty state ─────────────────────────────────────────────────── */
+.ds-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-12) var(--space-6);
+  color: var(--text-secondary);
+}
+/* Dentro de painel (ou drawer) o estado é compacto: o painel já delimita a área. */
+.ds-card__body .ds-empty, .ds-drawer__body .ds-empty { padding: var(--space-6) var(--space-4); }
+.ds-empty__icon { color: var(--danger); margin-bottom: var(--space-2); }
+.ds-empty__title { font: 600 14px/20px var(--font-sans); color: var(--text-primary); margin: 0; }
+.ds-empty__description { font: var(--type-caption); color: var(--text-secondary); margin: var(--space-1) 0 0; max-width: 56ch; overflow-wrap: anywhere; }
+.ds-empty__action { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin-top: var(--space-4); }
+.ds-empty--erro .ds-empty__title { color: var(--text-primary); }
+
+.ds-button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: var(--space-4); }
+
+/* ── Criação de categorias em lote (ModalCriarCategoriasEmLote) ──────── */
+.ds-lote-preview p, .ds-lote-resultado p { font: var(--type-body-dense); color: var(--text-muted); margin: 0 0 10px; }
+.ds-lote-lista { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.ds-lote-lista li { display: flex; align-items: center; gap: 8px; font: var(--type-body-dense); padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+.ds-lote-lista li:last-child { border-bottom: none; }
+.ds-lote-input-inline { flex: 1; height: var(--control-h-sm); padding: 0 8px; }
+
+/* ── Utilitários de formulário (usados por componentes compartilhados,
+   ex: refund-modal.js) ──────────────────────────────────────────── */
+.ds-form-error { color: var(--danger); font: var(--type-body-dense); }
+.ds-form-note { font: var(--type-caption); color: var(--text-muted); }
+.ds-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ds-check-row:last-child { border-bottom: none; }
+.ds-check-row__label { flex: 1; font: var(--type-body-dense); }
+.ds-check-row input[type="number"] { width: 80px; }
+
+/* ── Utilitário de acessibilidade — some visualmente, mas continua legível por leitor de tela
+   (ex: Dialog.Description do Radix quando o conteúdo já é auto-explicativo sem descrição
+   visível) ────────────────────────────────────────────────────────── */
+.ds-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Skeleton ────────────────────────────────────────────────────── */
+.ds-skeleton-stack { display: flex; flex-direction: column; gap: var(--space-2); }
+.ds-skeleton-table { border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-1); overflow: hidden; }
+.ds-skeleton-table__head, .ds-skeleton-table__row { display: grid; grid-template-columns: 38fr 14fr 18fr 12fr; align-items: center; gap: var(--space-4); padding: 0 var(--space-3); }
+.ds-skeleton-table__head { height: 36px; border-bottom: 1px solid var(--border-default); }
+.ds-skeleton-table__row { height: 44px; border-bottom: 1px solid var(--border-subtle); }
+.ds-skeleton-table__row:last-child { border-bottom: 0; }
+.ds-skeleton {
+  display: block;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(90deg, var(--surface-3) 25%, color-mix(in srgb, var(--surface-3) 70%, var(--text-muted)) 37%, var(--surface-3) 63%);
+  background-size: 400% 100%;
+  animation: ds-skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes ds-skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* ── Entrada de overlays (Modal/Drawer/DropdownMenu) ────────────────── */
+@keyframes ds-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ds-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ds-scale-in { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+@keyframes ds-modal-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.98); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes ds-modal-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, calc(-50% + 4px)) scale(.98); } }
+@keyframes ds-slide-in-right { from { transform: translateX(32px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes ds-slide-out-right { from { transform: translateX(0); opacity: 1; } to { transform: translateX(32px); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-switch, .ds-switch__thumb { transition: none; }
+  .ds-drawer-overlay, .ds-drawer, .ds-modal-overlay, .ds-modal, .ds-dropdown, .ds-tooltip { animation: none; }
+  .ds-skeleton { animation: none; }
+}
+
+/* ── Amostra de mídia (Templates) ────────────────────────────────── */
+.ds-media-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  padding: 28px 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color var(--motion-fast), background var(--motion-fast);
+}
+.ds-media-dropzone:hover, .ds-media-dropzone:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+.ds-media-dropzone strong { font: 500 14px/20px var(--font-sans); color: var(--text-primary); }
+.ds-media-dropzone span { font: var(--type-caption); color: var(--text-muted); }
+.ds-media-dropzone--dragging { border-color: var(--accent); background: var(--accent-tint); }
+.ds-media-dropzone--error { border-color: var(--danger); }
+
+.ds-media-dropzone--uploaded {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  cursor: default;
+  padding: 14px 16px;
+  border-style: solid;
+}
+.ds-media-dropzone__preview {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.ds-media-dropzone__file-icon {
+  width: 56px; height: 56px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.ds-media-dropzone__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.ds-media-dropzone__info strong { font: var(--type-label); color: var(--text-primary); word-break: break-all; }
+.ds-media-dropzone__info span { font: var(--type-caption); color: var(--text-muted); }
+.ds-media-dropzone__acoes { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* ── Utilitários de composição (substituem style={{}} espalhados nas telas) ───────────── */
+/* Bloco que segue outro dentro de um painel sem PageStack/ds-stack (ex.: status abaixo de um formulário). */
+.ds-bloco-seguinte { margin-top: var(--space-4); }
+/* Linha de status: badge + texto de apoio, quebrando em telas estreitas. */
+.ds-status-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); min-width: 0; }
+.ds-status-linha__meta { font: var(--type-body-dense); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* Lista curta de histórico/metadados. */
+.ds-lista-meta { margin: var(--space-1) 0 0; padding-left: 18px; font: var(--type-body-dense); color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; }
+/* JSON/payload bruto. */
+.ds-code-block { margin: 0; padding: var(--space-3); background: var(--surface-2); border-radius: var(--radius-sm); font: 400 12px/16px var(--font-mono); color: var(--text-secondary); overflow: auto; max-height: 360px; white-space: pre; }
+/* Literal que é pra LER (URL gerada), não pra rolar como um payload — quebra a linha em vez de
+   esconder o final atrás de uma barra de rolagem horizontal. */
+.ds-code-block--wrap { white-space: pre-wrap; word-break: break-all; overflow: visible; max-height: none; user-select: all; }
+.ds-selecao-barra { align-items: center; }
+/* Checkbox/radio em linha com texto (listas de seleção simples). */
+.ds-check-inline { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; font: var(--type-body-dense); color: var(--text-primary); cursor: pointer; }
+.ds-check-inline input { margin: 0; width: 16px; height: 16px; flex-shrink: 0; }
+/* Nota de apoio em texto corrido (legado .pc-nota, usado em ~20 telas — vive no DS desde a Fase 9
+   porque várias telas não importavam pedidos-central.css e dependiam da ordem de carregamento). */
+.pc-nota { font: var(--type-caption); color: var(--text-muted); margin: 0 0 var(--space-3); overflow-wrap: anywhere; }
+.ds-stack > .pc-nota, .ds-form > .pc-nota, .ds-card__body > .pc-nota:last-child { margin-bottom: 0; }
+.pc-nota--warning { color: var(--warning); }

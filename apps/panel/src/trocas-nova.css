@@ -1,0 +1,41 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/trocas/nova — wizard de criação de troca (Fase 4, docs/plan.md)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.tn-form { display: flex; flex-direction: column; gap: var(--space-4); max-width: var(--form-max); min-width: 0; }
+
+.tn-radio-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font: var(--type-body-dense);
+  cursor: pointer;
+}
+.tn-radio-row:last-child { border-bottom: none; }
+
+.tn-item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+.tn-item-row:last-child { border-bottom: none; }
+.tn-item-row__nome { flex: 1; font-size: 13px; }
+.tn-item-row input[type="number"] { width: 80px; } /* visual vem de .ds-input */
+
+.tn-nova-opcao {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tn-nova-opcao__titulo { font-size: 13px; font-weight: 600; }
+.tn-nova-opcao__campos { display: flex; gap: 10px; flex-wrap: wrap; }
+.tn-nova-opcao__campos input { width: 140px; }
+
+.tn-form > .ds-btn { align-self: flex-start; }

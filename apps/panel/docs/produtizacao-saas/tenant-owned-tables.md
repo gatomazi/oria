@@ -1,0 +1,131 @@
+# Tabelas tenant-owned — manifesto canônico (Fase 1)
+
+> **GERADO** por `scripts/tenancy/gerar-manifesto.mjs` a partir de
+> [`lib/platform/tenancy-manifest.js`](../../lib/platform/tenancy-manifest.js). Não editar à mão:
+> `test/invariants/tenancy-schema.test.js` reprova se este arquivo divergir do código.
+
+## Contagem única
+
+**55 tabelas tenant-owned** + **5 tabelas de plataforma** sob RLS
+(`organizations`, `stores`, `organization_members`, `onboarding_sessions`, `onboarding_steps`) + **9 globais declaradas**
+(`pgmigrations` — controle do node-pg-migrate; `users` — identidade da pessoa (PD-004): existe antes de qualquer Organization e pode pertencer a várias; `sessions` — sessão é do usuário; a Organization ativa é resolvida por request (Fase 3); `tenancy_mapeamentos` — mapeamento legado → Organization; lido só pelo trigger SECURITY DEFINER e pelo backfill; `oauth_states` — state de OAuth da pessoa/sessão (Fase 4); a Organization é dado validado no callback contra o membership; `external_resource_claims` — posse de recurso externo entre Organizations (PD-016); só funções SECURITY DEFINER com a Organization do contexto; `job_leases` — lease dos jobs entre réplicas (TD-006); só funções SECURITY DEFINER, pedidas pelo scheduler antes do contexto; `onboarding_invites` — convite do primeiro owner (Fase 7): existe antes da Organization; só o hash do token, lido e consumido por funções SECURITY DEFINER; `onboarding_idempotencia` — chave de idempotência (pessoa, chave) → Organization criada (Fase 7); só função SECURITY DEFINER, com a Organization do contexto).
+
+Toda tabela do schema está em exatamente uma dessas listas; tabela nova sem classificação reprova
+no CI.
+
+| regra | tabelas |
+|---|---:|
+| `loja` | 19 |
+| `loja_ou_sem_loja` | 4 |
+| `pai` | 4 |
+| `integracao` | 1 |
+| `instalacao` | 5 |
+| `meta` | 8 |
+| `google_ads` | 5 |
+| `creative` | 9 |
+
+### Reconciliação com as contagens antigas
+
+| contagem antiga | o que era | por que difere |
+|---|---|---|
+| 53 tabelas (auditoria) | 44 do `bootstrapPostgres()` + 9 `creative_*` do boot do Creative Core, em `8a7ea3d` | a Fase 0 criou `integrations` e `integration_secrets`: 53 + 2 = 55 |
+| 47 tabelas (relatório noturno) | schema após as 5 migrations da noite | 44 do baseline + `integrations` + `integration_secrets` + `pgmigrations`; as 9 `creative_*` ainda nasciam no boot |
+| 49 tabelas (plano, Fase 1) | 53 − 4 `origens_migration_*` | as 4 `origens_migration_*` **também** recebem `organization_id` e RLS: são LEGACY / TO_REMOVE, mas guardam dado por loja enquanto existirem, e ficar fora da RLS seria um buraco declarado |
+| 55 tabelas RED (gates TD-001) | todas as tabelas públicas menos `pgmigrations` | é a contagem certa das tenant-owned; esta página a torna canônica |
+| "9 creative_* já têm tenant_id" | discriminador textual do Creative Core | continuam tendo; `organization_id` passa a ser o canônico e `tenant_id` fica até a Fase 3 |
+| "integrations/integration_secrets com organization_id nullable" | Fase 0 | agora NOT NULL, com FK |
+| "28 UNIQUEs globais mantidas" (rodada 11) | expand/contract ainda aberto | **fechado na rodada 12**: os 32 alvos de `ON CONFLICT` do código incluem `organization_id`, e a migration `1789600420000_tenancy-chaves` remove as 20 UNIQUEs globais e troca as 55 PKs por PKs que começam por `organization_id`. Zero chaves globais |
+
+## Chaves (INV-05, sem exceção)
+
+Toda UNIQUE e toda PK das 55 tabelas inclui `organization_id` — inclusive a PK surrogate, que vira
+`(organization_id, id)` com um índice comum em `id` para as buscas diretas. As 8 FKs entre tabelas
+tenant-owned são compostas: o filho só aponta para pai da mesma Organization. O `public_token` de
+mídia é único por Organization (token de 192 bits), com índice comum para o link público.
+
+**Deploy em dois passos (OPS-17):** primeiro a versão com os alvos novos de `ON CONFLICT` e as
+migrations até `1789600360000`; depois `1789600420000_tenancy-chaves`.
+
+## Cardinalidade Organization ↔ Store (PD-002)
+
+`stores` tem `UNIQUE (organization_id)` — uma Store por Organization, ativa ou não (não há histórico
+de Stores na V1). O gate `card1a1` confere a constraint e o dado: nenhuma Organization com mais de uma
+Store ativa, nenhuma sem Store, nenhuma Store sem Organization.
+
+## Mapeamento explícito exigido antes do pre-deploy
+
+A migration `1789600120000_tenancy-mapeamento` lê `TENANCY_MAPPING_FILE` (formato em
+[`lib/platform/tenancy-mapping.js`](../../lib/platform/tenancy-mapping.js)). Com dado na base, o
+arquivo é **obrigatório** e precisa declarar, para o código em execução:
+
+- `loja:` sul, centro, norte
+- `sem_loja:` audit_log, media_assets, webhook_eventos, whatsapp_web_outbox
+- `instalacao:*`, `meta:*`, `google_ads:*`
+- `creative_tenant:<CREATIVE_TENANT_ID ou default>`
+- e qualquer outra loja/tenant que exista no dado
+
+PD-019 A → 3 Organizations + 3 Stores (uma por Organization). PD-019 B → **1 Organization + 1 Store**
+(Use Origens); os três valores legados de loja (`sul`, `centro`, `norte`) convergem para ela no
+backfill, sem virar Stores. Fixtures: `test/fixtures/tenancy/cenario-a.json` e `cenario-b.json`.
+Faltou um item, ou o mesmo item aparece duas vezes → a migration aborta e nada é aplicado. Nunca
+existe "é a única Organization".
+
+## Tabelas
+
+| tabela | dono (regra explícita) | organization_id antes da Fase 1 | tenant_id legado | ação da Fase 1 | RLS | chaves finais (INV-05) | legado |
+|---|---|---|---|---|---|---|---|
+| `bulk_category_jobs` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `campaigns` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>FK (organization_id, segmento_id) → `segments` | — |
+| `controle_estoque_observacoes` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `despesas_operacionais` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `estoque_observacoes` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `ga4_performance_cache` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_ga4_performance_cache_org` (organization_id, loja, periodo) | — |
+| `google_analytics_connections` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_google_analytics_connections_org` (organization_id, loja) | — |
+| `pedidos_backfill_jobs` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `pedidos_ink` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_pedidos_ink_org` (organization_id, loja, ink_order_id) | — |
+| `pedidos_ink_itens` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, loja, item_id) | — |
+| `produtos_feed` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, loja, produto_id) | — |
+| `produtos_feed_sync` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, loja) | — |
+| `produtos_ink` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, loja, produto_id) | — |
+| `produtos_ink_sync` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, loja) | — |
+| `sync_estado` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, loja) | — |
+| `utm_campaigns` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `origens_migration_city_uf_map` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_origens_city_uf_map_org` (organization_id, loja, cidade_normalizada) | **LEGACY / TO_REMOVE** — R-01 LEGACY / TO_REMOVE — sem DROP; tenantizada para a RLS proteger o dado enquanto existir |
+| `origens_migration_rules` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | **LEGACY / TO_REMOVE** — R-01 LEGACY / TO_REMOVE — sem DROP |
+| `origens_migration_simulations` | `loja`: loja → `loja:<loja>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>FK (organization_id, job_id) → `bulk_category_jobs` | **LEGACY / TO_REMOVE** — R-01 LEGACY / TO_REMOVE — sem DROP |
+| `audit_log` | `loja_ou_sem_loja`: loja → `loja:<loja>`; loja NULL → `sem_loja:<tabela>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — — loja NULL = ação sem loja; dono declarado por sem_loja |
+| `media_assets` | `loja_ou_sem_loja`: loja → `loja:<loja>`; loja NULL → `sem_loja:<tabela>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_media_assets_public_token_org` (organization_id, public_token) WHERE … | — — o link público resolve por token: índice não-único para a busca; unicidade por Organization (token de 192 bits) |
+| `webhook_eventos` | `loja_ou_sem_loja`: loja → `loja:<loja>`; loja NULL → `sem_loja:<tabela>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — — loja NULL = entrega que não se identificou; dono declarado por sem_loja, nunca inferido |
+| `whatsapp_web_outbox` | `loja_ou_sem_loja`: loja → `loja:<loja>`; loja NULL → `sem_loja:<tabela>` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_wa_web_outbox_dedupe_org` (organization_id, dedupe_key) WHERE …<br>FK (organization_id, campaign_recipient_id) → `campaign_recipients` | — |
+| `bulk_category_job_items` | `pai` (`bulk_category_jobs.job_id`): herda do pai | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>FK (organization_id, job_id) → `bulk_category_jobs` | — |
+| `campaign_recipients` | `pai` (`campaigns.campaign_id`): herda do pai | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_campaign_recipients_org` (organization_id, campaign_id, customer_key)<br>FK (organization_id, campaign_id) → `campaigns`<br>FK (organization_id, media_asset_id) → `media_assets` | — |
+| `origens_migration_simulation_items` | `pai` (`origens_migration_simulations.simulation_id`): herda do pai | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>FK (organization_id, simulation_id) → `origens_migration_simulations` | **LEGACY / TO_REMOVE** — R-01 LEGACY / TO_REMOVE — sem DROP |
+| `integration_secrets` | `pai` (`integrations.integration_id`): herda do pai | sim, nullable | — | FK + backfill do que estiver NULL + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_integration_secrets_org` (organization_id, integration_id, tipo)<br>FK (organization_id, integration_id) → `integrations` | — — organization_id já existia (nullable, sem FK) desde a Fase 0 |
+| `integrations` | `integracao`: organization_id existente ou `escopo` → `loja:<escopo>` | sim, nullable | — | FK + backfill do que estiver NULL + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — — organization_id já existia (nullable, sem FK); a UNIQUE da Fase 0 já o incluía |
+| `app_config` | `instalacao`: `instalacao:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, chave) | — |
+| `custos_api_precos` | `instalacao`: `instalacao:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, chave) | — |
+| `segments` | `instalacao`: `instalacao:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `utm_presets` | `instalacao`: `instalacao:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `whatsapp_web_mensagens` | `instalacao`: `instalacao:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_wa_web_mensagens_nome_org` (organization_id, lower(nome)) | — |
+| `meta_connections` | `meta`: `meta:*` | não | — | coluna + backfill + FK + NOT NULL; remove `CHECK (id = 1)`, id com sequência, UNIQUE (organization_id); índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_meta_connections_org` (organization_id) | — |
+| `meta_ad_accounts` | `meta`: `meta:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_meta_ad_accounts_org` (organization_id, meta_account_id)<br>UNIQUE `uq_meta_ad_accounts_selecionada_org` (organization_id) WHERE … | — |
+| `meta_campaigns` | `meta`: `meta:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_meta_campaigns_org` (organization_id, meta_campaign_id) | — |
+| `meta_adsets` | `meta`: `meta:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_meta_adsets_org` (organization_id, meta_adset_id) | — |
+| `meta_ads` | `meta`: `meta:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_meta_ads_org` (organization_id, meta_ad_id) | — |
+| `meta_creatives` | `meta`: `meta:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_meta_creatives_org` (organization_id, meta_creative_id) | — |
+| `meta_insights_daily` | `meta`: `meta:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_meta_insights_daily_org` (organization_id, meta_account_id, level, entidade_id, data, attribution_setting) | — |
+| `meta_sync_logs` | `meta`: `meta:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `google_ads_connections` | `google_ads`: `google_ads:*` | não | — | coluna + backfill + FK + NOT NULL; remove `CHECK (id = 1)`, id com sequência, UNIQUE (organization_id); índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_google_ads_connections_org` (organization_id) | — |
+| `google_ads_customers` | `google_ads`: `google_ads:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_google_ads_customers_org` (organization_id, customer_id)<br>UNIQUE `uq_google_ads_customers_selecionada_org` (organization_id) WHERE … | — |
+| `google_ads_campaigns` | `google_ads`: `google_ads:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_google_ads_campaigns_org` (organization_id, customer_id, campaign_id) | — |
+| `google_ads_insights_daily` | `google_ads`: `google_ads:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id)<br>UNIQUE `uq_google_ads_insights_daily_org` (organization_id, customer_id, level, entidade_id, data, contagem_conversao) | — |
+| `google_ads_sync_logs` | `google_ads`: `google_ads:*` | não | — | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `creative_settings` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id) | — — um registro por tenant; PK tenant_id vira legado |
+| `creative_brand_profiles` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `creative_niche_profiles` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `creative_context_profiles` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `creative_personas` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `creative_products` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `creative_jobs` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |
+| `creative_generations` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, creative_id) | — |
+| `creative_assets` | `creative`: `creative_tenant:<tenant_id>` | não | sim (mantido) | coluna + backfill + FK + NOT NULL; índice organization_id; trigger transitório; chaves globais → por Organization | ENABLE + FORCE | PK (organization_id, id) | — |

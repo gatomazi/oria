@@ -1,0 +1,32 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/carrinhos — lista completa de carrinhos abandonados
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ad-carrinhos-resumo {
+  display: flex;
+  gap: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.ad-carrinhos-filtros { display: flex; gap: 8px; margin-bottom: 16px; }
+.ad-carrinhos-filtros .pa-btn { min-height: 36px; padding: 0 16px; font-size: 13px; }
+
+.ad-carrinho__topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.ad-carrinho__badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+.ad-carrinho__badge--quente { background: rgba(179,64,46,.12); color: var(--danger); }
+.ad-carrinho__badge--recente { background: rgba(45,122,78,.12); color: var(--success); }
+.ad-carrinho__badge--morno { background: var(--surface-2); color: var(--text-secondary); }
+.ad-carrinho__badge--antigo { background: var(--border-default); color: var(--text-muted); }

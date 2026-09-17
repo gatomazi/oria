@@ -1,0 +1,71 @@
+{
+  "versao": 1,
+  "organizations": [
+    {
+      "id": "b1000000-0000-4000-8000-000000000001",
+      "nome": "Use Origens",
+      "store": {
+        "id": "b2000000-0000-4000-8000-000000000001",
+        "nome": "Use Origens",
+        "lojaLegada": "sul"
+      }
+    }
+  ],
+  "mapeamentos": [
+    {
+      "tipo": "loja",
+      "chave": "sul",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "loja",
+      "chave": "centro",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "loja",
+      "chave": "norte",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "instalacao",
+      "chave": "*",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "meta",
+      "chave": "*",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "google_ads",
+      "chave": "*",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "audit_log",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "media_assets",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "webhook_eventos",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "whatsapp_web_outbox",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "tipo": "creative_tenant",
+      "chave": "default",
+      "organizationId": "b1000000-0000-4000-8000-000000000001"
+    }
+  ]
+}

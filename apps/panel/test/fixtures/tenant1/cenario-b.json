@@ -1,0 +1,18 @@
+{
+  "versao": 1,
+  "cenario": "B",
+  "rollout": false,
+  "mapeamentoTenancy": "../tenancy/cenario-b.json",
+  "creativeTenantLegado": "default",
+  "organizations": [
+    { "id": "b1000000-0000-4000-8000-000000000001", "entitlements": ["financial", "whatsapp", "creative_generator"] }
+  ],
+  "owners": [
+    { "email": "operacao@ensaio.oria", "passwordHashEnv": "TENANT1_OWNER_HASH", "organizations": ["b1000000-0000-4000-8000-000000000001"] }
+  ],
+  "whatsapp": {
+    "waba": { "id": "1200000000009", "organizationId": "b1000000-0000-4000-8000-000000000001" },
+    "phoneNumber": { "id": "5511900000009", "organizationId": "b1000000-0000-4000-8000-000000000001" }
+  },
+  "inkWebhook": { "organizations": ["b1000000-0000-4000-8000-000000000001"] }
+}

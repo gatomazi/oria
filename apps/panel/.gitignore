@@ -1,0 +1,30 @@
+.DS_Store
+node_modules/
+data/cities_temp.json
+
+# Dados de pedidos PIX (código PIX + QR de clientes) — nunca versionar
+db/
+assets/pedidos/
+
+# Cache local de imagens de produtos (regenerável, escrito em runtime)
+img-cache/
+
+# Log de webhooks reais (PII de cliente — nome, telefone, CPF, endereço) usado só pra análise
+# local, nunca deve ir pro git.
+docs/webhook-log.json
+
+
+# App desktop (Electron)
+desktop/node_modules/
+desktop/dist/
+
+# Saída e estado dos scripts de migração (regeneráveis, escritos em runtime)
+migracao.log
+verificar.log
+scripts/.migracao-estado.jsonl
+
+# Prints do painel para documentação. Ficam SÓ na máquina: as telas mostram dados reais de
+# cliente — nome completo, e-mail e telefone aparecem inteiros em Pedidos e em Recuperação.
+# Mesma razão de docs/webhook-log.json acima. Git não esquece: uma vez empurrado, apagar depois
+# não tira do histórico.
+docs/painel-prints/

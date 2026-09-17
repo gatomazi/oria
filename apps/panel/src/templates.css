@@ -1,0 +1,224 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/templates + /admin/templates/novo — templates aprovados pela
+   Meta (header/corpo/rodapé/botões) e vínculo com automação por evento
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pa-lista li { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+
+.ad-templates-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ad-templates-topo .pa-field-hint { margin: 0; max-width: 480px; }
+
+
+.ad-config-editor {
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+.ad-config-editor__status { font-size: 12px; margin-left: 8px; }
+.ad-config-editor__status--ok { color: var(--success); }
+.ad-config-editor__status--erro { color: var(--danger); }
+
+.ad-template-vars { display: flex; flex-direction: column; gap: 4px; }
+
+.ad-botoes-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+
+.ad-botao-linha {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ad-botao-linha input { flex: 1; min-width: 140px; } /* visual vem de .ds-input/.ds-select */
+
+.ad-template-referencia {
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.ad-template-referencia__corpo { display: flex; flex-direction: column; gap: var(--space-4); }
+.ad-template-referencia__grupo { display: flex; flex-direction: column; gap: var(--space-1-5); }
+.ad-template-referencia__grupo strong { font: var(--type-label); color: var(--text-primary); }
+.ad-template-referencia__nota { font: var(--type-caption); color: var(--text-muted); }
+.ad-template-referencia__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ad-var-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  max-width: 100%;
+  transition: border-color .15s, background-color .15s;
+}
+.ad-var-btn:hover { border-color: var(--border-strong); background: var(--surface-3); }
+.ad-var-btn__label { font: var(--type-caption); font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.ad-var-btn__exemplo { font: var(--type-caption); font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* ── Preview estilo WhatsApp ─────────────────────────────────────── */
+.ad-wa-preview { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 20px; }
+.ad-wa-preview__bolha {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+}
+/* Cores fixas (não os tokens do tema do admin): este balão simula como a mensagem chega no
+   WhatsApp do CLIENTE — sempre um fundo claro, igual no admin dark ou não. `--ink-80`/`--ink-60`
+   nunca existiram fora de src/loja.css (site público) e `--ink-45`/`--ink-10` viraram claros
+   depois do redesign dark do admin — herdados aqui, ficavam claro-sobre-claro no balão branco. */
+.ad-wa-preview__media { width: 100%; max-height: 180px; object-fit: cover; border-radius: 6px; margin: -14px -16px 4px; }
+.ad-wa-preview__media-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  height: 90px; border-radius: 6px; margin: -14px -16px 4px;
+  background: rgba(0, 0, 0, .06); color: rgba(0, 0, 0, .45); font-size: 13px;
+}
+.ad-wa-preview__header { font-size: 14px; color: rgba(0, 0, 0, .85); }
+.ad-wa-preview__corpo { font-size: 14px; color: rgba(0, 0, 0, .85); white-space: pre-wrap; word-break: break-word; }
+.ad-wa-preview__vazio { font-size: 13px; color: rgba(0, 0, 0, .6); font-style: italic; }
+.ad-wa-preview__footer { font-size: 12px; color: rgba(0, 0, 0, .45); }
+.ad-wa-preview__botao {
+  text-align: center;
+  font-size: 13px;
+  color: #027eb5; /* azul de link do WhatsApp escurecido pra 4.5:1 sobre o balão branco */
+  border-top: 1px solid rgba(0, 0, 0, .1);
+  padding-top: 8px;
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ad-wa-preview__botao-hint {
+  font-size: 11px;
+  color: rgba(0, 0, 0, .45);
+  word-break: break-all;
+}
+
+/* Conteúdo aprovado pela Meta: rótulo em Caption + valor em texto corrido, sem painel extra. */
+.ad-template-detalhes { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ad-template-detalhes__label { font: var(--type-caption); font-weight: 500; color: var(--text-muted); margin-top: var(--space-3); }
+.ad-template-detalhes__label:first-child { margin-top: 0; }
+.ad-template-detalhes__valor { font: var(--type-body); color: var(--text-primary); white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; }
+.ad-template-detalhes__ressalva { font: var(--type-caption); color: var(--text-muted); margin-top: var(--space-4); max-width: 72ch; }
+
+/* ── Vínculo evento→template — compartilhado entre /admin/automacoes e /admin/templates ── */
+/* Linha de vínculo evento → mensagem. Fica dentro de um painel, então é linha com divisória, não card (DESIGN.md › No Nesting). */
+.ad-vinculo-card {
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+.ad-vinculo-card:first-child { padding-top: 0; }
+.ad-vinculo-card:last-child { border-bottom: 0; }
+.ad-evento-codigo { font: 400 12px/16px var(--font-mono); color: var(--text-muted); }
+.ad-vinculo-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ad-vinculo-topo .pa-btn--ghost, .ad-vinculo-topo__acao { margin-left: auto; }
+
+.ad-vinculo-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.ad-vinculo-form-inline { display: flex; flex-direction: column; gap: var(--space-4); }
+/* Formulários de vínculo seguem a largura de formulário (DESIGN.md › Content-Width). */
+.ad-vinculo-form, .ad-vinculo-form-inline { max-width: var(--form-max); min-width: 0; }
+
+.ad-vinculo-vars { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.ad-vinculo-botoes { display: flex; flex-direction: column; gap: 6px; }
+.ad-vinculo-botao-fixo { font-size: 12px; color: var(--text-muted); }
+
+.ad-vinculo-carrinho {
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.ad-vinculo-checar { display: flex; align-items: center; gap: var(--space-2); font: var(--type-body-dense); color: var(--text-primary); cursor: pointer; }
+.ad-vinculo-checar input { width: 16px; height: 16px; margin: 0; flex-shrink: 0; }
+
+.ad-vinculo-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+.ad-vinculo-add > .ds-input { flex: 1 1 240px; min-width: 0; } /* visual vem de .ds-input/.ds-select */
+.ad-vinculo-add__loja { flex: 0 1 220px; min-width: 0; }
+.ad-vinculo-add > .ds-form-error { flex-basis: 100%; }
+.ad-template-automacao > .ad-vinculo-form-inline { margin-top: var(--space-4); }
+
+.ad-vinculo-add .ad-evento-autocomplete { flex: 1 1 240px; min-width: 0; position: relative; }
+.ad-evento-autocomplete .ds-input { width: 100%; }
+.ad-evento-autocomplete__lista {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-overlay);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: var(--z-dropdown, 20);
+  padding: var(--space-1);
+}
+.ad-evento-autocomplete__item { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); padding: 6px var(--space-2); border-radius: var(--radius-xs); font: var(--type-body-dense); color: var(--text-primary); cursor: pointer; }
+.ad-evento-autocomplete__item:hover, .ad-evento-autocomplete__item--ativa { background: var(--surface-2); }
+
+/* ── Layout de 2 colunas (form + preview) no desktop ────────────────── */
+/* Formulário + prévia: 1 coluna até 1100px; formulário flexível + prévia fixa de 340px acima disso.
+   Grade (não flex com base mínima de 420px, que estourava telas menores que isso). */
+.ad-template-novo-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.ad-template-novo-layout__form, .ad-template-novo-layout__preview { min-width: 0; }
+@media (min-width: 1100px) {
+  .ad-template-novo-layout { grid-template-columns: minmax(0, 1fr) 340px; }
+  .ad-template-novo-layout__preview { position: sticky; top: calc(var(--topbar-height) + var(--space-4)); }
+}
+@media (max-width: 767px) {
+  .ad-wa-preview { position: static; }
+}
+
+/* ── Amostra de localização (2 campos lado a lado) ────────────────── */
+.ad-campo-linha { display: flex; gap: 12px; }
+.ad-campo-linha > * { flex: 1; min-width: 0; }

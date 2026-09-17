@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Oria — Painel de gestão para lojas</title>
+  <meta name="description" content="Oria reúne pedidos, resultado financeiro, recuperação de carrinho e desempenho de anúncios da sua loja em um só painel." />
+  <link rel="canonical" href="https://orgulhoregional.com.br/oria" />
+  <meta name="robots" content="index, follow" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://orgulhoregional.com.br/oria" />
+  <meta property="og:title" content="Oria — Painel de gestão para lojas" />
+  <meta property="og:description" content="Pedidos, financeiro, recuperação de carrinho e anúncios da sua loja em um só lugar." />
+  <meta property="og:locale" content="pt_BR" />
+  <meta property="og:site_name" content="Oria" />
+  <meta property="og:image" content="https://orgulhoregional.com.br/assets/oria/oria-logo.png" />
+  <meta property="og:image:alt" content="Oria" />
+  <link rel="icon" type="image/png" href="/assets/oria/oria-simbolo.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Mesmos tokens do painel (src/admin/design-system/tokens-base.css): esta página é a face
+       pública do Oria, então precisa parecer o produto — e o verde é o mesmo do logotipo que está
+       na tela de consentimento do Google. Consistência de marca é parte do que a verificação olha. */
+    :root {
+      --bg-app:       #0B121A;
+      --bg-deep:      #070C11;
+      --surface-1:    #111A24;
+      --surface-2:    #16212D;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.09);
+      --text-primary: #F3F6F9;
+      --text-secondary: #A9B4C0;
+      --text-muted:   #8390A0;
+      --accent:       #35D07F;
+      --accent-hover: #4FD98F;
+      --accent-tint:  rgba(53, 208, 127, 0.12);
+      --on-accent:    #06140C;
+      --info:         #34B7EB;
+      --font-sans: 'DM Sans', Inter, system-ui, -apple-system, sans-serif;
+      --font-wordmark: 'Fraunces', Georgia, serif;
+      color-scheme: dark;
+    }
+
+    body {
+      background: var(--bg-app);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); }
+    a:hover, a:focus-visible { color: var(--accent-hover); }
+
+    .envoltorio { margin: 0 auto; max-width: 880px; padding-inline: 24px; }
+
+    /* ── Topo ───────────────────────────────────────────────────────────── */
+    .topo {
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      gap: 12px;
+      padding-block: 20px;
+    }
+
+    .marca {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    /* O mesmo símbolo que está na tela de consentimento do Google — a verificação compara a marca
+       dos dois lados. */
+    .marca__simbolo { display: block; height: 32px; width: auto; }
+
+    .marca__nome {
+      color: var(--text-primary);
+      font-family: var(--font-wordmark);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Herói ──────────────────────────────────────────────────────────── */
+    .heroi { padding-block: 72px 56px; }
+
+    .heroi h1 {
+      font-size: clamp(32px, 6vw, 46px);
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      line-height: 1.12;
+      max-width: 17ch;
+    }
+
+    .heroi h1 em { color: var(--accent); font-style: normal; }
+
+    .heroi p {
+      color: var(--text-secondary);
+      font-size: clamp(17px, 2.4vw, 19px);
+      margin-top: 20px;
+      max-width: 60ch;
+    }
+
+    .acoes { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+
+    .botao {
+      border-radius: 8px;
+      display: inline-block;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 11px 20px;
+      text-decoration: none;
+      transition: background-color .15s ease, border-color .15s ease;
+    }
+    .botao--principal { background: var(--accent); color: var(--on-accent); }
+    .botao--principal:hover, .botao--principal:focus-visible { background: var(--accent-hover); color: var(--on-accent); }
+    .botao--secundario { border: 1px solid var(--border-default); color: var(--text-primary); }
+    .botao--secundario:hover, .botao--secundario:focus-visible { border-color: var(--accent); color: var(--text-primary); }
+
+    /* ── Seções ─────────────────────────────────────────────────────────── */
+    section { padding-block: 44px; }
+    section + section { border-top: 1px solid var(--border-subtle); }
+
+    h2 {
+      font-size: clamp(22px, 3.4vw, 27px);
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+
+    .subtitulo { color: var(--text-secondary); margin-top: 12px; max-width: 62ch; }
+
+    .grade {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      margin-top: 28px;
+    }
+
+    .cartao {
+      background: var(--surface-1);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 22px;
+    }
+
+    .cartao h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .cartao p { color: var(--text-secondary); font-size: 15px; }
+
+    .lista { list-style: none; margin-top: 22px; }
+    .lista li {
+      border-left: 2px solid var(--accent-tint);
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      padding-left: 18px;
+    }
+    .lista strong { color: var(--text-primary); font-weight: 600; }
+
+    /* Bloco dos dados do Google: é o que a verificação lê com mais atenção, então fica destacado
+       do resto em vez de diluído entre as features. */
+    .destaque {
+      background: var(--surface-2);
+      border: 1px solid var(--border-default);
+      border-radius: 12px;
+      margin-top: 26px;
+      padding: 26px;
+    }
+    .destaque h3 { font-size: 17px; font-weight: 600; margin-bottom: 10px; }
+    .destaque p { color: var(--text-secondary); }
+    .destaque p + p { margin-top: 12px; }
+
+    .etiqueta {
+      background: var(--accent-tint);
+      border-radius: 999px;
+      color: var(--accent);
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      margin-bottom: 14px;
+      padding: 4px 11px;
+      text-transform: uppercase;
+    }
+
+    /* ── Rodapé ─────────────────────────────────────────────────────────── */
+    .rodape {
+      background: var(--bg-deep);
+      border-top: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 40px;
+      padding-block: 32px;
+    }
+    .rodape__linhas { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; }
+    .rodape a { color: var(--text-secondary); text-decoration: none; }
+    .rodape a:hover, .rodape a:focus-visible { color: var(--accent); }
+    .rodape nav { display: flex; flex-wrap: wrap; gap: 20px; }
+
+    @media (max-width: 600px) {
+      .heroi { padding-block: 48px 40px; }
+      section { padding-block: 34px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topo">
+    <div class="envoltorio" style="display:flex;align-items:center;gap:12px;width:100%">
+      <a class="marca" href="/oria">
+        <img class="marca__simbolo" src="/assets/oria/oria-simbolo.png" alt="" width="41" height="32" />
+        <span class="marca__nome">Oria</span>
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <div class="envoltorio">
+      <section class="heroi">
+        <!-- A manchete começa com o nome sozinho, sem o artigo "O" antes. A reprovação anterior foi
+             por "o nome do app não corresponde ao da página inicial", e quem revisa pode não ler
+             português: "O Oria" corre o risco de ser lido como se o nome fosse "O Oria". -->
+        <h1><em>Oria</em> reúne a operação da sua loja em um só painel.</h1>
+        <p>
+          <strong>Oria é um painel de gestão para lojas.</strong> Pedidos, resultado financeiro,
+          recuperação de carrinho abandonado e desempenho dos anúncios — lado a lado, no mesmo
+          lugar. Em vez de abrir cinco ferramentas para entender um dia de vendas, você abre uma.
+        </p>
+        <div class="acoes">
+          <a class="botao botao--principal" href="/admin">Entrar no painel</a>
+          <a class="botao botao--secundario" href="/politica-de-privacidade">Política de Privacidade</a>
+        </div>
+      </section>
+
+      <section>
+        <h2>O que o Oria faz</h2>
+        <p class="subtitulo">
+          É um painel de gestão de uso restrito: cada loja acessa apenas os próprios dados, com
+          login e senha.
+        </p>
+        <div class="grade">
+          <article class="cartao">
+            <h3>Pedidos e produção</h3>
+            <p>
+              Todos os pedidos da loja em uma lista só, com status de pagamento, de produção e de
+              entrega — sem depender de abrir a plataforma de vendas.
+            </p>
+          </article>
+          <article class="cartao">
+            <h3>Resultado financeiro</h3>
+            <p>
+              Faturamento, custo de produção, gasto com mídia e o que sobra de fato. Por período e
+              por produto.
+            </p>
+          </article>
+          <article class="cartao">
+            <h3>Recuperação de carrinho</h3>
+            <p>
+              Identifica quem deixou o carrinho para trás e envia uma mensagem por WhatsApp — e nunca
+              envia para quem já comprou.
+            </p>
+          </article>
+          <article class="cartao">
+            <h3>Desempenho de anúncios</h3>
+            <p>
+              Investimento, alcance e retorno das campanhas, comparados com as vendas reais do mesmo
+              período.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <span class="etiqueta">Integrações</span>
+        <h2>Como o Oria usa dados de contas conectadas</h2>
+        <p class="subtitulo">
+          Todas as integrações são opcionais, autorizadas pela própria pessoa responsável pela loja e
+          sempre em modo de <strong>somente leitura</strong>. Podem ser desconectadas a qualquer
+          momento.
+        </p>
+
+        <div class="destaque">
+          <h3>Google Analytics</h3>
+          <p>
+            Quando a loja conecta a conta Google, o Oria lê as métricas da propriedade escolhida no
+            Google Analytics — sessões, origens de tráfego e conversões — e as exibe no painel, ao
+            lado dos pedidos e do investimento em anúncios. É essa junção que permite responder “de
+            onde veio a venda de ontem” sem alternar entre ferramentas.
+          </p>
+          <p>
+            O acesso pedido é <strong>somente leitura</strong> (<code>analytics.readonly</code>) mais
+            o endereço de e-mail da conta, usado apenas para mostrar qual conta está conectada. O
+            Oria <strong>não altera, não cria e não apaga</strong> nada na conta Google, não
+            compartilha esses dados com terceiros e não os usa para publicidade nem para treinar
+            modelos de inteligência artificial.
+          </p>
+          <p>
+            O uso das informações recebidas das APIs do Google obedece à
+            <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Política de Dados do Usuário dos Serviços de API do Google</a>,
+            incluindo os requisitos de Uso Limitado. Os detalhes estão na
+            <a href="/politica-de-privacidade">Política de Privacidade</a>.
+          </p>
+        </div>
+
+        <ul class="lista">
+          <li>
+            <strong>Meta (Facebook e Instagram):</strong> leitura do desempenho das campanhas de
+            anúncios. O Oria não cria, não pausa e não edita campanhas.
+          </li>
+          <li>
+            <strong>WhatsApp:</strong> envio de mensagens sobre o pedido e de recuperação de
+            carrinho, para o número que o comprador informou na compra.
+          </li>
+          <li>
+            <strong>Plataforma de vendas:</strong> leitura dos pedidos, itens e status para montar o
+            painel.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Quem opera o Oria</h2>
+        <p class="subtitulo">
+          O Oria é operado pelo Orgulho Regional, que também o utiliza na própria loja. Dúvidas sobre
+          o app, sobre dados ou sobre privacidade:
+          <a href="mailto:tomazi.brand@gmail.com">tomazi.brand@gmail.com</a>.
+        </p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="rodape">
+    <div class="envoltorio rodape__linhas">
+      <span>© 2026 Oria</span>
+      <nav>
+        <a href="/politica-de-privacidade">Política de Privacidade</a>
+        <a href="/admin">Entrar no painel</a>
+        <a href="mailto:tomazi.brand@gmail.com">Contato</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

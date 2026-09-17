@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Envio WhatsApp</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topo">
+      <div>
+        <h1>Envio WhatsApp</h1>
+        <p class="sub" id="versao">—</p>
+      </div>
+      <span class="badge" id="badge-situacao">Pausado</span>
+    </header>
+
+    <section class="card">
+      <p class="detalhe" id="detalhe">Pausado</p>
+      <div class="numeros">
+        <div><strong id="enviadas">0</strong><span>enviadas nesta sessão</span></div>
+        <div><strong id="falhas">0</strong><span>falhas</span></div>
+        <div><strong id="ultimo">—</strong><span>último envio</span></div>
+      </div>
+      <div class="acoes">
+        <button type="button" class="btn btn--primario" id="btn-iniciar">Iniciar envio</button>
+        <button type="button" class="btn" id="btn-pausar" hidden>Pausar</button>
+      </div>
+      <p class="msg" id="msg-envio" role="status"></p>
+      <p class="aviso">
+        Durante o envio o app abre a conversa e aperta <kbd>Enter</kbd> por você. Ele só age com o computador parado e com o
+        WhatsApp na frente — se você mexer, ele espera.
+      </p>
+    </section>
+
+    <section class="card" id="card-permissao" hidden>
+      <h2>Permissão de Acessibilidade</h2>
+      <p class="texto">O macOS precisa liberar o app pra ele conseguir apertar <kbd>Enter</kbd> no WhatsApp.</p>
+      <p class="texto" id="permissao-dev" hidden>
+        Rodando pelo terminal (<code>npm start</code>), quem aparece na lista é o programa onde o terminal está aberto — Cursor,
+        Terminal, iTerm… Ligue ele. No app instalado aparece "Envio WhatsApp".
+      </p>
+      <div class="acoes">
+        <button type="button" class="btn" id="btn-permissao">Abrir permissão</button>
+        <button type="button" class="btn" id="btn-permissao-verificar">Já liberei</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Conexão com o painel</h2>
+      <label class="campo">
+        <span>URL do painel</span>
+        <input type="url" id="painel-url" placeholder="https://seu-painel.com.br" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="campo">
+        <span>Token <em id="token-status"></em></span>
+        <input type="password" id="token" placeholder="Cole o token gerado em Integrações → WhatsApp" autocomplete="off" spellcheck="false">
+      </label>
+      <button type="button" class="btn" id="btn-salvar-conexao">Salvar conexão</button>
+      <p class="msg" id="msg-conexao" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Enviar por</h2>
+      <div class="opcoes" role="radiogroup">
+        <label class="opcao">
+          <input type="radio" name="modo" value="desktop">
+          <span><strong>WhatsApp Desktop</strong><small>App do WhatsApp instalado e logado. Mais rápido.</small></span>
+        </label>
+        <label class="opcao">
+          <input type="radio" name="modo" value="navegador">
+          <span><strong>WhatsApp Web</strong><small>Abre uma aba no navegador padrão, envia e fecha a aba. Deixe o WhatsApp Web logado nele.</small></span>
+        </label>
+      </div>
+
+      <details class="avancado">
+        <summary>Ajustes avançados</summary>
+        <div class="grade">
+          <label class="campo"><span>Espera abrir (Desktop, s)</span><input type="number" id="esperaDesktopSeg" min="2" max="30"></label>
+          <label class="campo"><span>Espera abrir (Web, s)</span><input type="number" id="esperaNavegadorSeg" min="5" max="60"></label>
+          <label class="campo"><span>Computador parado há (s)</span><input type="number" id="ociosoSeg" min="0" max="120"></label>
+          <label class="campo"><span>Mensagens por lote</span><input type="number" id="loteAntesPausa" min="1" max="200"></label>
+          <label class="campo"><span>Intervalo mínimo (s)</span><input type="number" id="pausaMinSeg" min="5" max="600"></label>
+          <label class="campo"><span>Intervalo máximo (s)</span><input type="number" id="pausaMaxSeg" min="5" max="900"></label>
+          <label class="campo"><span>Pausa entre lotes mín. (s)</span><input type="number" id="pausaLongaMinSeg" min="30" max="3600"></label>
+          <label class="campo"><span>Pausa entre lotes máx. (s)</span><input type="number" id="pausaLongaMaxSeg" min="30" max="7200"></label>
+        </div>
+      </details>
+
+      <label class="check"><input type="checkbox" id="iniciarComSistema"> Abrir o app ao ligar o computador</label>
+      <p class="dica" id="dica-inicio" hidden>Disponível só no app instalado.</p>
+      <button type="button" class="btn" id="btn-salvar-config">Salvar ajustes</button>
+      <p class="msg" id="msg-config" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Testar</h2>
+      <p class="texto">Envia uma mensagem de teste pro número informado, sem usar a fila e sem contar no limite do dia.</p>
+      <div class="linha">
+        <input type="tel" id="telefone-teste" placeholder="5548999999999" inputmode="numeric">
+        <button type="button" class="btn" id="btn-testar">Testar</button>
+      </div>
+      <p class="msg" id="msg-teste" role="status"></p>
+    </section>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>

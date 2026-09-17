@@ -1,0 +1,47 @@
+{
+  "name": "orgulho-envio-whatsapp",
+  "productName": "Envio WhatsApp",
+  "version": "0.1.0",
+  "description": "Executa a fila de envio do WhatsApp Web do painel Orgulho Regional pelo WhatsApp Desktop ou pelo navegador.",
+  "main": "src/main.js",
+  "private": true,
+  "author": "Orgulho Regional",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "icones": "node scripts/gerar-icones.js",
+    "dist:mac": "electron-builder --mac --arm64 --x64",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "br.com.orgulhoregional.enviowhatsapp",
+    "productName": "Envio WhatsApp",
+    "files": ["src/**/*", "assets/**/*", "package.json"],
+    "directories": { "output": "dist" },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.business",
+      "icon": "assets/icon.png",
+      "identity": "-",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSAppleEventsUsageDescription": "O app usa o System Events para apertar Enter no WhatsApp durante o envio das mensagens."
+      }
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

@@ -1,0 +1,57 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/criativos — Gerador de Criativos (Etapa 2, funcional). Só o
+   layout que components.css não cobre: formulário + prévia lado a lado
+   no desktop, empilhados abaixo de 1024px, e a grade de miniaturas do
+   lote. Lapidação visual fica para a Etapa 3.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.criativos-layout {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: start;
+}
+.criativos-layout__preview { position: sticky; top: var(--space-4); }
+@media (max-width: 1023px) {
+  .criativos-layout { grid-template-columns: minmax(0, 1fr); }
+  .criativos-layout__preview { position: static; }
+}
+
+.criativos-lista-check { display: grid; gap: var(--space-2); }
+
+.criativos-resumo { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-2) var(--space-4); margin: 0; }
+.criativos-resumo dt { font: var(--type-body-dense); color: var(--text-muted); }
+.criativos-resumo dd { margin: 0; font: var(--type-body-dense); color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+
+.criativos-grade { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.criativos-item { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.criativos-item__thumb {
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  max-width: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2, transparent);
+}
+.criativos-item__thumb--vazio { display: flex; align-items: center; justify-content: center; color: var(--text-muted); font: var(--type-body-dense); }
+.criativos-item__meta { font: var(--type-body-dense); color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* Passo a passo do "Preencher com ChatGPT" (KitEditor) */
+.criativos-passos {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
+  font: var(--type-body);
+  color: var(--text-primary);
+}
+.criativos-passos__acao { margin-top: var(--space-2); }
+
+/* Prévia: testar o prompt no ChatGPT antes de gerar o lote */
+.criativos-prompts { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.criativos-prompts__refs { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: 0 0 var(--space-3); padding: 0; list-style: none; }
+.criativos-prompts__ref { display: grid; gap: var(--space-1); width: 96px; font: var(--type-body-dense); color: var(--text-muted); overflow-wrap: anywhere; }
+.criativos-prompts__ref img { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-2); }
+.criativos-prompts__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.criativos-prompts__texto { white-space: pre-wrap; overflow-wrap: anywhere; }

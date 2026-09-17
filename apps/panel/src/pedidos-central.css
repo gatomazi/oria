@@ -1,0 +1,73 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/pedidos-central — Central de Pedidos (Fase 3, docs/plan.md)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pc-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: var(--space-5);
+}
+.pc-filtros select,
+.pc-filtros input[type="date"] {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.pc-paginacao {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: var(--space-4) var(--space-5);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.pc-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-default);
+  margin-bottom: var(--space-4);
+}
+.pc-tab {
+  border: none;
+  background: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.pc-tab--ativa { color: var(--accent); border-bottom-color: var(--accent); }
+
+.pc-drawer-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--space-4); }
+.pc-drawer-header__badges { display: flex; gap: 6px; align-items: center; }
+
+.pc-item-linha {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-default);
+  font-size: 13px;
+}
+.pc-item-linha:last-child { border-bottom: none; }
+
+.pc-kv { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.pc-kv__row { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--border-default); padding-bottom: 8px; }
+.pc-kv__row:last-child { border-bottom: none; }
+.pc-kv__label { color: var(--text-secondary); }
+.pc-kv__value { font-weight: 600; text-align: right; }
+
+.pc-timeline { list-style: none; margin: 0; padding: 0; }
+.pc-timeline li { padding: 8px 0; border-bottom: 1px dashed var(--border-default); font-size: 13px; }
+.pc-timeline li:last-child { border-bottom: none; }
+.pc-timeline time { display: block; font-size: 11px; color: var(--text-muted); }

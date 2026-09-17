@@ -1,0 +1,153 @@
+import { useEffect, useRef, useState } from 'react';
+import { Button, Card, ConfirmDialog, Field, Input, ProgressBar, Select, StatusBadge } from '../../components/ds';
+import { formatData, plural } from '../../lib/format';
+import { adminStores } from '../../state/adminStores';
+import {
+  getBackfillPedidosJob,
+  iniciarBackfillPedidos,
+  listarBackfillsPedidos,
+  type PedidosBackfillJob,
+} from '../../api/pedidosBackfill';
+
+// O sync incremental de pedidos (server.js `syncPedidosLoja`) só busca desde o último sync (ou
+// os últimos 30 dias na 1ª ativação da loja) — pedidos mais antigos nunca entram no cache local,
+// o que sub-contava clientes em segmentos de campanha (achado real, 2026-09-10: 712 clientes
+// contra 4000+ pedidos históricos). Este card dispara um backfill sob demanda, reexecutável a
+// qualquer momento (ex.: loja nova, gap depois de instabilidade).
+export function BackfillPedidosCard({ lojas }: { lojas: string[] }) {
+  const [loja, setLoja] = useState(lojas[0] || '');
+  const [desde, setDesde] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
+  const [jobAtivo, setJobAtivo] = useState<PedidosBackfillJob | null>(null);
+  const [historico, setHistorico] = useState<PedidosBackfillJob[]>([]);
+  const [erro, setErro] = useState('');
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function carregarHistorico() {
+    listarBackfillsPedidos()
+      .then((r) => {
+        setHistorico(r.jobs);
+        const rodando = r.jobs.find((j) => j.status === 'processando');
+        if (rodando) setJobAtivo(rodando);
+      })
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    if (loja) carregarHistorico();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loja]);
+
+  useEffect(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (!jobAtivo || jobAtivo.status !== 'processando') return;
+    pollRef.current = setInterval(() => {
+      getBackfillPedidosJob(jobAtivo.id)
+        .then((r) => {
+          setJobAtivo(r.job);
+          if (r.job.status !== 'processando') carregarHistorico();
+        })
+        .catch(() => {});
+    }, 3000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobAtivo, loja]);
+
+  async function confirmar() {
+    setErro('');
+    const r = await iniciarBackfillPedidos(desde || undefined);
+    setJobAtivo({
+      id: r.jobId,
+      loja,
+      desde: desde || '2015-01-01',
+      status: 'processando',
+      paginas_processadas: 0,
+      paginas_total: null,
+      pedidos_processados: 0,
+      erro: null,
+      criado_em: new Date().toISOString(),
+      atualizado_em: new Date().toISOString(),
+    });
+  }
+
+  const progresso = jobAtivo?.paginas_total ? Math.round((jobAtivo.paginas_processadas / jobAtivo.paginas_total) * 100) : 0;
+  const rodando = jobAtivo?.status === 'processando';
+
+  return (
+    <Card title="Sincronização histórica de pedidos">
+      <p className="pc-nota">
+        O sync automático só cobre os últimos 30 dias a partir da 1ª ativação da loja. Use isto pra trazer pedidos
+        mais antigos pro cache local (necessário pra segmentos de campanha contarem clientes de compras antigas).
+      </p>
+
+      <div className="ds-form-row">
+        <Field label="Loja">
+          <Select value={loja} onChange={(e) => setLoja(e.target.value)} disabled={rodando || !lojas.length}>
+            {!lojas.length && <option value="">Nenhuma loja conectada</option>}
+            {lojas.map((id) => (
+              <option key={id} value={id}>{adminStores.name(id)}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Desde (opcional)" hint="Padrão: 2015-01-01">
+          <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} disabled={rodando} />
+        </Field>
+        <Button className="ds-form-row__action" variant="secondary" onClick={() => setConfirmando(true)} disabled={rodando || !loja}>
+          {rodando ? 'Sincronizando…' : 'Sincronizar histórico completo'}
+        </Button>
+      </div>
+
+      {erro && <p className="ds-form-error" role="alert">{erro}</p>}
+
+      {jobAtivo && (
+        <div className="ds-stack ds-bloco-seguinte">
+          <div className="ds-status-linha">
+            <StatusBadge
+              tone={jobAtivo.status === 'concluido' ? 'success' : jobAtivo.status === 'falhou' ? 'danger' : 'info'}
+              label={jobAtivo.status === 'concluido' ? 'Concluído' : jobAtivo.status === 'falhou' ? 'Falhou' : 'Processando'}
+            />
+            <span className="ds-status-linha__meta">
+              {jobAtivo.paginas_total
+                ? `página ${jobAtivo.paginas_processadas}/${jobAtivo.paginas_total} — ${plural(jobAtivo.pedidos_processados, 'pedido processado', 'pedidos processados')}`
+                : 'Buscando pedidos na Ink…'}
+            </span>
+          </div>
+          {rodando && jobAtivo.paginas_total != null && (
+            <ProgressBar value={progresso} label="Progresso da sincronização histórica" showValue />
+          )}
+          {jobAtivo.status === 'falhou' && jobAtivo.erro && <p className="pc-nota">{jobAtivo.erro}</p>}
+        </div>
+      )}
+
+      {historico.length > 0 && (
+        <div className="ds-bloco-seguinte">
+          <p className="pc-nota">Execuções anteriores nesta loja:</p>
+          <ul className="ds-lista-meta">
+            {historico.map((j) => (
+              <li key={j.id}>
+                {formatData(j.criado_em)} — desde {j.desde} — {j.status} — {plural(j.pedidos_processados, 'pedido', 'pedidos')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmando}
+        onClose={() => setConfirmando(false)}
+        title="Sincronizar histórico completo de pedidos"
+        description={`Isso vai buscar TODOS os pedidos da Ink de ${adminStores.name(loja)} desde ${desde || '2015-01-01'} e pode demorar. O sync incremental normal não é afetado.`}
+        confirmLabel="Sincronizar"
+        confirmVariant="primary"
+        onConfirm={async () => {
+          try {
+            await confirmar();
+          } catch (err) {
+            setErro((err as Error).message);
+            throw err;
+          }
+        }}
+      />
+    </Card>
+  );
+}

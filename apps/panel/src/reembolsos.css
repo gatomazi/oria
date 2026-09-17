@@ -1,0 +1,12 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/reembolsos — Fase 5, docs/plan.md
+   Reaproveita .pc-* (pedidos-central.css) e .tn-* (trocas-nova.css).
+   ═══════════════════════════════════════════════════════════════════ */
+
+.rb-busca {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rb-busca input[type="number"] { width: 140px; }

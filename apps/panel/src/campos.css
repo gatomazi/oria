@@ -1,0 +1,13 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/campos — migrado pro design system (DS.card/field/button).
+   Reaproveita .ad-vinculo-topo/.ad-vinculo-vars de templates.css (compartilhadas
+   com o editor de template) e .pc-nota de pedidos-central.css.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ad-campos-grid { display: flex; flex-direction: column; gap: 20px; }
+.ad-campos-lista { display: flex; flex-direction: column; }
+.ad-campo-item { padding-block: var(--space-3); border-bottom: 1px solid var(--border-subtle); min-width: 0; }
+.ad-campo-item:first-child { padding-top: 0; }
+.ad-campo-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.ad-campo-item .ad-vinculo-topo { margin-bottom: 0; }
+.ad-campo-item .ds-form { margin-top: var(--space-4); }

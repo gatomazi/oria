@@ -1,0 +1,40 @@
+import { api } from './client';
+
+// Tipos e chamadas pra /api/admin/agrupamentos/* — porte do que src/agrupamentos.js já fazia.
+export interface Agrupamento {
+  id: number;
+  default_product_id: number;
+  product_ids: number[];
+  // Só na listagem (GET .../:loja) — resolvido no backend a partir do produto de vitrine.
+  defaultProductName?: string | null;
+  defaultProductImageUrl?: string | null;
+}
+
+export interface ProdutoResumo {
+  id: number;
+  name: string;
+  product_type?: { name: string } | null;
+}
+
+export function listAgrupamentos() {
+  return api<{ agrupamentos: Agrupamento[] }>(`/api/admin/agrupamentos`);
+}
+
+export function getAgrupamento(id: number) {
+  return api<{ loja: string; agrupamento: Agrupamento; produtos: ProdutoResumo[] }>(`/api/admin/agrupamentos/${id}`);
+}
+
+export function criarAgrupamento(productIds: number[]) {
+  return api<{ loja: string; agrupamento: Agrupamento }>(`/api/admin/agrupamentos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productIds }),
+  });
+}
+
+export function removerProdutoDoAgrupamento(clusterId: number, produtoId: number) {
+  return api<{ loja: string; agrupamento: Agrupamento | null; dissolvido: boolean }>(
+    `/api/admin/agrupamentos/${clusterId}/produtos/${produtoId}`,
+    { method: 'DELETE' },
+  );
+}

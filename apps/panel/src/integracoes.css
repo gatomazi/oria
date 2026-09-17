@@ -1,0 +1,31 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/integracoes — migrado pro design system (DS.card/dataTable/
+   statusBadge). Reaproveita .pc-nota de pedidos-central.css.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.ad-integracoes-grid { display: flex; flex-direction: column; gap: 20px; }
+
+.ad-integracao-item__topo { display: flex; align-items: center; gap: 8px; }
+
+/* Google Analytics 4 — 1 linha por loja, expande pra escolher/trocar a propriedade quando
+   preciso (mesma anatomia de "linha com divisória" das outras integrações — sem card dentro de
+   card, DESIGN.md › No Nesting). */
+.ga-linha { padding-block: var(--space-3); border-bottom: 1px solid var(--border-subtle); min-width: 0; }
+.ga-linha:first-child { padding-top: 0; }
+.ga-linha:last-child { border-bottom: 0; padding-bottom: 0; }
+.ga-linha__topo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ga-linha__loja { font: var(--type-body-dense); font-weight: 600; color: var(--text-primary); }
+.ga-linha__meta { font: var(--type-caption); color: var(--text-muted); }
+.ga-linha__acao { margin-left: auto; display: flex; gap: var(--space-2); }
+.ga-linha__form {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: var(--form-max);
+}
+.ga-linha__form .ds-select { flex: 1 1 240px; min-width: 0; }
+.ga-linha__erro { font: var(--type-caption); color: var(--danger); margin-top: var(--space-1); overflow-wrap: anywhere; }

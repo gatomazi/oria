@@ -1,0 +1,71 @@
+{
+  "versao": 1,
+  "organizations": [
+    {
+      "id": "<ORGANIZATION_ID_USE_ORIGENS>",
+      "nome": "Use Origens",
+      "store": {
+        "id": "<STORE_ID_USE_ORIGENS>",
+        "nome": "Use Origens",
+        "lojaLegada": "sul"
+      }
+    }
+  ],
+  "mapeamentos": [
+    {
+      "tipo": "loja",
+      "chave": "sul",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "loja",
+      "chave": "centro",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "loja",
+      "chave": "norte",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "instalacao",
+      "chave": "*",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "meta",
+      "chave": "*",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "google_ads",
+      "chave": "*",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "audit_log",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "media_assets",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "webhook_eventos",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "sem_loja",
+      "chave": "whatsapp_web_outbox",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    },
+    {
+      "tipo": "creative_tenant",
+      "chave": "<CREATIVE_TENANT_ID_ATUAL>",
+      "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>"
+    }
+  ]
+}

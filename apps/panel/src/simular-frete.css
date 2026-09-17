@@ -1,0 +1,6 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/simular-frete — ferramenta pequena, não precisa ocupar a
+   largura toda só pra CEP + Calcular (achado do refinamento visual).
+   ═══════════════════════════════════════════════════════════════════ */
+
+.sf-form-card { max-width: 400px; }

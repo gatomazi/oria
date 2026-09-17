@@ -1,0 +1,22 @@
+{
+  "versao": 1,
+  "cenario": "B",
+  "rollout": true,
+  "mapeamentoTenancy": "tenancy-scenario-b.json",
+  "creativeTenantLegado": "<CREATIVE_TENANT_ID_ATUAL>",
+  "organizations": [
+    { "id": "<ORGANIZATION_ID_USE_ORIGENS>", "entitlementsProfile": "../entitlements/tenant1-entitlements.json" }
+  ],
+  "owners": [
+    {
+      "email": "<EMAIL_DO_OWNER_USE_ORIGENS>",
+      "passwordHashEnv": "TENANT1_OWNER_PASSWORD_HASH",
+      "organizations": ["<ORGANIZATION_ID_USE_ORIGENS>"]
+    }
+  ],
+  "whatsapp": {
+    "waba": { "id": "<WABA_ID_ATUAL>", "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>" },
+    "phoneNumber": { "id": "<PHONE_NUMBER_ID_ATUAL>", "organizationId": "<ORGANIZATION_ID_USE_ORIGENS>" }
+  },
+  "inkWebhook": { "organizations": ["<ORGANIZATION_ID_USE_ORIGENS>"] }
+}

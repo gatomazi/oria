@@ -1,0 +1,65 @@
+name: CI
+
+# Postgres EFÊMERO, com TODAS as migrations rodando do zero a cada execução.
+#
+# Por que assim, e não com um banco pré-carregado: até `8a7ea3d` a suíte tinha 228 testes verdes e
+# 6 que se auto-pulavam por falta de `*_TEST_DATABASE_URL` — entre eles o ÚNICO teste de isolamento
+# por tenant do repositório. Um teste pulado é verde na saída do CI. A Fase 0 da productização
+# existe, em parte, para acabar com essa diferença entre "passou" e "não rodou".
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # `scripts/test-db.mjs` respeita TEST_DATABASE_URL e pula o Docker quando ela existe —
+      # aqui o banco é o serviço acima.
+      TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # --ignore-scripts pula o `postinstall`, que builda o admin. O build do frontend é um passo
+      # próprio (abaixo) para que a falha aponte para a etapa certa.
+      - run: npm ci --ignore-scripts
+
+      # Migrations do zero. Se qualquer uma falhar, o CI para aqui — é o mesmo gancho que o
+      # Pre-deploy Command do Railway usa em produção (OPS-11).
+      - name: migrations do zero
+        run: npm run migrate:up
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      # Idempotência: aplicar de novo não pode fazer nada nem falhar.
+      - name: migrations são idempotentes
+        run: npm run migrate:up
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: suíte completa (nenhum teste pode ser pulado)
+        run: npm test
+
+      - name: build do admin
+        run: npm run build

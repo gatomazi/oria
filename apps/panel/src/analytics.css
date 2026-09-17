@@ -1,0 +1,212 @@
+/* Analytics GA4 — funil, canais, dispositivos e mapa de calor.
+   Tudo em cima dos tokens do design system: nenhuma cor literal, nenhuma escala própria. */
+
+/* ── Barra de participação (usada em canais, dispositivos e na tabela de UTM) ───────────
+   O número continua sendo o dado; a barra é só o peso relativo, lida de relance. */
+.ga-barra {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+.ga-barra__preenchimento {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: var(--info);
+  transform-origin: left center;
+}
+.ga-barra__preenchimento--accent { background: var(--accent); }
+.ga-barra__preenchimento--neutro { background: var(--chart-neutral); }
+.ga-barra__preenchimento--sucesso { background: var(--success); }
+
+/* ── Funil de conversão ────────────────────────────────────────────────────────────────
+   Cada etapa é uma linha: rótulo, barra proporcional à 1ª etapa, valor absoluto.
+   A taxa de passagem fica ENTRE as etapas, que é onde a informação nasce. */
+.ga-funil { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.ga-funil__etapa {
+  display: grid;
+  grid-template-columns: 150px 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+.ga-funil__rotulo { font: var(--type-label); color: var(--text-secondary); min-width: 0; }
+.ga-funil__trilho {
+  height: 28px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+/* Preenchimento por transform (não por width), igual ao ProgressBar do DS. */
+.ga-funil__preenchimento {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  transform-origin: left center;
+}
+.ga-funil__preenchimento--info { background: var(--info-tint); box-shadow: inset -2px 0 0 var(--info); }
+.ga-funil__preenchimento--warning { background: var(--warning-tint); box-shadow: inset -2px 0 0 var(--warning); }
+.ga-funil__preenchimento--premium { background: var(--premium-tint); box-shadow: inset -2px 0 0 var(--premium); }
+.ga-funil__preenchimento--success { background: var(--success-tint); box-shadow: inset -2px 0 0 var(--success); }
+.ga-funil__valor {
+  font: var(--type-label);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+  text-align: right;
+}
+
+/* Taxa de passagem entre duas etapas. */
+.ga-funil__passagem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: 162px;
+  font: var(--type-caption);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.ga-funil__passagem::before {
+  content: '';
+  width: 1px;
+  height: 12px;
+  background: var(--border-strong);
+}
+
+.ga-funil__resumo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font: var(--type-label);
+  color: var(--text-secondary);
+}
+.ga-funil__resumo strong { font: var(--type-section-title); color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* ── Mapa de calor: sessões por dia da semana × hora ───────────────────────────────────
+   24 colunas fixas; no celular o bloco rola na horizontal dentro do próprio container. */
+.ga-heat__scroll { overflow-x: auto; }
+/* Coluna larga o bastante pra caber o número da célula ("1,2k") sem apertar. */
+.ga-heat {
+  display: grid;
+  grid-template-columns: 36px repeat(24, minmax(38px, 1fr));
+  gap: 2px;
+  min-width: 1000px;
+}
+.ga-heat__rotulo-hora,
+.ga-heat__rotulo-dia {
+  font: var(--type-micro);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+.ga-heat__rotulo-hora { justify-content: center; }
+.ga-heat__celula {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  font: 500 10px/14px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.ga-heat__legenda {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+/* Mesma rampa da célula (para em 55% de --info), senão a legenda promete uma cor que o mapa nunca usa. */
+.ga-heat__legenda-escala {
+  width: 96px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--surface-2), color-mix(in srgb, var(--info) 55%, var(--surface-2)));
+}
+
+/* ── Lista de canais / dispositivos ───────────────────────────────────────────────────── */
+.ga-lista { display: flex; flex-direction: column; }
+.ga-lista__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) repeat(3, minmax(0, auto));
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ga-lista__item:last-child { border-bottom: 0; }
+.ga-lista__nome { font: var(--type-label); color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ga-lista__metrica {
+  font: var(--type-body-dense);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 68px;
+}
+.ga-lista__metrica strong { color: var(--text-primary); font-weight: 500; }
+.ga-lista__cabecalho {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) repeat(3, minmax(0, auto));
+  gap: var(--space-3) var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+  font: var(--type-micro);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.ga-lista__cabecalho > span:not(:first-child):not(:nth-child(2)) { text-align: right; }
+
+@media (max-width: 700px) {
+  .ga-lista__item,
+  .ga-lista__cabecalho { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .ga-lista__item > .ga-lista__metrica--opcional,
+  .ga-lista__cabecalho > span.ga-lista__metrica--opcional { display: none; }
+  .ga-funil__etapa { grid-template-columns: 110px 1fr auto; }
+  .ga-funil__passagem { padding-left: 122px; }
+}
+
+/* ── Chip de valor UTM (source/medium/campaign) ────────────────────────────────────────
+   Literal técnico → fonte mono (DESIGN.md › Code Literal Rule). O tom só separa os campos
+   entre si; não carrega semântica de bom/ruim. */
+.ga-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px var(--space-1-5);
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  font: 400 11px/16px var(--font-mono);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ga-chip--source { color: var(--info); border-color: var(--info-tint); }
+.ga-chip--medium { color: var(--premium); border-color: var(--premium-tint); }
+.ga-chip--vazio { color: var(--text-disabled); font-family: var(--font-sans); }
+
+.ga-combo { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+
+/* Os 5 campos crus da combinação, no detalhe do drawer — mesma ideia do dl de wa-fila__detalhe. */
+.ga-utm-detalhe {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  align-items: center;
+}
+.ga-utm-detalhe dt { font: 400 11px/16px var(--font-mono); color: var(--text-muted); }
+.ga-utm-detalhe dd { margin: 0; min-width: 0; }
