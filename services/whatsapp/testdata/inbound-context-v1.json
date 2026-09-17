@@ -1,0 +1,65 @@
+{
+  "contract": "oria-whatsapp-context",
+  "version": 1,
+  "copies": [
+    "orgulhoregional: test/fixtures/whatsapp/inbound-context-v1.json",
+    "whatsapp-webhook-go: testdata/inbound-context-v1.json"
+  ],
+  "auth": {
+    "header": "X-Api-Key",
+    "panel_env": "WHATSAPP_SENDER_RESOLVER_KEY",
+    "service_env": "PANEL_SENDER_RESOLVER_KEY"
+  },
+  "endpoints": {
+    "inbound": {
+      "method": "POST",
+      "path": "/api/internal/whatsapp/inbound-context",
+      "request_fields": ["phone_number_id", "waba_id"],
+      "required_fields": ["waba_id"]
+    },
+    "ref": {
+      "method": "POST",
+      "path": "/api/internal/whatsapp/ref-context",
+      "request_fields": ["ref"],
+      "required_fields": ["ref"]
+    }
+  },
+  "response_fields": ["integration_id", "organization_id", "phone_number_id", "reply", "sender_ref", "waba_id"],
+  "reply_fields": ["notify_number", "redirect_message"],
+  "forbidden_response_fields": ["access_token", "token"],
+  "statuses": {
+    "invalid_request": 400,
+    "unauthorized": 401,
+    "feature_disabled": 403,
+    "unknown": 404,
+    "mismatch": 409,
+    "rate_limited": 429
+  },
+  "codes": {
+    "invalid_request": "CONTEXT_REQUEST_INVALID",
+    "unknown": "SENDER_UNKNOWN",
+    "mismatch": "SENDER_MISMATCH",
+    "changed": "SENDER_CHANGED",
+    "feature_disabled": "FEATURE_DISABLED"
+  },
+  "service_behavior": {
+    "drop_without_effect": [403, 404, 409],
+    "retry_later": [401, 429, 500, 502, 503, 504]
+  },
+  "examples": {
+    "inbound_request": { "waba_id": "2220000001", "phone_number_id": "1110000001" },
+    "inbound_request_waba_only": { "waba_id": "2220000001" },
+    "ref_request": { "ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc" },
+    "response": {
+      "organization_id": "a1000000-0000-4000-8000-000000000001",
+      "integration_id": "7",
+      "phone_number_id": "1110000001",
+      "waba_id": "2220000001",
+      "sender_ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc",
+      "reply": {
+        "redirect_message": "Olá! Este canal é automático.",
+        "notify_number": "5548900000000"
+      }
+    }
+  }
+}

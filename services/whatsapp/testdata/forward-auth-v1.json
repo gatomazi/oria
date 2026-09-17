@@ -1,0 +1,50 @@
+{
+  "contract": "oria-whatsapp-forward-auth",
+  "version": 1,
+  "copies": [
+    "orgulhoregional: test/fixtures/whatsapp/forward-auth-v1.json",
+    "whatsapp-webhook-go: testdata/forward-auth-v1.json"
+  ],
+  "request": {
+    "method": "POST",
+    "path": "/api/webhooks/whatsapp",
+    "content_type": "application/json"
+  },
+  "auth": {
+    "timestamp_header": "X-Oria-Forward-Timestamp",
+    "signature_header": "X-Oria-Forward-Signature",
+    "signature_scheme": "v1=",
+    "signed_payload": "timestamp + \".\" + raw_body",
+    "algorithm": "HMAC-SHA256, hex",
+    "panel_env": "WHATSAPP_WEBHOOK_SECRET",
+    "service_env": "WEBHOOK_FORWARD_SECRET",
+    "min_secret_length": 32,
+    "max_clock_skew_seconds": 300,
+    "forbidden_query_params": ["secret"]
+  },
+  "legacy_query_transition": {
+    "note": "rodada 19, §5: transição sem perda de status, desligada por padrão. Sem as flags vale só o bloco auth. Mesmo formato de fio; versão mantida",
+    "service_flag_env": "WEBHOOK_FORWARD_LEGACY_QUERY_SECRET",
+    "panel_flag_env": "WHATSAPP_WEBHOOK_LEGACY_QUERY_TOLERATED",
+    "flag_on": "1",
+    "flag_off": ["", "0"],
+    "flag_other_values": "erro de configuração (o boot para)",
+    "legacy_query_param": "secret",
+    "service_with_flag": "aceita URL com exatamente um parâmetro secret não vazio e envia a query E os headers de assinatura, mesmo corpo",
+    "query_secret_must_differ_from_signing_secret": true,
+    "panel_with_flag": "secret na query é ignorado (nunca comparado) se a assinatura for válida; sem assinatura válida → 401",
+    "legacy_panel": "autentica só por query.secret igual ao WHATSAPP_WEBHOOK_SECRET antigo e ignora os headers"
+  },
+  "statuses": {
+    "accepted": 200,
+    "unauthorized": 401,
+    "not_configured": 503
+  },
+  "test_vector": {
+    "note": "valor só de teste, não é segredo de ambiente nenhum",
+    "secret": "oria-forward-contract-test-vector-000000001",
+    "timestamp": "1790000000",
+    "body": "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"2220000001\",\"changes\":[]}]}",
+    "signature": "v1=d04a36b09150c806aa36f1dc06aeb9eaff14c336d4f7430b95908ab446b45ed9"
+  }
+}
