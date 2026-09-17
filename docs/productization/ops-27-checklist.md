@@ -95,4 +95,4 @@ sem/com assinatura e API key) roda junto, com a sua autorização explícita par
 Qualquer NO MATCH, 403 ou "nada chegou" mantém o rollout **NO-GO**.
 
 **Feito em 17/09/2026** para o ambiente atual: o `OPS-27.json` está registrado. Falta ainda o
-`OPS-10.json` (`NOT_APPLICABLE` com `reason` "absorvido por OPS-27").
+`OPS-10.json` — **registrado em 17/09/2026** como `NOT_APPLICABLE` / SUPERSEDED (PD-023 encerrou a dúvida arquitetural; o OPS-27 comprovou a parte operacional).

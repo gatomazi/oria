@@ -251,7 +251,9 @@ Nada aqui altera produção, exceto quando o passo diz "configurar": são variá
     Qualquer NO MATCH, 403 no evento real ou "nada chegou" mantém **NO-GO**.
     Registrado em `ops-evidence/OPS-27.json` (17/09/2026). Esta trava está liberada; as outras
     (demais OPS, infraestrutura do §20, releases, dogfood) **não**.
-- [ ] **OPS-10** — `NOT_APPLICABLE` com `reason` "absorvido por OPS-27".
+- [x] **OPS-10** — **NOT_APPLICABLE / SUPERSEDED** (17/09/2026, `ops-evidence/OPS-10.json`): a dúvida
+  arquitetural foi encerrada pela PD-023 e a validação operacional foi absorvida e comprovada pelo
+  OPS-27. O item continua no catálogo do gate, para preservar o histórico.
 
 ### 5.2 Infraestrutura e backup (OPS-01..08)
 
@@ -840,7 +842,7 @@ Nunca rotacionar enquanto qualquer ciphertext depender dele.
 | 01-05 | 5.2 | antes de tudo |
 | 06-08 | 5.2 | antes de tudo (re-registrar) |
 | 09 | 5.4 / 11 / 12 / 13.1 / 15.1 | estado atual antes; segredo novo + flag no Go (E); segredo novo + tolerância no painel (D'); Go sem query; fim da tolerância |
-| 10 | 5.1 | junto com OPS-27 (absorvido); falta o `OPS-10.json` com `NOT_APPLICABLE` + `reason` |
+| 10 | 5.1 | **NOT_APPLICABLE / SUPERSEDED** pela PD-023 + OPS-27 (evidência registrada) |
 | 11 | 8.2 / 10 / 12 | pre-deploy B, D0 e D' |
 | 12, 13, 15 | 5.4 | antes de B |
 | 14 | 14 / 18 | RELEASE F; referência do dogfood |

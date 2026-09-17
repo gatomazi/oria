@@ -572,7 +572,7 @@ test('gate · evidência OPS inválida é FAIL, nunca VERIFIED', () => {
 // Evidência OPS versionada é o que faz o gate liberar rollout: cada arquivo aqui precisa ter sido
 // verificado DE VERDADE em produção, e entrar nesta lista por decisão explícita de quem verificou.
 // Um arquivo novo aparecendo sem passar por aqui reprova — é o controle contra evidência fabricada.
-const EVIDENCIAS_VERIFICADAS = ['OPS-27.json'];
+const EVIDENCIAS_VERIFICADAS = ['OPS-10.json', 'OPS-27.json'];
 
 test('gate · só evidência OPS declarada aqui existe no repositório, e ela é válida', () => {
   const dir = path.join(RAIZ_REPO, lib.DIR_EVIDENCIA_PADRAO);
@@ -583,7 +583,8 @@ test('gate · só evidência OPS declarada aqui existe no repositório, e ela é
   // ausência de valor sensível) — evidência inválida não pode virar VERIFIED silenciosamente.
   for (const { id, status, detalhes } of lib.avaliarOps(dir)) {
     if (!EVIDENCIAS_VERIFICADAS.includes(`${id}.json`)) continue;
-    assert.equal(status, 'VERIFIED', `${id}: ${detalhes.join(' | ')}`);
+    // `avaliarOps` devolve 'NOT APPLICABLE' (com espaço) para o que tem reason; o arquivo grava NOT_APPLICABLE.
+    assert.ok(['VERIFIED', 'NOT APPLICABLE'].includes(status), `${id}: ${status} — ${detalhes.join(' | ')}`);
   }
 });
 

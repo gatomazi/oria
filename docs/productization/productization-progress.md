@@ -771,8 +771,9 @@ Organizations, que é onde estão os blockers CRITICAL.
 
 ## Next actions
 
-1. ~~Checklist do OPS-27~~ — feito (rodada 21). **Próximo:** registrar o `OPS-10.json` como
-   `NOT_APPLICABLE` com `reason` "absorvido por OPS-27", que é o par documental do OPS-27.
+1. ~~Checklist do OPS-27~~ e ~~`OPS-10.json`~~ — feitos. O OPS-27 está **VERIFIED** e o OPS-10 ficou
+   **NOT_APPLICABLE / SUPERSEDED** (PD-023 encerrou a dúvida arquitetural; o OPS-27 comprovou a parte
+   operacional). Restam **34 OPS** sem evidência.
 2. Criar a infraestrutura do projeto Railway `Oria` conforme `docs/operations/railway-bootstrap.md`
    (nada criado até aqui) e registrar as evidências de OPS-01..05 e OPS-15.
 3. **Decidir a sequência de releases no alvo novo** (runbook §20.3): o que substitui os commits

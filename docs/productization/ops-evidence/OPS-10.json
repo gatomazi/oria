@@ -1,0 +1,10 @@
+{
+  "format": "oria-ops-evidence/v1",
+  "id": "OPS-10",
+  "status": "NOT_APPLICABLE",
+  "reason": "Superado. A dúvida arquitetural que originou o item (qual é a natureza do token da Meta usado pelo serviço, e o que isso implicaria para a topologia) foi encerrada pela decisão PD-023, que fechou a Variante B: um processo Go compartilhado e um App da plataforma, com o token de cada Organization no cofre do painel. A validação operacional correspondente foi absorvida pelo OPS-27 e comprovada nele: o App Secret pertence ao mesmo App do META_APP_ID e o webhook real da Meta passa no HMAC. Item preservado no catálogo do gate para manter o histórico; nada foi apagado.",
+  "verified_at": "2026-09-17T19:00:00-03:00",
+  "verified_by": "Gabriel Tomazi",
+  "environment": "production",
+  "evidence": "Sem verificação própria: PD-023 fechou a decisão de topologia e o OPS-27 (VERIFIED em 17/09/2026) cobre a comprovação operacional do par App ID/App Secret com HMAC obrigatório. Nenhum valor de segredo aparece aqui."
+}
