@@ -17,8 +17,19 @@ import crypto from 'crypto';
 
 const INK = 'https://api.reserva.ink';  // mesmo INK_API_BASE de server.js:54
 const TOKEN = process.env.INK_TOKEN_SUL;
-const ARTES = process.env.MIGRACAO_ARTES_DIR || '/Users/gtomazi/projects/arte-lojas/migracao-useorigens';
-const GENTILICOS = process.env.MIGRACAO_GENTILICOS_DIR || '/Users/gtomazi/projects/pontos-turisticos';
+// Os diretórios de arte e de gentílicos vivem FORA do monorepo (material da operação). Não existe
+// caminho padrão: sem a variável, o script para na hora, em vez de ler a pasta errada de alguém.
+function exigirDiretorio(nome) {
+  const valor = (process.env[nome] || '').trim();
+  if (!valor) {
+    console.error(`[migracao] defina ${nome} com o diretório local (ele não mora no repositório).`);
+    process.exit(2);
+  }
+  return valor;
+}
+
+const ARTES = exigirDiretorio('MIGRACAO_ARTES_DIR');
+const GENTILICOS = exigirDiretorio('MIGRACAO_GENTILICOS_DIR');
 
 // A Ink EXIGE `price` no POST /products (só o /copy aceita omitir e cair no padrão da loja).
 // 109.90 é o preço de 7.304 dos 7.313 produtos Camiseta da Sul hoje — é o padrão da loja.

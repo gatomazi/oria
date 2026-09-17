@@ -14,6 +14,7 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pulados = process.argv.filter((a, i) => process.argv[i - 1] === '--skip');
 
 const ETAPAS = [
+  { id: 'self-check', titulo: 'repositório autocontido (sem caminho local nem repo de origem)', cmd: [process.execPath, ['scripts/self-check.mjs']] },
   { id: 'contracts', titulo: 'contratos cross-service (fonte canônica == cópias)', cmd: [process.execPath, ['scripts/check-contracts.mjs']] },
   { id: 'panel', titulo: 'painel · npm test (suíte + invariants + E2E com o binário Go)', cmd: ['npm', ['--prefix', 'apps/panel', 'test']] },
   { id: 'panel-build', titulo: 'painel · npm run build (admin)', cmd: ['npm', ['--prefix', 'apps/panel', 'run', 'build']] },

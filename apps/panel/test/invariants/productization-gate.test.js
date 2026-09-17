@@ -569,10 +569,22 @@ test('gate · evidência OPS inválida é FAIL, nunca VERIFIED', () => {
   assert.equal(lib.avaliarOps(dir).find((x) => x.id === 'OPS-28').status, lib.NAO_VERIFICADO);
 });
 
-test('gate · o repositório não traz evidência OPS de produção (nada foi verificado nesta fase)', () => {
+// Evidência OPS versionada é o que faz o gate liberar rollout: cada arquivo aqui precisa ter sido
+// verificado DE VERDADE em produção, e entrar nesta lista por decisão explícita de quem verificou.
+// Um arquivo novo aparecendo sem passar por aqui reprova — é o controle contra evidência fabricada.
+const EVIDENCIAS_VERIFICADAS = ['OPS-27.json'];
+
+test('gate · só evidência OPS declarada aqui existe no repositório, e ela é válida', () => {
   const dir = path.join(RAIZ_REPO, lib.DIR_EVIDENCIA_PADRAO);
-  const arquivos = fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x.endsWith('.json')) : [];
-  assert.deepEqual(arquivos, []);
+  const arquivos = fs.existsSync(dir) ? fs.readdirSync(dir).filter((x) => x.endsWith('.json')).sort() : [];
+  assert.deepEqual(arquivos, [...EVIDENCIAS_VERIFICADAS].sort(),
+    'evidência OPS nova precisa ser declarada em EVIDENCIAS_VERIFICADAS, com verificação real por trás');
+  // O que está versionado precisa passar no mesmo validador que o gate usa (formato, ambiente,
+  // ausência de valor sensível) — evidência inválida não pode virar VERIFIED silenciosamente.
+  for (const { id, status, detalhes } of lib.avaliarOps(dir)) {
+    if (!EVIDENCIAS_VERIFICADAS.includes(`${id}.json`)) continue;
+    assert.equal(status, 'VERIFIED', `${id}: ${detalhes.join(' | ')}`);
+  }
 });
 
 // ── CLI contra cópia com violação (ciclo de 5 passos) ──────────────────────────────────────────
