@@ -628,7 +628,7 @@ test('contrato 5c · respostas reais do painel seguem a fixture de contexto (có
   assert.deepEqual(Object.keys(c.examples.inbound_request).sort(), c.endpoints.inbound.request_fields);
   assert.deepEqual(Object.keys(c.examples.ref_request).sort(), c.endpoints.ref.request_fields);
 
-  const dirGo = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', 'whatsapp-webhook-go');
+  const dirGo = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', '..', 'services', 'whatsapp');
   const copia = path.join(dirGo, 'testdata', 'inbound-context-v1.json');
   if (!fs.existsSync(copia)) {
     t.diagnostic(`cópia do Go não encontrada em ${dirGo} — só a metade do painel foi verificada`);

@@ -1,7 +1,7 @@
 import type { CatalogAngle } from '../../api/criativos';
 
 // Campos do Brand Kit e do Niche Kit em linguagem de lojista (contratos BrandKit/NicheKit do core,
-// services/creative-core/creative_core/schemas). Serve ao formulário guiado e ao prompt que o lojista
+// apps/creative-generator/creative_core/schemas). Serve ao formulário guiado e ao prompt que o lojista
 // leva ao ChatGPT — os dois leem daqui pra nunca divergirem.
 
 export type KitKind = 'brand-kits' | 'niche-kits';

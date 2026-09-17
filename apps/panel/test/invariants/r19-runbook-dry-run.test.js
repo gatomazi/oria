@@ -1,6 +1,6 @@
 'use strict';
 
-// Rodada 19 · §15 — DRY-RUN do runbook (docs/produtizacao-saas/production-rollout-runbook.md), sem
+// Rodada 19 · §15 — DRY-RUN do runbook (docs/productization/production-rollout-runbook.md, raiz do monorepo), sem
 // produção: um Postgres descartável montado como a produção de hoje (6 migrations + dado legado das
 // três lojas + credenciais nas colunas antigas) e uploads legados num diretório temporário.
 //
@@ -35,8 +35,8 @@ const h = require('./harness');
 const e = require('../helpers/tenant1-ensaio');
 
 const RAIZ = fs.realpathSync(h.RAIZ_REPO);
-const RUNBOOK = path.join(RAIZ, 'docs', 'produtizacao-saas', 'production-rollout-runbook.md');
-const DOC_G = path.join(RAIZ, 'docs', 'produtizacao-saas', 'round19-trilha-g.md');
+const RUNBOOK = path.join(RAIZ, '..', '..', 'docs', 'productization', 'production-rollout-runbook.md');
+const DOC_G = path.join(RAIZ, '..', '..', 'docs', 'productization', 'round19-trilha-g.md');
 const PERFIL = path.join(RAIZ, 'config', 'entitlements', 'tenant1-entitlements.json');
 const TEMPLATES = path.join(RAIZ, 'config', 'tenant1');
 const PREFLIGHT = path.join(RAIZ, 'scripts', 'release', 'preflight.mjs');
@@ -44,6 +44,7 @@ const TENANT1 = path.join(RAIZ, 'scripts', 'tenant1', 'cli.mjs');
 const MOVER = path.join(RAIZ, 'scripts', 'tenancy', 'mover-criativos.mjs');
 const GATE = path.join(RAIZ, 'scripts', 'productization', 'gate.mjs');
 const COMMIT = { B: '31a7cdb', D0: '8c024d2' };
+const LEGADO = h.exigirRepoLegado(COMMIT.B, COMMIT.D0);
 
 const ORG = 'b1000000-0000-4000-8000-000000000001';
 const WABA = '1200000000009';
@@ -69,7 +70,7 @@ function tmpReal(t, prefixo) {
 }
 
 function git(args) {
-  const r = spawnSync('git', ['-C', RAIZ, ...args], { encoding: 'utf8' });
+  const r = spawnSync('git', ['-C', LEGADO, ...args], { encoding: 'utf8' });
   assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
   return r.stdout;
 }

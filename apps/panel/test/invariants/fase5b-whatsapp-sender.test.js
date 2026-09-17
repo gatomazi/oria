@@ -287,7 +287,7 @@ test('contrato · a lib do painel implementa exatamente a fixture versionada', a
 });
 
 test('contrato · a cópia do serviço Go é idêntica (quando o repositório está ao lado)', (t) => {
-  const dirGo = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', 'whatsapp-webhook-go');
+  const dirGo = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', '..', 'services', 'whatsapp');
   const copia = path.join(dirGo, 'testdata', 'sender-contract-v1.json');
   if (!fs.existsSync(copia)) {
     t.skip(`repositório do Go não encontrado em ${dirGo} (defina WHATSAPP_GO_DIR)`);

@@ -76,7 +76,7 @@ Não regenerar depois do primeiro deploy: o SQL aplicado é histórico.
 mapeamento explícito (formato em `lib/platform/tenancy-mapping.js`; exemplos em
 `test/fixtures/tenancy/`). Sem ele, ou com item faltando/ambíguo, a migration aborta e — em
 single-transaction — nada da Fase 1 fica aplicado. Detalhes e a lista exigida:
-[`docs/produtizacao-saas/tenant-owned-tables.md`](../docs/produtizacao-saas/tenant-owned-tables.md).
+[`docs/productization/tenant-owned-tables.md`](../../../docs/productization/tenant-owned-tables.md) (raiz do monorepo).
 
 Banco vazio (CI, instalação nova) migra sem arquivo; o mapeamento vem depois, por
 `node scripts/tenancy/aplicar-mapeamento.mjs <arquivo>`.

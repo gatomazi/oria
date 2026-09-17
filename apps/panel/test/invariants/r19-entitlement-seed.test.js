@@ -28,7 +28,7 @@ const { FLAGS: FLAGS_CRIATIVOS } = require('../../lib/creative-core/flags.js');
 const SEED = path.join(h.RAIZ_REPO, 'scripts', 'tenancy', 'seed-entitlements.mjs');
 const PERFIL = path.join(h.RAIZ_REPO, 'config', 'entitlements', 'tenant1-entitlements.json');
 
-// Lista ON documentada em docs/produtizacao-saas/round19-trilha-h.md. Mudar o perfil exige mudar
+// Lista ON documentada em docs/productization/round19-trilha-h.md. Mudar o perfil exige mudar
 // aqui e no documento, de propósito.
 const ON_TENANT1 = [
   'catalog', 'creative_clean_angles', 'creative_funnel_visual', 'creative_generator', 'creative_multi_product',

@@ -27,6 +27,7 @@ const e = require('../helpers/tenant1-ensaio');
 
 const B = 'b1000000-0000-4000-8000-000000000001';
 const COMMIT_B = '31a7cdb';
+const LEGADO = h.exigirRepoLegado(COMMIT_B);
 const TEMPLATES = path.join(h.RAIZ_REPO, 'config', 'tenant1');
 const PERFIL = path.join(h.RAIZ_REPO, 'config', 'entitlements', 'tenant1-entitlements.json');
 const VALORES = Object.freeze({
@@ -42,7 +43,7 @@ const statusDe = (r, id) => e.itensDe(r.linhas).filter((i) => i.id === id).map((
 const soPassOuInfo = (r) => e.itensDe(r.linhas).filter((i) => i.status !== 'PASS' && i.status !== 'INFO');
 
 function git(args) {
-  const r = spawnSync('git', ['-C', h.RAIZ_REPO, ...args], { encoding: 'utf8' });
+  const r = spawnSync('git', ['-C', LEGADO, ...args], { encoding: 'utf8' });
   assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
   return r.stdout;
 }

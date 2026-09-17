@@ -14,10 +14,10 @@
 //                          Nunca use em CI/release como condição de avanço.
 //   --skip-suite           não roda `npm test`; checks derivados da suíte = NOT VERIFIED
 //   --no-go-tests          não roda go vet/build/test -race (check go-tests = NOT VERIFIED, salvo --go-report)
-//   --go-dir <dir>         repositório do Go (padrão: WHATSAPP_GO_DIR ou ../whatsapp-webhook-go)
+//   --go-dir <dir>         repositório do Go (padrão: WHATSAPP_GO_DIR ou ../../services/whatsapp)
 //   --go-report <arquivo>  relatório do Go (formato oria-go-gate-report/v1) quando o repositório não está disponível
 //   --emit-go-report <arq> grava o relatório do Go a partir de --go-dir (e dos testes Go, se rodados) e segue
-//   --evidence-dir <dir>   evidências OPS/dogfood (padrão: docs/produtizacao-saas/ops-evidence)
+//   --evidence-dir <dir>   evidências OPS/dogfood (padrão: ../../docs/productization/ops-evidence, na raiz do monorepo)
 //   --root <dir>           raiz avaliada pelas checagens estáticas (controle negativo); exige --skip-suite
 //   --json                 relatório em JSON no stdout
 //   --verbose              detalhes de todos os checks
@@ -136,7 +136,7 @@ async function main() {
     console.error('[gate] --root só avalia checagens estáticas: use junto com --skip-suite');
     return EXIT.USO;
   }
-  const goDirPadrao = process.env.WHATSAPP_GO_DIR || path.resolve(RAIZ_REPO, '..', 'whatsapp-webhook-go');
+  const goDirPadrao = process.env.WHATSAPP_GO_DIR || path.resolve(RAIZ_REPO, '..', '..', 'services', 'whatsapp');
   const goDir = path.resolve(o['go-dir'] || goDirPadrao);
   const temGo = fs.existsSync(path.join(goDir, 'go.mod'));
   const relatorioGo = o['go-report'] ? lerRelatorioGo(path.resolve(o['go-report'])) : null;

@@ -25,6 +25,28 @@ const RAIZ_SUJEITO = process.env.INVARIANT_SUBJECT_ROOT
   ? path.resolve(process.env.INVARIANT_SUBJECT_ROOT)
   : RAIZ_REPO;
 
+// Repositório LEGADO do painel (orgulhoregional). O monorepo Oria nasceu de snapshots, sem a
+// história antiga, mas os contratos de rollout (RELEASE B = 31a7cdb, D0 = 8c024d2, painel antigo
+// bfd00a6, produção ed5a5b0) precisam rodar o código REAL daqueles commits. Quem executa o runbook
+// tem os dois repositórios lado a lado; em outra máquina, defina ORIA_LEGACY_PANEL_REPO.
+const RAIZ_LEGADO_PAINEL = process.env.ORIA_LEGACY_PANEL_REPO
+  ? path.resolve(process.env.ORIA_LEGACY_PANEL_REPO)
+  : path.resolve(RAIZ_REPO, '..', '..', '..', 'orgulhoregional');
+
+// Falha (nunca pula) quando o histórico legado não está disponível: um contrato que some em silêncio
+// é indistinguível de um contrato que passa.
+function exigirRepoLegado(...commits) {
+  const { spawnSync } = require('node:child_process');
+  const dica = `defina ORIA_LEGACY_PANEL_REPO (atual: ${RAIZ_LEGADO_PAINEL}); a suíte do CI usa npm run test:ci`;
+  const r = spawnSync('git', ['-C', RAIZ_LEGADO_PAINEL, 'rev-parse', '--git-dir'], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`repositório legado do painel não encontrado — ${dica}`);
+  for (const c of commits) {
+    const e = spawnSync('git', ['-C', RAIZ_LEGADO_PAINEL, 'cat-file', '-e', `${c}^{commit}`], { encoding: 'utf8' });
+    if (e.status !== 0) throw new Error(`commit ${c} ausente no repositório legado (clone raso?) — ${dica}`);
+  }
+  return RAIZ_LEGADO_PAINEL;
+}
+
 // Carrega o módulo SOB TESTE. Sempre por aqui — nunca `require` relativo.
 function sujeito(caminhoRelativo) {
   // eslint-disable-next-line global-require, import/no-dynamic-require
@@ -177,6 +199,8 @@ function chaveMestraDeTeste(semente = 'a') {
 module.exports = {
   RAIZ_REPO,
   RAIZ_SUJEITO,
+  RAIZ_LEGADO_PAINEL,
+  exigirRepoLegado,
   sujeito,
   rodandoContraCopia,
   abrirPool,

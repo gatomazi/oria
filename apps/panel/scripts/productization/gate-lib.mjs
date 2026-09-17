@@ -39,7 +39,8 @@ export const ENV_REMETENTE_PADRAO = /\b(META_PHONE_NUMBER_ID|META_ACCESS_TOKEN|M
 
 export const FORMATO_RELATORIO_GO = 'oria-go-gate-report/v1';
 export const FORMATO_EVIDENCIA_OPS = 'oria-ops-evidence/v1';
-export const DIR_EVIDENCIA_PADRAO = path.join('docs', 'produtizacao-saas', 'ops-evidence');
+// Relativo a apps/panel: os docs da productization moram na raiz do monorepo Oria.
+export const DIR_EVIDENCIA_PADRAO = path.join('..', '..', 'docs', 'productization', 'ops-evidence');
 
 // ── Catálogo OPS ───────────────────────────────────────────────────────────────────────────────
 // Fonte: productization-plan.md (seção SECOND TENANT GATE para OPS-01..10; Fases 0-5c para 11-26),

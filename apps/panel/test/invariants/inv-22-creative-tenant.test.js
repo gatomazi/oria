@@ -3,7 +3,7 @@
 // INV-22 — o tenant do Creative Core é a Organization autenticada da request, nunca uma variável de
 // ambiente da instalação (CREATIVE_TENANT_ID) nem um valor do cliente.
 //
-// O Creative Core Python (services/creative-core) é stateless e recusa acoplamento a tenant por
+// O Creative Core Python (apps/creative-generator) é stateless e recusa acoplamento a tenant por
 // teste de pureza: recebe kits e referências já carregados, não guarda nada por tenant. A fronteira
 // de isolamento é este router, e é ela que o invariant mede.
 

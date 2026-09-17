@@ -15702,7 +15702,7 @@ async function processarWebhookWhatsapp(body) {
   }
 }
 
-// Transição sem perda de status (rodada 19, §5; docs/produtizacao-saas/round19-trilha-e.md):
+// Transição sem perda de status (rodada 19, §5; docs/productization/round19-trilha-e.md):
 // WHATSAPP_WEBHOOK_LEGACY_QUERY_TOLERATED=1 aceita o repasse do Go em transição (query legada +
 // assinatura) pela assinatura. Valor inválido derruba o boot. Sai no CLEANUP.
 const { lerToleranciaQueryLegada } = require('./lib/platform/whatsapp-forward');

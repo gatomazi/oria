@@ -1,7 +1,7 @@
 import { LIMITE_DESCRICAO, LIMITE_ITEM, LIMITE_NOME, extrairJson, listaDeTextos, type SecaoKit } from './kitTemplate';
 
 // Campos do perfil de contexto em linguagem de lojista (contrato ContextProfile do core,
-// services/creative-core/creative_core/schemas). Serve ao formulário guiado e ao prompt do ChatGPT.
+// apps/creative-generator/creative_core/schemas). Serve ao formulário guiado e ao prompt do ChatGPT.
 // Na geração, o core usa as cenas (uma por imagem), os detalhes de apoio e o "evitar"
 // (context_intelligence.py); os demais campos ficam no perfil como referência.
 

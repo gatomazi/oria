@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Gera docs/produtizacao-saas/tenant-owned-tables.md a partir de lib/platform/tenancy-manifest.js.
+// Gera docs/productization/tenant-owned-tables.md (raiz do monorepo Oria) a partir de lib/platform/tenancy-manifest.js.
 //   node scripts/tenancy/gerar-manifesto.mjs          grava
 //   node scripts/tenancy/gerar-manifesto.mjs --check  falha se o arquivo estiver desatualizado
 import fs from 'node:fs';
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const m = require('../../lib/platform/tenancy-manifest.js');
-const DESTINO = path.join(RAIZ, 'docs', 'produtizacao-saas', 'tenant-owned-tables.md');
+const DESTINO = path.join(RAIZ, '..', '..', 'docs', 'productization', 'tenant-owned-tables.md');
 
 const ALVO = {
   loja: 'loja → `loja:<loja>`',
@@ -54,7 +54,7 @@ function gerar() {
   return `# Tabelas tenant-owned — manifesto canônico (Fase 1)
 
 > **GERADO** por \`scripts/tenancy/gerar-manifesto.mjs\` a partir de
-> [\`lib/platform/tenancy-manifest.js\`](../../lib/platform/tenancy-manifest.js). Não editar à mão:
+> [\`lib/platform/tenancy-manifest.js\`](../../apps/panel/lib/platform/tenancy-manifest.js). Não editar à mão:
 > \`test/invariants/tenancy-schema.test.js\` reprova se este arquivo divergir do código.
 
 ## Contagem única
@@ -101,7 +101,7 @@ Store ativa, nenhuma sem Store, nenhuma Store sem Organization.
 ## Mapeamento explícito exigido antes do pre-deploy
 
 A migration \`1789600120000_tenancy-mapeamento\` lê \`TENANCY_MAPPING_FILE\` (formato em
-[\`lib/platform/tenancy-mapping.js\`](../../lib/platform/tenancy-mapping.js)). Com dado na base, o
+[\`lib/platform/tenancy-mapping.js\`](../../apps/panel/lib/platform/tenancy-mapping.js)). Com dado na base, o
 arquivo é **obrigatório** e precisa declarar, para o código em execução:
 
 ${['- `loja:` ' + m.LOJAS_LEGADAS.join(', '),

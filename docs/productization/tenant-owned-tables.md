@@ -1,7 +1,7 @@
 # Tabelas tenant-owned — manifesto canônico (Fase 1)
 
 > **GERADO** por `scripts/tenancy/gerar-manifesto.mjs` a partir de
-> [`lib/platform/tenancy-manifest.js`](../../lib/platform/tenancy-manifest.js). Não editar à mão:
+> [`lib/platform/tenancy-manifest.js`](../../apps/panel/lib/platform/tenancy-manifest.js). Não editar à mão:
 > `test/invariants/tenancy-schema.test.js` reprova se este arquivo divergir do código.
 
 ## Contagem única
@@ -55,7 +55,7 @@ Store ativa, nenhuma sem Store, nenhuma Store sem Organization.
 ## Mapeamento explícito exigido antes do pre-deploy
 
 A migration `1789600120000_tenancy-mapeamento` lê `TENANCY_MAPPING_FILE` (formato em
-[`lib/platform/tenancy-mapping.js`](../../lib/platform/tenancy-mapping.js)). Com dado na base, o
+[`lib/platform/tenancy-mapping.js`](../../apps/panel/lib/platform/tenancy-mapping.js)). Com dado na base, o
 arquivo é **obrigatório** e precisa declarar, para o código em execução:
 
 - `loja:` sul, centro, norte

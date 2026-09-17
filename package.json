@@ -1,0 +1,29 @@
+{
+  "name": "oria",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Monorepo do produto Oria: painel, gerador de criativos e serviço de WhatsApp.",
+  "scripts": {
+    "test": "node scripts/test-all.mjs",
+    "contracts:check": "node scripts/check-contracts.mjs",
+    "contracts:sync": "node scripts/check-contracts.mjs --sync",
+    "panel:install": "npm --prefix apps/panel ci",
+    "panel:test": "npm --prefix apps/panel test",
+    "panel:test:app-role": "npm --prefix apps/panel run test:app-role",
+    "panel:build": "npm --prefix apps/panel run build",
+    "panel:start": "npm --prefix apps/panel start",
+    "creatives:test": "node scripts/creatives.mjs test",
+    "whatsapp:test": "node scripts/whatsapp.mjs test",
+    "whatsapp:build": "node scripts/whatsapp.mjs build",
+    "productization:gate": "npm --prefix apps/panel run productization:gate --",
+    "release:preflight": "npm --prefix apps/panel run release:preflight --",
+    "tenant1:preflight": "npm --prefix apps/panel run tenant1:preflight --",
+    "tenant1:plan": "npm --prefix apps/panel run tenant1:plan --",
+    "tenant1:apply": "npm --prefix apps/panel run tenant1:apply --",
+    "tenant1:verify": "npm --prefix apps/panel run tenant1:verify --",
+    "tenant1:rollback": "npm --prefix apps/panel run tenant1:rollback --"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}

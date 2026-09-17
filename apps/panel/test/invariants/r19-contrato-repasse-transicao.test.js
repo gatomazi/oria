@@ -35,11 +35,12 @@ const { inserir, limparCache } = require('../helpers/linhas');
 // mesma do painel em produção hoje (`req.query.secret !== WHATSAPP_WEBHOOK_SECRET`) e a do commit
 // imediatamente anterior ao endurecimento — o candidato a RELEASE D0 do runbook (round19-trilha-e.md).
 const COMMIT_PAINEL_ANTIGO = 'bfd00a6';
+const LEGADO = h.exigirRepoLegado(COMMIT_PAINEL_ANTIGO);
 const COMMIT_ENDURECIMENTO = 'c706da1';
 
-const DIR_GO = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', 'whatsapp-webhook-go');
+const DIR_GO = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', '..', 'services', 'whatsapp');
 const GO = spawnSync('go', ['version'], { encoding: 'utf8' });
-const git = (...args) => spawnSync('git', args, { cwd: h.RAIZ_REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const git = (...args) => spawnSync('git', args, { cwd: LEGADO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 const MOTIVO_PULO = GO.status !== 0 ? 'toolchain Go ausente'
   : !fs.existsSync(path.join(DIR_GO, 'go.mod')) ? `repositório do Go não encontrado em ${DIR_GO} (defina WHATSAPP_GO_DIR)`
     : git('cat-file', '-e', `${COMMIT_PAINEL_ANTIGO}^{commit}`).status !== 0 ? `commit ${COMMIT_PAINEL_ANTIGO} ausente (clone raso?)`

@@ -1,6 +1,6 @@
 'use strict';
 
-// Fase 6 · rollback LOCAL do cutover do Tenant #1 (runbook: docs/produtizacao-saas/overnight-trilha-a.md,
+// Fase 6 · rollback LOCAL do cutover do Tenant #1 (runbook: docs/productization/overnight-trilha-a.md,
 // seção "Rollback Fase 6").
 //
 // O cutover não cria schema nem apaga nada; o rollback é de configuração e de caminho de leitura:

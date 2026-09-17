@@ -1,0 +1,152 @@
+{
+  "contract": "oria-whatsapp-sender",
+  "version": 1,
+  "copies": [
+    "orgulhoregional: test/fixtures/whatsapp/sender-contract-v1.json",
+    "whatsapp-webhook-go: testdata/sender-contract-v1.json"
+  ],
+  "auth": {
+    "header": "X-Api-Key",
+    "note": "service authentication is independent from the sender identity"
+  },
+  "headers": {
+    "phone_number_id": "X-Sender-Phone-Number-Id",
+    "waba_id": "X-Sender-Waba-Id",
+    "access_token": "X-Sender-Access-Token",
+    "ref": "X-Sender-Ref"
+  },
+  "patterns": {
+    "meta_id": "^[0-9]{5,32}$",
+    "access_token": "^[A-Za-z0-9._|~+/=-]+$",
+    "ref": "^v1\\.[A-Za-z0-9_-]{16,1000}\\.[A-Za-z0-9_-]{43}$"
+  },
+  "access_token_length": { "min": 16, "max": 4096 },
+  "required_headers": ["phone_number_id", "access_token", "ref"],
+  "forbidden_body_fields": ["access_token", "organization_id", "phone_number_id", "sender", "sender_ref", "waba_id"],
+  "routes": {
+    "sender_required": [
+      "POST /send/text",
+      "POST /send/template",
+      "POST /send/media",
+      "POST /send/buttons",
+      "POST /send/list",
+      "POST /send/reaction",
+      "POST /send/read",
+      "GET /media/{media_id}",
+      "POST /media/upload",
+      "POST /queue/add"
+    ],
+    "sender_and_waba_required": [
+      "GET /templates/list",
+      "POST /templates/create",
+      "DELETE /templates/delete"
+    ],
+    "tenant_required": [
+      "GET /dashboard/events",
+      "POST /dashboard/events/clear",
+      "GET /queue/list",
+      "POST /queue/send",
+      "POST /queue/delete",
+      "POST /queue/dedupe",
+      "GET /problems/list",
+      "POST /problems/add",
+      "POST /problems/sync",
+      "GET /automaticos/list"
+    ],
+    "no_sender": [
+      "GET /health"
+    ]
+  },
+  "tenant_headers": ["phone_number_id", "ref"],
+  "errors": {
+    "missing_api_key": 401,
+    "missing_sender": 400,
+    "malformed_sender": 400,
+    "forbidden_body_field": 400,
+    "missing_tenant": 400,
+    "tenant_rejected": 403,
+    "tenant_unavailable": 503,
+    "meta_failure": 502
+  },
+  "resolver": {
+    "method": "POST",
+    "path": "/api/internal/whatsapp/sender",
+    "auth_header": "X-Api-Key",
+    "request_fields": ["ref"],
+    "response_fields": ["access_token", "phone_number_id", "waba_id"],
+    "error_fields": ["codigo", "error"]
+  },
+  "health": {
+    "allowed_fields": ["status"]
+  },
+  "examples": {
+    "valid": {
+      "X-Sender-Phone-Number-Id": "1110000001",
+      "X-Sender-Waba-Id": "2220000001",
+      "X-Sender-Access-Token": "EAAG-contract-token-0000000001",
+      "X-Sender-Ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "invalid": [
+      {
+        "name": "token missing",
+        "headers": {
+          "X-Sender-Phone-Number-Id": "1110000001",
+          "X-Sender-Waba-Id": "2220000001",
+          "X-Sender-Ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      {
+        "name": "phone number id missing",
+        "headers": {
+          "X-Sender-Waba-Id": "2220000001",
+          "X-Sender-Access-Token": "EAAG-contract-token-0000000001",
+          "X-Sender-Ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      {
+        "name": "ref missing",
+        "headers": {
+          "X-Sender-Phone-Number-Id": "1110000001",
+          "X-Sender-Waba-Id": "2220000001",
+          "X-Sender-Access-Token": "EAAG-contract-token-0000000001"
+        }
+      },
+      {
+        "name": "phone number id with path",
+        "headers": {
+          "X-Sender-Phone-Number-Id": "111/../me",
+          "X-Sender-Waba-Id": "2220000001",
+          "X-Sender-Access-Token": "EAAG-contract-token-0000000001",
+          "X-Sender-Ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      {
+        "name": "token too short",
+        "headers": {
+          "X-Sender-Phone-Number-Id": "1110000001",
+          "X-Sender-Waba-Id": "2220000001",
+          "X-Sender-Access-Token": "EAAG-short",
+          "X-Sender-Ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      {
+        "name": "waba not numeric",
+        "headers": {
+          "X-Sender-Phone-Number-Id": "1110000001",
+          "X-Sender-Waba-Id": "waba-abc",
+          "X-Sender-Access-Token": "EAAG-contract-token-0000000001",
+          "X-Sender-Ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      {
+        "name": "ref with wrong version",
+        "headers": {
+          "X-Sender-Phone-Number-Id": "1110000001",
+          "X-Sender-Waba-Id": "2220000001",
+          "X-Sender-Access-Token": "EAAG-contract-token-0000000001",
+          "X-Sender-Ref": "v2.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      }
+    ]
+  }
+}

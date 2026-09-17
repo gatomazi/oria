@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Preflight de release — `npm run release:preflight` (rodada 18, trilha D, §32).
 //
-// SOMENTE LEITURA. Confere, antes de um passo do runbook (docs/produtizacao-saas/production-rollout-runbook.md):
+// SOMENTE LEITURA. Confere, antes de um passo do runbook (docs/productization/production-rollout-runbook.md):
 //   - NOMES de variáveis presentes/ausentes (nunca valores; no máximo "atende o requisito: sim/não")
 //   - flags legadas (ligada/desligada)
 //   - URL da role de migration separada da URL do app (sem imprimir usuário, host ou senha)

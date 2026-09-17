@@ -19,7 +19,7 @@
 >
 > **Fontes de intenção:** [`levantamento-productizacao-saas-painel.md`](./levantamento-productizacao-saas-painel.md),
 > [`productization-audit-addendum-v2.md`](./productization-audit-addendum-v2.md) (prevalece em conflito),
-> [`../painel-estado-atual.md`](../painel-estado-atual.md).
+> [`../painel-estado-atual.md`](../../apps/panel/docs/painel-estado-atual.md).
 
 ## Regra de leitura deste documento
 

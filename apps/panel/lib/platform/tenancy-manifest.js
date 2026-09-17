@@ -3,7 +3,7 @@
 // Manifesto CANÔNICO das tabelas tenant-owned (Fase 1 · TD-001).
 //
 // É a única lista. Os gates (INV-04/05/06/07), a verificação de role, o teste de isolamento e o
-// documento `docs/produtizacao-saas/tenant-owned-tables.md` (gerado por
+// documento `docs/productization/tenant-owned-tables.md` (gerado por
 // `scripts/tenancy/gerar-manifesto.mjs`) saem daqui. Um teste reprova se existir tabela no schema
 // que não esteja aqui nem em `TABELAS_GLOBAIS` — tabela nova sem classificação não passa.
 //

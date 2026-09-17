@@ -51,7 +51,7 @@ test('R19 · contrato: bloco de transição com os mesmos nomes do código, vers
   assert.equal(repasse.lerToleranciaQueryLegada(tr.flag_on), true);
   for (const v of tr.flag_off) assert.equal(repasse.lerToleranciaQueryLegada(v), false);
   assert.deepEqual(c.auth.forbidden_query_params, [tr.legacy_query_param]);
-  const dirGo = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', 'whatsapp-webhook-go');
+  const dirGo = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', '..', 'services', 'whatsapp');
   const copia = path.join(dirGo, 'testdata', 'forward-auth-v1.json');
   if (!fs.existsSync(copia)) {
     t.diagnostic(`cópia do Go não encontrada em ${dirGo}`);

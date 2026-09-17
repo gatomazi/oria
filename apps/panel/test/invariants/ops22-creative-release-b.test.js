@@ -22,6 +22,7 @@ const { pathToFileURL } = require('node:url');
 
 const h = require('./harness');
 
+const REPO_LEGADO = h.exigirRepoLegado('ed5a5b0', '31a7cdb'); // história antiga (monorepo Oria: snapshots)
 const PRODUCAO = 'ed5a5b0'; // master: tenant = CREATIVE_TENANT_ID || 'default'
 const RELEASE_B = '31a7cdb'; // tenant = Organization da sessão, sem leitura dupla
 const MOVER = path.join(h.RAIZ_REPO, 'scripts', 'tenancy', 'mover-criativos.mjs');
@@ -39,7 +40,7 @@ let mover;
 const codigo = {};
 
 function git(args) {
-  const r = spawnSync('git', args, { cwd: h.RAIZ_REPO, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync('git', args, { cwd: REPO_LEGADO, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
   assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
   return r.stdout;
 }
@@ -334,10 +335,10 @@ test('OPS-22/B · vínculo recusado quando não se aplica; estado inválido repr
   assert.equal(mover.verificarCriativos(opcoes, banco([])).status, 'FAIL');
 });
 
-// O bloco de shell do runbook (docs/produtizacao-saas/round19-trilha-g.md, §7.5), extraído do próprio documento:
+// O bloco de shell do runbook (docs/productization/round19-trilha-g.md, raiz do monorepo, §7.5), extraído do próprio documento:
 // a produção (ed5a5b0) não tem o mover, então o vínculo é criado com ele.
 function blocoDoRunbook() {
-  const doc = fs.readFileSync(path.join(h.RAIZ_REPO, 'docs', 'produtizacao-saas', 'round19-trilha-g.md'), 'utf8');
+  const doc = fs.readFileSync(path.join(h.RAIZ_REPO, '..', '..', 'docs', 'productization', 'round19-trilha-g.md'), 'utf8');
   const linhas = doc.slice(doc.indexOf('<!-- ops22-vincular-sh -->')).split('\n').map((l) => l.replace(/^> ?/, ''));
   const inicio = linhas.indexOf('```sh');
   const fim = linhas.indexOf('```', inicio + 1);

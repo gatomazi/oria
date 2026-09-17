@@ -1,6 +1,6 @@
 'use strict';
 
-// Cliente HTTP do serviço Python do Gerador de Criativos (services/creative-core).
+// Cliente HTTP do serviço Python do Gerador de Criativos (apps/creative-generator).
 // Falha graciosa por desenho: sem URL/token configurados, com o serviço fora do ar ou lento, toda chamada
 // lança CoreUnavailableError (as rotas viram 503) — nada no boot do Node depende do serviço.
 // A OpenAI key do tenant só trafega no corpo de /v1/generations e /v1/copies; nunca em log, header ou URL.

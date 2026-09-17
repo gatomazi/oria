@@ -56,7 +56,7 @@ test('§22 · contrato do repasse: vetor de teste, headers e cópia do Go', (t) 
   });
   assert.deepEqual(ok, { ok: true });
 
-  const dirGo = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', 'whatsapp-webhook-go');
+  const dirGo = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', '..', 'services', 'whatsapp');
   const copia = path.join(dirGo, 'testdata', 'forward-auth-v1.json');
   if (!fs.existsSync(copia)) {
     t.diagnostic(`cópia do Go não encontrada em ${dirGo} — só a metade do painel foi verificada`);

@@ -3,7 +3,7 @@
 // Fase 5c · E2E local painel ↔ whatsapp-webhook-go ↔ Meta (simulada).
 //
 // Processos reais: server.js (painel, sob a role da aplicação) e o binário do serviço Go compilado
-// a partir de WHATSAPP_GO_DIR (padrão: ../whatsapp-webhook-go), cada um com o seu banco
+// a partir de WHATSAPP_GO_DIR (padrão: ../../services/whatsapp, no monorepo Oria), cada um com o seu banco
 // descartável. A Meta é um servidor HTTP deste processo (META_GRAPH_BASE_URL). Cenário A/B:
 //
 //   entrada A → evento A e resposta pelo remetente A, sem envio prévio do painel (cold start)
@@ -39,7 +39,7 @@ const { createKeyring } = h.sujeito('lib/secrets/keyring.js');
 const wa = h.sujeito('lib/platform/whatsapp-sender.js');
 const { limparCache } = require('../helpers/linhas');
 
-const DIR_GO = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', 'whatsapp-webhook-go');
+const DIR_GO = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', '..', 'services', 'whatsapp');
 const GO = spawnSync('go', ['version'], { encoding: 'utf8' });
 const MOTIVO_PULO = GO.status !== 0 ? 'toolchain Go ausente'
   : !fs.existsSync(path.join(DIR_GO, 'go.mod')) ? `repositório do Go não encontrado em ${DIR_GO} (defina WHATSAPP_GO_DIR)`

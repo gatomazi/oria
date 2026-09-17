@@ -1,5 +1,5 @@
 # Gunicorn config, loaded automatically from the working directory (Railway Root Directory =
-# services/creative-core). Keeps the start command free of shell expansion ($PORT) so it works
+# apps/creative-generator in the Oria monorepo). Keeps the start command free of shell expansion ($PORT) so it works
 # the same from Procfile, Railpack and the Railway dashboard.
 import os
 

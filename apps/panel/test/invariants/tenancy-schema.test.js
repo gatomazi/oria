@@ -62,7 +62,7 @@ test('manifesto · LOJAS_LEGADAS é o mesmo enum que o server.js usa', () => {
   assert.deepEqual(chaves, [...manifesto.LOJAS_LEGADAS]);
 });
 
-test('manifesto · docs/produtizacao-saas/tenant-owned-tables.md está gerado a partir do manifesto', () => {
+test('manifesto · docs/productization/tenant-owned-tables.md está gerado a partir do manifesto', () => {
   const r = spawnSync(process.execPath, [path.join(h.RAIZ_REPO, 'scripts', 'tenancy', 'gerar-manifesto.mjs'), '--check'], {
     cwd: h.RAIZ_REPO, encoding: 'utf8',
   });
