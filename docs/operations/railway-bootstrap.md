@@ -120,7 +120,8 @@ produção. Com o alvo no projeto novo:
 - **Mantém-se:** a ordem lógica dos OPS, os motivos de cada degrau (nenhum status perdido, checkpoint
   antes do cutover 5b, vínculo antes da materialização) e todos os pré-requisitos de segurança.
 - **Precisa ser redefinido:** quais artefatos são publicados (os commits intermediários não existem na
-  história do monorepo), o que substitui a premissa de "banco já em produção" (num Postgres novo é
+  história do monorepo — embora os testes que provam o comportamento deles rodem de snapshots
+  versionados desde a rodada 21), o que substitui a premissa de "banco já em produção" (num Postgres novo é
   import + migrations), o que prova cada passo sem os commits antigos, e o que é rollback entre
   degraus (num ambiente novo, o rollback real é voltar o tráfego ao legado).
 

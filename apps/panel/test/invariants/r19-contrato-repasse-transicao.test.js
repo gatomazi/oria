@@ -4,9 +4,9 @@
 //
 // Processos reais, nada lido só do código:
 //   - painel ANTIGO: server.js do commit COMMIT_PAINEL_ANTIGO (5c R1, antes do endurecimento do
-//     repasse em COMMIT_ENDURECIMENTO), extraído com `git archive` para um diretório temporário,
-//     com o seu próprio schema (as migrations DAQUELE commit) e WHATSAPP_WEBHOOK_SECRET definido —
-//     autentica só por `?secret=`;
+//     repasse em COMMIT_ENDURECIMENTO), extraído do snapshot versionado em test/fixtures/legacy/
+//     para um diretório temporário, com o seu próprio schema (as migrations DAQUELE commit) e
+//     WHATSAPP_WEBHOOK_SECRET definido — autentica só por `?secret=`;
 //   - painel NOVO: server.js deste checkout, com e sem WHATSAPP_WEBHOOK_LEGACY_QUERY_TOLERATED;
 //   - serviço Go: binário compilado de WHATSAPP_GO_DIR, com e sem WEBHOOK_FORWARD_LEGACY_QUERY_SECRET,
 //     e um binário MUTANTE (com a flag, deixa de mandar a query) como controle negativo.
@@ -15,7 +15,7 @@
 // Meta, o Go resolve a Organization no painel, repassa, e o destinatário da campanha avança no banco
 // do painel. Recusa = o destinatário não avança e o Go registra o 401.
 //
-// Sem Go, sem git ou sem o commit antigo no repositório, o teste registra o motivo e não roda.
+// Sem a toolchain Go ou sem o código do serviço, o teste registra o motivo e não roda.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -35,16 +35,17 @@ const { inserir, limparCache } = require('../helpers/linhas');
 // mesma do painel em produção hoje (`req.query.secret !== WHATSAPP_WEBHOOK_SECRET`) e a do commit
 // imediatamente anterior ao endurecimento — o candidato a RELEASE D0 do runbook (round19-trilha-e.md).
 const COMMIT_PAINEL_ANTIGO = 'bfd00a6';
-const LEGADO = h.exigirRepoLegado(COMMIT_PAINEL_ANTIGO);
+const SNAPSHOT_PAINEL_ANTIGO = 'bfd00a6-painel'; // snapshot versionado em test/fixtures/legacy/
 const COMMIT_ENDURECIMENTO = 'c706da1';
+// `c706da1^` = 8c024d2, o candidato a RELEASE D0 — também versionado, e com o server.js daquele
+// commit, para que a comparação das rotas continue sendo feita contra o código real.
+const SNAPSHOT_ANTES_DO_ENDURECIMENTO = '8c024d2-release-d0';
 
 const DIR_GO = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', '..', 'services', 'whatsapp');
 const GO = spawnSync('go', ['version'], { encoding: 'utf8' });
-const git = (...args) => spawnSync('git', args, { cwd: LEGADO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 const MOTIVO_PULO = GO.status !== 0 ? 'toolchain Go ausente'
   : !fs.existsSync(path.join(DIR_GO, 'go.mod')) ? `repositório do Go não encontrado em ${DIR_GO} (defina WHATSAPP_GO_DIR)`
-    : git('cat-file', '-e', `${COMMIT_PAINEL_ANTIGO}^{commit}`).status !== 0 ? `commit ${COMMIT_PAINEL_ANTIGO} ausente (clone raso?)`
-      : null;
+    : null;
 
 const ORG = 'a1000000-0000-4000-8000-000000000001';
 const LOJA = 'sul';
@@ -65,6 +66,7 @@ const FLAG_GO = 'WEBHOOK_FORWARD_LEGACY_QUERY_SECRET';
 const FLAG_PAINEL = 'WHATSAPP_WEBHOOK_LEGACY_QUERY_TOLERATED';
 
 let arvoreAntiga;
+let arvoreD0;
 let binarioGo;
 let binarioMutante;
 let meta;
@@ -278,12 +280,8 @@ test.before(async () => {
   if (MOTIVO_PULO) return;
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'oria-r19-'));
   // Árvore antiga, só leitura para o teste; dependências do checkout atual por symlink.
-  arvoreAntiga = path.join(tmp, `painel-${COMMIT_PAINEL_ANTIGO}`);
-  fs.mkdirSync(arvoreAntiga);
-  const tar = path.join(tmp, 'painel.tar');
-  assert.equal(git('archive', '--format=tar', '-o', tar, COMMIT_PAINEL_ANTIGO).status, 0, 'git archive');
-  const x = spawnSync('tar', ['-xf', tar, '-C', arvoreAntiga], { encoding: 'utf8' });
-  assert.equal(x.status, 0, x.stderr);
+  arvoreAntiga = h.extrairSnapshotLegado(path.join(tmp, `painel-${COMMIT_PAINEL_ANTIGO}`), SNAPSHOT_PAINEL_ANTIGO);
+  arvoreD0 = h.extrairSnapshotLegado(path.join(tmp, 'painel-d0'), SNAPSHOT_ANTES_DO_ENDURECIMENTO);
   fs.symlinkSync(path.join(h.RAIZ_REPO, 'node_modules'), path.join(arvoreAntiga, 'node_modules'), 'dir');
 
   binarioGo = path.join(tmp, 'whatsapp-webhook');
@@ -342,9 +340,8 @@ cenario('R19 · o painel antigo extraído é o que autentica só pela query (e �
   const antiga = rota(fs.readFileSync(path.join(arvoreAntiga, 'server.js'), 'utf8'));
   assert.match(antiga, /if \(WHATSAPP_WEBHOOK_SECRET && req\.query\.secret !== WHATSAPP_WEBHOOK_SECRET\) \{\n\s+return res\.status\(401\)\.end\(\);/);
   assert.doesNotMatch(antiga, /x-oria-forward|verificarRepasseWhatsapp/i, 'o painel antigo não conhece a assinatura');
-  const anterior = git('show', `${COMMIT_ENDURECIMENTO}^:server.js`);
-  assert.equal(anterior.status, 0);
-  assert.equal(rota(anterior.stdout), antiga, `a rota em ${COMMIT_ENDURECIMENTO}^ (candidato a RELEASE D0) difere da testada`);
+  const anterior = fs.readFileSync(path.join(arvoreD0, 'server.js'), 'utf8');
+  assert.equal(rota(anterior), antiga, `a rota em ${COMMIT_ENDURECIMENTO}^ (candidato a RELEASE D0) difere da testada`);
   assert.match(painelAntigo.log, /na porta/);
 });
 

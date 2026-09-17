@@ -43,8 +43,9 @@ const PREFLIGHT = path.join(RAIZ, 'scripts', 'release', 'preflight.mjs');
 const TENANT1 = path.join(RAIZ, 'scripts', 'tenant1', 'cli.mjs');
 const MOVER = path.join(RAIZ, 'scripts', 'tenancy', 'mover-criativos.mjs');
 const GATE = path.join(RAIZ, 'scripts', 'productization', 'gate.mjs');
+// Snapshots versionados dos commits de release (ver scripts/fixtures/legacy-snapshots.mjs).
 const COMMIT = { B: '31a7cdb', D0: '8c024d2' };
-const LEGADO = h.exigirRepoLegado(COMMIT.B, COMMIT.D0);
+const SNAPSHOT = { [COMMIT.B]: '31a7cdb-release-b', [COMMIT.D0]: '8c024d2-release-d0' };
 
 const ORG = 'b1000000-0000-4000-8000-000000000001';
 const WABA = '1200000000009';
@@ -69,20 +70,10 @@ function tmpReal(t, prefixo) {
   return dir;
 }
 
-function git(args) {
-  const r = spawnSync('git', ['-C', LEGADO, ...args], { encoding: 'utf8' });
-  assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
-  return r.stdout;
-}
-
 // Código publicado por uma release (o que o Pre-deploy Command roda), com o node_modules do repositório.
 function extrairRelease(t, commit) {
   const dir = tmpReal(t, `oria-r19h-dry-${commit}-`);
-  const tar = path.join(dir, 'codigo.tar');
-  git(['archive', '--format=tar', '-o', tar, commit, 'scripts', 'lib', 'migrations', 'package.json']);
-  const r = spawnSync('tar', ['-xf', tar, '-C', dir], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
-  fs.rmSync(tar);
+  h.extrairSnapshotLegado(dir, SNAPSHOT[commit]);
   fs.symlinkSync(path.join(RAIZ, 'node_modules'), path.join(dir, 'node_modules'));
   return dir;
 }

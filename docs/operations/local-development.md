@@ -13,9 +13,10 @@ pelos próprios scripts. Um compose só acrescentaria manutenção.
 | Go | 1.25 | serviço de WhatsApp |
 | Python | 3.12 | Gerador de Criativos |
 
-O repositório legado do painel (`orgulhoregional`) precisa estar ao lado do monorepo para quatro
-testes de contrato que rodam código de commits antigos. Caminho alternativo:
-`ORIA_LEGACY_PANEL_REPO=/caminho/para/orgulhoregional`.
+Nenhum repositório vizinho é necessário. Os quatro testes de contrato que rodam o código real de
+commits antigos leem snapshots versionados em `apps/panel/test/fixtures/legacy/` — regerá-los exige o
+repositório legado, mas rodar a suíte não (ver `docs/architecture/source-migration-manifest.md`).
+`npm run repo:self-check`, na raiz, falha se essa dependência voltar.
 
 ## Instalação
 

@@ -27,7 +27,7 @@ const e = require('../helpers/tenant1-ensaio');
 
 const B = 'b1000000-0000-4000-8000-000000000001';
 const COMMIT_B = '31a7cdb';
-const LEGADO = h.exigirRepoLegado(COMMIT_B);
+const SNAPSHOT_B = '31a7cdb-release-b'; // snapshot versionado em test/fixtures/legacy/
 const TEMPLATES = path.join(h.RAIZ_REPO, 'config', 'tenant1');
 const PERFIL = path.join(h.RAIZ_REPO, 'config', 'entitlements', 'tenant1-entitlements.json');
 const VALORES = Object.freeze({
@@ -42,21 +42,12 @@ const VALORES = Object.freeze({
 const statusDe = (r, id) => e.itensDe(r.linhas).filter((i) => i.id === id).map((i) => i.status);
 const soPassOuInfo = (r) => e.itensDe(r.linhas).filter((i) => i.status !== 'PASS' && i.status !== 'INFO');
 
-function git(args) {
-  const r = spawnSync('git', ['-C', LEGADO, ...args], { encoding: 'utf8' });
-  assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
-  return r.stdout;
-}
-
 // Código de 31a7cdb num diretório próprio (realpath: os scripts só rodam o main quando
 // import.meta.url === file://argv[1]).
 function extrairReleaseB(t) {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'oria-r19h-relb-')));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const tar = path.join(dir, 'b.tar');
-  git(['archive', '--format=tar', '-o', tar, COMMIT_B, 'scripts', 'lib', 'package.json']);
-  const r = spawnSync('tar', ['-xf', tar, '-C', dir], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
+  h.extrairSnapshotLegado(dir, SNAPSHOT_B);
   fs.symlinkSync(path.join(h.RAIZ_REPO, 'node_modules'), path.join(dir, 'node_modules'));
   return dir;
 }
@@ -81,20 +72,27 @@ function montarConfig(raiz, mudar = (x) => x, nome = 'rollout-scenario-b.json') 
   return { mapa, rollout };
 }
 
-test('r19 · RELEASE B = 31a7cdb: premissas conferidas no próprio git', async () => {
+test('r19 · RELEASE B = 31a7cdb: premissas conferidas no snapshot do commit', async (t) => {
+  const dirB = extrairReleaseB(t);
+  const ler = (rel) => fs.readFileSync(path.join(dirB, rel), 'utf8');
   const { RELEASE_B } = await import(pathToFileURL(path.join(h.RAIZ_REPO, 'scripts', 'tenant1', 'config.mjs')).href);
   assert.equal(RELEASE_B.commit, COMMIT_B);
-  const migrationsB = git(['ls-tree', '--name-only', COMMIT_B, 'migrations/']).split('\n').filter((x) => /^migrations\/\d+_.+\.js$/.test(x));
+  const migrationsB = fs.readdirSync(path.join(dirB, 'migrations')).filter((x) => /^\d+_.+\.js$/.test(x)).sort();
   assert.equal(migrationsB.length, 17);
   assert.equal(path.basename(migrationsB[migrationsB.length - 1], '.js'), RELEASE_B.ultimaMigration);
   // As migrations da B são as mesmas do HEAD (o HEAD só acrescenta): o schema "até a 17" é o da B.
-  assert.equal(git(['diff', '--name-only', '--diff-filter=MDR', COMMIT_B, 'HEAD', '--', 'migrations/']).trim(), '');
+  // Equivale ao antigo `git diff --diff-filter=MDR` — nenhuma foi alterada, apagada nem renomeada.
+  for (const m of migrationsB) {
+    const noHead = path.join(h.RAIZ_REPO, 'migrations', m);
+    assert.ok(fs.existsSync(noHead), `migration da B ausente no HEAD: ${m}`);
+    assert.equal(fs.readFileSync(noHead, 'utf8'), ler(path.join('migrations', m)), `migration da B alterada no HEAD: ${m}`);
+  }
   // O que a B executa no pre-deploy: seed sem perfil, import sem par declarado.
-  const seedB = git(['show', `${COMMIT_B}:scripts/tenancy/seed-entitlements.mjs`]);
+  const seedB = ler('scripts/tenancy/seed-entitlements.mjs');
   assert.ok(seedB.includes('ENTITLEMENTS_SEED_FEATURES') && !seedB.includes('ENTITLEMENTS_SEED_PROFILE'));
-  const zapB = git(['show', `${COMMIT_B}:scripts/integrations/import-whatsapp-sender.mjs`]);
+  const zapB = ler('scripts/integrations/import-whatsapp-sender.mjs');
   assert.ok(!zapB.includes('esperado') && !zapB.includes("'waba', $1"), 'a B não confere o par nem reivindica a WABA');
-  const pkgB = JSON.parse(git(['show', `${COMMIT_B}:package.json`]));
+  const pkgB = JSON.parse(ler('package.json'));
   for (const s of ['migrate:up', 'auth:bootstrap-owner', 'tenancy:seed-entitlements', 'integrations:import-legacy', 'integrations:reencrypt', 'integrations:import-whatsapp-sender', 'tenancy:mover-criativos']) {
     assert.ok(pkgB.scripts[s], `${s} existe na B`);
   }

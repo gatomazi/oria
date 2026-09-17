@@ -1,0 +1,83 @@
+{
+  "descricao": "Snapshots podados do histórico legado do painel, versionados para que a suíte rode em clone limpo. Regerar: node scripts/fixtures/legacy-snapshots.mjs --repo <caminho>",
+  "snapshots": [
+    {
+      "arquivo": "ed5a5b0-criativos.tar.gz",
+      "commit": "ed5a5b0",
+      "commitCompleto": "ed5a5b046757dfe56b57f5817c4745457fda26ba",
+      "escopo": "criativos",
+      "paths": [
+        "routes/criativos.js",
+        "lib/creative-core"
+      ],
+      "consumidores": [
+        "test/invariants/ops22-creative-release-b.test.js"
+      ],
+      "bytes": 20925,
+      "sha256": "2b51ded4c0458d456ba68910393bb07f1911dfe8a52e579c80f1d79b3df9bd0a",
+      "geradoEm": "2026-09-17"
+    },
+    {
+      "arquivo": "31a7cdb-release-b.tar.gz",
+      "commit": "31a7cdb",
+      "commitCompleto": "31a7cdb168848fe7df2afa64e16acb889b118adf",
+      "escopo": "release-b",
+      "paths": [
+        "scripts",
+        "lib",
+        "migrations",
+        "package.json",
+        "routes/criativos.js"
+      ],
+      "consumidores": [
+        "test/invariants/ops22-creative-release-b.test.js",
+        "test/invariants/r19-release-b-contrato.test.js",
+        "test/invariants/r19-runbook-dry-run.test.js"
+      ],
+      "bytes": 208193,
+      "sha256": "54778db01ffe47c9cf661724a1fa53b3101d3b739d5ce982677fe4b063e89925",
+      "geradoEm": "2026-09-17"
+    },
+    {
+      "arquivo": "8c024d2-release-d0.tar.gz",
+      "commit": "8c024d2",
+      "commitCompleto": "8c024d24aa7ed201eb3fe9440d84f6478161ff3b",
+      "escopo": "release-d0",
+      "paths": [
+        "scripts",
+        "lib",
+        "migrations",
+        "package.json",
+        "server.js"
+      ],
+      "consumidores": [
+        "test/invariants/r19-runbook-dry-run.test.js",
+        "test/invariants/r19-contrato-repasse-transicao.test.js"
+      ],
+      "bytes": 448942,
+      "sha256": "a7e4f43c5dc69efa24176601da272903da1a17b3d27e9dabd1c2d0e9618488da",
+      "geradoEm": "2026-09-17"
+    },
+    {
+      "arquivo": "bfd00a6-painel.tar.gz",
+      "commit": "bfd00a6",
+      "commitCompleto": "bfd00a665711f721aaea18506620964f168bdeaf",
+      "escopo": "painel",
+      "paths": [
+        "server.js",
+        "lib",
+        "routes",
+        "migrations",
+        "scripts",
+        "package.json",
+        "test/fixtures/tenancy"
+      ],
+      "consumidores": [
+        "test/invariants/r19-contrato-repasse-transicao.test.js"
+      ],
+      "bytes": 422709,
+      "sha256": "c233fb48003ffc001579e8f37b016873bc232d17a09c56dbe0871bb7ffcea606",
+      "geradoEm": "2026-09-17"
+    }
+  ]
+}

@@ -25,26 +25,45 @@ const RAIZ_SUJEITO = process.env.INVARIANT_SUBJECT_ROOT
   ? path.resolve(process.env.INVARIANT_SUBJECT_ROOT)
   : RAIZ_REPO;
 
-// Repositório LEGADO do painel (orgulhoregional). O monorepo Oria nasceu de snapshots, sem a
-// história antiga, mas os contratos de rollout (RELEASE B = 31a7cdb, D0 = 8c024d2, painel antigo
-// bfd00a6, produção ed5a5b0) precisam rodar o código REAL daqueles commits. Quem executa o runbook
-// tem os dois repositórios lado a lado; em outra máquina, defina ORIA_LEGACY_PANEL_REPO.
-const RAIZ_LEGADO_PAINEL = process.env.ORIA_LEGACY_PANEL_REPO
-  ? path.resolve(process.env.ORIA_LEGACY_PANEL_REPO)
-  : path.resolve(RAIZ_REPO, '..', '..', '..', 'orgulhoregional');
+// ── Snapshots do histórico legado do painel ────────────────────────────────────────────────────
+// O monorepo Oria nasceu de snapshots, sem a história antiga, mas os contratos de rollout
+// (RELEASE B = 31a7cdb, D0 = 8c024d2, painel de antes do endurecimento = bfd00a6, produção de então
+// = ed5a5b0) só provam o que prometem se rodarem o código REAL daqueles commits.
+//
+// Até a rodada 20 isso exigia o repositório legado em disco, ao lado do monorepo — o que impedia um
+// clone limpo de rodar a suíte e obrigava o CI a excluir esses quatro arquivos. Agora o `git
+// archive` é feito UMA VEZ e o resultado, podado, é versionado em `test/fixtures/legacy/`. O código
+// executado continua byte a byte o daqueles commits; o que sumiu foi a dependência externa.
+//
+// Regerar/conferir: `node scripts/fixtures/legacy-snapshots.mjs --repo <legado> [--check]`.
+const DIR_SNAPSHOTS_LEGADOS = path.join(RAIZ_REPO, 'test', 'fixtures', 'legacy');
 
-// Falha (nunca pula) quando o histórico legado não está disponível: um contrato que some em silêncio
-// é indistinguível de um contrato que passa.
-function exigirRepoLegado(...commits) {
+// Falha (nunca pula) quando o snapshot não confere: um contrato que some em silêncio é
+// indistinguível de um contrato que passa. O sha256 do manifesto é verificado a cada extração —
+// é o que liga o que roda aqui ao commit que o manifesto declara.
+function extrairSnapshotLegado(destino, nome) {
+  // eslint-disable-next-line global-require
+  const fs = require('node:fs');
+  // eslint-disable-next-line global-require
+  const crypto = require('node:crypto');
+  // eslint-disable-next-line global-require
   const { spawnSync } = require('node:child_process');
-  const dica = `defina ORIA_LEGACY_PANEL_REPO (atual: ${RAIZ_LEGADO_PAINEL}); a suíte do CI usa npm run test:ci`;
-  const r = spawnSync('git', ['-C', RAIZ_LEGADO_PAINEL, 'rev-parse', '--git-dir'], { encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`repositório legado do painel não encontrado — ${dica}`);
-  for (const c of commits) {
-    const e = spawnSync('git', ['-C', RAIZ_LEGADO_PAINEL, 'cat-file', '-e', `${c}^{commit}`], { encoding: 'utf8' });
-    if (e.status !== 0) throw new Error(`commit ${c} ausente no repositório legado (clone raso?) — ${dica}`);
+
+  const arquivo = nome.endsWith('.tar.gz') ? nome : `${nome}.tar.gz`;
+  const manifesto = JSON.parse(fs.readFileSync(path.join(DIR_SNAPSHOTS_LEGADOS, 'manifest.json'), 'utf8'));
+  const entrada = manifesto.snapshots.find((s) => s.arquivo === arquivo);
+  if (!entrada) throw new Error(`snapshot legado ${arquivo} não está no manifesto de test/fixtures/legacy`);
+
+  const tarball = path.join(DIR_SNAPSHOTS_LEGADOS, arquivo);
+  const sha = crypto.createHash('sha256').update(fs.readFileSync(tarball)).digest('hex');
+  if (sha !== entrada.sha256) {
+    throw new Error(`snapshot legado ${arquivo} não confere com o manifesto (sha256 ${sha.slice(0, 12)} ≠ ${entrada.sha256.slice(0, 12)})`);
   }
-  return RAIZ_LEGADO_PAINEL;
+
+  fs.mkdirSync(destino, { recursive: true });
+  const r = spawnSync('tar', ['-xzf', tarball, '-C', destino], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`falha ao extrair ${arquivo}: ${r.stderr}`);
+  return destino;
 }
 
 // Carrega o módulo SOB TESTE. Sempre por aqui — nunca `require` relativo.
@@ -199,8 +218,7 @@ function chaveMestraDeTeste(semente = 'a') {
 module.exports = {
   RAIZ_REPO,
   RAIZ_SUJEITO,
-  RAIZ_LEGADO_PAINEL,
-  exigirRepoLegado,
+  extrairSnapshotLegado,
   sujeito,
   rodandoContraCopia,
   abrirPool,

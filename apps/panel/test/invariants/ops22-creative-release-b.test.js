@@ -7,7 +7,7 @@
 // versões passam a ler e gravar os mesmos arquivos. A materialização (remover o vínculo e mover) só
 // acontece numa release com a leitura dupla (HEAD), com `--desvincular --aplicar`.
 //
-// Aqui roda o código REAL de cada commit (git archive de routes/criativos.js + lib/creative-core/),
+// Aqui roda o código REAL de cada commit — snapshot podado, versionado em test/fixtures/legacy/ —
 // sobre o mesmo volume: antes, durante e depois, com uploads das duas versões e rollback B → anterior.
 
 const test = require('node:test');
@@ -22,9 +22,9 @@ const { pathToFileURL } = require('node:url');
 
 const h = require('./harness');
 
-const REPO_LEGADO = h.exigirRepoLegado('ed5a5b0', '31a7cdb'); // história antiga (monorepo Oria: snapshots)
-const PRODUCAO = 'ed5a5b0'; // master: tenant = CREATIVE_TENANT_ID || 'default'
-const RELEASE_B = '31a7cdb'; // tenant = Organization da sessão, sem leitura dupla
+// Snapshots versionados do histórico legado (ver scripts/fixtures/legacy-snapshots.mjs).
+const PRODUCAO = { commit: 'ed5a5b0', snapshot: 'ed5a5b0-criativos' }; // master: tenant = CREATIVE_TENANT_ID || 'default'
+const RELEASE_B = { commit: '31a7cdb', snapshot: '31a7cdb-release-b' }; // tenant = Organization da sessão, sem leitura dupla
 const MOVER = path.join(h.RAIZ_REPO, 'scripts', 'tenancy', 'mover-criativos.mjs');
 const ORG = 'a1000000-0000-4000-8000-000000000001';
 const LEGADO = 'default';
@@ -39,20 +39,9 @@ let tmp;
 let mover;
 const codigo = {};
 
-function git(args) {
-  const r = spawnSync('git', args, { cwd: REPO_LEGADO, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
-  assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
-  return r.stdout;
-}
-
 // routes/criativos.js + lib/creative-core/ do commit, com o node_modules do repositório.
-function extrair(commit) {
-  const dir = path.join(tmp, commit);
-  fs.mkdirSync(dir, { recursive: true });
-  const tar = path.join(tmp, `${commit}.tar`);
-  fs.writeFileSync(tar, git(['archive', '--format=tar', commit, 'routes/criativos.js', 'lib/creative-core']));
-  const r = spawnSync('tar', ['-xf', tar, '-C', dir], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
+function extrair({ commit, snapshot }) {
+  const dir = h.extrairSnapshotLegado(path.join(tmp, commit), snapshot);
   fs.symlinkSync(path.join(h.RAIZ_REPO, 'node_modules'), path.join(dir, 'node_modules'), 'dir');
   return {
     criarRouterCriativos: require(path.join(dir, 'routes', 'criativos.js')).criarRouterCriativos,
