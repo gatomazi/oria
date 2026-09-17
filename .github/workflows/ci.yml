@@ -6,11 +6,9 @@ name: CI
 # que a productização combate. Por isso o Postgres é efêmero, as migrations rodam do zero e nenhum
 # passo aceita "não rodou" como sucesso.
 #
-# Limite conhecido: quatro testes de contrato do painel rodam o código REAL de commits antigos
-# (releases do runbook) e precisam do repositório legado `orgulhoregional` em disco. O runner não o
-# tem, então eles ficam fora do job do painel (PAINEL_SEM_LEGADO) e são cobertos pelo
-# `npm run productization:gate` na máquina do operador, que roda a suíte inteira. Quando o legado
-# estiver disponível no CI, basta remover a exclusão.
+# Os contratos de rollout que rodam o código REAL de commits antigos são autocontidos: os snapshots
+# podados daqueles commits estão versionados em `apps/panel/test/fixtures/legacy/`. Nenhum job
+# depende de repositório vizinho, caminho absoluto ou interpretador local.
 
 on:
   push:
@@ -19,7 +17,7 @@ on:
 
 jobs:
   contracts:
-    name: contratos cross-service
+    name: contratos cross-service e autocontenção
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +25,8 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/check-contracts.mjs
+      # Falha se voltar a existir caminho absoluto de máquina ou dependência de repo vizinho.
+      - run: npm run repo:self-check
 
   panel:
     name: painel (Node)
@@ -72,16 +72,8 @@ jobs:
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
 
-      # Sem o repositório legado, os contratos que rodam commits antigos não podem ser executados.
-      - name: suíte do painel (sem os contratos que exigem o histórico legado)
-        run: |
-          node scripts/test-db.mjs run -- node --test --test-concurrency=1 \
-            $(ls test/*.test.js) \
-            $(ls test/invariants/*.test.js \
-              | grep -v -e 'r19-contrato-repasse-transicao' \
-                        -e 'r19-release-b-contrato' \
-                        -e 'r19-runbook-dry-run' \
-                        -e 'ops22-creative-release-b')
+      - name: suíte do painel
+        run: npm test
 
       - name: suíte sob a role da aplicação (oria_app)
         run: npm run test:app-role

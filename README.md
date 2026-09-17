@@ -41,7 +41,14 @@ npm run whatsapp:test          # go vet + build + test -race (sobe um Postgres d
 ```
 
 Os testes de banco sobem Postgres efêmero no Docker e o derrubam no fim. Nenhum teste se pula em
-silêncio: falta de Docker, de Python ou do repositório legado **falha**.
+silêncio: falta de Docker ou de Python **falha**. A suíte é autocontida — não precisa de repositório
+vizinho: os contratos que rodam o código real de commits antigos leem snapshots versionados em
+`apps/panel/test/fixtures/legacy/` (proveniência e regeração em
+`docs/architecture/source-migration-manifest.md`).
+
+```bash
+npm run repo:self-check        # nenhum caminho de máquina local nem dependência de repo vizinho
+```
 
 ## Railway
 

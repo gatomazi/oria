@@ -8,6 +8,8 @@
     "repo:self-check": "node scripts/self-check.mjs",
     "contracts:check": "node scripts/check-contracts.mjs",
     "contracts:sync": "node scripts/check-contracts.mjs --sync",
+    "repo:self-check": "node scripts/repo-self-check.mjs",
+    "panel:fixtures:legacy": "node apps/panel/scripts/fixtures/legacy-snapshots.mjs",
     "panel:install": "npm --prefix apps/panel ci",
     "panel:test": "npm --prefix apps/panel test",
     "panel:test:app-role": "npm --prefix apps/panel run test:app-role",
