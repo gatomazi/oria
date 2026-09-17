@@ -1,0 +1,9 @@
+{
+  "format": "oria-ops-evidence/v1",
+  "id": "OPS-27",
+  "status": "VERIFIED",
+  "verified_at": "2026-09-17T18:00:00-03:00",
+  "verified_by": "Gabriel Tomazi",
+  "environment": "production",
+  "evidence": "O valor de META_APP_SECRET foi recuperado no Meta Developers (App settings > Basic) no MESMO App a que pertence o META_APP_ID configurado no serviço Go do WhatsApp. Depois de atualizar a variável no ambiente real, o fluxo real de mensagens da Meta voltou a ser aceito e processado pelo serviço. A verificação HMAC do cabeçalho X-Hub-Signature-256 permaneceu obrigatória durante todo o procedimento: nada foi desligado, afrouxado ou contornado, e o boot do serviço continuou com a verificação de assinatura ligada. Nenhum valor foi registrado aqui, no repositório ou em conversa: a comparação entre o console da Meta e o ambiente foi feita apenas na tela do operador."
+}

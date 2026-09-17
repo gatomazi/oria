@@ -7,7 +7,9 @@ não foi tocada.
 
 ```text
 CODE READY
-ROLLOUT NO-GO   (OPS-27 NOT VERIFIED)
+ROLLOUT NO-GO   (OPS-27 NOT VERIFIED)   [nota posterior: OPS-27 VERIFIED em 17/09/2026, rodada 21;
+                                         o rollout segue BLOCKED pelos demais OPS, pela infra nova
+                                         e pelo dogfood]
 FASE 6 NOT CLOSED
 ```
 

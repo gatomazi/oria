@@ -2,24 +2,28 @@
 
 ## Current phase
 
-**Rodada 19 (17/09/2026): decisões da rodada 18 fechadas e rollout preparado, sem publicar.**
-**CODE READY · ROLLOUT NO-GO (OPS-27) · FASE 6 NOT CLOSED.**
-Branches **`feature/produtizacao-saas`** no painel e no Go. Sem push, sem deploy; a `master` não foi tocada.
+**Rodada 21 (17/09/2026): OPS-27 VERIFIED e alvo de infraestrutura fechado. Nada publicado.**
+**CODE READY · ROLLOUT BLOCKED · FASE 6 NOT CLOSED.**
+Branches **`feature/produtizacao-saas`** no painel e no Go; o produto vive no monorepo `oria`. Sem
+push, sem deploy; a `master` não foi tocada.
 
 | | estado |
 |---|---|
 | Fases 0 a 5c — implementação local | ✅ CLOSED |
 | Fase 6 — Tenant #1 | 🟡 **CODE READY** · alvo **cenário B** (Use Origens) · **NÃO CLOSED** |
 | Fase 7 — onboarding | 🟡 backend construído · `SECOND_TENANT_ENABLED` desligada · sem rota/UI |
-| Runbook | ✅ ordem única A → B → C → D0 → E → D' → F → CLEANUP → OPS-36 → dogfood; dry-run local encadeado verde |
-| `npm run productization:gate` | **CODE PASS · OPS 36/36 NOT VERIFIED · DOGFOOD NOT STARTED · OVERALL BLOCKED** (exit 2; `--report-only` exit 0) |
-| Rollout | ⛔ **OPS-27** (checklist para o usuário em `ops-27-checklist.md`) |
+| Runbook | ✅ ordem única A → B → C → D0 → E → D' → F → CLEANUP → OPS-36 → dogfood; dry-run local encadeado verde. A **sequência de releases** precisa ser redefinida para o alvo novo (runbook §20.3) |
+| OPS-27 | ✅ **VERIFIED (17/09/2026)** — `ops-evidence/OPS-27.json` |
+| `npm run productization:gate` | **OPS 35/36 NOT VERIFIED · DOGFOOD NOT STARTED · OVERALL BLOCKED.** Código: PASS na última execução completa (rodada 20); a rodada 21 rodou só `--report-only --skip-suite --no-go-tests`, que reporta CODE NOT VERIFIED por não executar a suíte |
+| Alvo de infraestrutura | ✅ **projeto Railway novo `Oria`** (`oria-panel`, `oria-creatives`, `oria-whatsapp`; dois Postgres; volume só no painel). Projeto antigo = stack legada / rollback. **Nada criado ainda** |
+| Rollout | ⛔ **BLOCKED** — infraestrutura nova não criada · 35 OPS sem evidência · nenhuma release publicada · dogfood NOT STARTED |
 | Nada publicado | nenhum push, deploy, Railway, banco de produção, tenant externo ou dogfooding |
 
 > **Rodada 20 (17/09/2026) — o produto mudou de casa, e só isso.** A productização passou a viver no
 > monorepo **`oria`** (`apps/panel`, `apps/creative-generator`, `services/whatsapp`), importado como
-> snapshot de `orgulhoregional@970290e` e `whatsapp-webhook-go@244bf45`. **Nenhum estado mudou:**
-> Fase 6 CODE READY e NÃO CLOSED, rollout NO-GO, OPS-27 NOT VERIFIED, dogfood NOT STARTED. Os
+> snapshot de `orgulhoregional@970290e` e `whatsapp-webhook-go@244bf45`. **Nenhum estado mudou naquela
+> rodada:** Fase 6 CODE READY e NÃO CLOSED, rollout NO-GO, OPS-27 ainda NOT VERIFIED (resolvido na
+> rodada 21), dogfood NOT STARTED. Os
 > repositórios antigos continuam intactos; a proveniência está em
 > `docs/architecture/source-migration-manifest.md`. Os comandos `npm run ...` deste documento rodam
 > em `apps/panel` ou pelos atalhos da raiz (`npm run panel:test`, `npm run productization:gate`).
@@ -648,9 +652,13 @@ Documento da fase: **`whatsapp-inbound-5c.md`**.
 
 ## Blockers antes do rollout / do fechamento da Fase 6
 
-- **OPS-27** (NOT VERIFIED): primeiro gate; checklist em `ops-27-checklist.md`.
+- ~~**OPS-27**: primeiro gate~~ — ✅ **VERIFIED em 17/09/2026** (rodada 21), evidência em
+  `ops-evidence/OPS-27.json`. O checklist em `ops-27-checklist.md` fica como referência para qualquer
+  ambiente novo.
+- **Infraestrutura do projeto Railway `Oria` não criada** (project, services, dois Postgres, volume).
+- **Sequência de releases não redefinida para o alvo novo** (runbook §20.3) — decisão de outra rodada.
 - **Consolidação operacional Use Origens** pronta para o corte (condição do cenário B).
-- **OPS-01..36** sem evidência no formato do gate.
+- **OPS-01..26 e OPS-28..36** sem evidência no formato do gate (35 dos 36).
 - **`ADMIN_SESSION_SECRET` atual < 32** (se for o caso) para o rollout em §5.4 do runbook: exige decisão nova.
 - **Dogfood de 14 dias:** NOT STARTED.
 - **Fora do repositório:** OPS-33 (extrator).
@@ -763,12 +771,18 @@ Organizations, que é onde estão os blockers CRITICAL.
 
 ## Next actions
 
-1. Usuário responde o checklist do OPS-27 (sem segredo); com MATCH e evento real, registrar a evidência.
-2. Confirmar que a consolidação Use Origens está pronta para o corte e preencher os arquivos de rollout do cenário B.
-3. Ensaiar `tenant1:*` sobre uma restauração local do backup de produção.
-4. Seguir `production-rollout-runbook.md` a partir de §5, com `release:preflight` em cada etapa.
-5. Iniciar o dogfood (`DOGFOOD.json`) só depois de OPS-14 e OPS-36 VERIFIED; gate exit 0 + decisão do usuário fecham a Fase 6.
-6. Sincronizar a `master` e integrar as branches só por decisão separada.
+1. ~~Checklist do OPS-27~~ — feito (rodada 21). **Próximo:** registrar o `OPS-10.json` como
+   `NOT_APPLICABLE` com `reason` "absorvido por OPS-27", que é o par documental do OPS-27.
+2. Criar a infraestrutura do projeto Railway `Oria` conforme `docs/operations/railway-bootstrap.md`
+   (nada criado até aqui) e registrar as evidências de OPS-01..05 e OPS-15.
+3. **Decidir a sequência de releases no alvo novo** (runbook §20.3): o que substitui os commits
+   B/C/D0 do repositório antigo, o que prova cada passo e como é o rollback entre degraus.
+4. Confirmar que a consolidação Use Origens está pronta para o corte e preencher os arquivos de rollout do cenário B.
+5. Ensaiar `tenant1:*` sobre uma restauração local do backup de produção.
+6. Seguir `production-rollout-runbook.md` a partir de §5, com `release:preflight` em cada etapa e a
+   estratégia de cutover do §20.3 (legado no ar até o fim da janela de rollback).
+7. Iniciar o dogfood (`DOGFOOD.json`) só depois de OPS-14 e OPS-36 VERIFIED; gate exit 0 + decisão do usuário fecham a Fase 6.
+8. Sincronizar a `master` e integrar as branches só por decisão separada.
 
 > Histórico das próximas ações das rodadas 1-7 preservado abaixo, só para rastreio.
 

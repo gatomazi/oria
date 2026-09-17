@@ -1,7 +1,18 @@
 # OPS-27 — checklist para o usuário (sem expor segredo)
 
-Rodada 19. **Não executado.** Este checklist é o primeiro gate de qualquer rollout da productização
-(`production-rollout-runbook.md` §4.3). Ele prova, no ambiente real, que o serviço Go valida webhooks
+> ## ✅ RESOLVIDO em 17/09/2026 (rodada 21)
+>
+> O `META_APP_SECRET` foi recuperado no Meta Developers, no **mesmo App** a que pertence o
+> `META_APP_ID` do serviço Go, e atualizado no ambiente real. O fluxo real de mensagens voltou a
+> funcionar e a validação HMAC (`X-Hub-Signature-256`) **permaneceu obrigatória o tempo todo**.
+> Evidência, sem valores: [`ops-evidence/OPS-27.json`](ops-evidence/OPS-27.json).
+>
+> **O checklist abaixo continua valendo como procedimento de referência** — para qualquer ambiente
+> novo (o projeto Railway `Oria` do runbook §20 inclusive), para uma troca futura do App Secret ou
+> para um novo incidente de assinatura. Cada ambiente precisa de evidência própria.
+
+Rodada 19. Este checklist é o primeiro gate de qualquer rollout da productização
+(`production-rollout-runbook.md` §5.1). Ele prova, no ambiente real, que o serviço Go valida webhooks
 da Meta com o segredo certo, **sem** desligar a verificação de assinatura.
 
 > **Regra de ouro:** nunca cole App Secret, token, API key ou URL com credencial no chat, em arquivo
@@ -77,8 +88,11 @@ Confirme `sig_verify=true` e `env=production`.
 
 ## Depois
 
-Com tudo OK (3 = MATCH, 5 = recebido, 7 = sim), registro `docs/produtizacao-saas/ops-evidence/OPS-27.json`
-(formato do runbook §2, sem valores) e o OPS-10 como absorvido. A bateria 5a do runbook §4.3 (chamadas
+Com tudo OK (3 = MATCH, 5 = recebido, 7 = sim), registro `docs/productization/ops-evidence/OPS-27.json`
+(formato do runbook §2, sem valores) e o OPS-10 como absorvido. A bateria 5a do runbook §5.1 (chamadas
 sem/com assinatura e API key) roda junto, com a sua autorização explícita para chamar o serviço de produção.
 
 Qualquer NO MATCH, 403 ou "nada chegou" mantém o rollout **NO-GO**.
+
+**Feito em 17/09/2026** para o ambiente atual: o `OPS-27.json` está registrado. Falta ainda o
+`OPS-10.json` (`NOT_APPLICABLE` com `reason` "absorvido por OPS-27").

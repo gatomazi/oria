@@ -11,6 +11,8 @@ Second Tenant Gate             = automatizado (npm run productization:gate)
 Rollout runbook                = consolidado (production-rollout-runbook.md)
 Hardening crítico 5c           = feito (repasse assinado, aceite durável, cache curto, páginas removidas)
 OVERALL PRODUCTION ROLLOUT     = BLOCKED por OPS-27 + OPS pendentes + dogfooding
+                                 [nota posterior: OPS-27 VERIFIED em 17/09/2026 (rodada 21);
+                                  os demais bloqueios continuam]
 ```
 
 ## Como foi executado

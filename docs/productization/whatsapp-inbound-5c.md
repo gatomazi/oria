@@ -1,6 +1,8 @@
 # Fase 5c — entrada multi-tenant, jobs com lease e webhook da Ink
 
-Rodada 17, 16/09/2026. **Implementação local, nada publicado.** A 5c depende da 5b (`whatsapp-sender-contract.md`), e todo rollout segue bloqueado por **OPS-27**.
+Rodada 17, 16/09/2026. **Implementação local, nada publicado.** A 5c depende da 5b (`whatsapp-sender-contract.md`).
+O **OPS-27 foi verificado em 17/09/2026** (rodada 21); o rollout continua bloqueado pelos demais OPS, pela
+infraestrutura Railway nova ainda não criada e pelo dogfood (`production-rollout-runbook.md`).
 
 ## 1. Arquitetura V1 (PD-023 CLOSED)
 

@@ -1618,7 +1618,7 @@ Nenhum PD/TD mudou de status. Decisões de implementação tomadas nas trilhas (
 | 1 | PD-019 A/B e dono do número | **Cenário B**; número → Use Origens, declarado | `config/tenant1/*.template.json`, `--rollout`, `whatsapp.declaracao`; preflight bloqueia mapeamento ≠ B (`round19-trilha-h.md`) |
 | 2 | Janela D → E do repasse | **Nenhuma perda aceita.** Go novo assina e mantém a query sob flag; painel exige assinatura e tolera a query sob flag; depois as flags saem | D0 = `8c024d2`, E, D', Go sem query, CLEANUP; contrato executável com o painel antigo real (`round19-trilha-e.md`) |
 | 3 | Boot sem `WHATSAPP_WEBHOOK_SECRET` | **Abort em produção** (≥ 32), sem modo que dispense | `exigirSegredoDeRepasseNoBoot` (`round19-trilha-f.md`) |
-| 4 | Release antes do OPS-27 | **Não.** Nenhuma release da productização, nem só migrations | runbook §3/§5.1 |
+| 4 | Release antes do OPS-27 | **Não.** Nenhuma release da productização, nem só migrations. O OPS-27 foi verificado em 17/09/2026 (rodada 21); a regra continua valendo para qualquer ambiente novo | runbook §3/§5.1 |
 | 5 | B e C juntas | **Separadas.** B = checkpoint observável; C só após smoke + ciclo real | runbook §8.4/§9 |
 | 6 | Janela de 404 dos criativos | **Zero janela.** Vínculo `tenant/<org>` → legado antes da B; materialização com leitura dupla depois da D' | `mover-criativos --vincular/--verificar/--desvincular`, `CREATIVE_LEGACY_READ_*` (`round19-trilha-g.md`) |
 | 7a | Features do seed | **Features implementadas e usadas** pela operação: catalog, creative_clean_angles, creative_funnel_visual, creative_generator, creative_multi_product, creative_remarketing, exchanges, financial, refunds, whatsapp. OFF: instagram, advancedAutomations. Não fecha PD-005/PD-009 | perfil `config/entitlements/tenant1-entitlements.json`; seed valida contra o registry |
@@ -1634,3 +1634,62 @@ scripts daquele commit. Por isso o seed da B usa a lista igual ao perfil, o mape
 variável, o par do WhatsApp é conferido pelo HEAD antes e depois, e os criativos usam o vínculo em vez
 de código novo na B.
 
+
+---
+
+# Rodada 21 — OPS-27 verificado e alvo de infraestrutura fechado (17/09/2026)
+
+Rodada de documentação. **Nada foi publicado, executado ou criado**: sem push, sem deploy, sem projeto
+Railway, sem banco de produção, sem valor de segredo em lugar nenhum.
+
+## 1. OPS-27 = VERIFIED
+
+O usuário recuperou o `META_APP_SECRET` no Meta Developers, no **mesmo App** a que pertence o
+`META_APP_ID` usado pelo serviço Go do WhatsApp, e atualizou o valor no ambiente real. Depois disso o
+fluxo real de mensagens voltou a funcionar, com a validação HMAC (`X-Hub-Signature-256`) **ligada o
+tempo todo**.
+
+Evidência no formato do gate, sem nenhum valor:
+[`ops-evidence/OPS-27.json`](ops-evidence/OPS-27.json).
+
+## 2. Interpretação técnica que fica registrada
+
+| # | decisão | por quê |
+|---|---|---|
+| R21-1 | `META_APP_SECRET` é segredo **da plataforma / do App Meta** | é o App da Oria que recebe o webhook; o cliente não tem App próprio nesse caminho |
+| R21-2 | `META_APP_ID` e `META_APP_SECRET` **precisam pertencer ao mesmo App** | assinatura calculada com o segredo de outro App nunca confere: 403 em todo evento — foi exatamente o incidente |
+| R21-3 | O **HMAC continua obrigatório** | não existe modo de operação que dispense `X-Hub-Signature-256`, em nenhum ambiente; o incidente foi resolvido corrigindo o segredo, não afrouxando a verificação |
+| R21-4 | O segredo **não** vira credencial de tenant | não entra em `integration_secrets`, não é configurável por Organization e continua sendo variável de ambiente do serviço Go (`infra/railway/env-manifest.md`, seção PROJECT/SHARED) |
+
+Consequência para o multi-tenant: o que é **por cliente** é a WABA, o número e o token de envio
+(OPS-31, OPS-29). O par App ID / App Secret é **um só**, da plataforma.
+
+## 3. Alvo Railway fechado
+
+O rollout tem como destino o **projeto Railway novo `Oria`**: `oria-panel` (`apps/panel`),
+`oria-creatives` (`apps/creative-generator`) e `oria-whatsapp` (`services/whatsapp`); dois Postgres
+(painel e WhatsApp, não unificados); volume **só** no painel. O **projeto Railway antigo é stack legada
+e origem de rollback**, não é alvo. A bifurcação "projeto antigo ou novo" foi removida de
+`docs/operations/railway-bootstrap.md`.
+
+Networking confirmado: painel público (painel + webhook da Ink pela URL opaca) com acesso privado aos
+outros dois; Gerador **só** privado; WhatsApp com ingress público para o webhook da Meta e endpoints
+internos protegidos por `API_KEY` + assinatura.
+
+## 4. Estratégia de cutover (direção única)
+
+```text
+LEGACY RAILWAY continua live → NEW ORIA RAILWAY sobe isolado → validação/migrations/import
+  → cutovers coordenados → dogfood → legado disponível para rollback por uma janela definida
+```
+
+## 5. O que esta rodada NÃO resolveu
+
+- **A sequência de releases do runbook continua escrita para o projeto antigo**, com commits antigos
+  (B `31a7cdb`, C `3adad08`, D0 `8c024d2`, D' HEAD) que não existem na história do monorepo.
+  Redefini-la — o que é publicado em cada degrau, o que prova cada passo, como é o rollback entre
+  degraus — é **decisão e trabalho de outra rodada**. O que se mantém e o que precisa mudar está
+  descrito com honestidade em `production-rollout-runbook.md` §20.3.
+- **O rollout continua BLOCKED:** infraestrutura Railway nova não criada, 35 dos 36 OPS sem evidência,
+  nenhuma release publicada, dogfood NOT STARTED.
+- **A Fase 6 continua CODE READY e NÃO CLOSED.**

@@ -134,9 +134,9 @@ Fase 5a — preparação independente do serviço Go  ← paralelo a tudo, desde
 | **3** | Tenant context + entitlements | RBST | **XL** | 2 |
 | **4** | Integrations | RBST | **L** | 3 |
 | **5a** | Serviço Go — preparação | RBST | **S** | — *(paralelo)* |
-| **5b** | Janela coordenada painel ↔ Go — ✅ **CLOSED (local), 16/09** · deploy bloqueado por **OPS-27** | RBST | **M** | 4 + 5a |
-| **5c** | Entrada/webhook multi-tenant — ✅ **CLOSED (local), 16/09** · Variante **B** · rollout bloqueado por **OPS-27** | RBST | **L (var. B)** | 5b + **PD-023 (CLOSED)** |
-| **6** | Operação interna como Tenant #1 — 🟡 **CODE READY (local), 17/09** · alvo **cenário B** · rollout **NO-GO** (OPS-27) · **NÃO CLOSED** | RBST | **L** | 5c |
+| **5b** | Janela coordenada painel ↔ Go — ✅ **CLOSED (local), 16/09** · deploy pendente de rollout (OPS-27 ✅ VERIFIED 17/09) | RBST | **M** | 4 + 5a |
+| **5c** | Entrada/webhook multi-tenant — ✅ **CLOSED (local), 16/09** · Variante **B** · rollout pendente (OPS-27 ✅ VERIFIED 17/09) | RBST | **L (var. B)** | 5b + **PD-023 (CLOSED)** |
+| **6** | Operação interna como Tenant #1 — 🟡 **CODE READY (local), 17/09** · alvo **cenário B** · rollout **BLOCKED** (infra Railway nova não criada, 35 OPS sem evidência, dogfood NOT STARTED) · **NÃO CLOSED** | RBST | **L** | 5c |
 | **7** | Onboarding — 🟡 **construída localmente (backend), 17/09** · travada por `SECOND_TENANT_ENABLED` · não exposta | RBPL | **M** | GATE |
 | **8** | Hardening | RBPL/PLH | **L** | contínua |
 
@@ -1183,7 +1183,7 @@ INV-39 PASS    autenticação interna obrigatória e só por header — sem cred
 >
 > | id | o quê | bloqueia |
 > |---|---|---|
-> | **OPS-27** | `META_APP_SECRET` pertence exatamente ao `META_APP_ID` do Go, e um webhook real passa no HMAC (200/received). Repetir a bateria 5a (403/403/401/401/200/401). | **qualquer deploy da 5b** |
+> | **OPS-27** ✅ | `META_APP_SECRET` pertence exatamente ao `META_APP_ID` do Go, e um webhook real passa no HMAC (200/received). Repetir a bateria 5a (403/403/401/401/200/401). **VERIFIED em 17/09/2026** (`ops-evidence/OPS-27.json`) | **qualquer deploy da 5b** |
 > | **OPS-28** | segredos novos: `WHATSAPP_SENDER_REF_SECRET` e `WHATSAPP_SENDER_RESOLVER_KEY` (painel), `PANEL_SENDER_RESOLVER_URL` e `PANEL_SENDER_RESOLVER_KEY` (Go) | Releases A/B |
 > | **OPS-29** | `npm run integrations:import-whatsapp-sender -- --organization <uuid> --aplicar`, com `WHATSAPP_LEGACY_*` = `META_*` do Go | Release B |
 > | **OPS-30** | esvaziar a fila do Go (itens sem referência) antes do cutover; `POST /api/admin/integrations/whatsapp/teste` depois | Release C |
@@ -1393,8 +1393,10 @@ prova a plataforma.
 > - Teste estático sem `internalTenant`/`useOrigens`/`ourStore` (`fase6-tenant1-static`), com controle negativo.
 > - Rollback local por configuração/caminho de leitura, sem DROP/DELETE/troca de dono
 >   (`fase6-tenant1-rollback`); runbook em `overnight-trilha-a.md` §6.
-> - **Falta para fechar:** rollout em produção (bloqueado por OPS-27 e OPS pendentes —
->   `production-rollout-runbook.md`) e ≥ 2 semanas de dogfooding factual.
+> - **Falta para fechar:** rollout em produção — bloqueado pela infraestrutura Railway nova (não criada),
+>   pelos 35 OPS ainda sem evidência e pela sequência de releases a redefinir no alvo novo
+>   (`production-rollout-runbook.md` §20). O OPS-27 saiu do caminho em 17/09/2026. Falta também
+>   ≥ 2 semanas de dogfooding factual.
 >
 > **Rodada 19 (17/09): decisões fechadas, rollout preparado, nada publicado.**
 >
