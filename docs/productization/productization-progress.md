@@ -16,6 +16,14 @@ Branches **`feature/produtizacao-saas`** no painel e no Go. Sem push, sem deploy
 | Rollout | ⛔ **OPS-27** (checklist para o usuário em `ops-27-checklist.md`) |
 | Nada publicado | nenhum push, deploy, Railway, banco de produção, tenant externo ou dogfooding |
 
+> **Rodada 20 (17/09/2026) — o produto mudou de casa, e só isso.** A productização passou a viver no
+> monorepo **`oria`** (`apps/panel`, `apps/creative-generator`, `services/whatsapp`), importado como
+> snapshot de `orgulhoregional@970290e` e `whatsapp-webhook-go@244bf45`. **Nenhum estado mudou:**
+> Fase 6 CODE READY e NÃO CLOSED, rollout NO-GO, OPS-27 NOT VERIFIED, dogfood NOT STARTED. Os
+> repositórios antigos continuam intactos; a proveniência está em
+> `docs/architecture/source-migration-manifest.md`. Os comandos `npm run ...` deste documento rodam
+> em `apps/panel` ou pelos atalhos da raiz (`npm run panel:test`, `npm run productization:gate`).
+
 ---
 
 ## Histórico da auditoria

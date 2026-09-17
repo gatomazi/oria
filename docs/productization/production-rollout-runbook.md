@@ -18,6 +18,12 @@ contexto; onde divergirem, vale este documento, e o motivo está em §17:
 - `whatsapp-inbound-5c.md`;
 - os `round19-trilha-*.md`.
 
+> **Onde rodar os comandos (monorepo Oria, rodada 20).** Tudo aqui foi escrito com o painel na raiz de
+> um repositório. No monorepo, `npm run <script>` roda em `apps/panel`, ou pela raiz com os atalhos
+> `npm run panel:*`, `npm run productization:gate`, `npm run release:preflight` e `npm run tenant1:*`.
+> As releases B, C e D0 publicam commits do **repositório antigo** (`orgulhoregional`), que continua
+> existindo; ver `docs/operations/railway-bootstrap.md` §"O que este projeto novo muda no runbook".
+
 **Marcadores**
 
 | marcador | significado |
