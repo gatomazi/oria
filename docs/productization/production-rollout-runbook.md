@@ -1,14 +1,23 @@
 # Runbook único de rollout em produção — painel Oria + whatsapp-webhook-go
 
-- **Versão:** rodada 19 (17/09/2026).
+- **Versão:** rodada 19 (17/09/2026), atualizada na rodada 21 (17/09/2026): OPS-27 VERIFIED e alvo de
+  infraestrutura fechado (§20).
 - **Origem:** consolida a rodada 18 (trilhas A–D) com as decisões da rodada 19 (trilhas E–H e lead).
 - **Nada aqui foi executado.**
 
 ```text
-ESTADO: rollout NO-GO — OPS-27 NOT VERIFIED; demais OPS NOT VERIFIED; dogfood NOT STARTED
+ESTADO: rollout BLOCKED — OPS-27 VERIFIED; 35 dos 36 OPS ainda NOT VERIFIED;
+        infraestrutura do projeto Railway Oria não criada; rollout não executado;
+        dogfood NOT STARTED
 Fase 6: CODE READY · NÃO CLOSED
-PRODUCTION ROLLOUT START requires OPS-27 VERIFIED (nenhuma exceção, nem "só migrations")
+ALVO DE INFRAESTRUTURA: projeto Railway novo "Oria" (§20). O projeto antigo é stack legada / rollback
+PRODUCTION ROLLOUT START requires OPS-27 VERIFIED — cumprido em 17/09/2026
+        (evidência: docs/productization/ops-evidence/OPS-27.json)
 ```
+
+> **OPS-27 deixou de ser o bloqueio.** O gate zero de §5.1 está cumprido. O rollout continua **BLOCKED**
+> por outros motivos, nenhum deles resolvido nesta rodada: a infraestrutura nova do Railway não foi
+> criada, os demais OPS não têm evidência, nenhuma release foi publicada e o dogfood não começou.
 
 Este runbook junta, numa ordem só, os OPS-01..36. As fontes originais continuam valendo como
 contexto; onde divergirem, vale este documento, e o motivo está em §17:
@@ -21,14 +30,18 @@ contexto; onde divergirem, vale este documento, e o motivo está em §17:
 > **Onde rodar os comandos (monorepo Oria, rodada 20).** Tudo aqui foi escrito com o painel na raiz de
 > um repositório. No monorepo, `npm run <script>` roda em `apps/panel`, ou pela raiz com os atalhos
 > `npm run panel:*`, `npm run productization:gate`, `npm run release:preflight` e `npm run tenant1:*`.
-> As releases B, C e D0 publicam commits do **repositório antigo** (`orgulhoregional`), que continua
-> existindo; ver `docs/operations/railway-bootstrap.md` §"O que este projeto novo muda no runbook".
+>
+> **Sequência de releases × alvo novo (rodada 21).** Os checkpoints B, C e D0 de §4 são commits do
+> **repositório antigo** (`orgulhoregional`) e foram escritos para o projeto Railway antigo. O alvo do
+> rollout agora é o projeto Railway **novo** (§20), servido pelo monorepo. O que isso significa para a
+> sequência está em §20.3, e **a redefinição dela é trabalho de outra rodada**: nada aqui foi reescrito
+> às pressas.
 
 **Marcadores**
 
 | marcador | significado |
 |---|---|
-| **[EVIDÊNCIA]** | gravar `docs/produtizacao-saas/ops-evidence/OPS-XX.json` (formato em §2) para o gate contar o item |
+| **[EVIDÊNCIA]** | gravar `docs/productization/ops-evidence/OPS-XX.json` (formato em §2) para o gate contar o item |
 | **[SEM VOLTA]** | ponto a partir do qual um rollback para trás exige procedimento manual |
 | **[NÃO ENSAIADO NO RAILWAY]** | procedimento testado localmente, mas não na plataforma |
 
@@ -57,6 +70,7 @@ contexto; onde divergirem, vale este documento, e o motivo está em §17:
 | 17 | Divergências resolvidas |
 | 18 | Dogfood, SECOND TENANT GATE e onboarding |
 | 19 | Matriz OPS → passo |
+| 20 | Alvo de infraestrutura e estratégia de cutover (rodada 21) |
 
 ---
 
@@ -81,9 +95,10 @@ contexto; onde divergirem, vale este documento, e o motivo está em §17:
 
 ## 2. Evidência OPS e dogfood (formato)
 
-Diretório: `docs/produtizacao-saas/ops-evidence/`. Um arquivo por item. **Hoje nenhum existe**, então
-todos aparecem como NOT VERIFIED, inclusive os OPS-06/07/08 da rodada 8, que precisam ser
-registrados de novo neste formato.
+Diretório: `docs/productization/ops-evidence/` (na raiz do monorepo; é o padrão do gate,
+`DIR_EVIDENCIA_PADRAO`). Um arquivo por item. **Hoje existe só o `OPS-27.json`** (rodada 21); os outros
+35 aparecem como NOT VERIFIED, inclusive os OPS-06/07/08 da rodada 8, que precisam ser registrados de
+novo neste formato.
 
 ```json
 {
@@ -136,7 +151,7 @@ só `open_incidents` é editado.
 |---|---|
 | D1 | **PD-019 = cenário B.** Organization "Use Origens" com Store "Use Origens". Sul/Centro/Norte só como mapeamento legado. O cenário A continua suportado e testado, mas **não** é o plano. Mudar exige nova confirmação do usuário |
 | D2 | **Número WhatsApp atual** (WABA + phone_number_id) → Organization Use Origens, **declarado** no arquivo de rollout. Nunca inferido |
-| D3 | **OPS-27 primeiro.** Nenhuma release da productização, nem só migrations, antes do OPS-27 VERIFIED. Sem enfraquecer HMAC nem fail-fast |
+| D3 | **OPS-27 primeiro.** Nenhuma release da productização, nem só migrations, antes do OPS-27 VERIFIED. Sem enfraquecer HMAC nem fail-fast. **Cumprido em 17/09/2026** (rodada 21, §5.1): o HMAC nunca foi desligado, e a regra continua valendo para qualquer ambiente novo |
 | D4 | **`WHATSAPP_WEBHOOK_SECRET` obrigatório no boot de produção** do HEAD (≥ 32; sem modo que o dispense) |
 | D5 | **Status assinados sem perda.** O R1 vira D0 (repasse pela query) + E (Go assina e mantém a query) + D' (painel exige assinatura e tolera a query) + Go sem query + CLEANUP. Nenhum passo aceita perda |
 | D6 | **B e C separadas.** B é checkpoint observável/reversível; C é cutover. C só depois de smoke + ciclo real observado na B |
@@ -152,8 +167,12 @@ só `open_incidents` é editado.
 
 ## 4. Ordem única
 
+A ordem abaixo é a de execução dos OPS. O **alvo** dela mudou na rodada 21 (§20): o projeto Railway
+novo. Os passos 0 a 3 valem como estão; os passos com commit nomeado (6, 8, 9, 11) dependem da
+redefinição descrita em §20.3.
+
 ```text
- 0. OPS-27 VERIFIED ................................................ §5.1
+ 0. OPS-27 VERIFIED ................................ ✅ 17/09/2026 ... §5.1
  1. backup/restore readiness (OPS-04) ............................. §5.2
  2. cenário B configurado (arquivos de rollout preenchidos) ....... §5.3
  3. mapping Tenant #1 + WhatsApp declarado (antes-da-b PASS) ...... §5.3–5.5
@@ -193,9 +212,28 @@ só `open_incidents` é editado.
 
 Nada aqui altera produção, exceto quando o passo diz "configurar": são variáveis sem efeito até o deploy.
 
-### 5.1 Gate zero — OPS-27
+### 5.1 Gate zero — OPS-27 ✅ VERIFIED (17/09/2026)
 
-- [ ] **OPS-27** — checklist em [`ops-27-checklist.md`](ops-27-checklist.md): App ID, MATCH/NO MATCH do
+> **Resolvido.** O `META_APP_SECRET` foi recuperado no Meta Developers, no **mesmo App** a que pertence
+> o `META_APP_ID` do serviço Go, e atualizado no ambiente real. O fluxo real de mensagens voltou a
+> funcionar e a validação HMAC (`X-Hub-Signature-256`) **permaneceu obrigatória o tempo todo** — nada
+> foi desligado nem afrouxado. Evidência (sem valores):
+> [`ops-evidence/OPS-27.json`](ops-evidence/OPS-27.json).
+>
+> **Interpretação técnica que fica registrada** (rodada 21; ver também
+> [`productization-decisions.md`](productization-decisions.md) §rodada 21):
+>
+> 1. `META_APP_SECRET` é segredo **da plataforma / do App Meta**, não de cliente.
+> 2. `META_APP_ID` e `META_APP_SECRET` precisam pertencer **ao mesmo App**; par trocado = 403 em todo
+>    webhook, que foi exatamente o incidente.
+> 3. O HMAC continua **obrigatório**: não existe modo de operação que o dispense, em nenhum ambiente.
+> 4. O segredo **não** vira credencial de tenant: não entra em `integration_secrets`, não é
+>    configurável por Organization e continua sendo variável de ambiente do serviço Go.
+>
+> O procedimento abaixo continua valendo como referência para qualquer ambiente novo (inclusive o
+> projeto Railway do §20), que precisa de evidência própria antes de receber webhook real.
+
+- [x] **OPS-27** — checklist em [`ops-27-checklist.md`](ops-27-checklist.md): App ID, MATCH/NO MATCH do
   App Secret, webhook real, `sig_verify=true`, WABA e número.
   - **Nunca colar o App Secret.**
   - Depois, com autorização explícita para chamar produção, rodar a bateria 5a:
@@ -211,6 +249,8 @@ Nada aqui altera produção, exceto quando o passo diz "configurar": são variá
 
   - **[EVIDÊNCIA]** Enquanto o OPS-27 não estiver VERIFIED, **nenhum passo de §6 em diante acontece.**
     Qualquer NO MATCH, 403 no evento real ou "nada chegou" mantém **NO-GO**.
+    Registrado em `ops-evidence/OPS-27.json` (17/09/2026). Esta trava está liberada; as outras
+    (demais OPS, infraestrutura do §20, releases, dogfood) **não**.
 - [ ] **OPS-10** — `NOT_APPLICABLE` com `reason` "absorvido por OPS-27".
 
 ### 5.2 Infraestrutura e backup (OPS-01..08)
@@ -230,7 +270,8 @@ Nada aqui altera produção, exceto quando o passo diz "configurar": são variá
 - [ ] **Gate:** no HEAD do painel, `npm run productization:gate`, com `WHATSAPP_GO_DIR` no HEAD do Go.
   - Esperado: **exit 2** com `CODE: PASS`.
   - **Exit 1 = pare.**
-  - Exit 0 aqui é erro de evidência: nenhum OPS pode estar VERIFIED antes do rollout.
+  - Exit 0 aqui é erro de evidência: o rollout ainda não aconteceu, então só os OPS efetivamente
+    verificados no ambiente real podem aparecer VERIFIED (hoje, apenas o OPS-27).
 - [ ] **Suíte e build:** `npm run test:app-role` verde e `npm run build` verde.
 - [ ] **Arquivos de rollout** (fora do repositório; têm ids de produção, não segredos):
   1. `cp config/tenant1/rollout-scenario-b.template.json config/tenant1/rollout-scenario-b.json`
@@ -799,7 +840,7 @@ Nunca rotacionar enquanto qualquer ciphertext depender dele.
 | 01-05 | 5.2 | antes de tudo |
 | 06-08 | 5.2 | antes de tudo (re-registrar) |
 | 09 | 5.4 / 11 / 12 / 13.1 / 15.1 | estado atual antes; segredo novo + flag no Go (E); segredo novo + tolerância no painel (D'); Go sem query; fim da tolerância |
-| 10 | 5.1 | junto com OPS-27 (absorvido) |
+| 10 | 5.1 | junto com OPS-27 (absorvido); falta o `OPS-10.json` com `NOT_APPLICABLE` + `reason` |
 | 11 | 8.2 / 10 / 12 | pre-deploy B, D0 e D' |
 | 12, 13, 15 | 5.4 | antes de B |
 | 14 | 14 / 18 | RELEASE F; referência do dogfood |
@@ -812,7 +853,7 @@ Nunca rotacionar enquanto qualquer ciphertext depender dele.
 | 24 | 5.4 / 14 / 15.2 | release N / flag desligada antes da F / limpeza na N+1 |
 | 25 | 8.2 / 15.3 | pre-deploy B / prova de 0 legado antes da rotação |
 | 26 | 8.4 / 9 | depois de B e de C |
-| 27 | 5.1 | gate zero |
+| 27 | 5.1 | gate zero — ✅ **VERIFIED em 17/09/2026** (`ops-evidence/OPS-27.json`) |
 | 28 | 5.4 / 5.5 | antes de A e B |
 | 29 | 5.4 / 8.2 / 15.2 | insumo, pre-deploy B, limpeza |
 | 30 | 9 / 11 | antes de C (e de E) |
@@ -822,3 +863,103 @@ Nunca rotacionar enquanto qualquer ciphertext depender dele.
 | 34 | 10 / 15.2 | logo após D0 / limpeza |
 | 35 | 5.5 / 11 / 15.2 | antes de A / E / limpeza |
 | 36 | 15.3 / 18 | rotação final; referência do dogfood |
+
+---
+
+## 20. Alvo de infraestrutura e estratégia de cutover (rodada 21)
+
+Esta seção fecha duas decisões que antes eram bifurcação. **Nada aqui foi executado**: nenhum project,
+service, banco, volume ou deploy existe.
+
+### 20.1 Alvo: o projeto Railway novo "Oria"
+
+```text
+Project: Oria                    (NOVO — alvo do rollout)
+
+Services:
+  oria-panel      → apps/panel
+  oria-creatives  → apps/creative-generator
+  oria-whatsapp   → services/whatsapp
+
+Databases:
+  Postgres do painel      (oria-panel)
+  Postgres do WhatsApp    (oria-whatsapp)   — não são unificados
+
+Volume:
+  só no oria-panel, no caminho documentado em infra/railway/services.md
+```
+
+Os três services apontam para o **mesmo** repositório (`gatomazi/oria`), cada um com seu *Root
+Directory*. O passo a passo de criação está em
+[`../operations/railway-bootstrap.md`](../operations/railway-bootstrap.md); a matriz de services, em
+[`../../infra/railway/services.md`](../../infra/railway/services.md); os nomes de variáveis, em
+[`../../infra/railway/env-manifest.md`](../../infra/railway/env-manifest.md).
+
+> **O projeto Railway antigo é stack legada e origem de rollback — não é alvo.** Ele continua no ar
+> servindo a operação enquanto o Oria sobe, e é para onde se volta se o cutover falhar. Nenhum passo
+> deste runbook tem como destino final o projeto antigo.
+
+### 20.2 Networking (confirmado)
+
+| service | ingress público | rede privada |
+|---|---|---|
+| `oria-panel` | **sim** — painel administrativo e `POST /api/webhooks/ink/:token` | chama `oria-creatives` e `oria-whatsapp` pelo domínio interno |
+| `oria-creatives` | **não** — só rede privada | recebe do painel (`CREATIVE_CORE_URL`, OPS-01/02) |
+| `oria-whatsapp` | **sim** — o webhook da Meta precisa alcançá-lo | endpoints internos continuam exigindo `API_KEY` + assinatura; repassa ao painel pelo domínio interno |
+
+- O webhook da **Ink** entra pelo **ingress público do `oria-panel`** (URL opaca `/:token`, OPS-34):
+  não existe ingress separado para ele.
+- O `oria-creatives` nunca é alcançado pelo navegador.
+
+### 20.3 Estratégia de cutover (direção única)
+
+```text
+LEGACY RAILWAY continua live
+  → NEW ORIA RAILWAY sobe isolado (sem tráfego real)
+  → validação + migrations + import de dados
+  → cutovers coordenados (DNS/URLs de webhook, um de cada vez)
+  → dogfood da operação interna como Organization normal
+  → legado permanece disponível para rollback por uma janela definida
+```
+
+Regras que essa direção impõe:
+
+1. **O Oria sobe sem tráfego real.** Nenhum webhook (Meta ou Ink) é reapontado enquanto o ambiente
+   novo não estiver validado e com backup/restauração testados (OPS-04).
+2. **Cutovers são coordenados e individuais**, cada um com rollback próprio: painel (URL da Ink,
+   OPS-34), WhatsApp (callback da Meta) e resolver/repasse (contrato 5b/5c, OPS-09/28).
+3. **O dogfood só começa depois do ambiente novo estável**, com `OPS-14` e `OPS-36` VERIFIED (§2, §18).
+4. **A janela de rollback do legado é declarada antes do primeiro cutover** — dias, não "até alguém
+   desligar". Enquanto ela durar, o projeto antigo não é apagado nem tem variável removida.
+
+#### O que isso faz com a sequência de releases de §4 — em aberto
+
+O runbook descreve B, C, D0 e D' como **releases de commits antigos do repositório antigo**
+(`31a7cdb`, `3adad08`, `8c024d2`, e D' = HEAD), publicadas no projeto Railway antigo, sobre um banco
+que já continha a produção. O alvo mudou; a sequência, não. Com honestidade sobre o que se sabe hoje:
+
+**O que se mantém, independentemente do alvo**
+
+- A **ordem lógica** dos OPS (§4) e a matriz OPS → passo (§19).
+- Os **motivos** de cada passo intermediário: a D' existe para que nenhum status se perca, a B é
+  checkpoint observável antes do cutover 5b, o vínculo dos criativos vem antes da materialização.
+- Todos os **pré-requisitos de segurança**: OPS-27, backups testados, HMAC obrigatório, role da
+  aplicação, rotação por último.
+- O **ROLLBACK** de §16 continua descrevendo como desfazer cada passo *dentro* de um ambiente.
+
+**O que precisa ser redefinido antes de qualquer execução**
+
+- **Os commits.** A história do monorepo não tem `31a7cdb`, `3adad08` nem `8c024d2`: os checkpoints
+  intermediários não existem lá. Publicar "a release B" no projeto novo exige decidir **o que** é
+  publicado — e isso ainda não foi decidido.
+- **A premissa de banco preexistente.** Várias releases são degraus sobre uma base que já contém dados
+  de produção; num Postgres novo, o degrau vira *import* + migrations, não *upgrade em produção*.
+  Migrar dados e repetir a escada de releases são coisas diferentes.
+- **Os testes de contrato de cada degrau.** Eles provam a passagem de uma versão à outra; sem os
+  commits intermediários, o que prova cada passo precisa ser redefinido junto com ele.
+- **O rollback entre degraus.** §16 assume "voltar o deploy para o commit anterior". Num ambiente novo
+  alimentado por import, o rollback real é "voltar o tráfego para o legado" — outro procedimento.
+
+> **Isto é decisão e trabalho de outra rodada.** Nenhuma sequência nova está descrita aqui, porque
+> nenhuma foi desenhada nem ensaiada. Até que exista, §4 continua valendo como **ordem de OPS** e como
+> registro do que a sequência antiga garantia — **não** como roteiro executável no projeto novo.

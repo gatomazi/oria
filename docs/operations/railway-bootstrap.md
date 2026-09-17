@@ -1,13 +1,19 @@
 # Bootstrap do projeto Railway "Oria"
 
-Rodada 20. **Nada aqui foi executado.** Nenhum project, service, banco ou volume foi criado, e nenhum
-segredo real aparece neste documento.
+Rodada 20, atualizado na rodada 21. **Nada aqui foi executado.** Nenhum project, service, banco ou
+volume foi criado, e nenhum segredo real aparece neste documento.
 
-O projeto Railway antigo continua sendo a produção legada. O projeto **Oria** é o alvo isolado: subir,
-validar, migrar e, se preciso, voltar para a stack antiga (§36 da rodada 20).
+**Alvo fechado (rodada 21):** o rollout tem como destino o **projeto Railway novo `Oria`**, com os
+services `oria-panel`, `oria-creatives` e `oria-whatsapp`, dois Postgres (painel e WhatsApp) e volume
+só no painel. O **projeto Railway antigo é stack legada e origem de rollback** — ele continua no ar
+durante a transição e não é alvo de nenhum passo do rollout. Não há mais escolha entre "projeto antigo
+ou novo".
 
-> **Pré-condição de rollout:** o `production-rollout-runbook.md` (raiz: `docs/productization/`) só
-> começa depois do **OPS-27 VERIFIED**. Este bootstrap prepara a infraestrutura; ele não libera deploy.
+> **Pré-condição de rollout:** o **OPS-27 está VERIFIED** desde 17/09/2026
+> (`docs/productization/ops-evidence/OPS-27.json`). O `production-rollout-runbook.md` (raiz:
+> `docs/productization/`) continua bloqueado por outros motivos — infraestrutura não criada, demais OPS
+> sem evidência, releases não publicadas e dogfood NOT STARTED. Este bootstrap prepara a
+> infraestrutura; ele não libera deploy.
 
 ## Ordem
 
@@ -85,17 +91,38 @@ validar, migrar e, se preciso, voltar para a stack antiga (§36 da rodada 20).
 
 ### 12. Só então: rollout
 
-- [ ] Seguir `docs/productization/production-rollout-runbook.md` desde §5, com o OPS-27 VERIFIED.
+- [ ] Seguir `docs/productization/production-rollout-runbook.md` desde §5 (o OPS-27 já está VERIFIED),
+      respeitando a estratégia de cutover abaixo.
 
-## O que este projeto novo muda no runbook
+## Estratégia de cutover (direção única, rodada 21)
 
-O runbook foi escrito para o projeto Railway **antigo**, com releases em commits antigos
-(`31a7cdb`, `3adad08`, `8c024d2`) do repositório do painel. Num projeto novo, partindo do monorepo,
-existem duas opções — e **a escolha é do usuário**, numa rodada própria:
+```text
+LEGACY RAILWAY continua live
+  → NEW ORIA RAILWAY sobe isolado (sem tráfego real)
+  → validação + migrations + import de dados
+  → cutovers coordenados (URLs de webhook e domínio, um de cada vez)
+  → dogfood da operação interna como Organization normal
+  → legado permanece disponível para rollback por uma janela definida
+```
 
-1. **Rollout no projeto antigo** (como o runbook descreve) e, depois, migração para o Oria.
-2. **Rollout direto no projeto Oria**, a partir do monorepo. Isso exige reescrever a sequência de
-   releases: os checkpoints intermediários não existem na história do monorepo, e os testes de
-   contrato que provam cada passo dependem do repositório legado.
+- O Oria sobe **sem tráfego real**: nenhum webhook (Meta ou Ink) é reapontado antes da validação e do
+  backup/restauração testados (OPS-04).
+- Cada cutover tem rollback próprio, e a **janela de rollback do legado é declarada antes do primeiro
+  deles**. Enquanto ela durar, o projeto antigo não é apagado nem tem variável removida.
+- O dogfood só começa com o ambiente novo estável e `OPS-14`/`OPS-36` VERIFIED.
 
-Enquanto a decisão não existir, o runbook continua valendo como está, e o Oria fica pronto e parado.
+## O que o alvo novo muda na sequência de releases — em aberto
+
+O runbook descreve as releases B, C e D0 como commits **antigos** do repositório antigo (`31a7cdb`,
+`3adad08`, `8c024d2`; D' = HEAD), publicados no projeto Railway antigo sobre um banco que já continha a
+produção. Com o alvo no projeto novo:
+
+- **Mantém-se:** a ordem lógica dos OPS, os motivos de cada degrau (nenhum status perdido, checkpoint
+  antes do cutover 5b, vínculo antes da materialização) e todos os pré-requisitos de segurança.
+- **Precisa ser redefinido:** quais artefatos são publicados (os commits intermediários não existem na
+  história do monorepo), o que substitui a premissa de "banco já em produção" (num Postgres novo é
+  import + migrations), o que prova cada passo sem os commits antigos, e o que é rollback entre
+  degraus (num ambiente novo, o rollback real é voltar o tráfego ao legado).
+
+**Isso é decisão e trabalho de outra rodada.** Nenhuma sequência nova foi desenhada nem ensaiada aqui.
+O detalhamento está no runbook, §20.3.

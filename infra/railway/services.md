@@ -1,11 +1,17 @@
 # Railway — matriz de services do projeto Oria
 
-Rodada 20. **Documento. Nenhum service, banco ou volume foi criado nesta rodada.** Os comandos abaixo
-foram derivados dos projetos importados (`package.json`, `Procfile`, `Dockerfile`, `gunicorn.conf.py`),
-não inventados.
+Rodada 20, atualizado na rodada 21. **Documento. Nenhum service, banco ou volume foi criado.** Os
+comandos abaixo foram derivados dos projetos importados (`package.json`, `Procfile`, `Dockerfile`,
+`gunicorn.conf.py`), não inventados.
 
-Projeto Railway: **Oria** · três services apontando para o **mesmo** repositório `gatomazi/oria`,
-cada um com seu *Root Directory*.
+Projeto Railway: **Oria** (novo) · três services apontando para o **mesmo** repositório
+`gatomazi/oria`, cada um com seu *Root Directory*.
+
+> **Alvo fechado (rodada 21).** O projeto **Oria** é o alvo do rollout. O **projeto Railway antigo é
+> stack legada e origem de rollback**: continua no ar durante a transição, e nenhum passo do rollout
+> tem ele como destino. Ordem de criação em
+> [`../../docs/operations/railway-bootstrap.md`](../../docs/operations/railway-bootstrap.md);
+> estratégia de cutover no runbook, §20.
 
 ## Visão geral
 

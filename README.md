@@ -58,14 +58,19 @@ Detalhes em [`infra/railway/services.md`](infra/railway/services.md) e
 [`docs/operations/railway-bootstrap.md`](docs/operations/railway-bootstrap.md).
 **Nada disso foi criado ainda.**
 
+O projeto **Oria** é o alvo do rollout; o projeto Railway antigo fica como **stack legada e origem de
+rollback**. A estratégia de cutover (legado no ar → Oria isolado → validação → cutovers coordenados →
+dogfood → janela de rollback) está no runbook, §20.
+
 ## Productização
 
 ```text
 Fases 0 a 5c ....... CLOSED (local)
 Fase 6 ............. CODE READY · NÃO CLOSED
 Fase 7 ............. construída, travada por SECOND_TENANT_ENABLED
-ROLLOUT ............ NO-GO
-OPS-27 ............. NOT VERIFIED
+OPS-27 ............. VERIFIED (17/09/2026)
+OPS GATES .......... 35 de 36 NOT VERIFIED
+ROLLOUT ............ BLOCKED (infra Railway nova não criada · OPS pendentes · dogfood)
 DOGFOOD ............ NOT STARTED
 ```
 
@@ -78,8 +83,10 @@ npm run release:preflight -- --from-env-file <export> --stage release-n
 ```
 
 Leitura na ordem: [`docs/productization/productization-progress.md`](docs/productization/productization-progress.md)
-(estado), [`production-rollout-runbook.md`](docs/productization/production-rollout-runbook.md) (o que
-fazer no rollout) e [`ops-27-checklist.md`](docs/productization/ops-27-checklist.md) (o bloqueio atual).
+(estado e bloqueios atuais), [`production-rollout-runbook.md`](docs/productization/production-rollout-runbook.md)
+(o que fazer no rollout, incluindo o alvo de infraestrutura em §20) e
+[`ops-27-checklist.md`](docs/productization/ops-27-checklist.md) (procedimento do OPS-27, já resolvido,
+mantido como referência para ambientes novos).
 
 ## Segurança
 
