@@ -14,6 +14,9 @@ Resposta ao §40 do comando
 Código, banco, API, interface e testes: prontos. Deploy: não feito. Nada bloqueia o deploy além
 da criação do service.
 
+O fluxo agora fecha ponta a ponta: o Admin cria a Organization e emite o convite, e o owner
+consegue **aceitar** pelo painel (seção 33).
+
 ## 2. Branch / HEAD
 
 `main`, HEAD `b20afcf`. As branches de trabalho (`feature/platform-admin`, `refactor/panel-flatten`)
@@ -34,7 +37,8 @@ conflito entre elas.
 
 ## 4. Push
 
-Feito. `origin/main` = `167baa7`.
+Feito. `origin/main` = `7422bf5` no momento da escrita; o merge do aceite do convite (`0c36145`)
+sobe em seguida.
 
 ## 5. CI — **verde**
 
@@ -212,9 +216,7 @@ real de variável.
 ## 30. Blockers
 
 1. **O service `oria-admin` não existe** — único bloqueio real para abrir o Admin no navegador.
-2. **O convite ainda não pode ser aceito pela interface.** A rota de aceite é do Tenant Plane
-   (painel); está sendo construída em `feature/invite-acceptance`. Sem ela, o convite é emitido mas
-   o owner não entra pela UI.
+2. ~~O convite não pode ser aceito pela interface~~ — **resolvido** (`0c36145`). Ver a seção 33.
 3. ~~CI em execução~~ — **resolvido**: verde nos cinco jobs em `b20afcf`.
 
 ## 31. O que você precisa fazer amanhã
@@ -238,8 +240,39 @@ real de variável.
 ## 32. GO / NO-GO para cadastrar a Use Origens manualmente
 
 **GO condicional.** O produto está pronto e provado; o condicional é operacional, não de qualidade:
-criar o service e rodar o bootstrap. Depois disso o fluxo inteiro funciona, com uma ressalva
-honesta: **o owner só conseguirá aceitar o convite quando a rota de aceite aterrissar**. Se ela
-aterrissar ainda hoje, o fluxo fecha ponta a ponta no mesmo dia.
+criar o service e rodar o bootstrap. Depois disso o fluxo inteiro funciona — inclusive o aceite do
+convite pelo owner, que aterrissou ainda nesta madrugada (seção 33).
 
 Nada de Tenant #1 foi criado automaticamente. Nenhuma Organization existe.
+
+---
+
+## 33. Aceite do convite — fechado depois do relatório original
+
+Duas rotas anônimas no painel, ambas **POST** (token em URL vira histórico, `Referer` e log de
+acesso): `/api/admin/convite/consultar`, que **não** consome e só mostra para quem é o convite, e
+`/api/admin/convite/aceitar`, que consome.
+
+O que ficou travado por decisão, não por acaso:
+
+- **A identidade é o e-mail do convite, lido do banco.** Se aquele e-mail já tem conta, o aceite
+  responde `409 conta_existente` e **não toca na senha** — "tem token, logo troca a senha" é
+  exatamente como se toma a conta de outra pessoa. A pessoa entra pelo login normal e volta.
+- **Falha não diz qual falha.** `desconhecido`, `usado`, `revogado` e `expirado` devolvem a mesma
+  resposta, byte a byte (há teste comparando as quatro). O motivo real vai só para o log, com uma
+  referência curta derivada do hash — nunca o token, nunca o hash inteiro.
+- **A tela usa o fragmento da URL** (`/admin/convite#<token>`), que o navegador não envia ao
+  servidor, e o apaga da barra assim que lê.
+- Tudo numa transação: se qualquer passo falhar, o convite **volta a valer**.
+
+O `GRANT` da função do control plane foi para o SQL do OPS-14 (`app-role.js`), não para uma
+migration — a role `oria_app` ainda não existe nos ambientes anteriores à RELEASE F, e uma
+migration com `GRANT … TO oria_app` quebraria o pre-deploy de todo banco novo. Foi preciso uma
+migration nova (`0020`) por outro motivo: uma função de **consulta** que trava a linha sem consumir,
+porque quem aceita normalmente ainda não tem conta e o e-mail precisa vir do banco.
+
+Verificado no Chrome de verdade, não por curl: token no fragmento → tela confirma e-mail e
+Organization → senha definida → painel aberto com a Organization do convite ativa, e `audit_log`
+com `org.invite.accept` sem token.
+
+**Suíte do painel: 934/934**, incluindo sob a role `oria_app`. Piso do gate em 934.
