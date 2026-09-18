@@ -86,7 +86,7 @@ export const SNAPSHOTS = Object.freeze([
     commit: 'bfd00a6',
     escopo: 'painel',
     // Painel INTEIRO em processo: `server.js` sobe de verdade, com as migrations daquele commit e
-    // a role da aplicação provisionada pelo contrato daquela árvore. O front (`admin/dist`,
+    // a role da aplicação provisionada pelo contrato daquela árvore. O front (`dist`,
     // `assets`, `src`) e os catálogos (`data`) ficam de fora: o teste só fala HTTP/JSON com o
     // painel, e os leitores de catálogo daquele commit já caem em fallback vazio sem o arquivo.
     // `test/fixtures/tenancy` (669 bytes) entra por necessidade: a migration de mapeamento daquela

@@ -5,7 +5,7 @@
 // Hoje é fail-OPEN em dois lugares independentes, e é preciso ver os dois para entender o tamanho
 // do problema (8a7ea3d):
 //
-//   frontend  admin/src/state/entitlements.ts:14-22,36-39  → DEFAULTS com tudo `true`
+//   frontend  src/state/entitlements.ts:14-22,36-39  → DEFAULTS com tudo `true`
 //   backend   server.js:13390                              → { ...ENTITLEMENTS_DEFAULT, ...entitlements }
 //
 // No backend, o spread faz chave AUSENTE virar permissão CONCEDIDA. Ou seja: falhar ao carregar o

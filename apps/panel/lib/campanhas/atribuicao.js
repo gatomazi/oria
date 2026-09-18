@@ -15,7 +15,7 @@ const { variantesTelefone } = require('../recuperacao/compra');
 
 const JANELA_DIAS = 7;
 // Janelas que o painel oferece — o endpoint só aceita uma destas (espelhada em
-// admin/src/state/janelaAtribuicao.ts).
+// src/state/janelaAtribuicao.ts).
 const JANELAS_DIAS_PERMITIDAS = [1, 3, 7, 14, 30];
 
 // Valor vindo da query string: inválido/ausente cai no padrão em vez de virar erro.

@@ -28,19 +28,36 @@
     "tenant1:rollback": "node scripts/tenant1/cli.mjs rollback",
     "db:start": "node scripts/test-db.mjs start",
     "db:stop": "node scripts/test-db.mjs stop",
-    "build": "npm --prefix admin install && npm --prefix admin run build",
-    "postinstall": "npm --prefix admin install && npm --prefix admin run build",
+    "dev": "vite",
+    "dev:frontend": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "build": "tsc -b && vite build",
     "test:unit": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=20.11"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-tooltip": "^1.2.16",
     "express": "^4.19.2",
     "node-pg-migrate": "^9.0.0",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^3.10.1",
     "serve": "^14.2.4",
     "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
   }
 }

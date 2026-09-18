@@ -27,11 +27,15 @@ do monorepo. A raiz é orquestradora: o `package.json` dela só chama subprocess
 
 Por que cada um é assim:
 
-- **`oria-panel`** — `package.json` com `start` (`node server.js`), `build` (instala e builda o admin) e
+- **`oria-panel`** — `package.json` com `start` (`node server.js`), `build` (`tsc -b && vite build`) e
   `engines.node >= 20.11` (OPS-15; declarado na rodada 22, antes o Railpack escolheria a versão).
-  `package-lock.json` está na raiz do service, e o admin tem o dele em `admin/package-lock.json`.
-  O `postinstall` já buildaria o admin; o Build Command repete `npm run build` de propósito, para o
-  `admin/dist` existir mesmo se o builder instalar com scripts desligados.
+  Há **um** `package-lock.json`, na raiz do service: o frontend deixou de ser um segundo app em
+  `apps/panel/admin/` (com manifesto e lockfile próprios) e subiu para a raiz do deployable, com o
+  build saindo em `dist/`. Por isso o `postinstall` que buildava o admin também sumiu — o Build
+  Command chama `npm run build` explicitamente, que é o que gera o `dist/`.
+  **Atenção ao `npm ci`:** o build precisa das `devDependencies` (`vite`, `typescript`,
+  `@vitejs/plugin-react`). Se o builder rodar com `NODE_ENV=production` (ou `--omit=dev`), o
+  `npm run build` quebra com "vite: not found" — nesse caso, instalar com `npm ci --include=dev`.
 - **`oria-creatives`** — a pasta tem `requirements.txt` (Pillow, openai, gunicorn), `pyproject.toml`
   e `.python-version` (3.12). **O Build Command precisa ser explícito:** o `pyproject` declara só
   `Pillow` como dependência de runtime (openai e gunicorn são o extra `service`, porque o core é uma
@@ -58,7 +62,7 @@ Nenhum runtime foi unificado e nenhum componente virou "aplicação da raiz".
 |---|---|
 | Root Directory | `apps/panel` |
 | Runtime | Node (`engines.node >= 20.11`), builder padrão do Railway |
-| Build | `npm ci` roda o `postinstall`: `npm --prefix admin install && npm --prefix admin run build` (gera `admin/dist`) |
+| Build | `npm ci && npm run build` → `tsc -b && vite build`, que gera `dist/` (o SPA). Não há mais `postinstall`: o build é explícito |
 | Start | `npm start` → `node server.js` (escuta em `PORT`, padrão 8080) |
 | Health endpoint | **não existe hoje.** O serviço não expõe `/health`. Usar `GET /` (página pública) como healthcheck, ou criar um endpoint próprio numa rodada futura — não inventar um caminho que não existe |
 | Pre-deploy | runbook §8.2: grava o mapeamento, `migrate:up`, `auth:bootstrap-owner`, `tenancy:seed-entitlements`, `integrations:import-legacy --aplicar`, `integrations:reencrypt`, `integrations:import-whatsapp-sender`. A partir do OPS-14: `export DATABASE_URL="$MIGRATION_DATABASE_URL"` antes do bloco |

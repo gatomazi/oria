@@ -31,6 +31,15 @@ function criarRaizFalsa() {
     'assets/fonts/handelson-six.otf': 'otf',
     'src/pedido.js': 'js',
     'src/pedido.css': 'css',
+    // Frontend do painel: mora em `src/` desde que `apps/panel/admin/` deixou de existir. É
+    // código-fonte, não arquivo público — o Vite empacota, ninguém busca por URL.
+    'src/main.tsx': 'tsx',
+    'src/App.tsx': 'tsx',
+    'src/api/client.ts': 'ts',
+    'src/auth/AuthContext.tsx': 'tsx',
+    'index.html': '<div id="root"></div>',
+    'vite.config.mjs': 'js',
+    'tsconfig.json': '{}',
     // Código, dados e operação — nunca públicos.
     'server.js': 'segredo',
     'package.json': '{}',
@@ -121,6 +130,11 @@ test('given source code docs scripts logs and internal data, when requested, the
     '/docs/plan.md', '/scripts/test-db.mjs', '/test/arquivos-publicos.test.js',
     '/desktop/package.json', '/db/pedidos.json',
     '/src/../server.js', '/assets/%2e%2e/server.js',
+    // Frontend do painel. `src/` já foi um diretório público inteiro; quando o SPA subiu de
+    // `admin/src` para `src/`, isso passou a significar servir o código-fonte do produto aberto.
+    // A allowlist agora nomeia os dois arquivos da hotpage e nada mais.
+    '/src/main.tsx', '/src/App.tsx', '/src/api/client.ts', '/src/auth/AuthContext.tsx',
+    '/vite.config.mjs', '/tsconfig.json',
   ];
   for (const url of privados) {
     const res = await fetch(base + url);
@@ -139,6 +153,9 @@ test('given source code docs scripts logs and internal data, when requested, the
 test('given the old Orgulho Regional site pages, when requested, then the allowlist refuses them', async (t) => {
   const base = await subirApp(t);
   const doSite = [
+    // `/index.html` responde 404 por dois motivos somados: era a home do site, e hoje o arquivo
+    // na raiz é o template FONTE do Vite (aponta para `/src/main.tsx`) — servi-lo entregaria uma
+    // página que não carrega. O painel sai da rota `/admin`, com o build em `dist/`.
     '/index.html',
     '/loja.html',
     '/stories/frame1-sul.html',

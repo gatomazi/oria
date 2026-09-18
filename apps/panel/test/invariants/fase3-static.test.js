@@ -91,7 +91,7 @@ test('INV-21 · sem espelho JSON global de auditoria quando há Postgres', () =>
 });
 
 test('INV-01/10 · o painel não escolhe loja nem manda tenant para a API', () => {
-  const raiz = path.join(h.RAIZ_REPO, 'admin', 'src');
+  const raiz = path.join(h.RAIZ_REPO, 'src');
   const arquivos = fs.readdirSync(raiz, { recursive: true })
     .filter((x) => /\.(ts|tsx)$/.test(x)).map((x) => path.join(raiz, x));
   assert.ok(arquivos.length > 50, 'fontes do painel não encontradas');

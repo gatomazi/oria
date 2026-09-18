@@ -21,9 +21,10 @@ export const PASS = 'PASS';
 export const FAIL = 'FAIL';
 export const NAO_VERIFICADO = 'NOT VERIFIED';
 
-// Piso de testes da suíte completa (bfd00a6: 710; rodada 18: 806; rodada 19: 894; rodada 20, monorepo Oria: 895). Só sobe: uma
+// Piso de testes da suíte completa (bfd00a6: 710; rodada 18: 806; rodada 19: 894; rodada 20, monorepo Oria: 895;
+// rodada 21, fusão do SPA na raiz do painel: 908). Só sobe: uma
 // suíte que encolheu em silêncio é o mesmo modo de falha de um teste que se pula.
-export const MINIMO_DE_TESTES = 895;
+export const MINIMO_DE_TESTES = 908;
 
 // Contratos painel ↔ Go. A versão esperada é declarada aqui de propósito: mudar o contrato exige
 // mudar o gate junto, e o gate confere que os dois lados carregam a mesma cópia.

@@ -61,22 +61,23 @@ function ehComentario(linha) {
   return l.startsWith('//') || l.startsWith('*') || l.startsWith('/*') || l.startsWith('{/*');
 }
 
-// Arquivos de produto: server.js, lib/ e routes/ da raiz do sujeito; admin/src da raiz do painel.
+// Arquivos de produto: server.js, lib/ e routes/ da raiz do sujeito; src/ da raiz do painel (o
+// frontend, que já morou em `admin/src` e subiu para a raiz do deployable).
 function arquivosDeProduto({ raiz, raizAdmin = raiz }) {
   const js = ['lib', 'routes'].flatMap((d) => {
     const dir = path.join(raiz, d);
     if (!fs.existsSync(dir)) return [];
     return fs.readdirSync(dir, { recursive: true }).filter((x) => x.endsWith('.js')).map((x) => path.join(dir, x));
   });
-  const adminDir = path.join(raizAdmin, 'admin', 'src');
-  const ts = fs.existsSync(adminDir)
-    ? fs.readdirSync(adminDir, { recursive: true }).filter((x) => /\.(ts|tsx)$/.test(x)).map((x) => path.join(adminDir, x))
+  const frontDir = path.join(raizAdmin, 'src');
+  const ts = fs.existsSync(frontDir)
+    ? fs.readdirSync(frontDir, { recursive: true }).filter((x) => /\.(ts|tsx)$/.test(x)).map((x) => path.join(frontDir, x))
     : [];
   return { raiz, raizAdmin, arquivos: [path.join(raiz, 'server.js'), ...js, ...ts] };
 }
 
 function rotulo(arquivo, { raiz, raizAdmin }) {
-  const base = arquivo.startsWith(path.join(raizAdmin, 'admin')) ? raizAdmin : raiz;
+  const base = arquivo.startsWith(path.join(raizAdmin, 'src')) ? raizAdmin : raiz;
   return path.relative(base, arquivo);
 }
 

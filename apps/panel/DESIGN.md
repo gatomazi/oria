@@ -257,7 +257,7 @@ Grafite frio em camadas, um verde de ação e um vocabulário semântico fechado
 
 **The Semantic-Only Rule.** Ciano, âmbar, vermelho e violeta só aparecem quando representam o estado que nomeiam. Ícone de KPI, cabeçalho de seção e série decorativa não recebem cor.
 
-**The Same-Status Same-Color Rule.** Um status tem um único rótulo e uma única cor em todo o produto, resolvidos por `admin/src/lib/statusMap.ts`. Rótulo cru da API (`paid`, `waiting_payment`) nunca chega à tela.
+**The Same-Status Same-Color Rule.** Um status tem um único rótulo e uma única cor em todo o produto, resolvidos por `src/lib/statusMap.ts`. Rótulo cru da API (`paid`, `waiting_payment`) nunca chega à tela.
 
 ## Typography
 
