@@ -63,11 +63,16 @@ ou novo".
 - [ ] Healthcheck: `/health`.
 - [ ] Ingress público: **sim** (webhook da Meta).
 
-### 7. Rede privada
+### 7. Comunicação entre os serviços
+
+A rede privada do Railway é **http**: não há TLS em `*.railway.internal`. Por isso o sentido
+painel → serviços usa a rede privada, mas o sentido Go → painel **não pode** usá-la — com
+`RAILWAY_ENVIRONMENT_NAME=production` o serviço Go recusa destino que não seja https e nem sobe.
 
 - [ ] `CREATIVE_CORE_URL` = domínio interno do `oria-creatives` (ex.: `http://oria-creatives.railway.internal:<porta>`) — OPS-02.
-- [ ] `WHATSAPP_SERVICE_URL` = domínio interno do `oria-whatsapp`.
-- [ ] `PANEL_SENDER_RESOLVER_URL` e `WEBHOOK_FORWARD_URL` = domínio interno do `oria-panel`, em https, **sem query**.
+- [ ] `WHATSAPP_SERVICE_URL` = domínio interno do `oria-whatsapp` (ex.: `http://oria-whatsapp.railway.internal:<porta>`).
+- [ ] `PANEL_SENDER_RESOLVER_URL` e `WEBHOOK_FORWARD_URL` = domínio **público https** do `oria-panel`, **sem query**.
+      Não aponte para `http://oria-panel.railway.internal`: o Go em produção exige https.
 - [ ] Conferir que só `oria-panel` e `oria-whatsapp` têm domínio público.
 
 ### 8. Volume

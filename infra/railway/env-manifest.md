@@ -75,8 +75,8 @@ A chave da OpenAI é **BYOK**: vem por request, do cofre do painel. Não existe 
 | `META_APP_SECRET` | sim (boot aborta em produção) | HMAC do webhook — **OPS-27 VERIFIED**; precisa ser o App Secret do mesmo App do `META_APP_ID` |
 | `META_APP_ID` | sim (preflight exige em todo estágio) | id público do App; o código sobe sem ela, o preflight não deixa |
 | `META_VERIFY_TOKEN` | sim, em **qualquer** ambiente | `mustEnv`: sem ela o processo não sobe nem em dev |
-| `PANEL_SENDER_RESOLVER_URL`, `PANEL_SENDER_RESOLVER_KEY` | sim | resolver do remetente e contexto (5b/5c); URL em https, chave ≥ 32 |
-| `WEBHOOK_FORWARD_URL`, `WEBHOOK_FORWARD_SECRET` | sim (quando há repasse) | URL **sem** query; segredo ≥ 32 |
+| `PANEL_SENDER_RESOLVER_URL`, `PANEL_SENDER_RESOLVER_KEY` | sim | resolver do remetente e contexto (5b/5c); URL no domínio **público https** do painel (a rede privada é http e o Go em produção a recusa), chave ≥ 32 |
+| `WEBHOOK_FORWARD_URL`, `WEBHOOK_FORWARD_SECRET` | sim (quando há repasse) | URL **sem** query, também no domínio público https do painel; segredo ≥ 32 |
 | `PORT`, `META_API_VERSION` | não | padrões no código |
 | `META_SEND_INTERVAL_MS` | não | intervalo mínimo entre envios à Meta (padrão 1000; `0` desliga o pacer) |
 | `WEBHOOK_FORWARD_LEGACY_QUERY_SECRET` | não | flag de transição do repasse (OPS-09); ver LEGACY TEMPORARY |

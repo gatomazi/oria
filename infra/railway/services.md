@@ -94,7 +94,7 @@ Nenhum runtime foi unificado e nenhum componente virou "aplicação da raiz".
 | Pre-deploy | nenhum. As migrations do serviço rodam no boot, com advisory lock entre réplicas |
 | Volume | não |
 | Banco | Postgres **próprio** do serviço (`DATABASE_URL`), separado do painel |
-| Depende de | painel (`PANEL_SENDER_RESOLVER_URL`, privado) e Meta (externo) |
+| Depende de | painel (`PANEL_SENDER_RESOLVER_URL`, domínio público https — ver **Rede**) e Meta (externo) |
 | Ingress público | **necessário**: o webhook da Meta precisa alcançar o serviço. As rotas internas continuam exigindo `API_KEY` e assinatura |
 
 ## Rede
@@ -102,15 +102,19 @@ Nenhum runtime foi unificado e nenhum componente virou "aplicação da raiz".
 ```text
 navegador ──público──► oria-panel ──privado──► oria-creatives
                             │
-                            └──privado──► oria-whatsapp ──público (entrada)──► Meta webhook
+                            └──privado──► oria-whatsapp ◄──público (entrada)── Meta webhook
                                               │
-                                              └──privado──► oria-panel (repasse assinado)
+                                              └──público https──► oria-panel (repasse assinado)
 ```
 
 - **Público:** `oria-panel` (painel + webhook da Ink) e `oria-whatsapp` (webhook da Meta).
 - **Privado:** `oria-creatives`. O navegador nunca fala com ele.
-- As chamadas painel ↔ WhatsApp e painel → Gerador usam o domínio interno do Railway
-  (`*.railway.internal`), com autenticação service-to-service (OPS-01/02 e o contrato 5b/5c).
+- As chamadas painel → WhatsApp e painel → Gerador usam o domínio interno do Railway
+  (`http://*.railway.internal`), com autenticação service-to-service (OPS-01/02 e o contrato 5b/5c).
+- O caminho de volta **WhatsApp → painel** é a exceção: a rede privada do Railway não tem TLS e o
+  serviço Go em produção (`RAILWAY_ENVIRONMENT_NAME=production`) só aceita destino https. Por isso
+  `PANEL_SENDER_RESOLVER_URL` e `WEBHOOK_FORWARD_URL` apontam para o domínio **público** do painel.
+  A garantia segue sendo `API_KEY` mais a assinatura do forward, não o isolamento de rede.
 
 ## Bancos
 

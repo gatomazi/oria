@@ -905,13 +905,18 @@ Directory*. O passo a passo de criação está em
 
 | service | ingress público | rede privada |
 |---|---|---|
-| `oria-panel` | **sim** — painel administrativo e `POST /api/webhooks/ink/:token` | chama `oria-creatives` e `oria-whatsapp` pelo domínio interno |
+| `oria-panel` | **sim** — painel administrativo e `POST /api/webhooks/ink/:token` | chama `oria-creatives` e `oria-whatsapp` pelo domínio interno (`http://*.railway.internal`) |
 | `oria-creatives` | **não** — só rede privada | recebe do painel (`CREATIVE_CORE_URL`, OPS-01/02) |
-| `oria-whatsapp` | **sim** — o webhook da Meta precisa alcançá-lo | endpoints internos continuam exigindo `API_KEY` + assinatura; repassa ao painel pelo domínio interno |
+| `oria-whatsapp` | **sim** — o webhook da Meta precisa alcançá-lo | endpoints internos continuam exigindo `API_KEY` + assinatura; **volta ao painel pelo domínio público https**, não pela rede privada |
 
 - O webhook da **Ink** entra pelo **ingress público do `oria-panel`** (URL opaca `/:token`, OPS-34):
   não existe ingress separado para ele.
 - O `oria-creatives` nunca é alcançado pelo navegador.
+- **Assimetria deliberada:** a rede privada do Railway é http (sem TLS em `*.railway.internal`), e o
+  serviço Go com `RAILWAY_ENVIRONMENT_NAME=production` recusa destino que não seja https. Logo
+  `PANEL_SENDER_RESOLVER_URL` e `WEBHOOK_FORWARD_URL` apontam para o domínio **público** do
+  `oria-panel`. O tráfego sai e volta pelo ingress; a proteção continua sendo `API_KEY` mais a
+  assinatura do forward (`X-Oria-Forward-Timestamp` / `X-Oria-Forward-Signature`), não a topologia.
 
 ### 20.3 Estratégia de cutover (direção única)
 
