@@ -139,24 +139,17 @@ function criarServicoDeOrganizations({ pool, config, planos, readModels, agora =
 
     let reservaDeOutro = null;
     const resultado = await comOrganization(pool, organizationId, async (c) => {
-      // Gate (§13). Serializa por advisory lock de transação: dois pedidos simultâneos não veem
-      // ambos "zero Organizations". Não olha nome — o que autoriza é a AUSÊNCIA de Organization.
-      const { rows: [{ platform_bootstrap_reservar: quantas }] } = await c.query('SELECT platform_bootstrap_reservar()');
-      if (!config.criacaoExternaHabilitada) {
-        if (!bootstrapInterno) {
-          throw new HttpError(403, 'second_tenant_disabled',
-            'criação de Organization desabilitada (SECOND_TENANT_ENABLED). Para o Tenant #1, use bootstrapInterno.');
-        }
-        if (quantas > 0) {
-          throw erro409('bootstrap_interno_indisponivel',
-            'o bootstrap interno só existe enquanto não há nenhuma Organization; para criar tenant externo, ligue SECOND_TENANT_ENABLED');
-        }
-      }
-
-      // Idempotência ANTES de criar: a reserva grava (admin, chave) → esta Organization. A FK é
-      // DEFERRABLE, então a linha pode apontar para a Organization que ainda vai nascer no mesmo
-      // COMMIT. Dois pedidos simultâneos com a mesma chave serializam na PK: o segundo espera e vê
-      // a reserva do primeiro. Nada de "este admin já criou uma, devolve essa".
+      // Idempotência ANTES do gate, e não depois. A reserva grava (admin, chave) → esta
+      // Organization. A FK é DEFERRABLE, então a linha pode apontar para a Organization que ainda
+      // vai nascer no mesmo COMMIT. Dois pedidos simultâneos com a mesma chave serializam na PK: o
+      // segundo espera e vê a reserva do primeiro. Nada de "este admin já criou uma, devolve essa".
+      //
+      // A ORDEM IMPORTA. Com o gate na frente, reenviar o MESMO pedido (clique duplo, refresh,
+      // retry de rede) respondia `409 bootstrap_interno_indisponivel` em vez de devolver a
+      // Organization já criada: o gate via a Organization do primeiro envio e recusava antes de
+      // chegar na reserva. Quem estava do outro lado não tinha como saber se o primeiro envio
+      // funcionou — justamente na operação que se faz uma vez, para criar o Tenant #1. Com a
+      // reserva na frente, o reenvio encontra a própria reserva e cai no caminho de replay.
       await c.query(
         `INSERT INTO platform_organization_creations (admin_id, chave_hash, organization_id, digest)
          VALUES ($1, $2, $3, $4) ON CONFLICT (admin_id, chave_hash) DO NOTHING`,
@@ -170,6 +163,24 @@ function criarServicoDeOrganizations({ pool, config, planos, readModels, agora =
         // A chave é de outra criação. Desfaz esta transação inteira e responde fora dela.
         reservaDeOutro = reserva;
         throw new ChaveJaReservada();
+      }
+
+      // Gate (§13). Serializa por advisory lock de transação: dois pedidos simultâneos não veem
+      // ambos "zero Organizations". Não olha nome — o que autoriza é a AUSÊNCIA de Organization.
+      //
+      // Rodar depois da reserva não afrouxa o gate: chaves DIFERENTES continuam disputando o mesmo
+      // advisory lock aqui, e a segunda vê `quantas > 0` e é recusada. O que mudou é só que um
+      // reenvio da MESMA chave nunca chega neste ponto.
+      const { rows: [{ platform_bootstrap_reservar: quantas }] } = await c.query('SELECT platform_bootstrap_reservar()');
+      if (!config.criacaoExternaHabilitada) {
+        if (!bootstrapInterno) {
+          throw new HttpError(403, 'second_tenant_disabled',
+            'criação de Organization desabilitada (SECOND_TENANT_ENABLED). Para o Tenant #1, use bootstrapInterno.');
+        }
+        if (quantas > 0) {
+          throw erro409('bootstrap_interno_indisponivel',
+            'o bootstrap interno só existe enquanto não há nenhuma Organization; para criar tenant externo, ligue SECOND_TENANT_ENABLED');
+        }
       }
 
       await c.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [organizationId, nome]);

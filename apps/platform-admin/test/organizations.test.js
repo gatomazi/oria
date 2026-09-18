@@ -160,6 +160,51 @@ test('idempotência · mesma chave + mesmo pedido devolve a MESMA Organization, 
   }
 });
 
+// O teste acima roda com SECOND_TENANT_ENABLED=1, que pula o gate — e foi por isso que o bug
+// abaixo passou despercebido. Este cobre o caminho que realmente vai ser usado: bootstrap interno,
+// gate ligado, e o operador reenviando o mesmo formulário.
+test('idempotência · reenvio do bootstrap interno devolve a Organization, não 409 do gate', async () => {
+  // Banco próprio: o gate de bootstrap só vale enquanto NÃO há Organization, e o banco desta
+  // suíte já tem uma criada pelos testes anteriores.
+  const limpo = await h.bancoNovo();
+  const bootstrap = await h.subirApp(limpo.url);
+  try {
+    await h.criarAdmin(bootstrap.pool, { email: 'owner-bootstrap@exemplo.com', papel: 'platform_owner' });
+    await bootstrap.cliente.login('owner-bootstrap@exemplo.com');
+    const chave = h.chaveIdempotencia();
+    const pedido = {
+      nome: 'Org Bootstrap',
+      store: { nome: 'Store Bootstrap' },
+      planoChave: 'internal',
+      ownerEmail: 'bootstrap@exemplo.com',
+      idempotencyKey: chave,
+      bootstrapInterno: true,
+      passos: h.PASSOS_DE_TESTE,
+    };
+    const a = await bootstrap.cliente.post('/api/platform/organizations', pedido);
+    assert.equal(a.status, 201);
+
+    // Mesmo pedido de novo: é o clique duplo / refresh / retry de rede.
+    const b = await bootstrap.cliente.post('/api/platform/organizations', pedido);
+    assert.equal(b.status, 200, `esperava replay idempotente, veio ${b.status} ${b.corpo.erro || ''}`);
+    assert.equal(b.corpo.criada, false);
+    assert.equal(b.corpo.organization.id, a.corpo.organization.id);
+
+    const { rows } = await bootstrap.pool.query(`SELECT count(*)::int AS n FROM organizations WHERE nome = 'Org Bootstrap'`);
+    assert.equal(rows[0].n, 1);
+
+    // O gate continua valendo para chave NOVA: a segunda Organization não nasce.
+    const outra = await bootstrap.cliente.post('/api/platform/organizations', {
+      ...pedido, nome: 'Org Bootstrap 2', idempotencyKey: h.chaveIdempotencia(),
+    });
+    assert.equal(outra.status, 409);
+    assert.equal(outra.corpo.erro, 'bootstrap_interno_indisponivel');
+  } finally {
+    await bootstrap.fechar();
+    await limpo.destruir();
+  }
+});
+
 test('chave de idempotência ausente ou curta é recusada', async () => {
   const r = await criarOrg(app.cliente, { idempotencyKey: 'curta' });
   assert.equal(r.status, 400);
