@@ -246,6 +246,22 @@ Um workflow principal com um job `changes` (nada de vários workflows com `paths
 Regra de projeto: **na dúvida, rodar**. Base de diff ausente ou inválida (push direto, clone raso)
 liga tudo. Um filtro que erra para menos transforma verde em silêncio.
 
+## 7.1 Topologia de gatilhos — um run por commit
+
+A primeira versão disparava `pull_request` **e** `push`, e o mesmo commit de uma branch com PR
+aberto pagava o CI duas vezes. A topologia final não tem sobreposição:
+
+| evento | dispara | não dispara |
+|---|---|---|
+| commit numa branch **com PR aberto** (`synchronize`) | `ci.yml` — 1 run | nada de `push`; nada de `full-verification` |
+| commit numa branch **sem PR** | nada | — |
+| merge/push em `main` | `full-verification.yml` — 1 run | `ci.yml` não roda em `main` |
+| nightly (`schedule`) e disparo manual | `full-verification.yml` (com o gate) | — |
+| `workflow_dispatch` do `ci.yml` | `ci.yml`, **com tudo ligado** (sem PR não há base de diff, e o `changes` é fail-closed) | — |
+
+A consequência de branch sem PR não rodar CI é deliberada: quem quer o sinal abre o PR, e o PR é
+onde o `ci-gate` vale como check.
+
 ## 8. `ci-gate` (D10)
 
 Job final `ci-gate`, que é o check a exigir na branch protection:
@@ -347,9 +363,9 @@ Registradas como recomendação factual, fora do escopo autorizado desta frente:
 | # | decisão | reversão |
 |---|---|---|
 | D-CI-1 | PR roda a suíte de banco **só sob `oria_app`**; as duas roles rodam em main/nightly | trocar o passo do `panel-db` no `ci.yml` |
-| D-CI-2 | `main` deixa de usar `ci.yml` e passa a usar `full-verification.yml` | `branches-ignore` no `ci.yml` |
+| D-CI-2 | **um workflow por evento, sem sobreposição**: `ci.yml` dispara SÓ em `pull_request` (para `main`) e `workflow_dispatch`; `full-verification.yml` em `push` para `main`, `schedule` e `workflow_dispatch` | bloco `on:` dos dois workflows |
 | D-CI-3 | branch protection deve passar a exigir **`ci-gate`** no lugar dos checks individuais | configuração do repositório |
-| D-CI-4 | `cancel-in-progress` ligado para PR/branch, desligado para a verificação completa | bloco `concurrency` |
+| D-CI-4 | `cancel-in-progress` ligado para o PR, desligado para a verificação completa | bloco `concurrency` |
 
 ### Decisões em aberto (OPEN)
 
