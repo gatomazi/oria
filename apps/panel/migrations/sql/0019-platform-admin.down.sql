@@ -6,6 +6,7 @@ DROP FUNCTION IF EXISTS platform_overview();
 DROP FUNCTION IF EXISTS platform_listar_webhooks(UUID, BOOLEAN, INTEGER, TIMESTAMPTZ, BIGINT);
 DROP FUNCTION IF EXISTS platform_listar_jobs(UUID, INTEGER, TEXT, UUID);
 DROP FUNCTION IF EXISTS platform_listar_integracoes(UUID, TEXT, TEXT, INTEGER, TIMESTAMPTZ, BIGINT);
+DROP FUNCTION IF EXISTS platform_onboarding_resumo(UUID);
 DROP FUNCTION IF EXISTS platform_listar_passos(UUID);
 DROP FUNCTION IF EXISTS platform_listar_onboardings(TEXT, INTEGER, TIMESTAMPTZ, UUID);
 DROP FUNCTION IF EXISTS platform_listar_users(TEXT, TEXT, INTEGER, TIMESTAMPTZ, UUID);
@@ -21,6 +22,7 @@ DROP FUNCTION IF EXISTS platform_admin_proteger_ultimo_owner();
 DROP FUNCTION IF EXISTS platform_admin_owners_ativos();
 
 DROP TABLE IF EXISTS platform_audit_logs;
+DROP TABLE IF EXISTS platform_organization_creations;
 DROP TABLE IF EXISTS organization_owner_invites;
 DROP TABLE IF EXISTS organization_entitlement_overrides;
 DROP TABLE IF EXISTS organization_subscriptions;

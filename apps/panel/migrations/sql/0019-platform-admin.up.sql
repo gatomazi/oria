@@ -165,6 +165,25 @@ CREATE UNIQUE INDEX uq_owner_invite_pendente
   WHERE usado_em IS NULL AND revogado_em IS NULL;
 CREATE INDEX idx_owner_invites_org ON organization_owner_invites (organization_id, criado_em DESC);
 
+-- ── Idempotência da criação de Organization ──────────────────────────────────────────────────
+-- (platform admin, chave explícita) → Organization criada. Repetir a chave com o MESMO pedido
+-- devolve a mesma Organization; com pedido diferente é conflito, não retorno. Nunca "este admin já
+-- criou uma Organization, devolve essa".
+--
+-- A FK é DEFERRABLE INITIALLY DEFERRED de propósito: a reserva é gravada ANTES do INSERT em
+-- `organizations`, para que dois pedidos simultâneos com a mesma chave sirialize na PK — o segundo
+-- espera o COMMIT/ROLLBACK do primeiro em vez de criar uma segunda Organization.
+CREATE TABLE platform_organization_creations (
+  admin_id UUID NOT NULL REFERENCES platform_admins (id) ON DELETE CASCADE,
+  chave_hash TEXT NOT NULL CHECK (chave_hash ~ '^[0-9a-f]{64}$'),
+  organization_id UUID NOT NULL REFERENCES organizations (id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+  -- SHA-256 dos parâmetros da criação: a mesma chave com pedido diferente é conflito.
+  digest TEXT NOT NULL CHECK (digest ~ '^[0-9a-f]{64}$'),
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (admin_id, chave_hash)
+);
+CREATE INDEX idx_platform_organization_creations_org ON platform_organization_creations (organization_id);
+
 -- ── Auditoria do control plane ───────────────────────────────────────────────────────────────
 -- É LOG: a ordem monotônica é o ponto, então a chave é identidade sequencial (não é id de recurso
 -- exposto em URL de mutação). `actor_email` é retrato: o rastro sobrevive ao admin ser removido.
@@ -352,6 +371,13 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $fn
    LIMIT p_limite
 $fn$;
 
+CREATE FUNCTION platform_onboarding_resumo(p_org UUID)
+RETURNS TABLE (status TEXT, criado_em TIMESTAMPTZ, atualizado_em TIMESTAMPTZ, concluido_em TIMESTAMPTZ)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $fn$
+  SELECT os.status, os.criado_em, os.atualizado_em, os.concluido_em
+    FROM public.onboarding_sessions os WHERE os.organization_id = p_org
+$fn$;
+
 CREATE FUNCTION platform_listar_passos(p_org UUID)
 RETURNS TABLE (step_id TEXT, requirement TEXT, status TEXT, last_error_code TEXT, tentativas INTEGER,
                completed_at TIMESTAMPTZ, atualizado_em TIMESTAMPTZ)
@@ -482,6 +508,7 @@ REVOKE ALL ON FUNCTION platform_listar_membros(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_owners_ativos(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_listar_users(TEXT, TEXT, INTEGER, TIMESTAMPTZ, UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_listar_onboardings(TEXT, INTEGER, TIMESTAMPTZ, UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION platform_onboarding_resumo(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_listar_passos(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_listar_integracoes(UUID, TEXT, TEXT, INTEGER, TIMESTAMPTZ, BIGINT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_listar_jobs(UUID, INTEGER, TEXT, UUID) FROM PUBLIC;

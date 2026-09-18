@@ -1,0 +1,22 @@
+{
+  "name": "oria-platform-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Oria Admin — control plane da plataforma Oria. Deployable próprio (service oria-admin); não importa código de apps/panel em runtime.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node scripts/test-db.mjs run -- node --test --test-concurrency=1 test/*.test.js",
+    "test:unit": "node --test --test-concurrency=1 test/unit-*.test.js",
+    "test:negative": "node scripts/negative-controls.mjs",
+    "build": "node scripts/build.mjs",
+    "db:start": "node scripts/test-db.mjs start",
+    "db:stop": "node scripts/test-db.mjs stop",
+    "platform-admin:bootstrap": "node scripts/bootstrap-admin.mjs"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
+  }
+}
