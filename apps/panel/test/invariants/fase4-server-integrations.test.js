@@ -356,7 +356,12 @@ test('tenant novo · Integrações abre com zero integrações: 200, not_configu
   const r = await c.req('GET', '/api/admin/integrations');
 
   assert.equal(r.status, 200, `a tela de status não pode falhar num tenant novo: ${r.texto}`);
-  assert.deepEqual(r.json.reservaInk, [], 'sem loja legada não há linha de Ink — lista vazia, não erro');
+  // Uma linha: a Store existe (1:1) mesmo sem integração. Ela é identificada por storeId, e a
+  // ausência de chave legada é dado, não erro.
+  assert.equal(r.json.reservaInk.length, 1);
+  assert.ok(r.json.reservaInk[0].storeId, 'a linha precisa trazer a Store canônica');
+  assert.equal(r.json.reservaInk[0].loja, null);
+  assert.equal(r.json.reservaInk[0].tokenConfigurado, false);
   assert.equal(r.json.ink.conectado, false);
   assert.equal(r.json.ink.status, 'not_configured');
   assert.equal(r.json.whatsapp.conectado, false);
@@ -370,10 +375,159 @@ test('tenant novo · Integrações abre com zero integrações: 200, not_configu
   assert.doesNotMatch(saida, /UNHANDLED_REJECTION/, 'requisição terminou em rejeição não tratada');
 });
 
+// §"provar com cenário real de cliente novo": o ciclo inteiro sobre uma Store sem chave legada —
+// pedido persistido, listado, detalhado, com o estado de sincronização gravado. Se qualquer leitura
+// voltar a filtrar por `loja`, a lista some e este teste reprova.
+test('tenant novo · pedido com store_id é persistido, listado e detalhado sem chave legada', async () => {
+  const c = await navegador().entrar('f4-c@teste.oria');
+  const { rows: [store] } = await sup.query('SELECT id FROM stores WHERE organization_id = $1', [ORG_C]);
+  // O detalhe do pedido consulta a Ink ao vivo, então este cenário precisa de credencial. Salvar
+  // aqui mantém o teste independente da ordem dos demais.
+  await c.req('PUT', '/api/admin/integrations/ink/credenciais',
+    { corpo: { apiToken: `inkCiclo${crypto.randomBytes(10).toString('hex')}` } });
+
+  // Linha nova como o runtime grava: Store canônica, `loja` NULA.
+  await sup.query(
+    `INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status, order_status,
+                              buyer_nome, buyer_telefone, total_value, criado_em, items_count)
+     VALUES ($1, $2, NULL, $3, 'paid', 'producing', 'Cliente Nativo', '11999990000', 199.90, now(), 1)`,
+    [ORG_C, store.id, 900001]
+  );
+  await sup.query(
+    `INSERT INTO sync_estado (organization_id, store_id, loja, ultimo_sync_em) VALUES ($1, $2, NULL, now())`,
+    [ORG_C, store.id]
+  );
+  await sup.query(
+    `INSERT INTO webhook_eventos (organization_id, store_id, loja, recebido_em, verificado, metodo_auth, event_name, ink_order_id, headers, body)
+     VALUES ($1, $2, NULL, now(), true, 'hmac', 'order.paid', $3, '{}'::jsonb, '{}'::jsonb)`,
+    [ORG_C, store.id, 900001]
+  );
+
+  const conferencia = await sup.query('SELECT count(*)::int AS n, min(store_id::text) AS s FROM pedidos_ink WHERE organization_id = $1', [ORG_C]);
+  assert.equal(conferencia.rows[0].n, 1, `a linha precisa existir no banco: ${JSON.stringify(conferencia.rows[0])}`);
+  assert.equal(conferencia.rows[0].s, store.id, 'store_id gravado difere da Store da Organization');
+
+  const lista = await c.req('GET', '/api/admin/pedidos/central');
+  assert.equal(lista.status, 200, lista.texto);
+  const ids = (lista.json.pedidos || []).map((p) => p.inkOrderId);
+  assert.ok(ids.includes(900001), `o pedido da Store nativa precisa aparecer na lista: ${lista.texto.slice(0, 300)}`);
+
+  const detalhe = await c.req('GET', '/api/admin/pedidos/central/900001');
+  assert.equal(detalhe.status, 200, detalhe.texto);
+  assert.ok(Array.isArray(detalhe.json.timeline), 'o detalhe traz a linha do tempo do webhook');
+
+  // Nada disso pode ter exigido `sul`/`centro`/`norte`.
+  assert.doesNotMatch(lista.texto + detalhe.texto, /"loja":"(sul|centro|norte)"/);
+});
+
+// O caminho que resolve "quais Stores podem falar com a Ink" precisa aceitar Store nativa. Este
+// teste é o que o controle negativo `connector/chamador-exige-loja-legada` derruba.
+test('tenant novo · vincular pedido da Ink não exige chave legada', async () => {
+  const c = await navegador().entrar('f4-c@teste.oria');
+  await c.req('PUT', '/api/admin/integrations/ink/credenciais',
+    { corpo: { apiToken: `inkVinculo${crypto.randomBytes(10).toString('hex')}` } });
+
+  const r = await c.req('POST', '/api/admin/pedidos/ink', { corpo: { inkOrderId: 900123 } });
+  assert.notEqual(r.status, 503,
+    `Store nativa com credencial não pode ser tratada como "sem integração": ${r.texto}`);
+});
+
+// §29: linha nova sem identidade de Store é recusada pelo banco, não "aceita e some no escopo".
+test('tenant novo · insert sem store_id e sem loja é recusado pelo banco', async () => {
+  await assert.rejects(
+    sup.query(
+      `INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, criado_em)
+       VALUES ($1, NULL, NULL, $2, now())`,
+      [ORG_C, 900002]
+    ),
+    /ck_pedidos_ink_store_ou_loja/,
+    'toda linha nova precisa identificar a Store — pela identidade nova ou pela chave antiga'
+  );
+});
+
 // Fail-closed continua valendo: sem segredo, a ação de provider não roda — e JAMAIS cai na
 // credencial de outro tenant nem na variável de ambiente legada.
-test('tenant novo · sem segredo, ação de provider falha fechada e não usa credencial de ninguém', async () => {
+// §26 do comando: o cliente novo precisa CONECTAR, não só abrir a tela. Save, teste e webhook,
+// todos com `loja_legada = NULL`.
+test('tenant novo · salva credencial Ink, testa e gera webhook sem chave legada', async () => {
   const c = await navegador().entrar('f4-c@teste.oria');
+  const token = `inkNovo${crypto.randomBytes(12).toString('hex')}`;
+
+  const salvo = await c.req('PUT', '/api/admin/integrations/ink/credenciais', { corpo: { apiToken: token } });
+  assert.equal(salvo.status, 200, `save não pode exigir loja legada: ${salvo.texto}`);
+  assert.ok(salvo.json.segredos.some((x) => x.tipo === 'api_token' && x.last4 === token.slice(-4)));
+  assert.ok(!salvo.texto.includes(token), 'o token não pode voltar na resposta');
+
+  // A auditoria foi gravada na mesma transação, com a Store canônica e sem chave legada.
+  const { rows: auditoria } = await sup.query(
+    "SELECT organization_id, loja, after FROM audit_log WHERE action = 'integration.credentials.update' ORDER BY criado_em DESC LIMIT 1"
+  );
+  assert.equal(auditoria.length, 1, 'save sem auditoria');
+  assert.equal(auditoria[0].organization_id, ORG_C);
+  assert.equal(auditoria[0].loja, null, 'cliente novo não tem chave legada — e não pode precisar de uma');
+  assert.ok(auditoria[0].after.storeId, 'a auditoria precisa registrar a Store canônica');
+
+  // Teste de conexão: alcança o provider (mock) usando a credencial DESTA organization.
+  const teste = await c.req('POST', '/api/admin/integrations/ink/teste', { corpo: {} });
+  assert.equal(teste.json.status, 'connected', `teste não pode depender de loja legada: ${teste.texto}`);
+  assert.ok(chamadasMock().some((x) => String(x.auth || '').includes(token)), 'o teste usou outra credencial');
+
+  // Webhook: a URL opaca sai da integração, não da chave legada.
+  const url = await c.req('POST', '/api/admin/integrations/ink/webhook-url', { corpo: {} });
+  assert.equal(url.status, 200, url.texto);
+  assert.match(url.json.caminho, /^\/api\/webhooks\/ink\/[A-Za-z0-9_-]{20,}$/);
+
+  const estado = await c.req('GET', '/api/admin/integrations');
+  assert.equal(estado.json.ink.status, 'pendente', 'com token e sem segredo de webhook, o estado é pendente');
+  assert.equal(estado.json.reservaInk[0].loja, null);
+  assert.ok(estado.json.reservaInk[0].storeId, 'a linha é identificada pela Store');
+});
+
+// §27: atomicidade. Se a auditoria falhar, o segredo NÃO pode ficar gravado.
+test('tenant novo · falha depois de gravar o segredo desfaz tudo (rollback)', async () => {
+  const c = await navegador().entrar('f4-c@teste.oria');
+  const antes = await sup.query(
+    'SELECT tipo, ciphertext FROM integration_secrets WHERE organization_id = $1 ORDER BY tipo', [ORG_C]
+  );
+
+  // Falha REAL na auditoria, provocada no banco: gatilho que recusa justamente esta ação. É o que
+  // acontece na prática quando a última etapa da transação quebra — e o ponto do teste é que a
+  // etapa anterior (o segredo) não sobreviva a isso.
+  await sup.query(`
+    CREATE OR REPLACE FUNCTION teste_derrubar_auditoria() RETURNS trigger LANGUAGE plpgsql AS $fn$
+    BEGIN
+      IF NEW.action = 'integration.credentials.update' THEN
+        RAISE EXCEPTION 'falha proposital na auditoria (teste de rollback)';
+      END IF;
+      RETURN NEW;
+    END $fn$;`);
+  await sup.query('CREATE TRIGGER teste_rollback_auditoria BEFORE INSERT ON audit_log FOR EACH ROW EXECUTE FUNCTION teste_derrubar_auditoria()');
+  let quebrado;
+  try {
+    quebrado = await c.req('PUT', '/api/admin/integrations/ink/credenciais',
+      { corpo: { apiToken: `inkRollback${crypto.randomBytes(10).toString('hex')}` } });
+  } finally {
+    await sup.query('DROP TRIGGER IF EXISTS teste_rollback_auditoria ON audit_log');
+    await sup.query('DROP FUNCTION IF EXISTS teste_derrubar_auditoria()');
+  }
+  assert.notEqual(quebrado.status, 200, 'a requisição deveria falhar quando a auditoria falha');
+
+  const depois = await sup.query(
+    'SELECT tipo, ciphertext FROM integration_secrets WHERE organization_id = $1 ORDER BY tipo', [ORG_C]
+  );
+  assert.deepEqual(depois.rows, antes.rows, 'segredo persistiu apesar de a resposta ter dado erro');
+});
+
+test('tenant novo · sem segredo, ação de provider falha fechada e não usa credencial de ninguém', async () => {
+  // Organization própria: o teste precisa de um tenant que NUNCA teve credencial, e não pode
+  // depender da ordem em que os testes deste arquivo rodam.
+  const ORG_D = 'a1000000-0000-4000-8000-00000000000d';
+  await sup.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [ORG_D, 'Tenant Sem Credencial']);
+  await sup.query('INSERT INTO stores (id, organization_id, nome, loja_legada) VALUES ($1, $2, $3, NULL)',
+    [crypto.randomUUID(), ORG_D, 'Loja Sem Credencial']);
+  await criarPessoa('f4-d@teste.oria', ORG_D, 'owner');
+
+  const c = await navegador().entrar('f4-d@teste.oria');
   const chamadasAntes = chamadasMock().length;
 
   const teste = await c.req('POST', '/api/admin/integrations/ink/teste', { corpo: {} });

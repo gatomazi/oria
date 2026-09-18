@@ -27,8 +27,9 @@ const CENARIO_A = path.join(FIXTURES, 'cenario-a.json');
 const CENARIO_B = path.join(FIXTURES, 'cenario-b.json');
 const FASE1 = 8;
 // Fases 2 (auth), 3 (tenant context), 4 (integrações), 5c, 7 (onboarding), o control plane
-// (platform-admin) e o aceite do convite (0020) vêm depois; o rollback da Fase 1 desce todas.
-const DEPOIS_DA_FASE1 = 9;
+// (platform-admin), o aceite do convite (0020) e o `store_id` do Connector Ink (0021) vêm depois;
+// o rollback da Fase 1 desce todas.
+const DEPOIS_DA_FASE1 = 10;
 
 const lerJson = (arquivo) => JSON.parse(fs.readFileSync(arquivo, 'utf8'));
 

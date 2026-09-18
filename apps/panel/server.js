@@ -262,10 +262,12 @@ async function logInkWebhook(entry) {
     fs.writeFileSync(WEBHOOK_LOG_FILE, JSON.stringify(log, null, 2));
     return;
   }
+  // `store_id` é a identidade da Store na linha nova; `loja` só vai junto quando a Store tem chave
+  // legada, e serve para o histórico continuar legível.
   await pgPool.query(
-    `INSERT INTO webhook_eventos (recebido_em, verificado, loja, metodo_auth, event_name, ink_order_id, headers, body)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [entry.recebidoEm, entry.verificado, entry.loja, entry.metodoAuth, entry.eventName, entry.inkOrderId, JSON.stringify(entry.headers), JSON.stringify(entry.body)]
+    `INSERT INTO webhook_eventos (recebido_em, verificado, store_id, loja, metodo_auth, event_name, ink_order_id, headers, body)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [entry.recebidoEm, entry.verificado, entry.storeId || null, entry.loja || null, entry.metodoAuth, entry.eventName, entry.inkOrderId, JSON.stringify(entry.headers), JSON.stringify(entry.body)]
   ).catch((err) => console.error(`[POSTGRES] falha ao gravar evento: ${err.message}`));
 }
 
@@ -331,24 +333,60 @@ function extractInkEvent(req) {
   return { eventName, inkOrderId };
 }
 
-// Loja legada da Store do contexto (Fase 3). É a ÚNICA forma de o código de request/job saber
-// "qual loja": nunca do request, nunca de um enum percorrido. Store sem loja legada ainda não tem
-// integração Ink (Fase 4).
-function lojaDoContexto() {
+// ── Identidade da Store ──────────────────────────────────────────────────────────────────────
+//
+// A Store canônica é `store_id` (UUID). `loja_legada` é a chave do sistema de loja única
+// (`sul`/`centro`/`norte`) e existe só como compatibilidade de migração: cliente novo nasce com ela
+// NULA, e nada no caminho novo pode exigi-la.
+
+// Store do contexto — a identidade canônica. É esta que o runtime novo usa.
+function storeDoContexto() {
+  const ctx = contextoAtual();
+  if (!ctx) throw new TenantRuntimeError('operação de store fora de um contexto de Organization', 'TENANT_CONTEXT_REQUIRED');
+  if (!ctx.storeId) throw new TenantRuntimeError('contexto de Organization sem store resolvida', 'STORE_NOT_RESOLVED');
+  return ctx.storeId;
+}
+
+// Chave LEGADA da Store. O nome diz o que é de propósito: quem chamar isto está no caminho de
+// compatibilidade, não no caminho canônico. Lança para Store nativa do Oria (loja_legada NULL) —
+// e é por isso que o fluxo novo não pode depender dela.
+function lojaLegadaDoContexto() {
   const ctx = contextoAtual();
   if (!ctx) throw new TenantRuntimeError('operação de loja fora de um contexto de Organization', 'TENANT_CONTEXT_REQUIRED');
-  if (!ctx.loja) throw new TenantRuntimeError('a store desta organization não tem integração Ink', 'STORE_WITHOUT_INK');
+  if (!ctx.loja) throw new TenantRuntimeError('a store desta organization não tem loja legada', 'STORE_WITHOUT_LEGACY_KEY');
   return ctx.loja;
 }
 
-// Mesma loja, para quem só quer SABER se ela existe — tela de status, não operação.
-// `lojaDoContexto()` lança de propósito: operação sem loja é bug, e falhar é o certo. Mas a tela de
-// Integrações precisa dizer "não configurada" para uma organization nova, e lançar ali transformava
-// o primeiro acesso de um tenant novo em erro de servidor.
-function lojaDoContextoOuNulo() {
+// A chave legada, ou null. Para quem só precisa SABER se ela existe (exibição, compatibilidade),
+// sem transformar a ausência em erro — Store nativa do Oria simplesmente não tem uma.
+function lojaLegadaDoContextoOuNula() {
   const ctx = contextoAtual();
   if (!ctx) throw new TenantRuntimeError('operação fora de um contexto de Organization', 'TENANT_CONTEXT_REQUIRED');
   return ctx.loja || null;
+}
+
+// Escopo de Store para leitura, com os dois caminhos SEPARADOS e explícitos.
+//
+//   canônico     store_id = <Store do contexto>
+//   compat.      OU (store_id IS NULL AND loja = <chave legada do contexto>)
+//
+// O segundo ramo só existe quando a Store do contexto TEM chave legada — ou seja, quando ela veio
+// de uma migração e pode ter linhas antigas ainda sem `store_id`. Store nativa do Oria
+// (`loja_legada` NULA) **nunca** entra nesse ramo: sem chave, não há o que casar, e a leitura fica
+// restrita à identidade canônica. É isso que impede um cliente novo de enxergar linha histórica.
+//
+// `organization_id` entra sempre, à parte, e a RLS confere de novo por baixo.
+function escopoDaStore(proximoParametro) {
+  const loja = lojaLegadaDoContextoOuNula();
+  const storeId = storeDoContexto();
+  if (!loja) {
+    return { sql: `store_id = $${proximoParametro}`, params: [storeId], usados: 1 };
+  }
+  return {
+    sql: `(store_id = $${proximoParametro} OR (store_id IS NULL AND loja = $${proximoParametro + 1}))`,
+    params: [storeId, loja],
+    usados: 2,
+  };
 }
 
 // Organization do contexto, para predicados SQL explícitos (a RLS filtra de novo por baixo).
@@ -358,29 +396,40 @@ function orgDoContexto() {
   return ctx.organizationId;
 }
 
-// Lojas Ink que o contexto atual pode usar: a da Store, se a Organization tiver o token. Substitui
-// os laços que agregavam todas as lojas (F-02 / PD-022).
-async function lojasInkDoContexto() {
+// Stores que o contexto pode operar na Ink: a Store da Organization, se houver credencial.
+// Devolve a identidade CANÔNICA (`storeId`) e, junto, a chave legada quando existir — a chave serve
+// para rótulo e para os fluxos ainda não convertidos, nunca como condição de existência.
+//
+// Antes isto exigia `ctx.loja`, então uma Store nativa do Oria devolvia lista vazia e todo o
+// caminho de pedidos simplesmente não rodava para ela — sem erro, sem aviso.
+async function storesInkDoContexto() {
   const ctx = contextoAtual();
-  if (!ctx) throw new TenantRuntimeError('operação de loja fora de um contexto de Organization', 'TENANT_CONTEXT_REQUIRED');
-  return ctx.loja && (await inkConectada()) ? [ctx.loja] : [];
+  if (!ctx) throw new TenantRuntimeError('operação de store fora de um contexto de Organization', 'TENANT_CONTEXT_REQUIRED');
+  if (!ctx.storeId || !(await inkConectada())) return [];
+  return [{ storeId: ctx.storeId, loja: ctx.loja || null }];
+}
+
+// Caminho de COMPATIBILIDADE: só as Stores que têm chave legada. Existe para os fluxos que ainda
+// gravam em tabela cuja coluna `loja` é obrigatória (catálogo, feed, estoque) — eles não foram
+// convertidos nesta rodada, e rodá-los sem chave quebraria o INSERT. Store nativa não entra aqui,
+// que é exatamente o comportamento correto enquanto essas tabelas não tiverem `store_id`.
+async function lojasLegadasInkDoContexto() {
+  return (await storesInkDoContexto()).filter((s) => s.loja).map((s) => s.loja);
 }
 
 // ── Chamada à Ink com a credencial da Organization do contexto (Fase 4 · INV-12) ─────────────
 // O token vem de integration_secrets da Organization da sessão/job. `loja` só confere que quem
 // chama está falando da Store do contexto — nunca escolhe credencial.
-async function comTokenInk(loja, usar) {
-  const ctx = contextoAtual();
-  if (!ctx || ctx.loja !== loja) {
-    const err = new Error(`credencial Ink de "${loja}" fora do contexto da organization`);
-    err.status = 403;
-    throw err;
-  }
+// Entrada CANÔNICA: usa a credencial Ink da Organization do contexto. Não recebe identificador
+// nenhum de fora — o alvo é sempre a Organization da sessão, e a identidade da loja na Ink é
+// determinada pelo próprio token (a API é `/v1/stores/...`, sem id de loja no caminho).
+async function comTokenInkDaStore(usar) {
+  storeDoContexto(); // exige contexto com Store resolvida; a Organization vem junto
   try {
     return await exigirIntegracoes().usarSegredo('ink', 'api_token', usar);
   } catch (err) {
     if (err instanceof IntegracaoError || err.name === 'SegredoIndisponivelError') {
-      const e = new Error('esta loja não tem a integração com a Reserva Ink configurada');
+      const e = new Error('esta organization não tem a integração com a Reserva Ink configurada');
       e.status = 503;
       throw e;
     }
@@ -388,10 +437,27 @@ async function comTokenInk(loja, usar) {
   }
 }
 
-// A Store do contexto tem token Ink? (sem ler o token)
+// Entrada LEGADA: os chamadores que ainda carregam a chave `sul`/`centro`/`norte` (linhas antigas
+// de pedido, jobs de migração). Continua conferindo que a chave é a do contexto — nenhum request
+// escolhe loja — e delega para o caminho canônico.
+async function comTokenInk(loja, usar) {
+  const ctx = contextoAtual();
+  if (!ctx || ctx.loja !== loja) {
+    const err = new Error(`credencial Ink de "${loja}" fora do contexto da organization`);
+    err.status = 403;
+    throw err;
+  }
+  return comTokenInkDaStore(usar);
+}
+
+// A Organization do contexto tem token Ink? (sem ler o token)
+//
+// O guard exigia `ctx.loja`, e por isso respondia "não conectada" para toda Store nativa do Oria,
+// mesmo com a credencial gravada: a tela mostrava o token salvo e o status dizia o contrário. Quem
+// responde é a integração da Organization; a chave legada não entra nisso.
 async function inkConectada() {
   const ctx = contextoAtual();
-  if (!ctx || !ctx.loja || !INTEGRACOES) return false;
+  if (!ctx || !INTEGRACOES) return false;
   return INTEGRACOES.temSegredo('ink', 'api_token');
 }
 
@@ -418,6 +484,19 @@ async function inkFetch(loja, metodo, pathAndQuery, { body, extraHeaders, timeou
 }
 
 const inkApiRequest = (loja, pathAndQuery) => inkFetch(loja, 'GET', pathAndQuery);
+// Versão canônica do GET: sem chave legada, credencial da Organization do contexto.
+const inkApiRequestDaStore = (pathAndQuery) => comTokenInkDaStore((token) => fetch(INK_API_BASE + pathAndQuery, {
+  headers: { Authorization: `Bearer ${token}` },
+  signal: AbortSignal.timeout(15000),
+}).then(async (res) => {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error((data.errors && data.errors.join('; ')) || data.error || `INK API respondeu ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}));
 const inkApiPost = (loja, pathAndQuery, body, extraHeaders, timeoutMs) => inkFetch(loja, 'POST', pathAndQuery, { body, extraHeaders, timeoutMs });
 const inkApiPatch = (loja, pathAndQuery, body, extraHeaders) => inkFetch(loja, 'PATCH', pathAndQuery, { body, extraHeaders });
 const inkApiPut = (loja, pathAndQuery, body, extraHeaders) => inkFetch(loja, 'PUT', pathAndQuery, { body, extraHeaders });
@@ -523,7 +602,7 @@ JOBS.agendar('reconcile-ink', RECONCILE_INTERVAL_MS, () => reconcilePendingInkPe
 async function fetchInkDaStore(pathAndQuery) {
   const resultados = [];
   const erros = [];
-  for (const loja of await lojasInkDoContexto()) {
+  for (const { loja } of await storesInkDoContexto()) {
     try {
       const data = await inkApiRequest(loja, pathAndQuery);
       resultados.push({ loja, data });
@@ -559,7 +638,7 @@ function generatePedidoId(existing) {
 // resolve Organization — isso é Fase 3.
 const { resolverConfigAuth, createAuth } = require('./lib/auth');
 const { comOrganization } = require('./lib/platform/tenant-db');
-const { registrarAuditoria, validarAtor } = require('./lib/platform/audit');
+const { registrarAuditoria, registrarAuditoriaEm, validarAtor } = require('./lib/platform/audit');
 const { createTenantPipeline, resolverStore } = require('./lib/platform/tenant-pipeline');
 const { requireEntitlement, checkEntitlement, carregadorDaOrganizacao, planoEfetivo } = require('./lib/platform/entitlements');
 const { featureDaRota } = require('./lib/platform/feature-routes');
@@ -855,7 +934,7 @@ async function buscarPedidosPixPendentes() {
   const pendentes = [];
   const erros = [];
 
-  for (const loja of await lojasInkDoContexto()) {
+  for (const { loja } of await storesInkDoContexto()) {
     try {
       let page = 1;
       let totalPages = 1;
@@ -929,14 +1008,17 @@ async function garantirHotpagePedidoPix(loja, orderId, order) {
 // cliente, status) via API em vez de exigir digitação manual do código pix.
 app.post('/api/admin/pedidos/ink', requireAdmin, async (req, res) => {
   const { inkOrderId } = req.body || {};
-  const [loja] = await lojasInkDoContexto();
-  if (!loja) return res.status(503).json({ error: 'esta loja não tem integração com a Reserva Ink configurada' });
+  // O que autoriza é a Store ter credencial — não ter chave legada. Antes o gate era `!loja`, e
+  // por isso uma Store nativa do Oria levava 503 mesmo com a Ink conectada.
+  const [store] = await storesInkDoContexto();
+  if (!store) return res.status(503).json({ error: 'esta organization não tem integração com a Reserva Ink configurada' });
+  const loja = store.loja;
   const orderId = Number(inkOrderId);
   if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ error: 'id do pedido inválido' });
 
   let order;
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/orders/${orderId}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/orders/${orderId}`);
     order = data.order;
   } catch (err) {
     console.error(`[ADMIN] falha ao buscar pedido INK ${orderId} (${loja}): ${err.message}`);
@@ -1027,7 +1109,7 @@ app.get('/api/admin/dashboard/abandoned-carts', requireAdmin, async (req, res) =
 // conta de /api/admin/recuperacao, via calcularMetricasEnvio), sem bater na Ink nem no serviço de
 // WhatsApp: é rápido de propósito, pra não pesar o carregamento do Dashboard.
 app.get('/api/admin/dashboard/recuperacao-resumo', requireAdmin, async (req, res) => {
-  const lojaFiltro = lojaDoContexto();
+  const lojaFiltro = lojaLegadaDoContexto();
   try {
     const [envios, lembretes] = await Promise.all([readCarrinhoEnvios(), readPixLembretes()]);
     res.json(calcularMetricasEnvio(envios, lembretes, lojaFiltro));
@@ -1075,13 +1157,15 @@ function inicioDoCarrinho(registro) {
 // Pedidos pagos (sem troca) desde `desdeIso` nas lojas pedidas, no formato de lib/recuperacao/compra.js.
 // Só com Postgres: sem o cache local a tela não varre a API da Ink por carrinho — fica sem o selo
 // "Já comprou", mas o envio continua barrado por `clienteJaComprou`.
-async function pedidosPagosDesde(lojas, desdeIso) {
-  if (!pgPool || !lojas.length || !desdeIso) return [];
+async function pedidosPagosDesde(desdeIso) {
+  if (!pgPool || !desdeIso) return [];
+  const escopo = escopoDaStore(3);
   const { rows } = await pgPool.query(
     `SELECT loja, ink_order_id, criado_em, total_value, buyer_telefone, buyer_documento, buyer_email
      FROM pedidos_ink
-     WHERE organization_id = $4 AND loja = ANY($1) AND payment_status = ANY($2) AND criado_em >= $3 AND is_troca IS NOT TRUE`,
-    [lojas, Array.from(PAYMENT_STATUSES_CONVERTIDO), desdeIso, orgDoContexto()]
+     WHERE organization_id = $1 AND payment_status = ANY($2) AND criado_em >= $${3 + escopo.usados}
+       AND ${escopo.sql} AND is_troca IS NOT TRUE`,
+    [orgDoContexto(), Array.from(PAYMENT_STATUSES_CONVERTIDO), ...escopo.params, desdeIso]
   );
   return rows.map((r) => ({
     loja: r.loja,
@@ -1128,7 +1212,7 @@ function calcularMetricasEnvio(envios, lembretes, lojaFiltro) {
 }
 
 app.get('/api/admin/recuperacao', requireAdmin, async (req, res) => {
-  const lojaFiltro = lojaDoContexto();
+  const lojaFiltro = lojaLegadaDoContexto();
 
   let envios, lembretes, eventosPorLoja;
   try {
@@ -1269,7 +1353,7 @@ app.get('/api/admin/recuperacao', requireAdmin, async (req, res) => {
   }, null);
   let pedidosPagos = [];
   try {
-    pedidosPagos = await pedidosPagosDesde([...new Set(carrinhosTotal.map((c) => c.loja))], inicioMaisAntigo != null ? new Date(inicioMaisAntigo).toISOString() : null);
+    pedidosPagos = await pedidosPagosDesde(inicioMaisAntigo != null ? new Date(inicioMaisAntigo).toISOString() : null);
   } catch (err) {
     console.error(`[RECUPERACAO] falha ao cruzar carrinhos com pedidos pagos: ${err.message}`);
   }
@@ -1338,7 +1422,7 @@ app.get('/api/admin/recuperacao', requireAdmin, async (req, res) => {
 // não verificou) e o admin quer disparar na hora pela Meta em vez de só copiar e mandar na mão.
 app.post('/api/admin/recuperacao/carrinho/enviar', requireAdmin, async (req, res) => {
   const { cartId } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (cartId == null) return res.status(400).json({ error: 'cartId obrigatório' });
 
   try {
@@ -1400,7 +1484,7 @@ app.post('/api/admin/recuperacao/carrinho/enviar', requireAdmin, async (req, res
 // (achado do usuário, 2026-09-05: Pix de véspera parado em 0 tentativas).
 app.post('/api/admin/recuperacao/pix/enviar', requireAdmin, async (req, res) => {
   const { inkOrderId } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (inkOrderId == null) return res.status(400).json({ error: 'inkOrderId obrigatório' });
 
   try {
@@ -1452,7 +1536,7 @@ async function fetchRecentOrdersDaStore(beginDate) {
   const resultados = [];
   const erros = [];
   const lojasComLacuna = [];
-  for (const loja of await lojasInkDoContexto()) {
+  for (const { loja } of await storesInkDoContexto()) {
     try {
       const query = `begin_date=${beginDate}&per_page=100`;
       const primeira = await inkApiRequest(loja, `/v1/stores/orders?${query}&page=1`);
@@ -1535,7 +1619,7 @@ const LUCRO_AGRUPAMENTOS = {
 app.get('/api/admin/dashboard/lucro-produtos', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'lucro por produto exige Postgres configurado' });
   const dias = Math.max(1, Math.min(Number.parseInt(req.query.dias, 10) || 30, 180));
-  const lojas = [lojaDoContexto()];
+  const lojas = [lojaLegadaDoContexto()];
   const agrupar = Object.prototype.hasOwnProperty.call(LUCRO_AGRUPAMENTOS, req.query.agrupar) ? req.query.agrupar : 'produto';
   const { chave, rotulo } = LUCRO_AGRUPAMENTOS[agrupar];
   const params = [lojas, Array.from(RESUMO_PAGO), dias];
@@ -1708,20 +1792,22 @@ const DATA_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 // sincronizado. Devolve null (quem chama cai pra API da Ink) quando não há Postgres ou quando
 // alguma loja pedida ainda não tem nenhum pedido em cache — cache parcial passaria por lista
 // completa sem aviso.
-async function buscarPedidosNoCache(loja, query) {
+async function buscarPedidosNoCache(query) {
   if (!pgPool) return null;
-  const lojas = [loja];
+  const escopo = escopoDaStore(2);
 
+  // Cobertura do cache: a Store tem algum pedido sincronizado? Sem isso, uma lista vazia por cache
+  // frio passaria por "não há pedidos".
   const { rows: cobertura } = await pgPool.query(
-    `SELECT p.loja, COUNT(*) AS total, MIN(p.criado_em) AS desde, s.ultimo_sync_em
-     FROM pedidos_ink p LEFT JOIN sync_estado s ON s.loja = p.loja
-     WHERE p.loja = ANY($1) GROUP BY p.loja, s.ultimo_sync_em`,
-    [lojas]
+    `SELECT COUNT(*)::int AS total
+       FROM pedidos_ink p
+      WHERE p.organization_id = $1 AND ${escopo.sql.replace(/store_id|loja/g, (m) => `p.${m}`)}`,
+    [orgDoContexto(), ...escopo.params]
   );
-  if (cobertura.length < lojas.length) return null;
+  if (!cobertura.length || cobertura[0].total === 0) return null;
 
-  const where = ['loja = ANY($1)'];
-  const params = [lojas];
+  const where = [`organization_id = $1`, escopo.sql];
+  const params = [orgDoContexto(), ...escopo.params];
   const paymentStatus = String(query.payment_status || '').trim().slice(0, 60);
   if (paymentStatus) {
     params.push(paymentStatus);
@@ -1791,7 +1877,9 @@ async function buscarPedidosNoCache(loja, query) {
 
 // Pedidos da Store do contexto (Fase 3). O modo que agregava todas as lojas saiu (PD-022).
 app.get('/api/admin/pedidos/central', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  // A identidade é a Store. A chave legada segue disponível só para rotular a linha no formato
+  // antigo que a tela e o cache local ainda usam — nunca para escopo.
+  const loja = lojaLegadaDoContextoOuNula();
 
   let localPedidos;
   try {
@@ -1809,7 +1897,7 @@ app.get('/api/admin/pedidos/central', requireAdmin, async (req, res) => {
   // escape pra ver o estado ao vivo; falha no cache também cai pra Ink, sem quebrar a tela.
   if (req.query.fonte !== 'ink') {
     try {
-      const doCache = await buscarPedidosNoCache(loja, req.query);
+      const doCache = await buscarPedidosNoCache(req.query);
       if (doCache) return res.json(doCache);
     } catch (err) {
       console.error(`[PEDIDOS_CENTRAL] busca no cache falhou, caindo pra Ink: ${err.message}`);
@@ -1820,7 +1908,7 @@ app.get('/api/admin/pedidos/central', requireAdmin, async (req, res) => {
   const perPage = Math.min(Number.parseInt(req.query.per_page, 10) || 20, 100);
   const query = buildOrdersQuery(req, { page: String(page), per_page: String(perPage) });
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/orders?${query}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/orders?${query}`);
     const pedidos = (data.orders || []).map((o) => mapOrderSummary(loja, o, hotpageIdPorPedidoInk));
     res.json({
       pedidos,
@@ -1841,29 +1929,31 @@ app.get('/api/admin/pedidos/central', requireAdmin, async (req, res) => {
 // Histórico de webhooks recebidos pra 1 pedido — usado na aba Timeline do drawer. Só existe
 // com Postgres configurado (webhook_eventos); sem ele, cai pro log JSON local (últimos 200,
 // filtrado em memória — mesma limitação que o log já tem hoje em qualquer outra tela).
-async function getWebhookHistoryForOrder(loja, inkOrderId) {
+async function getWebhookHistoryForOrder(inkOrderId) {
   if (pgPool) {
     const { rows } = await pgPool.query(
       `SELECT recebido_em, event_name FROM webhook_eventos
-       WHERE organization_id = $3 AND loja = $1 AND ink_order_id = $2 ORDER BY recebido_em DESC LIMIT 20`,
-      [loja, inkOrderId, orgDoContexto()]
+       WHERE organization_id = $1 AND ink_order_id = $2 AND ${escopoDaStore(3).sql}
+       ORDER BY recebido_em DESC LIMIT 20`,
+      [orgDoContexto(), inkOrderId, ...escopoDaStore(3).params]
     );
     return rows.map((r) => ({ em: r.recebido_em, evento: r.event_name }));
   }
   let log = [];
   try { log = JSON.parse(fs.readFileSync(WEBHOOK_LOG_FILE, 'utf8')); } catch { log = []; }
   return log
-    .filter((e) => e.loja === loja && e.inkOrderId === inkOrderId)
+    // Arquivo local do modo sem Postgres: uma instalação, uma loja. Filtra pelo pedido.
+    .filter((e) => e.inkOrderId === inkOrderId)
     .slice(0, 20)
     .map((e) => ({ em: e.recebidoEm, evento: e.eventName }));
 }
 
 app.get('/api/admin/pedidos/central/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/orders/${id}`);
-    const timeline = await getWebhookHistoryForOrder(loja, Number(id));
+    const data = await inkApiRequestDaStore(`/v1/stores/orders/${id}`);
+    const timeline = await getWebhookHistoryForOrder(Number(id));
     res.json({ loja, order: data.order, timeline });
   } catch (err) {
     console.error(`[PEDIDOS_CENTRAL] falha ao buscar pedido ${loja}/${id}: ${err.message}`);
@@ -1897,7 +1987,7 @@ function mapExchangeSummary(loja, e) {
 const EXCHANGES_QUERY_PARAMS = ['order_id', 'external_order_id', 'begin_date', 'end_date', 'waiting_for_approval'];
 
 app.get('/api/admin/trocas', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   const baseParams = new URLSearchParams();
   EXCHANGES_QUERY_PARAMS.forEach((key) => { if (req.query[key]) baseParams.set(key, req.query[key]); });
@@ -1927,7 +2017,7 @@ app.get('/api/admin/trocas', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/trocas/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, `/v1/stores/exchanges/${id}`);
     res.json({ loja, exchange: data.exchange });
@@ -1943,7 +2033,7 @@ app.get('/api/admin/trocas/:id', requireAdmin, async (req, res) => {
 // nunca duplicar uma troca por duplo clique/retry de rede.
 app.post('/api/admin/trocas', requireAdmin, async (req, res) => {
   const { original_order_id: originalOrderId, exchange_reason: exchangeReason, problem_description: problemDescription, items, photos } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!Number.isInteger(originalOrderId) || originalOrderId <= 0) return res.status(400).json({ error: 'original_order_id inválido' });
   if (!EXCHANGE_REASONS.includes(exchangeReason)) return res.status(400).json({ error: 'exchange_reason inválido' });
   if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'informe ao menos 1 item' });
@@ -2004,7 +2094,7 @@ app.get('/api/admin/reembolsos', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/pedidos/central/:id/reembolsos', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, `/v1/stores/orders/${id}/refunds`);
     res.json({ loja, refunds: data.refunds || [] });
@@ -2019,7 +2109,7 @@ app.get('/api/admin/pedidos/central/:id/reembolsos', requireAdmin, async (req, r
 // `confirmadoTotal: true` explícito no corpo (checkbox de confirmação na UI, spec §32/§72).
 app.post('/api/admin/pedidos/:id/reembolsos', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { reason, refundedItems, confirmadoTotal } = req.body || {};
 
   if (typeof reason !== 'string' || !reason.trim()) return res.status(400).json({ error: 'informe o motivo do reembolso' });
@@ -2139,7 +2229,7 @@ function montarFiltroLocalProdutos(fonte) {
 }
 
 app.get('/api/admin/produtos', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   const baseParams = new URLSearchParams();
   PRODUTOS_QUERY_PARAMS.forEach((key) => { if (req.query[key] !== undefined) baseParams.set(key, req.query[key]); });
@@ -2308,7 +2398,7 @@ async function feedInkConfigurado() {
 
 async function sincronizarProdutosFeed(loja) {
   if (!pgPool) return { pulado: 'sem Postgres configurado' };
-  if (lojaDoContexto() !== loja) return { pulado: 'loja fora do contexto da organization' };
+  if (lojaLegadaDoContexto() !== loja) return { pulado: 'loja fora do contexto da organization' };
   if (!(await feedInkConfigurado())) return { pulado: 'sem URL do feed configurada pra esta loja' };
   if (feedEmSincronizacao.has(loja)) return { pulado: 'sincronização já em andamento' };
   feedEmSincronizacao.add(loja);
@@ -2486,7 +2576,7 @@ async function gravarLoteCatalogo(loja, produtos, sincronizadoEm) {
 
 async function sincronizarCatalogoInk(loja) {
   if (!pgPool) return { pulado: 'sem Postgres configurado' };
-  if (lojaDoContexto() !== loja || !(await inkConectada())) return { pulado: 'loja sem token INK configurado' };
+  if (lojaLegadaDoContexto() !== loja || !(await inkConectada())) return { pulado: 'loja sem token INK configurado' };
   if (catalogoEmSincronizacao.has(loja)) return { pulado: 'sincronização já em andamento' };
   catalogoEmSincronizacao.add(loja);
 
@@ -2556,7 +2646,10 @@ async function sincronizarCatalogoInk(loja) {
 
 async function sincronizarCatalogoInkDaOrganizacao({ apenasVencidos = false } = {}) {
   if (!pgPool) return;
-  for (const loja of await lojasInkDoContexto()) {
+  // Compatibilidade: o catálogo grava em tabelas cuja coluna `loja` ainda é obrigatória
+  // (produtos_ink, produtos_feed, produtos_ink_sync). Enquanto elas não tiverem `store_id`,
+  // este caminho só roda para Store com chave legada — Store nativa fica de fora, de propósito.
+  for (const loja of await lojasLegadasInkDoContexto()) {
     if (apenasVencidos) {
       const { rows } = await pgPool.query(
         'SELECT concluido_em, auto_pausado, intervalo_horas FROM produtos_ink_sync WHERE loja = $1',
@@ -2795,7 +2888,7 @@ app.get('/api/admin/produtos/catalogo/status', requireAdmin, async (req, res) =>
     const porLoja = new Map(totais.map((t) => [t.loja, t]));
     const porSync = new Map(syncs.map((s) => [s.loja, s]));
     res.json({
-      lojas: [lojaDoContexto()].map((loja) => {
+      lojas: [lojaLegadaDoContexto()].map((loja) => {
         const t = porLoja.get(loja);
         const s = porSync.get(loja);
         return {
@@ -2827,7 +2920,7 @@ app.get('/api/admin/produtos/catalogo/status', requireAdmin, async (req, res) =>
 // acompanha é o polling de /catalogo/status, igual ao backfill de pedidos.
 app.post('/api/admin/produtos/catalogo/sync', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'cache do catálogo exige Postgres configurado' });
-  const lojas = await lojasInkDoContexto();
+  const lojas = await lojasLegadasInkDoContexto();
   if (!lojas.length) return res.status(503).json({ error: 'esta loja não tem token INK configurado' });
   const iniciadas = lojas.filter((l) => !catalogoEmSincronizacao.has(l));
   for (const loja of iniciadas) {
@@ -2841,7 +2934,7 @@ app.post('/api/admin/produtos/catalogo/sync', requireAdmin, async (req, res) => 
 app.put('/api/admin/produtos/catalogo/config', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'cache do catálogo exige Postgres configurado' });
   const body = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const temPausado = body.pausado !== undefined;
   const temIntervalo = body.intervaloHoras !== undefined;
   if (!temPausado && !temIntervalo) return res.status(400).json({ error: 'nada para atualizar' });
@@ -2880,7 +2973,7 @@ app.get('/api/admin/produtos/feed/status', requireAdmin, async (req, res) => {
     const porLoja = new Map(totais.map((t) => [t.loja, t]));
     const porSync = new Map(syncs.map((s) => [s.loja, s]));
     res.json({
-      lojas: [lojaDoContexto()].map((loja) => {
+      lojas: [lojaLegadaDoContexto()].map((loja) => {
         const t = porLoja.get(loja);
         const s = porSync.get(loja);
         return {
@@ -2904,7 +2997,7 @@ app.get('/api/admin/produtos/feed/status', requireAdmin, async (req, res) => {
 // request do admin (mesmo motivo dos outros jobs deste arquivo).
 app.post('/api/admin/produtos/feed/sync', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'cache de produtos exige Postgres configurado' });
-  const lojas = (await feedInkConfigurado()) ? [lojaDoContexto()] : [];
+  const lojas = (await feedInkConfigurado()) ? [lojaLegadaDoContexto()] : [];
   if (!lojas.length) return res.status(503).json({ error: 'esta loja não tem a URL do feed configurada' });
   for (const loja of lojas) {
     sincronizarProdutosFeed(loja).catch(() => {});
@@ -2914,7 +3007,7 @@ app.post('/api/admin/produtos/feed/sync', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, `/v1/stores/products/${id}`);
     res.json({ loja, produto: data.product });
@@ -2925,7 +3018,7 @@ app.get('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
 });
 
 app.get('/api/admin/produto-tipos', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, '/v1/stores/product_types?per_page=100');
     res.json({ tipos: data.product_types || [] });
@@ -2992,7 +3085,7 @@ app.post('/api/admin/produtos', requireAdmin, async (req, res) => {
 // por uma futura edição completa. Nunca oferecer DELETE — a API não documenta esse método.
 app.patch('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   const { name, description, price, visibleInStore, tags, collections, newCollections, removeVariants, arts } = req.body || {};
   const body = {};
@@ -3018,7 +3111,7 @@ app.patch('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { productTypeId, price, includeCategories } = req.body || {};
   if (!Number.isInteger(productTypeId)) return res.status(400).json({ error: 'productTypeId (tipo de destino) inválido' });
 
@@ -3041,7 +3134,7 @@ app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
 // por isso "adicionar 1 produto" sempre lê a categoria atual antes de gravar (ver
 // /adicionar-produto abaixo), nunca assume o estado local.
 app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, '/v1/stores/collections?per_page=100');
     res.json({ categorias: data.collections || [] });
@@ -3053,7 +3146,7 @@ app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, `/v1/stores/collections/${id}`);
     res.json({ loja, categoria: data.collection });
@@ -3069,7 +3162,7 @@ app.get('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
 // pequenos — mesmo padrão já usado em falhas-por-tipo. Só leitura, não altera nada.
 app.get('/api/admin/categorias/:id/produtos-nomes', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const dataCategoria = await inkApiRequest(loja, `/v1/stores/collections/${id}`);
     const categoria = dataCategoria.collection;
@@ -3106,7 +3199,7 @@ app.get('/api/admin/categorias/:id/produtos-nomes', requireAdmin, async (req, re
 
 app.post('/api/admin/categorias', requireAdmin, async (req, res) => {
   const { name, description, isAvailable, position } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (typeof name !== 'string' || !name.trim() || name.length > 20) return res.status(400).json({ error: 'nome é obrigatório (máx. 20 caracteres — limite da Ink)' });
 
   const body = { name: name.trim() };
@@ -3125,7 +3218,7 @@ app.post('/api/admin/categorias', requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { name, description, isAvailable, position, productIds, kitIds } = req.body || {};
   const body = {};
   if (name !== undefined) body.name = name;
@@ -3147,7 +3240,7 @@ app.patch('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     await inkApiDelete(loja, `/v1/stores/collections/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(204).end();
@@ -3161,7 +3254,7 @@ app.delete('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
 // só aceita substituição total de `product_ids`, nunca "adicionar 1".
 app.post('/api/admin/categorias/:id/adicionar-produto', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { productId } = req.body || {};
   if (!Number.isInteger(productId)) return res.status(400).json({ error: 'productId inválido' });
 
@@ -3179,7 +3272,7 @@ app.post('/api/admin/categorias/:id/adicionar-produto', requireAdmin, async (req
 
 app.get('/api/admin/categorias/:id/vitrine', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, `/v1/stores/collections/${id}/custom_showcase`);
     res.json({ loja, vitrine: data.custom_showcase });
@@ -3191,7 +3284,7 @@ app.get('/api/admin/categorias/:id/vitrine', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/categorias/:id/vitrine', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { productItems, kitItems } = req.body || {};
   if (!Array.isArray(productItems)) return res.status(400).json({ error: 'productItems é obrigatório' });
 
@@ -3217,7 +3310,7 @@ function normalizarNomeCategoria(nome) {
 }
 
 app.post('/api/admin/categorias/bulk-preview', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { nomes } = req.body || {};
   if (!Array.isArray(nomes)) return res.status(400).json({ error: 'nomes é obrigatório (array)' });
 
@@ -3260,7 +3353,7 @@ app.post('/api/admin/categorias/bulk-preview', requireAdmin, async (req, res) =>
 // assíncrono; a Fase 2, associação de produtos, é que precisa de job de verdade). Sempre sem
 // `product_ids` neste momento — associação de produtos é etapa separada (Parte 2 do plano).
 app.post('/api/admin/categorias/bulk-create', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { nomes, isAvailable, descricaoPadrao } = req.body || {};
   if (!Array.isArray(nomes) || !nomes.length) return res.status(400).json({ error: 'nomes é obrigatório (array não vazio)' });
   if (nomes.some((n) => typeof n !== 'string' || !n.trim() || n.length > 20)) {
@@ -3305,7 +3398,7 @@ app.post('/api/admin/categorias/bulk-create', requireAdmin, async (req, res) => 
 // (422) associar um produto a uma categoria desativada — daí toda a execução da migração falhando
 // com a mesma mensagem genérica. O painel nativo da Ink só ativa/desativa 1 categoria por vez.
 app.post('/api/admin/categorias/bulk-ativar', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const ids = Array.isArray(req.body && req.body.ids) ? Array.from(new Set(req.body.ids)) : null;
   const disponivel = req.body && req.body.isAvailable === false ? false : true;
   const rotulo = disponivel ? 'ativada' : 'desativada';
@@ -3351,7 +3444,7 @@ async function excluirCategoriasEmLote(loja, ids) {
 }
 
 app.post('/api/admin/categorias/bulk-excluir', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const ids = Array.isArray(req.body && req.body.ids) ? Array.from(new Set(req.body.ids)) : null;
   if (!ids || !ids.length || !ids.every((n) => Number.isInteger(n))) {
     return res.status(400).json({ error: 'ids é obrigatório (array de inteiros não vazio)' });
@@ -3467,7 +3560,7 @@ function normalizarRemoveCategoryIds(mode, raw) {
 
 app.post('/api/admin/category-assignments/preview', requireAdmin, async (req, res) => {
   const { mode, filtros, selecaoManual } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const categoryIds = Array.isArray(req.body && req.body.categoryIds) ? Array.from(new Set(req.body.categoryIds)) : req.body && req.body.categoryIds;
   if (mode !== 'add' && mode !== 'replace') return res.status(400).json({ error: 'mode deve ser "add" ou "replace"' });
   const erroCategorias = validarCategoryIds(categoryIds, mode);
@@ -3505,7 +3598,7 @@ app.post('/api/admin/category-assignments/preview', requireAdmin, async (req, re
 app.post('/api/admin/category-assignments', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'associação em massa exige Postgres configurado' });
   const { mode, filtros, selecaoManual } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const categoryIds = Array.isArray(req.body && req.body.categoryIds) ? Array.from(new Set(req.body.categoryIds)) : req.body && req.body.categoryIds;
   if (mode !== 'add' && mode !== 'replace') return res.status(400).json({ error: 'mode deve ser "add" ou "replace"' });
   const erroCategorias = validarCategoryIds(categoryIds, mode);
@@ -5131,7 +5224,7 @@ function validarCondicoes(condicoes) {
 
 app.get('/api/admin/internal/origens-migration/rules', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'regras exigem Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { rows } = await pgPool.query('SELECT * FROM origens_migration_rules WHERE loja = $1 ORDER BY prioridade ASC, id ASC', [loja]);
   res.json({ regras: rows });
 });
@@ -5139,7 +5232,7 @@ app.get('/api/admin/internal/origens-migration/rules', requireAdmin, requireInte
 app.post('/api/admin/internal/origens-migration/rules', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'regras exigem Postgres configurado' });
   const { nome, habilitada, prioridade, dimensao, condicoes } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const categoriaIdsSaida = Array.isArray(req.body && req.body.categoriaIdsSaida) ? req.body.categoriaIdsSaida : null;
   if (typeof nome !== 'string' || !nome.trim()) return res.status(400).json({ error: 'nome é obrigatório' });
   const erroCondicoes = validarCondicoes(condicoes);
@@ -5486,7 +5579,7 @@ async function processarSimulacaoMigracao(simulationId, loja) {
 // isso não dava nenhum feedback de progresso (bug real reportado pelo usuário, 2026-09-09).
 app.post('/api/admin/internal/origens-migration/simulate', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'simulação exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (lojasSimulandoMigracao.has(loja)) {
     return res.status(409).json({ error: 'já existe uma simulação em andamento para esta loja — aguarde terminar' });
   }
@@ -5863,7 +5956,7 @@ app.post('/api/admin/internal/origens-migration/simulations/:id/corrigir-fala-da
 
 app.get('/api/admin/internal/origens-migration/simulations', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'simulações exigem Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { rows } = await pgPool.query(
     `SELECT s.*, j.status AS job_status, j.processed AS job_processed, j.total AS job_total, j.succeeded AS job_succeeded, j.failed AS job_failed
      FROM origens_migration_simulations s LEFT JOIN bulk_category_jobs j ON j.id = s.job_id
@@ -6244,7 +6337,7 @@ app.get('/api/admin/internal/origens-migration/simulations/:id/export.csv', requ
 // preset-create (pode incluir correção manual de categoria ambígua/ausente).
 app.get('/api/admin/internal/origens-migration/rules/preset-preview', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'preset exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   try {
     const [{ nomesPorId }, regrasExistentes] = await Promise.all([
@@ -6331,7 +6424,7 @@ app.get('/api/admin/internal/origens-migration/rules/preset-preview', requireAdm
 app.post('/api/admin/internal/origens-migration/rules/preset-create', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'preset exige Postgres configurado' });
   const { itens } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!Array.isArray(itens) || !itens.length) return res.status(400).json({ error: 'itens é obrigatório (array não vazio)' });
 
   let criadas = 0;
@@ -6396,7 +6489,7 @@ app.post('/api/admin/internal/origens-migration/rules/preset-create', requireAdm
 // 'categoria_ausente' do Grupo A).
 app.get('/api/admin/internal/origens-migration/rules/preset-especiais-preview', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'preset exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   try {
     const [{ nomesPorId }, regrasExistentes] = await Promise.all([
@@ -6477,7 +6570,7 @@ app.get('/api/admin/internal/origens-migration/rules/preset-especiais-preview', 
 // ── Mapa Cidade → UF (fallback pra produto sem UF explícita no nome) ────────────────────────
 app.get('/api/admin/internal/origens-migration/city-uf-map', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'mapa cidade→UF exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { rows } = await pgPool.query(
     'SELECT * FROM origens_migration_city_uf_map WHERE loja = $1 ORDER BY cidade_display ASC', [loja]
   );
@@ -6487,7 +6580,7 @@ app.get('/api/admin/internal/origens-migration/city-uf-map', requireAdmin, requi
 app.post('/api/admin/internal/origens-migration/city-uf-map', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'mapa cidade→UF exige Postgres configurado' });
   const { cidade, uf } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (typeof cidade !== 'string' || !cidade.trim()) return res.status(400).json({ error: 'cidade é obrigatória' });
   if (!PRESET_UFS.includes(uf)) return res.status(400).json({ error: `uf deve ser uma de: ${PRESET_UFS.join(', ')}` });
   try {
@@ -6527,7 +6620,7 @@ app.delete('/api/admin/internal/origens-migration/city-uf-map/:id', requireAdmin
 app.post('/api/admin/internal/origens-migration/city-uf-map/bulk-preview', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'mapa cidade→UF exige Postgres configurado' });
   const { texto } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (typeof texto !== 'string') return res.status(400).json({ error: 'texto é obrigatório' });
 
   const { rows: existentesRows } = await pgPool.query('SELECT cidade_normalizada FROM origens_migration_city_uf_map WHERE loja = $1', [loja]);
@@ -6563,7 +6656,7 @@ app.post('/api/admin/internal/origens-migration/city-uf-map/bulk-preview', requi
 app.post('/api/admin/internal/origens-migration/city-uf-map/bulk-create', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'mapa cidade→UF exige Postgres configurado' });
   const { itens } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!Array.isArray(itens) || !itens.length) return res.status(400).json({ error: 'itens é obrigatório (array não vazio)' });
 
   let criadas = 0;
@@ -6591,7 +6684,7 @@ app.post('/api/admin/internal/origens-migration/city-uf-map/bulk-create', requir
 // idempotente) — só que a lista vem fixa do dicionário, não do body da request.
 app.post('/api/admin/internal/origens-migration/city-uf-map/importar-dicionario', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'mapa cidade→UF exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   let importados = 0;
   let jaExistiam = 0;
@@ -6612,7 +6705,7 @@ app.post('/api/admin/internal/origens-migration/city-uf-map/importar-dicionario'
 // inteiro procurando manualmente.
 app.post('/api/admin/internal/origens-migration/city-uf-map/discover', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'mapa cidade→UF exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   try {
     const [produtos, cityUfMap] = await Promise.all([
@@ -6724,7 +6817,7 @@ async function avaliarCategoriasAntigas(loja, simulationIdParam) {
 app.get('/api/admin/internal/origens-migration/categorias-antigas', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   const { simulationId } = req.query;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const resultado = await avaliarCategoriasAntigas(loja, simulationId ? Number(simulationId) : null);
     res.json(resultado);
@@ -6737,7 +6830,7 @@ app.get('/api/admin/internal/origens-migration/categorias-antigas', requireAdmin
 app.post('/api/admin/internal/origens-migration/categorias-antigas/excluir', requireAdmin, requireInternalTools, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   const { simulationId } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const idsPedidos = Array.isArray(req.body && req.body.ids) ? Array.from(new Set(req.body.ids)) : null;
   if (!idsPedidos || !idsPedidos.length || !idsPedidos.every((n) => Number.isInteger(n))) {
     return res.status(400).json({ error: 'ids é obrigatório (array de inteiros não vazio)' });
@@ -6928,7 +7021,7 @@ function migracaoChaveDoProdutoOrigem(nome) {
 // pertence a um grupo) e remover produto individual. Remover o penúltimo produto dissolve o
 // grupo (a Ink devolve product_cluster: null) — a UI precisa avisar disso antes de confirmar.
 app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, '/v1/stores/product_clusters?per_page=100');
     const clusters = data.product_clusters || [];
@@ -6953,7 +7046,7 @@ app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/agrupamentos/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const cluster = await inkApiRequest(loja, `/v1/stores/product_clusters/${id}`);
     const produtos = await Promise.all(
@@ -6970,7 +7063,7 @@ app.get('/api/admin/agrupamentos/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
   const { productIds } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!Array.isArray(productIds) || productIds.length < 2) return res.status(400).json({ error: 'informe ao menos 2 produtos (ou 1 novo + 1 já agrupado)' });
 
   try {
@@ -6984,7 +7077,7 @@ app.post('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/agrupamentos/:clusterId/produtos/:produtoId', requireAdmin, async (req, res) => {
   const { clusterId, produtoId } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiDelete(loja, `/v1/stores/product_clusters/${clusterId}/products/${produtoId}`, { 'Idempotency-Key': crypto.randomUUID() });
     res.json({ loja, agrupamento: data.product_cluster || null, dissolvido: !data.product_cluster });
@@ -6998,7 +7091,7 @@ app.delete('/api/admin/agrupamentos/:clusterId/produtos/:produtoId', requireAdmi
 const PROMOTION_SUBTYPES = ['standard', 'progressive', 'unit_free'];
 
 app.get('/api/admin/promocoes', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const params = new URLSearchParams({ per_page: '100' });
   if (req.query.type) params.set('type', req.query.type);
   try {
@@ -7012,7 +7105,7 @@ app.get('/api/admin/promocoes', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/promocoes', requireAdmin, async (req, res) => {
   const { type, ...campos } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!PROMOTION_SUBTYPES.includes(type)) return res.status(400).json({ error: `type deve ser um de: ${PROMOTION_SUBTYPES.join(', ')}` });
   if (typeof campos.code !== 'string' || !campos.code.trim()) return res.status(400).json({ error: 'informe o código da promoção' });
 
@@ -7027,7 +7120,7 @@ app.post('/api/admin/promocoes', requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/promocoes/:type/:id', requireAdmin, async (req, res) => {
   const { type, id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!PROMOTION_SUBTYPES.includes(type)) return res.status(400).json({ error: `type deve ser um de: ${PROMOTION_SUBTYPES.join(', ')}` });
   try {
     const data = await inkApiPatch(loja, `/v1/stores/promotions/${type}/${id}`, req.body || {}, { 'Idempotency-Key': crypto.randomUUID() });
@@ -7040,7 +7133,7 @@ app.patch('/api/admin/promocoes/:type/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/promocoes/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     await inkApiDelete(loja, `/v1/stores/promotions/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(204).end();
@@ -7055,7 +7148,7 @@ app.delete('/api/admin/promocoes/:id', requireAdmin, async (req, res) => {
 // via API (ambos "fora de escopo" segundo a própria doc), então essa tela nunca oferece essas
 // ações, só mostra o histórico.
 app.get('/api/admin/financeiro/resumo', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, '/v1/stores/balance');
     res.json({ loja, saldo: data.balance });
@@ -7066,7 +7159,7 @@ app.get('/api/admin/financeiro/resumo', requireAdmin, async (req, res) => {
 });
 
 app.get('/api/admin/financeiro/movimentacoes', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const params = new URLSearchParams({ page: String(req.query.page || 1), per_page: '25' });
   if (req.query.start_date) params.set('start_date', req.query.start_date);
   if (req.query.end_date) params.set('end_date', req.query.end_date);
@@ -7080,7 +7173,7 @@ app.get('/api/admin/financeiro/movimentacoes', requireAdmin, async (req, res) =>
 });
 
 app.get('/api/admin/financeiro/antecipacoes', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, '/v1/stores/prepayments?per_page=100');
     res.json({ loja, antecipacoes: data.prepayments || [] });
@@ -7091,7 +7184,7 @@ app.get('/api/admin/financeiro/antecipacoes', requireAdmin, async (req, res) => 
 });
 
 app.get('/api/admin/financeiro/saques', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const data = await inkApiRequest(loja, '/v1/stores/withdraws?per_page=100');
     res.json({ loja, saques: data.withdraws || [] });
@@ -7105,7 +7198,7 @@ app.get('/api/admin/financeiro/saques', requireAdmin, async (req, res) => {
 // Sempre estimativa sobre um produto de referência (a própria Ink avisa isso) — nunca
 // apresentar como cotação definitiva.
 app.get('/api/admin/frete/simular', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const cep = String(req.query.cep || '').replace(/\D/g, '');
   if (cep.length !== 8) return res.status(400).json({ error: 'CEP inválido' });
   try {
@@ -7122,7 +7215,7 @@ app.get('/api/admin/frete/simular', requireAdmin, async (req, res) => {
 // JSON, ver `registrarObservacoesEstoque`).
 app.get('/api/admin/estoque', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'rastreio de estoque exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   try {
     // O "tipo de peça" de verdade pro estoque é Tamanho+Cor+Modelo — a estampa (produto/SKU) é
@@ -7167,7 +7260,7 @@ app.get('/api/admin/estoque', requireAdmin, async (req, res) => {
 // propósito (decisão do usuário, 2026-09-04) — nunca mistura as duas fontes na mesma resposta.
 app.get('/api/admin/controle-estoque', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'controle de estoque exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   try {
     // Agrupa por Tamanho+Cor+Modelo (escopado por produto_tipo), não por variant_id: quando o
@@ -7207,7 +7300,7 @@ app.get('/api/admin/controle-estoque', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/controle-estoque/sincronizar', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     if (loja) {
       const resultado = await sincronizarControleEstoque(loja);
@@ -7230,7 +7323,7 @@ app.post('/api/admin/controle-estoque/sincronizar', requireAdmin, async (req, re
 // vazia por alguns segundos até a sincronização terminar.
 app.post('/api/admin/controle-estoque/limpar', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'controle de estoque exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   try {
     // Só a Organization da sessão. Nunca TRUNCATE: ele ignora RLS e apagaria todas.
@@ -7269,10 +7362,10 @@ app.get('/api/admin/dashboard/customers', requireAdmin, async (req, res) => {
 // depois e-mail como fallback, igual o anti-spam de carrinho já faz (`clienteJaComprou`).
 app.get('/api/admin/clientes', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });
-  const lojas = [lojaDoContexto()];
+  const lojas = [lojaLegadaDoContexto()];
 
   try {
-    const clientes = await buscarClientesAgregados(lojas);
+    const clientes = await buscarClientesAgregados();
     res.json({ clientes });
   } catch (err) {
     console.error(`[CLIENTES] falha ao listar histórico de compras: ${err.message}`);
@@ -7293,15 +7386,16 @@ app.get('/api/admin/clientes', requireAdmin, async (req, res) => {
 // ON CONFLICT (organization_id, campaign_id, customer_key) de campaign_recipients). Trade-off consciente: no caso
 // raro de duas pessoas diferentes compartilharem telefone/email de família em pedidos distintos,
 // elas passam a contar como 1 "cliente" — prioriza nunca duplicar envio sobre esse risco raro.
-async function buscarClientesAgregados(lojas) {
+async function buscarClientesAgregados() {
+  const escopo = escopoDaStore(2);
   const { rows } = await pgPool.query(
     `SELECT loja, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing,
             buyer_uf, payment_status, total_value, criado_em, lucro_operacional, is_troca
      FROM pedidos_ink
-     WHERE organization_id = $2 AND loja = ANY($1)
+     WHERE organization_id = $1 AND ${escopo.sql}
        AND COALESCE(NULLIF(buyer_documento,''), NULLIF(buyer_telefone,''), NULLIF(buyer_email,'')) IS NOT NULL
      ORDER BY criado_em DESC`,
-    [lojas, orgDoContexto()]
+    [orgDoContexto(), ...escopo.params]
   );
 
   // Identidade nunca cruza lojas diferentes (mesmo documento podendo se repetir em 2 lojas
@@ -7421,7 +7515,7 @@ function compararNumero(valor, op, alvo) {
 // campaign_recipients) — por isso sempre calcula e devolve `elegiveis`; quem só quer a contagem
 // (calcularAudienciaCampanha, abaixo) simplesmente ignora o array.
 async function avaliarAudienciaCampanha(loja, matchTipo, filtros, exclusoes) {
-  const clientes = await buscarClientesAgregados([loja]);
+  const clientes = await buscarClientesAgregados();
 
   let telefonesComCarrinho = new Set();
   if ((filtros || []).some((f) => f.field === 'temCarrinhoAbandonado')) {
@@ -7553,7 +7647,7 @@ async function calcularAudienciaCampanha(loja, matchTipo, filtros, exclusoes) {
 
 app.post('/api/admin/campaigns/audience/preview', requireAdmin, async (req, res) => {
   const { match, filters, exclusions } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!pgPool) return res.status(503).json({ error: 'audiência de campanha exige Postgres configurado' });
   try {
     const resultado = await calcularAudienciaCampanha(loja, match === 'ANY' ? 'ANY' : 'ALL', filters || [], exclusions || {});
@@ -7677,7 +7771,7 @@ function montarUrlUtm(destinationUrl, { source, medium, campaign, content, term 
 // Valida + normaliza o corpo de criar/editar; devolve { erro } ou os valores prontos pra gravar.
 function prepararUtmCampanha(body) {
   // Loja da Store da sessão (Fase 3); o corpo nunca escolhe.
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const nome = String(body?.nome || '').trim();
   if (!nome) return { erro: 'nome é obrigatório' };
   const source = normalizarUtmValor(body?.source);
@@ -7695,7 +7789,7 @@ function prepararUtmCampanha(body) {
 
 app.get('/api/admin/utm/campaigns', requireAdmin, async (req, res) => {
   if (!pgPool) return res.json({ campanhas: [] });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const status = req.query.status === 'arquivadas' ? 'arquivadas' : req.query.status === 'todas' ? 'todas' : 'ativas';
   const condicoes = [];
   const params = [];
@@ -7903,7 +7997,7 @@ function normalizarMensagemWebId(valor) {
 
 app.get('/api/admin/campaigns', requireAdmin, async (req, res) => {
   if (!pgPool) return res.json({ campanhas: [] });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const { rows } = loja
       ? await pgPool.query(`SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns WHERE loja = $1 ORDER BY criado_em DESC`, [loja])
@@ -7929,7 +8023,7 @@ app.get('/api/admin/campaigns/:id', requireAdmin, exigirRecurso('campaigns'), as
 
 app.post('/api/admin/campaigns', requireAdmin, async (req, res) => {
   const { nome, descricao, templateNome, segmentoId, audienceDefinition } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!nome || !String(nome).trim()) return res.status(400).json({ error: 'nome é obrigatório' });
   const tamanhoLote = normalizarTamanhoLote(req.body?.tamanhoLote);
   if (tamanhoLote === undefined) return res.status(400).json({ error: 'tamanho de lote inválido' });
@@ -8303,9 +8397,10 @@ async function calcularAtribuicaoCampanha(campanha, janelaDias) {
     pgPool.query(
       `SELECT ink_order_id, criado_em, total_value, buyer_telefone, buyer_documento, buyer_email
          FROM pedidos_ink
-        WHERE loja = $1 AND payment_status = ANY($2) AND is_troca IS NOT TRUE
-          AND criado_em >= $3 AND criado_em <= $4`,
-      [campanha.loja, Array.from(PAYMENT_STATUSES_CONVERTIDO), desde, ate]
+        WHERE organization_id = $1 AND ${escopoDaStore(2).sql}
+          AND payment_status = ANY($${2 + escopoDaStore(2).usados}) AND is_troca IS NOT TRUE
+          AND criado_em >= $${3 + escopoDaStore(2).usados} AND criado_em <= $${4 + escopoDaStore(2).usados}`,
+      [orgDoContexto(), ...escopoDaStore(2).params, Array.from(PAYMENT_STATUSES_CONVERTIDO), desde, ate]
     ),
     pgPool.query(
       `SELECT r.sent_at, r.telefone, r.customer_key
@@ -8438,16 +8533,25 @@ app.get('/api/admin/campaigns/:id/recipients', requireAdmin, exigirRecurso('camp
 // Saúde das integrações: status de configuração por loja (Reserva Ink) + status do WhatsApp
 // (o webhook de status sent/delivered/read existe a partir daqui — ver /api/webhooks/whatsapp;
 // falta configurar WEBHOOK_FORWARD_URL no serviço Go pra ele de fato repassar os eventos).
-async function lojasDaIntegracaoInk() {
-  const loja = lojaDoContextoOuNulo();
-  // Organization sem loja legada ainda não tem integração Ink. Isso é um ESTADO, não um erro:
-  // toda organization nasce assim, e a tela precisa mostrar "não configurada".
-  if (!loja) return [];
-  return [[loja, {
+// Nome da Store do contexto, para exibição. O contexto carrega o id; o nome é dado de tela.
+async function nomeDaStoreDoContexto() {
+  if (!pgPool) return null;
+  const { rows } = await pgPool.query('SELECT nome FROM stores WHERE id = $1', [storeDoContexto()]);
+  return rows.length ? rows[0].nome : null;
+}
+
+// UMA linha, sempre: a Organization tem exatamente uma Store (1:1, PD-002). A linha é da STORE,
+// identificada por `storeId` — não pela chave legada. Store nativa do Oria tem `loja: null`, e isso
+// não impede nada: quem diz se a Ink está configurada é a integração da Organization.
+async function statusDaIntegracaoInk() {
+  return [{
+    storeId: storeDoContexto(),
+    loja: lojaLegadaDoContextoOuNula(),
+    nome: await nomeDaStoreDoContexto(),
     tokenConfigurado: await inkConectada(),
     // Fase 5c: webhook configurado = URL opaca emitida + segredo guardado na integração.
     webhookConfigurado: await inkWebhookConfigurado(),
-  }]];
+  }];
 }
 
 // Tela de STATUS: abrir não pode depender de nada estar configurado, e nenhuma leitura daqui fala
@@ -8471,19 +8575,19 @@ app.get('/api/admin/integrations', requireAdmin, async (req, res) => {
       try { log = JSON.parse(fs.readFileSync(WEBHOOK_LOG_FILE, 'utf8')); } catch { log = []; }
     }
 
-    const reservaInk = (await lojasDaIntegracaoInk()).map(([loja, store]) => {
-      const ultimoEvento = log.find((e) => e.verificado && e.loja === loja);
-      return {
-        loja,
-        tokenConfigurado: store.tokenConfigurado,
-        webhookConfigurado: store.webhookConfigurado,
-        ultimoEventoEm: ultimoEvento ? ultimoEvento.recebidoEm : null,
-      };
-    });
+    // O último evento é da Organization (a query já filtra por ela e a Store é única); não se
+    // procura mais por chave de loja.
+    const ultimoEvento = log.find((e) => e.verificado) || null;
+    const reservaInk = (await statusDaIntegracaoInk()).map((store) => ({
+      ...store,
+      ultimoEventoEm: ultimoEvento ? ultimoEvento.recebidoEm : null,
+    }));
 
-    const inkStatus = reservaInk.length === 0
-      ? 'not_configured'
-      : (reservaInk.every((r) => r.tokenConfigurado && r.webhookConfigurado) ? 'conectada' : 'pendente');
+    // Três estados, e a diferença importa: sem credencial é `not_configured`; com credencial e sem
+    // webhook é `pendente`; tudo no lugar é `conectada`. Nada aqui afirma que a credencial FUNCIONA
+    // — isso só o teste de conexão diz, e ele é explícito (§25 do comando).
+    const inkStatus = reservaInk.every((r) => r.tokenConfigurado && r.webhookConfigurado) ? 'conectada'
+      : (reservaInk.some((r) => r.tokenConfigurado) ? 'pendente' : 'not_configured');
 
     const whatsappConfigurado = !!(WHATSAPP_SERVICE_URL && WHATSAPP_API_KEY);
     let provider = WHATSAPP_PROVIDER_PADRAO.provider;
@@ -8574,16 +8678,30 @@ app.put('/api/admin/integrations/ink/credenciais', requireAdmin, (req, res, next
     return res.status(400).json({ error: 'URL do feed inválida (use a URL https da Reserva Ink)' });
   }
   try {
-    const integracoes = exigirIntegracoes();
-    if (apiToken !== undefined) await integracoes.gravarSegredo('ink', 'api_token', apiToken.trim());
-    if (feedUrl !== undefined) await integracoes.gravarSegredo('ink', 'feed_url', String(feedUrl).trim());
-    if (webhookSecret !== undefined) await integracoes.gravarSegredo('ink', 'webhook_secret', webhookSecret.trim());
-    await registrarAuditLog({
-      actorUserId: req.auth.userId, action: 'integration.credentials.update', entityType: 'integration', entityId: 'ink',
-      loja: lojaDoContexto(),
-      after: { campos: [apiToken !== undefined && 'apiToken', feedUrl !== undefined && 'feedUrl', webhookSecret !== undefined && 'webhookSecret'].filter(Boolean) },
+    // TUDO numa transação: segredos, status da integração e auditoria. Se a auditoria falhar, o
+    // segredo não fica gravado — a resposta e o banco contam a mesma história.
+    //
+    // A identidade é `organization_id` + `store_id`. A chave legada não entra: Store nativa do
+    // Oria não tem uma, e exigi-la aqui era o que impedia um cliente novo de conectar a Ink.
+    const m = await exigirIntegracoes().emTransacao(async (tx, cliente) => {
+      if (apiToken !== undefined) await tx.gravarSegredo('ink', 'api_token', apiToken.trim());
+      if (feedUrl !== undefined) await tx.gravarSegredo('ink', 'feed_url', String(feedUrl).trim());
+      if (webhookSecret !== undefined) await tx.gravarSegredo('ink', 'webhook_secret', webhookSecret.trim());
+      await registrarAuditoriaEm(cliente, {
+        criadoEm: new Date().toISOString(),
+        actorUserId: req.auth.userId,
+        action: 'integration.credentials.update',
+        entityType: 'integration',
+        entityId: 'ink',
+        organizationId: orgDoContexto(),
+        loja: lojaLegadaDoContextoOuNula(),
+        after: {
+          storeId: storeDoContexto(),
+          campos: [apiToken !== undefined && 'apiToken', feedUrl !== undefined && 'feedUrl', webhookSecret !== undefined && 'webhookSecret'].filter(Boolean),
+        },
+      });
+      return tx.metadata('ink');
     });
-    const m = await integracoes.metadata('ink');
     res.json({ status: m.status, segredos: m.segredos, webhook: webhookInkParaTela(m) });
   } catch (err) {
     responderErroIntegracao(res, err, 'gravar credenciais Ink');
@@ -8599,7 +8717,7 @@ app.delete('/api/admin/integrations/ink/credenciais', requireAdmin, (req, res, n
     await integracoes.gravarConfig('ink', {});
     await registrarAuditLog({
       actorUserId: req.auth.userId, action: 'integration.disconnect', entityType: 'integration', entityId: 'ink',
-      loja: lojaDoContexto(), after: { segredosApagados: apagados },
+      loja: lojaLegadaDoContextoOuNula(), after: { storeId: storeDoContexto(), segredosApagados: apagados },
     });
     res.json({ ok: true, apagados });
   } catch (err) {
@@ -8626,7 +8744,7 @@ app.post('/api/admin/integrations/ink/webhook-url', requireAdmin, (req, res, nex
     await integracoes.gravarConfig('ink', { ...antes.config, webhook_token_sha256: hash, webhook_token_criado_em: criadoEm });
     await registrarAuditLog({
       actorUserId: req.auth.userId, action: 'integration.webhook_url.rotate', entityType: 'integration', entityId: 'ink',
-      loja: lojaDoContexto(), after: { substituiuAnterior: !!antes.config.webhook_token_sha256 },
+      loja: lojaLegadaDoContextoOuNula(), after: { storeId: storeDoContexto(), substituiuAnterior: !!antes.config.webhook_token_sha256 },
     });
     res.set('Cache-Control', 'no-store');
     res.json({ caminho: `/api/webhooks/ink/${token}`, criadoEm });
@@ -8639,7 +8757,7 @@ app.post('/api/admin/integrations/ink/webhook-url', requireAdmin, (req, res, nex
 // A resposta traz só status e um código; nunca o erro bruto do provider (pode ecoar token/URL).
 const TESTES_DE_CONEXAO = {
   ink: async () => {
-    await inkApiRequest(lojaDoContexto(), '/v1/stores/orders?per_page=1');
+    await inkApiRequestDaStore('/v1/stores/orders?per_page=1');
     return {};
   },
   meta: async () => {
@@ -8659,7 +8777,7 @@ const TESTES_DE_CONEXAO = {
     return { contas: contas.length };
   },
   ga4: async () => {
-    const token = await obterAccessTokenValidoGA4(lojaDoContexto());
+    const token = await obterAccessTokenValidoGA4(lojaLegadaDoContexto());
     return { propriedades: (await listarPropriedadesGA4(token)).length };
   },
   // WhatsApp: a Meta confere se o token da integração enxerga o número da MESMA integração.
@@ -9027,7 +9145,7 @@ async function listarPropriedadesGA4(accessToken) {
 app.get('/api/admin/integrations/google-analytics/status', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
-    const loja = lojaDoContexto();
+    const loja = lojaLegadaDoContexto();
     const { rows } = await pgPool.query(
       'SELECT * FROM google_analytics_connections WHERE organization_id = $1 AND loja = $2', [orgDoContexto(), loja]
     );
@@ -9040,7 +9158,7 @@ app.get('/api/admin/integrations/google-analytics/status', requireAdmin, async (
 });
 
 app.get('/api/admin/integrations/google-analytics/connect', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!googleOAuthConfigurado()) return res.status(503).json({ error: 'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/GOOGLE_OAUTH_REDIRECT_URI não configurados neste ambiente' });
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   const state = await criarStateOAuth(req, 'ga4', { loja });
@@ -9079,7 +9197,7 @@ app.get('/api/admin/integrations/google-analytics/callback', async (req, res) =>
     }
     const { loja } = salvo.dados;
     await comOrganizacaoResolvida(salvo.organizationId, 'oauth:ga4', async () => {
-      if (lojaDoContexto() !== loja) throw new Error('state de outra store');
+      if (lojaLegadaDoContexto() !== loja) throw new Error('state de outra store');
       if (erroGoogle) {
         await marcarErroGA4(loja, `Google recusou: ${erroGoogle}`).catch(() => {});
         return;
@@ -9104,7 +9222,7 @@ app.get('/api/admin/integrations/google-analytics/callback', async (req, res) =>
 });
 
 app.get('/api/admin/integrations/google-analytics/properties', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
     const accessToken = await obterAccessTokenValidoGA4(String(loja));
@@ -9117,7 +9235,7 @@ app.get('/api/admin/integrations/google-analytics/properties', requireAdmin, asy
 
 app.post('/api/admin/integrations/google-analytics/property', requireAdmin, async (req, res) => {
   const { propertyId, propertyName } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!propertyId) return res.status(400).json({ error: 'propertyId é obrigatório' });
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
@@ -9131,7 +9249,7 @@ app.post('/api/admin/integrations/google-analytics/property', requireAdmin, asyn
 });
 
 app.post('/api/admin/integrations/google-analytics/disconnect', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
     // Revoga no Google também — best-effort, não impede a desconexão local se a revogação falhar.
@@ -9258,7 +9376,7 @@ async function salvarCachePerformanceGA4(loja, periodoChave, dados) {
 
 app.get('/api/admin/integrations/google-analytics/performance', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'GA4 exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   let periodo;
   try { periodo = resolverPeriodoGA4(req.query.periodo); } catch (err) { return res.status(400).json({ error: err.message }); }
   try {
@@ -9319,7 +9437,7 @@ async function buscarSerieDiariaGA4(accessToken, propertyId, periodo, combo) {
 }
 
 app.get('/api/admin/integrations/google-analytics/performance/series', requireAdmin, async (req, res) => {
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   let periodo;
   try { periodo = resolverPeriodoGA4(req.query.periodo); } catch (err) { return res.status(400).json({ error: err.message }); }
   const combo = {
@@ -9422,7 +9540,7 @@ async function buscarOverviewGA4(accessToken, propertyId, periodo) {
 
 app.get('/api/admin/integrations/google-analytics/overview', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'GA4 exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   let periodo;
   try { periodo = resolverPeriodoGA4(req.query.periodo); } catch (err) { return res.status(400).json({ error: err.message }); }
   const chaveCache = `overview:${periodo.chave}`;
@@ -9819,7 +9937,7 @@ app.post('/api/admin/integrations/google-ads/contas/:customerId/selecionar', req
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   const id = gadsMetricas.normalizarCustomerId(req.params.customerId);
   if (!id) return res.status(400).json({ error: 'customer id inválido' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const org = orgDoContexto();
   const conn = await pgPool.connect();
   try {
@@ -9872,7 +9990,7 @@ app.post('/api/admin/integrations/google-ads/contas/:customerId/loja', requireAd
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   const id = gadsMetricas.normalizarCustomerId(req.params.customerId);
   if (!id) return res.status(400).json({ error: 'customer id inválido' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const { rowCount } = await pgPool.query(
       'UPDATE google_ads_customers SET loja_atribuida = $2, atualizado_em = now() WHERE organization_id = $3 AND customer_id = $1',
@@ -10687,7 +10805,7 @@ app.get('/api/admin/integrations/meta/ad-accounts', requireAdmin, async (req, re
 app.post('/api/admin/integrations/meta/select-account', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'a integração com a Meta exige Postgres configurado' });
   const { metaAccountId } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!metaAccountId) return res.status(400).json({ error: 'metaAccountId é obrigatório' });
   // A conta atende a Store da Organization da sessão (PD-016, 1:1).
   const cliente = await pgPool.connect();
@@ -11173,7 +11291,7 @@ app.get('/api/admin/analytics/meta/ads/:adId', requireAdmin, async (req, res) =>
 
 // Financeiro real da loja no período, direto de pedidos_ink. Só pedido pago e que não é troca —
 // mesma regra do dashboard financeiro, pra os dois nunca divergirem.
-async function financeiroDaLoja(loja, from, to) {
+async function financeiroDaLoja(from, to) {
   const { rows } = await pgPool.query(
     // Duas escalas, deliberadamente separadas. Somar receita de TODOS os pedidos com custo só dos
     // que têm custo gravado produz uma margem sem sentido — foi exatamente o que apareceu em
@@ -11188,10 +11306,11 @@ async function financeiroDaLoja(loja, from, to) {
             COALESCE(SUM(custo_producao) FILTER (WHERE lucro_operacional IS NOT NULL), 0) AS custo_producao,
             COALESCE(SUM(lucro_operacional) FILTER (WHERE lucro_operacional IS NOT NULL), 0) AS lucro_produto
      FROM pedidos_ink
-     WHERE loja = $1 AND payment_status = ANY($2) AND is_troca IS NOT TRUE
-       AND criado_em >= ($3::date)::timestamp AT TIME ZONE 'America/Sao_Paulo'
-       AND criado_em <  (($4::date) + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo'`,
-    [loja, Array.from(RESUMO_PAGO), from, to]
+     WHERE organization_id = $1 AND ${escopoDaStore(2).sql}
+       AND payment_status = ANY($${2 + escopoDaStore(2).usados}) AND is_troca IS NOT TRUE
+       AND criado_em >= ($${3 + escopoDaStore(2).usados}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo'
+       AND criado_em <  (($${4 + escopoDaStore(2).usados}::date) + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo'`,
+    [orgDoContexto(), ...escopoDaStore(2).params, Array.from(RESUMO_PAGO), from, to]
   );
   const r = rows[0];
   const pedidos = Number(r.pedidos);
@@ -11217,7 +11336,7 @@ async function financeiroDaLoja(loja, from, to) {
 function midiaDaOrganizacao(from, to) {
   return resolverMidiaDaOrganizacao(pgPool, {
     organizationId: orgDoContexto(),
-    loja: lojaDoContexto(),
+    loja: lojaLegadaDoContexto(),
     from,
     to,
     // Google Ads só vira aviso de "não conectado" se esta Organization de fato tem a integração.
@@ -11277,7 +11396,7 @@ async function listarDespesas(loja) {
 
 app.get('/api/admin/financeiro/despesas', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'despesas exigem Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   try {
     const despesas = await listarDespesas(loja);
     // Quando o período vem junto, devolve também o total expandido — é o que a tela do Resultado
@@ -11298,7 +11417,7 @@ app.get('/api/admin/financeiro/despesas', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/financeiro/despesas', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'despesas exigem Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { despesa, erros } = financeiroDespesas.validarDespesa(req.body);
   if (erros) return res.status(400).json({ error: erros.join('; ') });
   try {
@@ -11527,7 +11646,7 @@ app.get('/api/admin/analytics/consolidado', requireAdmin, async (req, res) => {
   let periodo;
   try { periodo = resolverPeriodoMeta(req.query.from, req.query.to); } catch (err) { return res.status(400).json({ error: err.message }); }
   // A loja é a da Store da sessão; nenhum parâmetro do request a sobrescreve (F-01).
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!loja) {
     return res.status(409).json({
       error: 'defina em Integrações a qual loja a conta de anúncios atribui o tráfego — sem isso o MER compararia receita e gasto de escopos diferentes',
@@ -11538,7 +11657,7 @@ app.get('/api/admin/analytics/consolidado', requireAdmin, async (req, res) => {
   try {
     const { fontes, sinalizados } = await midiaDaOrganizacao(periodo.from, periodo.to);
     const [dadosLoja, meta, ga4, conexaoMeta, despesasCadastradas] = await Promise.all([
-      financeiroDaLoja(loja, periodo.from, periodo.to),
+      financeiroDaLoja(periodo.from, periodo.to),
       atribuicaoMeta(periodo.from, periodo.to, fontes),
       atribuicaoGA4(loja, periodo.from, periodo.to),
       obterConexaoMeta(),
@@ -13552,10 +13671,11 @@ async function clienteJaComprou(loja, registro, desdeIso) {
   if (pgPool) {
     const { rows } = await pgPool.query(
       `SELECT 1 FROM pedidos_ink
-       WHERE loja = $1 AND payment_status = ANY($2) AND criado_em >= $3 AND is_troca IS NOT TRUE
-         AND (buyer_telefone = ANY($4) OR buyer_documento = $5 OR buyer_email = $6)
+       WHERE organization_id = $1 AND ${escopoDaStore(2).sql}
+         AND payment_status = ANY($${2 + escopoDaStore(2).usados}) AND criado_em >= $${3 + escopoDaStore(2).usados} AND is_troca IS NOT TRUE
+         AND (buyer_telefone = ANY($${4 + escopoDaStore(2).usados}) OR buyer_documento = $${5 + escopoDaStore(2).usados} OR buyer_email = $${6 + escopoDaStore(2).usados})
        LIMIT 1`,
-      [loja, Array.from(PAYMENT_STATUSES_CONVERTIDO), desdeIso, telefones, docAlvo, emailAlvo]
+      [orgDoContexto(), ...escopoDaStore(2).params, Array.from(PAYMENT_STATUSES_CONVERTIDO), desdeIso, telefones, docAlvo, emailAlvo]
     );
     return rows.length > 0;
   }
@@ -13597,15 +13717,16 @@ async function upsertItensPedidoInkPostgres(loja, order) {
   const cliente = await pgPool.connect();
   try {
     await cliente.query('BEGIN');
-    await cliente.query('DELETE FROM pedidos_ink_itens WHERE loja = $1 AND ink_order_id = $2', [loja, order.id]);
+    const storeId = storeDoContexto();
+    await cliente.query('DELETE FROM pedidos_ink_itens WHERE store_id = $1 AND ink_order_id = $2', [storeId, order.id]);
     for (const it of itens) {
       await cliente.query(
         `INSERT INTO pedidos_ink_itens
-           (loja, ink_order_id, item_id, produto_id, produto_nome, sku, modelo, cor, tamanho, quantidade,
+           (store_id, loja, ink_order_id, item_id, produto_id, produto_nome, sku, modelo, cor, tamanho, quantidade,
             valor_venda, desconto_rateado, custo_producao, lucro_operacional)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-         ON CONFLICT (organization_id, loja, item_id) DO NOTHING`,
-        [loja, order.id, it.itemId, it.produtoId, it.produtoNome, it.sku, it.modelo, it.cor, it.tamanho, it.quantidade,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         ON CONFLICT (organization_id, store_id, item_id) WHERE store_id IS NOT NULL DO NOTHING`,
+        [storeId, loja || null, order.id, it.itemId, it.produtoId, it.produtoNome, it.sku, it.modelo, it.cor, it.tamanho, it.quantidade,
           it.venda, it.desconto, it.custo, it.lucro]
       );
     }
@@ -13624,10 +13745,10 @@ async function upsertPedidoInkPostgres(loja, order) {
   const fin = financeiroPedidoInk(order);
   const uf = String((order.shipping_address && order.shipping_address.state) || '').trim().toUpperCase().slice(0, 2) || null;
   await pgPool.query(
-    `INSERT INTO pedidos_ink (loja, ink_order_id, rsv_factory_id, payment_status, order_status, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing, buyer_uf, total_value, criado_em, items_count,
+    `INSERT INTO pedidos_ink (store_id, loja, ink_order_id, rsv_factory_id, payment_status, order_status, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing, buyer_uf, total_value, criado_em, items_count,
        frete, descontos, lucro_bruto, custo_producao, lucro_operacional, is_troca, atualizado_em)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20, now())
-     ON CONFLICT (organization_id, loja, ink_order_id) DO UPDATE SET
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21, now())
+     ON CONFLICT (organization_id, store_id, ink_order_id) WHERE store_id IS NOT NULL DO UPDATE SET
        payment_status = EXCLUDED.payment_status,
        order_status = EXCLUDED.order_status,
        buyer_nome = EXCLUDED.buyer_nome,
@@ -13646,7 +13767,7 @@ async function upsertPedidoInkPostgres(loja, order) {
        is_troca = COALESCE(EXCLUDED.is_troca, pedidos_ink.is_troca),
        atualizado_em = now()`,
     [
-      loja, order.id, order.rsv_factory_id || null, normalizarPaymentStatusInk(order.payment_status) || null, order.order_status || null,
+      storeDoContexto(), loja || null, order.id, order.rsv_factory_id || null, normalizarPaymentStatusInk(order.payment_status) || null, order.order_status || null,
       [buyer.first_name, buyer.last_name].filter(Boolean).join(' ').trim() || null,
       String(buyer.phone || '').replace(/\D/g, '') || null,
       String(buyer.document || '').replace(/\D/g, '') || null,
@@ -13709,7 +13830,7 @@ const CONTROLE_ESTOQUE_MAX_PAGINAS = 50; // trava de segurança (5000 produtos),
 
 async function sincronizarControleEstoque(loja) {
   if (!pgPool) return { produtos: 0, variantes: 0 };
-  if (lojaDoContexto() !== loja || !(await inkConectada())) return { produtos: 0, variantes: 0 };
+  if (lojaLegadaDoContexto() !== loja || !(await inkConectada())) return { produtos: 0, variantes: 0 };
 
   let page = 1;
   let totalPages = 1;
@@ -13751,7 +13872,7 @@ async function sincronizarControleEstoque(loja) {
 }
 
 async function sincronizarControleEstoqueDaOrganizacao() {
-  for (const loja of await lojasInkDoContexto()) {
+  for (const { loja } of await storesInkDoContexto()) {
     try {
       await sincronizarControleEstoque(loja);
     } catch (err) {
@@ -13761,7 +13882,11 @@ async function sincronizarControleEstoqueDaOrganizacao() {
 }
 
 async function syncPedidosLoja(loja) {
-  const estado = await pgPool.query('SELECT ultimo_sync_em FROM sync_estado WHERE loja = $1', [loja]);
+  const escopoSync = escopoDaStore(2);
+  const estado = await pgPool.query(
+    `SELECT ultimo_sync_em FROM sync_estado WHERE organization_id = $1 AND ${escopoSync.sql} ORDER BY ultimo_sync_em DESC LIMIT 1`,
+    [orgDoContexto(), ...escopoSync.params]
+  );
   const desde = estado.rows[0]
     ? estado.rows[0].ultimo_sync_em.toISOString().slice(0, 10)
     : new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -13774,22 +13899,24 @@ async function syncPedidosLoja(loja) {
       await upsertPedidoInkPostgres(loja, o);
       // Sync de hora em hora relista os mesmos pedidos recentes — "de graça", dá bem mais
       // observação de estoque por variação do que só esperar um webhook novo tocar naquele SKU.
-      await registrarObservacoesEstoque(loja, o);
+      // Compatibilidade: `estoque_observacoes` ainda tem `loja` obrigatória. Sem chave legada,
+      // não há onde gravar — e inventar uma seria pior do que não coletar a observação.
+      if (loja) await registrarObservacoesEstoque(loja, o);
     }
     totalPages = data.total_pages || 1;
     page += 1;
   } while (page <= totalPages);
 
   await pgPool.query(
-    `INSERT INTO sync_estado (loja, ultimo_sync_em) VALUES ($1, now())
-     ON CONFLICT (organization_id, loja) DO UPDATE SET ultimo_sync_em = now()`,
-    [loja]
+    `INSERT INTO sync_estado (store_id, loja, ultimo_sync_em) VALUES ($1, $2, now())
+     ON CONFLICT (organization_id, store_id) WHERE store_id IS NOT NULL DO UPDATE SET ultimo_sync_em = now()`,
+    [storeDoContexto(), loja || null]
   );
 }
 
 async function syncPedidosInkParaPostgres() {
   if (!pgPool) return;
-  for (const loja of await lojasInkDoContexto()) {
+  for (const { loja } of await storesInkDoContexto()) {
     try {
       await syncPedidosLoja(loja);
     } catch (err) {
@@ -13851,7 +13978,7 @@ async function processarBackfillHistoricoPedidos(jobId, loja, desde) {
 // histórico pode levar bem mais que a duração de uma request HTTP pra paginar tudo na Ink.
 app.post('/api/admin/pedidos/backfill-historico', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'backfill exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!(await inkConectada())) return res.status(409).json({ error: 'esta loja não tem a integração com a Reserva Ink configurada' });
   if (lojasComBackfillPedidosRodando.has(loja)) {
     return res.status(409).json({ error: 'já existe um backfill em andamento para esta loja — aguarde terminar' });
@@ -13880,7 +14007,7 @@ app.post('/api/admin/pedidos/backfill-historico', requireAdmin, async (req, res)
 app.get('/api/admin/pedidos/backfill-historico/:jobId', requireAdmin, exigirRecurso('pedidos_backfill_jobs', { param: 'jobId' }), async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'backfill exige Postgres configurado' });
   const { jobId } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { rows } = await pgPool.query(
     `SELECT * FROM pedidos_backfill_jobs WHERE id = $1 AND loja = $2`,
     [jobId, loja]
@@ -13891,7 +14018,7 @@ app.get('/api/admin/pedidos/backfill-historico/:jobId', requireAdmin, exigirRecu
 
 app.get('/api/admin/pedidos/backfill-historico', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'backfill exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { rows } = await pgPool.query(
     `SELECT * FROM pedidos_backfill_jobs WHERE loja = $1 ORDER BY criado_em DESC LIMIT 10`,
     [loja]
@@ -13905,17 +14032,18 @@ app.get('/api/admin/pedidos/backfill-historico', requireAdmin, async (req, res) 
 // quanto "como isso se distribui entre os clientes agregados?" (pessoas).
 app.get('/api/admin/pedidos/uf-diagnostico', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'diagnóstico exige Postgres configurado' });
-  const loja = lojaDoContexto();
+  const escopo = escopoDaStore(2);
+  const doEscopo = (extra = '') => [
+    `SELECT COUNT(*) FROM pedidos_ink WHERE organization_id = $1 AND ${escopo.sql}${extra}`,
+    [orgDoContexto(), ...escopo.params],
+  ];
 
   try {
-    const pedidosTotal = await pgPool.query('SELECT COUNT(*) FROM pedidos_ink WHERE loja = $1', [loja]);
-    const pedidosComUf = await pgPool.query('SELECT COUNT(*) FROM pedidos_ink WHERE loja = $1 AND buyer_uf IS NOT NULL', [loja]);
-    const pedidosSemEndereco = await pgPool.query(
-      `SELECT COUNT(*) FROM pedidos_ink WHERE loja = $1 AND buyer_uf IS NULL`,
-      [loja]
-    );
+    const pedidosTotal = await pgPool.query(...doEscopo());
+    const pedidosComUf = await pgPool.query(...doEscopo(' AND buyer_uf IS NOT NULL'));
+    const pedidosSemEndereco = await pgPool.query(...doEscopo(' AND buyer_uf IS NULL'));
 
-    const clientes = await buscarClientesAgregados([loja]);
+    const clientes = await buscarClientesAgregados();
     const comUf = clientes.filter((c) => c.uf).length;
     const distribuicao = {};
     for (const c of clientes) {
@@ -14674,7 +14802,7 @@ async function whatsappUploadHandleRequest(buffer, mimeType, filename) {
 // Consistente com o resto do app; evita introduzir uma 2ª forma de subir arquivo no projeto.
 app.post('/api/admin/media', requireAdmin, async (req, res) => {
   const { filename, mimeType, dataBase64 } = req.body || {};
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!filename || !mimeType || !dataBase64) return res.status(400).json({ error: 'filename, mimeType e dataBase64 são obrigatórios' });
   if (!pgPool) return res.status(503).json({ error: 'mídia exige Postgres configurado' });
 
@@ -14737,7 +14865,7 @@ app.post('/api/admin/media', requireAdmin, async (req, res) => {
 app.get('/api/admin/media', requireAdmin, async (req, res) => {
   if (!pgPool) return res.json({ assets: [] });
   const { kind } = req.query;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const condicoes = [];
   const params = [];
   if (loja) { params.push(loja); condicoes.push(`loja = $${params.length}`); }
@@ -15125,7 +15253,7 @@ app.put('/api/admin/campos-customizados/:chave', requireAdmin, async (req, res) 
       }
       // Valor por loja: só a loja da Store da sessão pode ser escrita.
       for (const loja of Object.keys(valores)) {
-        if (loja !== lojaDoContexto()) return res.status(400).json({ error: 'só é possível editar o valor da sua loja', codigo: 'TENANT_SELECTOR_NOT_ALLOWED' });
+        if (loja !== lojaLegadaDoContexto()) return res.status(400).json({ error: 'só é possível editar o valor da sua loja', codigo: 'TENANT_SELECTOR_NOT_ALLOWED' });
       }
       campos[chave].valores = { ...campos[chave].valores, ...valores };
     }
@@ -15205,7 +15333,7 @@ function validarAutomacaoEvento(body) {
 
 app.put('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) => {
   const { evento } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!evento || evento.length > 80) return res.status(400).json({ error: 'evento inválido' });
 
   const erro = validarAutomacaoEvento(req.body);
@@ -15318,7 +15446,7 @@ app.put('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) =
 
 app.delete('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) => {
   const { evento } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   const { modo } = req.query;
   if (modo !== undefined && modo !== 'api' && modo !== 'web') return res.status(400).json({ error: 'modo deve ser "api" ou "web"' });
   try {
@@ -15340,7 +15468,7 @@ app.delete('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res
 // não do modo); o template da Meta, se existir, fica intacto.
 app.put('/api/admin/automacao-eventos/:evento/web', requireAdmin, async (req, res) => {
   const { evento } = req.params;
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
   if (!evento || evento.length > 80) return res.status(400).json({ error: 'evento inválido' });
   const { mensagemWeb, maxEnvios, intervaloHoras, checarCompra, atrasoPrimeiroEnvioHoras } = req.body || {};
   if (typeof mensagemWeb !== 'string' || !UUID_RE.test(mensagemWeb)) return res.status(400).json({ error: 'selecione uma mensagem' });
@@ -15598,7 +15726,7 @@ app.post('/api/webhooks/ink/:token', async (req, res) => {
 
   const body = req.body;
   comOrganizacaoResolvida(organizationId, 'webhook:ink', async () => {
-    const loja = lojaDoContexto();
+    const loja = lojaLegadaDoContexto();
     await logInkWebhook({
       recebidoEm: new Date().toISOString(),
       verificado: true,
@@ -15918,7 +16046,7 @@ app.post('/api/admin/pedidos', requireAdmin, async (req, res) => {
 
   const { pixCode, cliente, valor, referencia } = req.body || {};
 
-  const loja = lojaDoContexto();
+  const loja = lojaLegadaDoContexto();
 
   try {
     await generateQrPng(pixCode.trim()); // valida que o código gera um QR de verdade antes de salvar

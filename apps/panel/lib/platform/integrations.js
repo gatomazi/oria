@@ -250,9 +250,38 @@ function createIntegrationResolver({ pool, segredos, env = process.env, logger =
     return rows[0] ? rows[0].n : 0;
   }
 
+  // Executa várias operações de integração numa transação só. O resolver entregue ao callback
+  // fala com o MESMO cliente, então segredo, status e auditoria commitam juntos ou não commitam.
+  //
+  // Por que isto existe: gravar credencial era uma sequência de transações independentes. Se a
+  // etapa seguinte falhasse, o segredo já estava gravado e a resposta dizia erro — a tela mentia
+  // sobre o estado do banco. Atomicidade aqui não é elegância, é a diferença entre a UI ser
+  // confiável e não ser.
+  async function emTransacao(executar) {
+    exigirContexto();
+    const cliente = await pool.connect();
+    try {
+      await cliente.query('BEGIN');
+      const ligado = createIntegrationResolver({
+        pool: { query: (sql, params) => cliente.query(sql, params) },
+        segredos: segredos.comCliente(cliente),
+        env,
+        logger,
+      });
+      const resultado = await executar(ligado, cliente);
+      await cliente.query('COMMIT');
+      return resultado;
+    } catch (err) {
+      await cliente.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      cliente.release();
+    }
+  }
+
   return {
     usarSegredo, temSegredo, gravarSegredo, gravarConfig, desconectar, metadata,
-    reivindicarRecurso, liberarRecursos,
+    reivindicarRecurso, liberarRecursos, emTransacao,
     legadoAtivo: () => legadoAtivo(env),
   };
 }

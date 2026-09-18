@@ -131,7 +131,14 @@ function createSecretStore({ pool, keyring = createKeyring() } = {}) {
     return resultado;
   }
 
-  return { gravar, listarMetadata, usarSegredo, apagar, recifrarPendentes, keyring };
+  // O mesmo store, ligado a um cliente que já está numa transação. Sem isto, gravar segredo e
+  // registrar auditoria seriam transações separadas — e foi exatamente esse buraco que deixou um
+  // segredo persistido enquanto a resposta dizia que falhou.
+  function comCliente(cliente) {
+    return createSecretStore({ pool: { query: (sql, params) => cliente.query(sql, params) }, keyring });
+  }
+
+  return { gravar, listarMetadata, usarSegredo, apagar, recifrarPendentes, comCliente, keyring };
 }
 
 module.exports = { createSecretStore, SegredoIndisponivelError };

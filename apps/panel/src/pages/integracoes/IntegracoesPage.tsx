@@ -57,9 +57,11 @@ export function IntegracoesPage() {
             <DataTable
               label="Conexões com a Reserva Ink"
               rows={data.reservaInk}
-              rowKey={(item) => item.loja}
+              rowKey={(item) => item.storeId}
               columns={[
-                { key: 'loja', label: 'Loja', render: (item) => adminStores.name(item.loja), sortValue: (item) => adminStores.name(item.loja) },
+                // Nome da Store. `adminStores.name` só sabe traduzir a chave legada; Store nativa do
+                // Oria não tem uma, e o nome vem do próprio registro.
+                { key: 'loja', label: 'Loja', render: (item) => item.nome || (item.loja ? adminStores.name(item.loja) : '—'), sortValue: (item) => item.nome || (item.loja ? adminStores.name(item.loja) : '') },
                 {
                   key: 'status',
                   label: 'Status',
@@ -95,9 +97,9 @@ export function IntegracoesPage() {
 
           <WhatsappRemetenteCard />
 
-          <BackfillPedidosCard lojas={data.reservaInk.filter((item) => item.tokenConfigurado).map((item) => item.loja)} />
+          <BackfillPedidosCard lojas={data.reservaInk.filter((item) => item.tokenConfigurado && item.loja).map((item) => item.loja as string)} />
 
-          <CatalogoCacheCard lojas={data.reservaInk.filter((item) => item.tokenConfigurado).map((item) => item.loja)} />
+          <CatalogoCacheCard lojas={data.reservaInk.filter((item) => item.tokenConfigurado && item.loja).map((item) => item.loja as string)} />
 
           <GoogleAnalyticsIntegracaoCard />
 

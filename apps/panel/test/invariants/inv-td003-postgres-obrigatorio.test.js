@@ -127,6 +127,7 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       '1790000300000_onboarding',
       '1790000400000_platform-admin',
       '1790000500000_convite-aceite',
+      '1790000600000_store-id-connector-ink',
     ]);
   } finally {
     await pool.end();
