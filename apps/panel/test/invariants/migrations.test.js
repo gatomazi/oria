@@ -92,6 +92,7 @@ test('migrations · do zero, num banco vazio, aplicam todas na ordem', async (t)
       '1790000300000_onboarding',
       '1790000400000_platform-admin',
       '1790000500000_convite-aceite',
+      '1790000600000_features-reclassificadas',
     ]);
     assert.ok((await tabelas(pool)).includes('integration_secrets'));
   } finally { await pool.end(); }

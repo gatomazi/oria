@@ -1,0 +1,67 @@
+--- a/apps/panel/server.js
++++ b/apps/panel/server.js
+@@ (bloco de requires, ~linha 564)
+ const { requireEntitlement, checkEntitlement, carregadorDaOrganizacao, planoEfetivo } = require('./lib/platform/entitlements');
+-const { featureDaRota } = require('./lib/platform/feature-routes');
++const { featureDaRota, capabilityDaRota } = require('./lib/platform/feature-routes');
++const { requireCapability, readModel: readModelDoConnector } = require('./lib/platform/connector-capabilities');
+
+@@ (requireAdmin, ~linha 612)
+ function requireAdmin(req, res, next) {
+   if (!AUTH || !TENANT) return res.status(503).json({ error: 'autenticação indisponível' });
+   return AUTH.requireAuth(req, res, (err) => {
+     if (err) return next(err);
+     return TENANT.requireOrganizationContext(req, res, (err2) => {
+       if (err2) return next(err2);
+-      // TD-012: a feature da rota é conferida contra o plano da Organization da sessão.
+-      const feature = featureDaRota(`${req.baseUrl || ''}${req.path}`);
+-      if (!feature) return next();
+-      return exigirFeature(feature)(req, res, next);
++      // Dois eixos independentes, nesta ordem, e no máximo um casa (há teste):
++      //   FEATURE COMERCIAL     conferida contra o plano da Organization (TD-012)  → 403
++      //   CONNECTOR CAPABILITY  conferida contra a integração da Organization      → 409
++      const caminho = `${req.baseUrl || ''}${req.path}`;
++      const feature = featureDaRota(caminho);
++      if (feature) return exigirFeature(feature)(req, res, next);
++      const capability = capabilityDaRota(caminho);
++      if (capability) return exigirCapability(capability)(req, res, next);
++      return next();
+     });
+   });
+ }
+
+@@ (logo abaixo de exigirFeature, ~linha 627)
+ const PLANO_DA_ORGANIZACAO = pgPool ? carregadorDaOrganizacao(pgPool) : async () => null;
+ function exigirFeature(feature) {
+   return requireEntitlement(PLANO_DA_ORGANIZACAO, feature);
+ }
++
++// Conexão ≠ entitlement: isto NÃO olha o plano, e `exigirFeature` NÃO olha isto. `inkConectada()`
++// já cobre o fallback de env legada (vai por `temSegredo`), então o guard não aperta ninguém que
++// hoje opera por env.
++async function CONNECTOR_CONECTADO(provider) {
++  if (provider === 'ink') return inkConectada();
++  return false;
++}
++const GUARDS_DE_CAPABILITY = new Map();
++function exigirCapability(chave) {
++  if (!GUARDS_DE_CAPABILITY.has(chave)) {
++    GUARDS_DE_CAPABILITY.set(chave, requireCapability(CONNECTOR_CONECTADO, chave));
++  }
++  return GUARDS_DE_CAPABILITY.get(chave);
++}
+
+@@ (junto de /api/admin/entitlements, ~linha 12772)
+ app.get('/api/admin/entitlements', requireAdmin, async (req, res) => {
+   res.json(await planoEfetivo(PLANO_DA_ORGANIZACAO));
+ });
++
++// Read model do connector, para a tela distinguir "não está no plano" de "conecte a Reserva Ink".
++// Sem segredo e sem chamada ao provider: só registry + o booleano de conexão local.
++app.get('/api/admin/connectors/:provider', requireAdmin, async (req, res) => {
++  try {
++    res.json(readModelDoConnector(req.params.provider, { conectado: await CONNECTOR_CONECTADO(req.params.provider) }));
++  } catch {
++    res.status(404).json({ erro: 'connector_desconhecido' });
++  }
++});
