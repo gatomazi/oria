@@ -44,12 +44,17 @@ function resolverConfigAuth(env = process.env) {
   return { producao, segredo, legado, disponivel: segredo.length >= 32 };
 }
 
-function createAuth({ pool, config, comOrganization, auditar, limiter = createLoginLimiter() }) {
+function createAuth({
+  pool, config, comOrganization, auditar, limiter = createLoginLimiter(), limiterConvite,
+}) {
   const sessoes = createSessionStore({ pool, segredo: config.segredo });
   const { requireAuth, carregar } = createAuthMiddleware({ sessoes, producao: config.producao });
   const router = createAuthRouter({
     pool, sessoes, requireAuth, carregarSessao: carregar, limiter,
     producao: config.producao, legado: config.legado, auditar, comOrganization,
+    // Balde do aceite de convite (lib/auth/rate-limit.js). Sem valor explícito, o router cria o
+    // seu — o parâmetro existe para o teste poder apertar os limites.
+    ...(limiterConvite ? { limiterConvite } : {}),
   });
   return { router, requireAuth, carregarSessao: carregar, sessoes };
 }

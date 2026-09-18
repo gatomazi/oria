@@ -5,6 +5,11 @@
 // cliente para decidir QUEM é o usuário ou O QUE ele pode. O `:organizationId` das rotas de membros
 // identifica o RECURSO a gerir, e é conferido contra os memberships do usuário no banco (TD-001,
 // ponto 7) — não vira contexto de tenant (Fase 3).
+//
+// Acrescentado depois: o aceite do convite de owner emitido pelo control plane (lib/auth/invites.js
+// e docs/architecture/invite-acceptance.md). São as únicas rotas ANÔNIMAS daqui além de `/login` e
+// `/session` — e continuam sem exceção para a regra acima: a Organization vem do convite lido no
+// banco, e o `organizationId` do corpo é recusado como campo não aceito.
 
 const crypto = require('crypto');
 const express = require('express');
@@ -13,7 +18,9 @@ const senhas = require('./password');
 const {
   resolverOrganizacaoAtiva, selecionarOrganizacao, resolverStore, TenantContextHttpError,
 } = require('../platform/tenant-pipeline');
-const { cookieDeSessao, cookieApagado, tokenDoRequest } = require('./middleware');
+const { cookieDeSessao, cookieApagado, tokenDoRequest, CSRF_HEADER } = require('./middleware');
+const { createInviteService, ConviteError, sha256, referencia } = require('./invites');
+const { createConviteLimiter } = require('./rate-limit');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SESSAO_ID_RE = /^[0-9a-f]{64}$/;
@@ -33,6 +40,8 @@ function createAuthRouter(deps) {
   const {
     pool, sessoes, requireAuth, carregarSessao, limiter, producao,
     legado = { habilitado: false }, auditar, comOrganization,
+    limiterConvite = createConviteLimiter(),
+    convites = createInviteService({ pool, sessoes }),
   } = deps;
   const router = express.Router();
 
@@ -204,6 +213,75 @@ function createAuthRouter(deps) {
     if (!auth) return res.json({ authenticated: false });
     await responderSessao(res, auth);
   }));
+
+  // ── Aceite do convite de owner (control plane → painel) ──────────────────────────────────
+  // Duas rotas anônimas. Ver lib/auth/invites.js e docs/architecture/invite-acceptance.md.
+  //
+  // POST (nunca GET) nas duas: o token é o segredo, e segredo em URL vira histórico do navegador,
+  // Referer, log do proxy e log de acesso do Railway. Ele viaja no CORPO.
+
+  // Balde do rate limit. O token não aparece aqui, nem o hash inteiro: só um prefixo curto dele.
+  function chaveDoConvite(corpo) {
+    const t = corpo && typeof corpo === 'object' && !Array.isArray(corpo) ? corpo.token : null;
+    return `convite:${referencia(sha256(typeof t === 'string' ? t : ''))}`;
+  }
+
+  async function rotaDeConvite(req, res, executar) {
+    const chave = chaveDoConvite(req.body);
+    if (limiterConvite.bloqueado(chave)) {
+      return res.status(429).json({ error: 'muitas tentativas, tente novamente mais tarde' });
+    }
+    let auth = null;
+    try {
+      auth = await carregarSessao(req);
+    } catch (err) {
+      console.error(`[CONVITE] sessão indisponível: ${err.message}`);
+      return res.status(503).json({ error: 'autenticação indisponível' });
+    }
+    // Sessão aberta = escrita autenticada por cookie. O CSRF vale aqui exatamente como no
+    // requireAuth (middleware.js): sem ele, um site qualquer poderia aceitar um convite em nome
+    // de quem estivesse logado no painel.
+    if (auth && !sessoes.csrfConfere(auth.sessaoId, req.get(CSRF_HEADER))) {
+      return res.status(403).json({ error: 'token CSRF ausente ou inválido', codigo: 'csrf' });
+    }
+    try {
+      return await executar(auth);
+    } catch (err) {
+      if (!(err instanceof ConviteError)) throw err;
+      limiterConvite.registrarFalha(chave);
+      // O motivo REAL para aqui. `err.message` é a frase única que o convidado recebe; o motivo
+      // (desconhecido/usado/revogado/expirado) e a referência curta do convite ficam no servidor.
+      console.warn(
+        `[CONVITE] ${req.path} recusado: ${err.codigo}${err.motivo ? ` (${err.motivo})` : ''} ref=${chave.slice(8)}`
+      );
+      return res.status(err.status).json({ error: err.message, codigo: err.codigo });
+    }
+  }
+
+  // Não consome. Serve para a tela saber se pede senha nova ou pede login — e responde a token
+  // inválido exatamente como a rota de aceite.
+  router.post('/convite/consultar', rota((req, res) => rotaDeConvite(req, res, async (auth) => {
+    const c = await convites.consultar({ corpo: req.body, auth });
+    return res.json(c);
+  })));
+
+  // Consome. Cria a conta (quando o e-mail do convite ainda não tem uma) e o membership na mesma
+  // transação; qualquer falha devolve o convite.
+  router.post('/convite/aceitar', rota((req, res) => rotaDeConvite(req, res, async (auth) => {
+    const r = await convites.aceitar({ corpo: req.body, auth });
+    if (r.sessao) {
+      res.setHeader('Set-Cookie', cookieDeSessao({ producao, token: r.sessao.token, expiraEm: r.sessao.expiraEm }));
+    }
+    return res.status(201).json({
+      ok: true,
+      user: { id: r.userId, email: r.email },
+      organizationId: r.organizationId,
+      organizationNome: r.organizationNome,
+      papel: r.papel,
+      contaCriada: r.contaCriada,
+      csrfToken: r.sessao ? r.sessao.csrfToken : auth.csrfToken,
+    });
+  })));
 
   // Troca de workspace: o ÚNICO lugar em que o navegador pode mencionar uma Organization. É uma
   // proposta; o servidor confere o membership desta pessoa e só então grava na sessão. As rotas de
