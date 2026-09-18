@@ -186,7 +186,10 @@ export function avisar(texto, tom = '') {
 // Painel lateral para detalhe e formulário. Devolve uma Promise que resolve com o que o
 // `onEnviar` retornar, ou `null` quando o operador fecha. Foco fica preso enquanto está aberto.
 
-export function abrirDrawer({ titulo, descricao = '', corpo, rodape = '', aoMontar, aoConfirmar }) {
+// `fecharSoPorAcao`: o drawer não fecha por clique no fundo nem por Escape — só pelos botões.
+// Existe para o drawer que mostra o token do convite, que aparece UMA vez: fechar por clique fora
+// é gesto acidental, e aqui o acidente custa um token irrecuperável (o banco só tem o hash).
+export function abrirDrawer({ titulo, descricao = '', corpo, rodape = '', aoMontar, aoConfirmar, fecharSoPorAcao = false }) {
   return new Promise((resolve) => {
     const fundo = document.createElement('div');
     fundo.className = 'drawer-fundo';
@@ -214,7 +217,14 @@ export function abrirDrawer({ titulo, descricao = '', corpo, rodape = '', aoMont
     }
 
     function aoTeclar(evento) {
-      if (evento.key === 'Escape') { evento.preventDefault(); fechar(null); return; }
+      if (evento.key === 'Escape') {
+        evento.preventDefault();
+        // Escape não fecha em drawer de conteúdo irrecuperável; o aviso explica por quê, senão
+        // o operador conclui que a tecla travou.
+        if (fecharSoPorAcao) { avisar('Use "Fechar" quando terminar — este painel não fecha sozinho.'); return; }
+        fechar(null);
+        return;
+      }
       if (evento.key !== 'Tab') return;
       const focaveis = [...fundo.querySelectorAll(
         'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -227,7 +237,10 @@ export function abrirDrawer({ titulo, descricao = '', corpo, rodape = '', aoMont
     }
 
     fundo.addEventListener('click', (evento) => {
-      if (evento.target === fundo || evento.target.closest('[data-fechar]')) fechar(null);
+      // Ação explícita fecha sempre. Clique no fundo (ou em qualquer área fora do conteúdo) só
+      // fecha quando o drawer permite — ver `fecharSoPorAcao`.
+      if (evento.target.closest('[data-fechar]')) { fechar(null); return; }
+      if (!fecharSoPorAcao && evento.target === fundo) fechar(null);
     });
     document.addEventListener('keydown', aoTeclar, true);
 

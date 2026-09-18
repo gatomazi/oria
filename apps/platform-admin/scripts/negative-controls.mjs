@@ -33,6 +33,14 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // reprovar. O defeito é sempre REALISTA — é o atalho que alguém escreveria de boa-fé.
 const CONTROLES = [
   {
+    nome: 'drawer-de-token-fecha-sozinho',
+    descricao: 'o drawer do token voltar a fechar por clique no fundo — o gesto acidental que custa um token irrecuperável',
+    arquivo: 'public/js/ui.js',
+    de: "      if (!fecharSoPorAcao && evento.target === fundo) fechar(null);",
+    para: "      if (evento.target === fundo) fechar(null);",
+    testes: ['test/drawer.test.js'],
+  },
+  {
     nome: 'markup-escapado',
     descricao: 'o template devolver STRING em vez de fragmento — o atalho natural, e o que fazia `<strong>` aparecer como texto na tela',
     arquivo: 'public/js/ui.js',

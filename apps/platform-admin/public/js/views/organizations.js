@@ -242,6 +242,15 @@ async function abrirCriacao(navegar, aoCriar) {
   await mostrarResultadoDaCriacao(resultado, navegar);
 }
 
+// Feedback no próprio botão: o toast some, o rótulo fica. Quem copiou precisa conseguir ver que
+// copiou ao voltar o olho para o botão.
+function marcarCopiado(botao) {
+  const original = botao.innerHTML;
+  botao.textContent = 'Token copiado';
+  botao.classList.add('btn-ok');
+  setTimeout(() => { botao.innerHTML = original; botao.classList.remove('btn-ok'); }, 4000);
+}
+
 // O token do convite aparece UMA vez. Esta tela é a única chance de copiá-lo.
 async function mostrarResultadoDaCriacao(resultado, navegar) {
   const org = resultado.organization;
@@ -249,6 +258,9 @@ async function mostrarResultadoDaCriacao(resultado, navegar) {
   const concedidas = Object.entries(resultado.entitlements || {}).filter(([, v]) => v).map(([f]) => f);
 
   await abrirDrawer({
+    // O token aparece uma vez. Clique fora e Escape não fecham: o gesto acidental aqui perde um
+    // token que não é recuperável. Fecha pelo "Fechar", pelo X ou por "Abrir a organization".
+    fecharSoPorAcao: true,
     titulo: resultado.criada ? 'Organization criada' : 'Pedido já processado',
     descricao: resultado.criada
       ? 'Guarde o token do convite agora.'
@@ -268,7 +280,7 @@ async function mostrarResultadoDaCriacao(resultado, navegar) {
           <label for="token-convite">Token do convite para ${convite.email}</label>
           <input id="token-convite" class="mono" type="text" readonly value="${convite.token}"
                  aria-describedby="token-ajuda">
-          <span class="ajuda" id="token-ajuda">Expira em ${dataHora(convite.expiraEm)} · papel ${convite.papel}</span>
+          <span class="ajuda" id="token-ajuda">Este token aparece apenas uma vez. Copie antes de fechar. · Expira em ${dataHora(convite.expiraEm)} · papel ${convite.papel}</span>
           <div style="display:flex;gap:8px;margin-top:4px">
             <button type="button" class="btn btn-secundario btn-pequeno" data-copiar>${cru(icone('copiar', 14))}Copiar token</button>
           </div>
@@ -293,7 +305,7 @@ async function mostrarResultadoDaCriacao(resultado, navegar) {
         botaoCopiar.addEventListener('click', async () => {
           const campo = fundo.querySelector('#token-convite');
           const ok = await copiar(campo.value);
-          if (ok) { avisar('Token copiado. Ele não será exibido de novo.'); return; }
+          if (ok) { avisar('Token copiado. Ele não será exibido de novo.'); marcarCopiado(botaoCopiar); return; }
           campo.focus();
           campo.select();
           avisar('Não foi possível copiar automaticamente. O token está selecionado: copie à mão.', 'aviso');
