@@ -30,14 +30,6 @@
     "db:stop": "node scripts/test-db.mjs stop",
     "build": "npm --prefix admin install && npm --prefix admin run build",
     "postinstall": "npm --prefix admin install && npm --prefix admin run build",
-    "extract": "node extract.mjs",
-    "extract:usesul": "node extract.mjs --brand usesul",
-    "extract:usecentro": "node extract.mjs --brand usecentro",
-    "extract:usenorte": "node extract.mjs --brand usenorte",
-    "warm": "node scripts/warm-images.mjs",
-    "warm:fast": "node scripts/warm-images.mjs --concurrency 12 --limit 500",
-    "extract:gentilico": "node extract-gentilico.mjs",
-    "extract:gentilico:dry": "node extract-gentilico.mjs usesul --dry",
     "test:unit": "node --test test/*.test.js"
   },
   "engines": {

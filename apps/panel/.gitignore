@@ -1,6 +1,5 @@
 .DS_Store
 node_modules/
-data/cities_temp.json
 
 # Dados de pedidos PIX (código PIX + QR de clientes) — nunca versionar
 db/

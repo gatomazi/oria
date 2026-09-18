@@ -1,36 +1,44 @@
 'use strict';
 
-// Allowlist do que o site público baixa direto do disco. Antes era um express.static na raiz do
-// repo, que servia server.js, lib/, docs/, scripts/, test/, services/, package.json e logs pra
-// qualquer um. Arquivo novo que o front precise buscar por URL tem que entrar numa das listas.
+// Allowlist do que este serviço entrega direto do disco, sem autenticação. Antes era um
+// express.static na raiz do repo, que servia server.js, lib/, docs/, scripts/, test/, services/,
+// package.json e logs pra qualquer um. Arquivo novo que precise ser buscado por URL tem que entrar
+// numa das listas.
+//
+// A lista encolheu quando o site da Orgulho Regional saiu daqui: sobrou o que o PRODUTO serve
+// aberto — a landing do Oria, a política de privacidade e a hotpage de pagamento do pedido.
 
 const path = require('path');
 const express = require('express');
 
-// Diretórios inteiros: só front (CSS/JS das páginas, fontes, logos, mockups, frames de stories).
-const DIRETORIOS_PUBLICOS = ['assets', 'src', 'stories'];
+// Diretórios inteiros. `assets` guarda a marca do Oria (landing) e os logos/fontes da hotpage de
+// pagamento; `src` guarda o CSS/JS dessa hotpage. O SPA do painel NÃO sai daqui — ele tem rota
+// própria em server.js, servindo o build do Vite em admin/dist.
+const DIRETORIOS_PUBLICOS = ['assets', 'src'];
 
-// Páginas na raiz. As variantes .html mantêm links antigos funcionando.
+// Páginas na raiz.
 //
-// A política de privacidade responde nas duas formas de propósito: a URL sem extensão é a que vai
-// no console de OAuth do Google (e que o Google revisita na verificação), então ela precisa ser
-// estável e bonita; a .html é só para não quebrar quem chegar pelo nome do arquivo.
+// A landing do Oria responde em `/` e em `/oria`: `/` porque é o que o domínio abre, e `/oria`
+// porque é a URL cadastrada no console de OAuth do Google como "página inicial do aplicativo" — a
+// verificação exige uma página aberta que diga o nome do app e explique a finalidade dele (/admin
+// não serve, é tela de login e não explica nada a quem revisa). As duas servem o MESMO arquivo em
+// vez de uma redirecionar pra outra: a verificação do Google lê um 200 com HTML, sem salto.
+//
+// A política de privacidade responde nas duas formas de propósito: a URL sem extensão é a outra
+// cadastrada no console do Google (e que o Google revisita na verificação), então precisa ser
+// estável; a .html é só para não quebrar quem chegar pelo nome do arquivo.
+//
+// `pedido.html` é a hotpage de pagamento Pix: o link vai para o cliente por WhatsApp (variável
+// `pedido.link_pagamento`, montada em server.js) e a página em si é servida pela rota
+// `/{idpedido}`, no fim do server.js. A entrada aqui mantém o nome do arquivo funcionando.
 const PAGINAS_RAIZ = {
-  '/': 'index.html',
-  '/index.html': 'index.html',
-  '/loja.html': 'loja.html',
+  '/': 'oria.html',
+  '/oria': 'oria.html',
+  '/oria.html': 'oria.html',
   '/pedido.html': 'pedido.html',
   '/politica-de-privacidade': 'politica-de-privacidade.html',
   '/politica-de-privacidade.html': 'politica-de-privacidade.html',
-  // Página pública do Oria. É ela que fica cadastrada como "página inicial do aplicativo" no
-  // console do Google: a verificação exige uma página aberta que diga o nome do app e explique a
-  // finalidade dele — /admin não serve, é tela de login e não explica nada a quem revisa.
-  '/oria': 'oria.html',
-  '/oria.html': 'oria.html',
 };
-
-// data/ tem backup e arquivos usados só por scripts — só o que index.html e src/loja.js buscam.
-const DADOS_PUBLICOS = ['cities.json', 'collections.json', 'config.json', 'produtos.json'];
 
 // HTML/JS/CSS sempre revalidam (Cache-Control: no-cache) — sem isso, navegador e Cloudflare
 // (que fica na frente do Railway) guardam a versão antiga depois de cada deploy.
@@ -50,11 +58,6 @@ function montarArquivosPublicos(app, { raiz }) {
       res.sendFile(path.join(raiz, arquivo));
     });
   }
-
-  const nomesDados = DADOS_PUBLICOS.map((nome) => nome.replace(/\./g, '\\.')).join('|');
-  app.get(new RegExp(`^/data/(${nomesDados})$`), (req, res) => {
-    res.sendFile(path.join(raiz, 'data', req.params[0]));
-  });
 }
 
-module.exports = { montarArquivosPublicos, DIRETORIOS_PUBLICOS, PAGINAS_RAIZ, DADOS_PUBLICOS };
+module.exports = { montarArquivosPublicos, DIRETORIOS_PUBLICOS, PAGINAS_RAIZ };

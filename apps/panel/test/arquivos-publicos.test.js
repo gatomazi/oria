@@ -1,7 +1,14 @@
 'use strict';
 
-// Allowlist de arquivos públicos (lib/arquivos-publicos.js): o que o front usa responde 200,
-// código-fonte, docs, scripts, logs e dados internos respondem 404.
+// Allowlist de arquivos públicos (lib/arquivos-publicos.js): o que o produto entrega aberto
+// responde 200; código-fonte, docs, scripts, logs, dados internos — e tudo que era do site da
+// Orgulho Regional — respondem 404.
+//
+// A raiz falsa abaixo contém DE PROPÓSITO os arquivos do site que foram removidos do repositório
+// (index.html, loja.html, stories/ e o catálogo em data/). Eles existem no disco desta raiz falsa
+// justamente para que os 404 provem a ALLOWLIST, e não a ausência dos arquivos: se alguém devolver
+// o site pro repositório sem mexer aqui, a allowlist continua recusando — e é isso que este teste
+// trava.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -15,27 +22,20 @@ const { montarArquivosPublicos } = require('../lib/arquivos-publicos');
 function criarRaizFalsa() {
   const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'arquivos-publicos-'));
   const arquivos = {
-    'index.html': '<h1>home</h1>',
-    'loja.html': '<h1>loja</h1>',
+    // O que o produto serve aberto.
+    'oria.html': '<h1>oria</h1>',
     'pedido.html': '<h1>pedido</h1>',
     'politica-de-privacidade.html': '<h1>privacidade</h1>',
-    'oria.html': '<h1>oria</h1>',
     'assets/oria/oria-simbolo.png': 'png',
+    'assets/logo-sul.png': 'png',
+    'assets/fonts/handelson-six.otf': 'otf',
+    'src/pedido.js': 'js',
+    'src/pedido.css': 'css',
+    // Código, dados e operação — nunca públicos.
     'server.js': 'segredo',
     'package.json': '{}',
     'migracao.log': 'log',
     '.env': 'OPENAI_API_KEY=x',
-    'src/loja.js': 'js',
-    'src/loja.css': 'css',
-    'assets/logo-sul.png': 'png',
-    'assets/fonts/handelson-six.otf': 'otf',
-    'stories/frame1-sul.html': '<h1>story</h1>',
-    'data/cities.json': '[]',
-    'data/collections.json': '[]',
-    'data/config.json': '{}',
-    'data/produtos.json': '[]',
-    'data/cities.json.bak': '[]',
-    'data/df-regioes-administrativas.json': '[]',
     'lib/creative-core/client.js': 'js',
     'routes/criativos.js': 'js',
     'services/creative-core/service.py': 'py',
@@ -44,6 +44,17 @@ function criarRaizFalsa() {
     'test/arquivos-publicos.test.js': 'js',
     'desktop/package.json': '{}',
     'db/pedidos.json': '{}',
+    // Único sobrevivente de data/: dicionário das regiões administrativas do DF, lido pelos
+    // scripts da migração interna. Nunca foi público e continua não sendo.
+    'data/df-regioes-administrativas.json': '[]',
+    // Site da Orgulho Regional: removido do repositório, e recusado aqui mesmo quando existe.
+    'index.html': '<h1>home do site</h1>',
+    'loja.html': '<h1>loja</h1>',
+    'stories/frame1-sul.html': '<h1>story</h1>',
+    'data/cities.json': '[]',
+    'data/collections.json': '[]',
+    'data/config.json': '{}',
+    'data/produtos.json': '[]',
   };
   for (const [rel, conteudo] of Object.entries(arquivos)) {
     fs.mkdirSync(path.dirname(path.join(raiz, rel)), { recursive: true });
@@ -67,15 +78,14 @@ async function subirApp(t) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-test('given public front files, when requested, then they are served', async (t) => {
+test('given the public product files, when requested, then they are served', async (t) => {
   const base = await subirApp(t);
   const publicos = [
-    '/', '/index.html', '/loja.html', '/pedido.html',
+    '/', '/oria', '/oria.html',
+    '/pedido.html',
     '/politica-de-privacidade', '/politica-de-privacidade.html',
-    '/oria', '/oria.html', '/assets/oria/oria-simbolo.png',
-    '/src/loja.js', '/src/loja.css', '/assets/logo-sul.png', '/assets/fonts/handelson-six.otf',
-    '/stories/frame1-sul.html',
-    '/data/cities.json', '/data/collections.json', '/data/config.json', '/data/produtos.json',
+    '/assets/oria/oria-simbolo.png', '/assets/logo-sul.png', '/assets/fonts/handelson-six.otf',
+    '/src/pedido.js', '/src/pedido.css',
   ];
   for (const url of publicos) {
     const res = await fetch(base + url);
@@ -83,9 +93,24 @@ test('given public front files, when requested, then they are served', async (t)
   }
 });
 
+// A raiz do serviço é a landing do Oria — abrir o domínio cai nela, sem redirecionamento.
+// `/oria` continua servindo o MESMO arquivo (é a URL cadastrada no console do Google).
+test('given the service root, when requested, then it serves the Oria landing itself', async (t) => {
+  const base = await subirApp(t);
+  const corpos = [];
+  for (const url of ['/', '/oria', '/oria.html']) {
+    const res = await fetch(base + url);
+    assert.equal(res.status, 200, url);
+    assert.match(res.headers.get('content-type') || '', /text\/html/, url);
+    corpos.push(await res.text());
+  }
+  assert.equal(corpos[0], '<h1>oria</h1>', 'a raiz serve a landing, não outra página');
+  assert.deepEqual(new Set(corpos).size, 1, '/ , /oria e /oria.html servem o mesmo arquivo');
+});
+
 test('given html js and css, when served, then they revalidate on every request', async (t) => {
   const base = await subirApp(t);
-  for (const url of ['/', '/loja.html', '/src/loja.js', '/src/loja.css', '/stories/frame1-sul.html']) {
+  for (const url of ['/', '/oria', '/pedido.html', '/src/pedido.js', '/src/pedido.css']) {
     const res = await fetch(base + url);
     assert.equal(res.headers.get('cache-control'), 'no-cache', url);
   }
@@ -98,10 +123,32 @@ test('given source code docs scripts logs and internal data, when requested, the
     '/lib/creative-core/client.js', '/routes/criativos.js', '/services/creative-core/service.py',
     '/docs/plan.md', '/scripts/migracao-config.mjs', '/test/arquivos-publicos.test.js',
     '/desktop/package.json', '/db/pedidos.json',
-    '/data/cities.json.bak', '/data/df-regioes-administrativas.json',
-    '/src/../server.js', '/assets/%2e%2e/server.js', '/data/..%2fserver.js',
+    '/data/df-regioes-administrativas.json',
+    '/src/../server.js', '/assets/%2e%2e/server.js',
   ];
   for (const url of privados) {
+    const res = await fetch(base + url);
+    assert.equal(res.status, 404, url);
+  }
+});
+
+// Controle negativo da remoção do site: mesmo com os arquivos presentes na raiz, a allowlist
+// recusa a home, a loja, os frames de stories e o catálogo em data/ — repor os arquivos não basta
+// para trazer o site de volta.
+//
+// O CSS/JS do site (src/loja.*) e as imagens dele (assets/mockups/, assets/og-image.png) não
+// aparecem aqui de propósito: `src` e `assets` são diretórios públicos inteiros, e o que os tira
+// do ar é terem sido apagados, não a allowlist. Quem prova isso é
+// test/invariants/site-fora.test.js, contra o repositório de verdade.
+test('given the old Orgulho Regional site pages, when requested, then the allowlist refuses them', async (t) => {
+  const base = await subirApp(t);
+  const doSite = [
+    '/index.html',
+    '/loja.html',
+    '/stories/frame1-sul.html',
+    '/data/cities.json', '/data/collections.json', '/data/config.json', '/data/produtos.json',
+  ];
+  for (const url of doSite) {
     const res = await fetch(base + url);
     assert.equal(res.status, 404, url);
   }

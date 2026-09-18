@@ -764,46 +764,16 @@ app.get(/^\/admin(\/.*)?$/, (req, res) => {
   res.sendFile(path.join(__dirname, 'admin', 'dist', 'index.html'));
 });
 
-// Só a allowlist de arquivos do front (assets/, src/, stories/, páginas da raiz e alguns data/*.json).
+// Só a allowlist de arquivos abertos do produto (assets/, src/ e as páginas da raiz).
 // Nada de express.static na raiz do repo: servia código-fonte, docs, scripts e logs.
+//
+// Aqui ficavam também as rotas do site da Orgulho Regional, que este serviço servia junto com o
+// painel: a busca de cidades (`/`, `/{sul|centro|norte}` e sub-rotas, `/{uf}/{cidade}`), a loja de
+// personalizados (`/{regiao}/loja/...`) e os dois logs dessas telas (`/api/log`, `/api/loja/log`).
+// O site saiu — o produto deste repositório é o painel —, e a raiz passou a servir a landing do
+// Oria (lib/arquivos-publicos.js). Nenhuma dessas URLs responde mais: test/invariants/site-fora.test.js
+// sobe o serviço e exige 404 em cada uma.
 require('./lib/arquivos-publicos').montarArquivosPublicos(app, { raiz: __dirname });
-
-app.post('/api/log', (req, res) => {
-  const { event, city, state, brand, term } = req.body;
-  const ts = new Date().toISOString();
-  if (event === 'city_selected') {
-    console.log(`[BUSCA] ${ts} | ${city} · ${state} · ${brand}`);
-  } else if (event === 'city_not_found') {
-    console.log(`[NAO_ENCONTRADO] ${ts} | "${term}"`);
-  } else if (event === 'store_redirect') {
-    console.log(`[REDIRECT] ${ts} | ${city} · ${state} · ${brand}`);
-  }
-  res.sendStatus(200);
-});
-
-// Rotas da loja de personalizados: /sul/loja, /centro/loja, /norte/loja (+ /{regiao}/loja/produto/[slug])
-app.get(/^\/(?:sul|centro|norte)\/loja(\/[^.]*)?$/, (req, res) => {
-  res.sendFile(path.join(__dirname, 'loja.html'));
-});
-
-// Log de eventos da loja de personalizados (opcional)
-app.post('/api/loja/log', (req, res) => {
-  const { event, region, product, ...rest } = req.body || {};
-  const ts = new Date().toISOString();
-  console.log(`[LOJA:${event}] ${ts} | ${region} · ${product || '-'} · ${JSON.stringify(rest)}`);
-  res.sendStatus(200);
-});
-
-// Sub-rotas regionais (/sul, /norte, /centro, /sul/traco, /sul/traco/curitiba)
-app.get(/^\/(?:sul|centro|norte)(\/[^.]*)?$/, (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Link permanente por estado+cidade (ex.: /sc/tijucas)
-const UF_CODES = ['ac','al','am','ap','ba','ce','df','es','go','ma','mg','ms','mt','pa','pb','pe','pi','pr','rj','rn','ro','rr','rs','sc','se','sp','to'];
-app.get(new RegExp(`^\\/(?:${UF_CODES.join('|')})\\/[a-z0-9-]+$`), (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
 
 // Login individual, logout, sessão, revogação e membros (lib/auth/router.js).
 if (AUTH) {
