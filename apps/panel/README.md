@@ -1,58 +1,38 @@
-# Orgulho Regional
+# Painel do Oria (`oria-panel`)
 
-> **"Todo mundo carrega um lugar. Vista o seu."**
+Serviço Node único: a API do produto, o SPA do painel (`admin/`, React + Vite) e as poucas páginas
+que o produto serve abertas.
 
-Site hub que conecta pessoas à camiseta da sua cidade — direto para Use Sul ou Use Centro na Reserva Ink.
+Este diretório nasceu do repositório do site da Orgulho Regional, que foi reaproveitado para
+construir o painel. O site em si (busca de cidade, páginas regionais, loja de personalizados) saiu
+daqui; o que sobrou é o produto.
 
----
+## O que responde sem autenticação
 
-## Como funciona
+| rota | o que é |
+|---|---|
+| `/` e `/oria` | landing do Oria (`oria.html`) — `/oria` é a página inicial do app cadastrada no console de OAuth do Google |
+| `/politica-de-privacidade` | a outra URL cadastrada no console do Google |
+| `/{idpedido}` | hotpage de pagamento Pix do pedido; o link vai pro cliente por WhatsApp |
+| `/admin/*` | SPA do painel (build do Vite em `admin/dist`) — a tela de login é a porta |
 
-1. Usuário digita o nome da cidade
-2. Vê o preview da camiseta
-3. Clica e vai direto para a página do produto
+A allowlist do que sai do disco está em [`lib/arquivos-publicos.js`](lib/arquivos-publicos.js), e o
+que ela recusa está travado em [`test/arquivos-publicos.test.js`](test/arquivos-publicos.test.js).
 
-Resolve o problema de quem não encontra sua cidade navegando nas lojas — a busca vai de 2 toques até o produto.
-
----
-
-## Stack
-
-- HTML + CSS + JS puro — zero dependências, zero servidor
-- `data/cities.json` estático gerado por scrape
-- Hospedagem gratuita via Vercel
-
----
-
-## Marcas
-
-| Loja | Território |
-|------|-----------|
-| [Use Sul](https://www.usesul.com.br) | PR · SC · RS |
-| [Use Centro](https://www.usecentro.com.br) | GO · MT · MS · DF |
-
-**1.684 cidades** mapeadas com imagem e link direto para o produto.
-
----
-
-## Rodar localmente
+## Rodar
 
 ```bash
-python3 -m http.server 3000
-# acesse http://localhost:3000
+npm ci            # postinstall builda o admin (admin/dist)
+npm run migrate:up
+npm start
 ```
 
-## Atualizar o catálogo
+## Testes
 
 ```bash
-node extract.js
+npm test          # suíte + invariants (sobe Postgres efêmero no Docker)
+npm run build     # build do SPA do painel
 ```
 
-Gera `data/cities.json` novo com todas as cidades e imagens atualizadas. O script salva progresso incremental em `data/cities_temp.json` a cada 20 produtos — se interrompido, basta rodar novamente.
-
----
-
-## Deploy
-
-Hospedado em [orgulhoregional.com.br](https://orgulhoregional.com.br) via Vercel.  
-Domínio registrado no [registro.br](https://registro.br).
+Nenhum teste se pula em silêncio. Detalhes de ambiente e de operação no
+[README do monorepo](../../README.md) e em `docs/`.
