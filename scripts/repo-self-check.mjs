@@ -12,8 +12,10 @@
 //   2. caminho que aponta para um dos repositórios de origem (dependência de repo vizinho);
 //   3. dependência do repositório legado do painel via ORIA_LEGACY_PANEL_REPO.
 //
-// E confere que os snapshots do histórico legado — que substituíram essa dependência — estão
-// versionados e batem com o manifesto.
+// E confere mais duas coisas:
+//   4. que os snapshots do histórico legado — que substituíram essa dependência — estão
+//      versionados e batem com o manifesto;
+//   5. que `apps/panel/admin/` não voltou a existir como um segundo app dentro do painel.
 //
 // O que NÃO é violação, e por isso não é procurado: o domínio de produção
 // (`orgulhoregional.com.br`), o identificador do app desktop e o nome do serviço Go em comentários.
@@ -116,20 +118,55 @@ function conferirSnapshots() {
   return problemas;
 }
 
+// `apps/panel` é UM deployable: um `package.json`, um lockfile, um build. Já foi dois — o frontend
+// morava em `apps/panel/admin/`, com manifesto, lockfile e `dist` próprios, e o Railway construía o
+// painel chamando um `npm install` aninhado por dentro do `postinstall`. Isso saiu de cena quando o
+// SPA subiu para a raiz do painel.
+//
+// A reincidência é fácil e silenciosa: basta alguém rodar `npm create vite@latest admin` ali dentro
+// para "separar o front", e nada quebra no mesmo dia — o Railway continua buildando, os testes
+// continuam verdes, e só muito depois aparecem dois lockfiles divergindo e um `dist` que não é o
+// que está no ar. Por isso a checagem é por CAMINHO VERSIONADO, e não por menção em texto: a
+// documentação histórica (relatórios de rodada, manifesto de proveniência) fala do layout antigo à
+// vontade, e deve mesmo.
+//
+// PASTA, não URL: a rota web `/admin` é o painel e continua existindo. O que não pode voltar é o
+// diretório.
+const CAMINHOS_PROIBIDOS = [
+  ['apps/panel/admin/package.json', 'segundo manifesto npm dentro do painel'],
+  ['apps/panel/admin/package-lock.json', 'segundo lockfile dentro do painel'],
+  ['apps/panel/admin/src', 'frontend de volta para um subdiretório do painel'],
+  ['apps/panel/admin/dist', 'segundo build dentro do painel'],
+];
+
+function conferirPainelUnico(versionados) {
+  const problemas = [];
+  for (const [caminho, motivo] of CAMINHOS_PROIBIDOS) {
+    const reapareceu = versionados.some((rel) => rel === caminho || rel.startsWith(`${caminho}/`));
+    if (reapareceu) problemas.push(`${caminho} voltou a existir — ${motivo}`);
+    else if (VERBOSE) process.stdout.write(`  ok  sem ${caminho}\n`);
+  }
+  return problemas;
+}
+
 function main() {
+  const versionados = arquivosVersionados();
   const { achados, lidos } = varrer();
   const problemasDeSnapshot = conferirSnapshots();
+  const problemasDePainel = conferirPainelUnico(versionados);
 
-  if (achados.length || problemasDeSnapshot.length) {
+  if (achados.length || problemasDeSnapshot.length || problemasDePainel.length) {
     process.stderr.write('[self-check] FAIL — o repositório não é autocontido\n');
     for (const a of achados) {
       process.stderr.write(`  ${a.rel}:${a.linha}  ${a.regra.mensagem}\n      ${a.trecho}\n`);
     }
     for (const p of problemasDeSnapshot) process.stderr.write(`  ${p}\n`);
+    for (const p of problemasDePainel) process.stderr.write(`  ${p}\n`);
     process.stderr.write('\n  um clone limpo precisa rodar sem repositórios vizinhos nem caminhos da máquina de quem escreveu\n');
+    process.stderr.write('  e `apps/panel` é um deployable só: um package.json, um lockfile, um build\n');
     return 1;
   }
-  process.stdout.write(`[self-check] OK · ${lidos} arquivo(s) de código/config varridos · snapshots do histórico legado conferem com o manifesto\n`);
+  process.stdout.write(`[self-check] OK · ${lidos} arquivo(s) de código/config varridos · snapshots do histórico legado conferem com o manifesto · apps/panel é um deployable só\n`);
   return 0;
 }
 
