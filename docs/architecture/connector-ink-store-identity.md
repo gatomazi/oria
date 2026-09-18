@@ -72,11 +72,19 @@ Três decisões que valem explicação:
 Store existir: ela precisa ser da Organization da linha. É a regra da RLS escrita também como
 integridade referencial, então o banco recusa a combinação errada mesmo que o código erre.
 
-**O CHECK é `NOT VALID`** — vale para linha nova e atualizada, e não revalida o histórico. Toda
-linha nova identifica sua Store (pela identidade nova ou pela chave antiga); nenhuma linha
-histórica é declarada inválida retroativamente. A primeira versão desta migration exigia `store_id`
-de todo mundo: quebrou 116 testes e, pior, quebraria o cenário real de migração, onde existem
-pedidos cuja loja ainda não foi mapeada.
+**O CHECK é `NOT VALID`, e só nas tabelas de pedido** — vale para linha nova e atualizada, e não
+revalida o histórico. Toda linha nova de pedido identifica sua Store (pela identidade nova ou pela
+chave antiga); nenhuma linha histórica é declarada inválida retroativamente.
+
+`webhook_eventos` fica de fora dessa regra de propósito: ela registra também a entrega que **não se
+identificou**, que é exatamente o caso em que não há Store nem chave. Exigir identidade ali
+transformaria "não consegui atribuir" em "não posso registrar", e o registro da entrega recusada é
+justamente a evidência que se quer guardar. Isso foi descoberto por um teste do control plane, que
+semeia exatamente esse caso — a primeira versão da migration punha o CHECK ali também.
+
+E a versão anterior a essa era pior: exigia `store_id` de **todo mundo**, retroativamente. Quebrou
+116 testes e quebraria o cenário real de migração, onde existem pedidos cuja loja ainda não foi
+mapeada.
 
 **Os índices legados continuam, com o mesmo nome e sem predicado** — as releases já publicadas
 fazem `ON CONFLICT (organization_id, loja, ...)`, e `ON CONFLICT` não casa com índice parcial.

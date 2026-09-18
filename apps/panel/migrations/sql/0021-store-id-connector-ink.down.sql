@@ -19,7 +19,6 @@ $ck$;
 ALTER TABLE sync_estado DROP CONSTRAINT IF EXISTS ck_sync_estado_store_ou_loja;
 ALTER TABLE pedidos_ink_itens DROP CONSTRAINT IF EXISTS ck_pedidos_ink_itens_store_ou_loja;
 ALTER TABLE pedidos_ink DROP CONSTRAINT IF EXISTS ck_pedidos_ink_store_ou_loja;
-ALTER TABLE webhook_eventos DROP CONSTRAINT IF EXISTS ck_webhook_eventos_store_ou_loja;
 
 DROP INDEX IF EXISTS idx_pedidos_ink_store;
 DROP INDEX IF EXISTS idx_webhook_eventos_store;

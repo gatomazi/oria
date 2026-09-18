@@ -97,8 +97,11 @@ CREATE INDEX idx_pedidos_ink_store ON pedidos_ink (organization_id, store_id);
 
 -- NOT VALID: vale para linha nova e para atualização, não revalida o histórico. Toda linha nova
 -- identifica sua Store — pela identidade canônica ou pela chave antiga, mas identifica.
-ALTER TABLE webhook_eventos ADD CONSTRAINT ck_webhook_eventos_store_ou_loja
-  CHECK (store_id IS NOT NULL OR loja IS NOT NULL) NOT VALID;
+--
+-- `webhook_eventos` fica FORA desta regra, de propósito: ela existe justamente para registrar a
+-- entrega que NÃO se identificou (ver o manifesto de tenancy — `loja NULL` é o caso de recusa, e o
+-- dono vem declarado, nunca inferido). Exigir Store ali transformaria "não consegui atribuir" em
+-- "não posso nem registrar" — e perder o registro da entrega recusada é perder a evidência.
 ALTER TABLE pedidos_ink ADD CONSTRAINT ck_pedidos_ink_store_ou_loja
   CHECK (store_id IS NOT NULL OR loja IS NOT NULL) NOT VALID;
 ALTER TABLE pedidos_ink_itens ADD CONSTRAINT ck_pedidos_ink_itens_store_ou_loja

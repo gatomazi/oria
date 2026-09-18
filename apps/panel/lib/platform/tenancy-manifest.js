@@ -129,9 +129,10 @@ const TABELAS_TENANT = Object.freeze([
   }),
   t('webhook_eventos', 'loja_ou_sem_loja', {
     nota: 'loja NULL = entrega que não se identificou; dono declarado por sem_loja, nunca inferido. '
-      + 'A 0021 acrescentou `store_id` (FK composta com organization_id → stores) e o CHECK NOT VALID '
-      + '`ck_webhook_eventos_store_ou_loja`: linha nova identifica a Store, pela identidade canônica '
-      + 'ou pela chave legada. Histórico não é revalidado.',
+      + 'A 0021 acrescentou `store_id` (FK composta com organization_id → stores) e o índice de leitura '
+      + 'por Store. NÃO há CHECK exigindo identidade de Store aqui, ao contrário de pedidos_ink: esta '
+      + 'tabela registra a entrega que não se identificou, e exigir Store transformaria "não atribuí" '
+      + 'em "não registro".',
   }),
   t('whatsapp_web_outbox', 'loja_ou_sem_loja', {
     fks: [{ coluna: 'campaign_recipient_id', pai: 'campaign_recipients', onDelete: 'CASCADE' }],
