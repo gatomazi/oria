@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, DataTable, ErrorState, PageHeader, Skeleton, StatusBadge } from '../../components/ds';
+import { Card, DataTable, EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge } from '../../components/ds';
 import { formatData } from '../../lib/format';
 import { adminStores } from '../../state/adminStores';
 import { getIntegrations, type IntegrationsData } from '../../api/integracoes';
@@ -46,6 +46,14 @@ export function IntegracoesPage() {
       {!erro && data && (
         <div className="ad-integracoes-grid">
           <Card title="Reserva Ink" flush>
+            {/* Organization nova não tem loja ligada à Ink. Uma tabela só com cabeçalho não diz
+                isso — diz que algo falhou. O estado é "ainda não configurada". */}
+            {data.reservaInk.length === 0 ? (
+              <EmptyState
+                title="Reserva Ink ainda não configurada"
+                description="Esta loja ainda não tem credencial da Reserva Ink. Configure abaixo, em Credenciais da Ink, para começar a receber pedidos."
+              />
+            ) : (
             <DataTable
               label="Conexões com a Reserva Ink"
               rows={data.reservaInk}
@@ -74,6 +82,7 @@ export function IntegracoesPage() {
                 },
               ]}
             />
+            )}
           </Card>
 
           <InkCredenciaisCard onAlterado={recarregar} />

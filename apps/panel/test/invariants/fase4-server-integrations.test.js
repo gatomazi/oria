@@ -34,6 +34,8 @@ const MOCK = path.join(h.RAIZ_REPO, 'test', 'helpers', 'provider-mock.cjs');
 const CENARIO_A = path.join(h.RAIZ_REPO, 'test', 'fixtures', 'tenancy', 'cenario-a.json');
 const ORG_A = 'a1000000-0000-4000-8000-000000000001';
 const ORG_B = 'a1000000-0000-4000-8000-000000000002';
+// Organization criada no meio da suíte para o caso do tenant novo: id fora da faixa do cenário.
+const ORG_C = 'a1000000-0000-4000-8000-00000000000c';
 const SENHA = 'senha-forte-de-teste-123';
 const ROLE = `oria_app_f4s_${crypto.randomBytes(4).toString('hex')}`;
 const SENHA_ROLE = crypto.randomBytes(16).toString('hex');
@@ -329,4 +331,61 @@ test('INV-13 · nenhum token de tenant em resposta HTTP ou no log do processo', 
   await new Promise((r) => setTimeout(r, 300));
   for (const token of TODOS_OS_TOKENS) assert.ok(!saida.includes(token), 'token no log do processo');
   assert.doesNotMatch(saida, /TENANT_CONTEXT_REQUIRED|row-level security|permission denied/i);
+});
+
+// ── Tenant novo: a tela de Integrações é a PRIMEIRA que um lojista abre ───────────────────────
+//
+// Caso real do Tenant #1 (Use Origens, 18/09/2026): organization criada pelo Oria Admin, store
+// válida, assinatura ativa, ZERO integrações. A tela devolvia 502 — `lojasDaIntegracaoInk()`
+// chamava `lojaDoContexto()`, que lança `STORE_WITHOUT_INK` quando a store não tem loja legada, e
+// o handler async sem try/catch transformava isso em unhandled rejection: a requisição ficava sem
+// resposta e o proxy respondia 502.
+//
+// Store sem loja legada é um ESTADO — toda organization nasce assim. Status é leitura: abrir a
+// tela não pode depender de nada estar configurado, nem falar com provider externo.
+test('tenant novo · Integrações abre com zero integrações: 200, not_configured, sem tocar provider', async () => {
+  await sup.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [ORG_C, 'Tenant Novo']);
+  await sup.query(
+    'INSERT INTO stores (id, organization_id, nome, loja_legada) VALUES ($1, $2, $3, NULL)',
+    [crypto.randomUUID(), ORG_C, 'Loja do Tenant Novo']
+  );
+  await criarPessoa('f4-c@teste.oria', ORG_C, 'owner');
+
+  const chamadasAntes = chamadasMock().length;
+  const c = await navegador().entrar('f4-c@teste.oria');
+  const r = await c.req('GET', '/api/admin/integrations');
+
+  assert.equal(r.status, 200, `a tela de status não pode falhar num tenant novo: ${r.texto}`);
+  assert.deepEqual(r.json.reservaInk, [], 'sem loja legada não há linha de Ink — lista vazia, não erro');
+  assert.equal(r.json.ink.conectado, false);
+  assert.equal(r.json.ink.status, 'not_configured');
+  assert.equal(r.json.whatsapp.conectado, false);
+  assert.equal(r.json.whatsapp.status, 'not_configured');
+
+  // Abrir a tela é leitura: nenhuma chamada externa sai daqui.
+  assert.equal(chamadasMock().length, chamadasAntes, 'abrir Integrações disparou chamada a provider externo');
+
+  // E o processo não registrou rejeição não tratada — é isso que virava 502.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.doesNotMatch(saida, /UNHANDLED_REJECTION/, 'requisição terminou em rejeição não tratada');
+});
+
+// Fail-closed continua valendo: sem segredo, a ação de provider não roda — e JAMAIS cai na
+// credencial de outro tenant nem na variável de ambiente legada.
+test('tenant novo · sem segredo, ação de provider falha fechada e não usa credencial de ninguém', async () => {
+  const c = await navegador().entrar('f4-c@teste.oria');
+  const chamadasAntes = chamadasMock().length;
+
+  const teste = await c.req('POST', '/api/admin/integrations/ink/teste', { corpo: {} });
+  assert.notEqual(teste.json && teste.json.status, 'connected', 'tenant sem credencial não pode conectar');
+
+  // Nenhuma credencial de A, de B ou do ambiente legado foi usada em nome do tenant novo.
+  const novas = chamadasMock().slice(chamadasAntes);
+  for (const chamada of novas) {
+    const auth = String(chamada.auth || '');
+    for (const token of TODOS_OS_TOKENS) {
+      assert.ok(!auth.includes(token), 'ação do tenant novo usou credencial de outro tenant');
+    }
+    assert.ok(!auth.includes('ink-env-centro-nao-use-000000'), 'ação do tenant novo caiu no env legado');
+  }
 });

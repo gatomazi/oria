@@ -341,6 +341,16 @@ function lojaDoContexto() {
   return ctx.loja;
 }
 
+// Mesma loja, para quem só quer SABER se ela existe — tela de status, não operação.
+// `lojaDoContexto()` lança de propósito: operação sem loja é bug, e falhar é o certo. Mas a tela de
+// Integrações precisa dizer "não configurada" para uma organization nova, e lançar ali transformava
+// o primeiro acesso de um tenant novo em erro de servidor.
+function lojaDoContextoOuNulo() {
+  const ctx = contextoAtual();
+  if (!ctx) throw new TenantRuntimeError('operação fora de um contexto de Organization', 'TENANT_CONTEXT_REQUIRED');
+  return ctx.loja || null;
+}
+
 // Organization do contexto, para predicados SQL explícitos (a RLS filtra de novo por baixo).
 function orgDoContexto() {
   const ctx = contextoAtual();
@@ -8429,7 +8439,10 @@ app.get('/api/admin/campaigns/:id/recipients', requireAdmin, exigirRecurso('camp
 // (o webhook de status sent/delivered/read existe a partir daqui — ver /api/webhooks/whatsapp;
 // falta configurar WEBHOOK_FORWARD_URL no serviço Go pra ele de fato repassar os eventos).
 async function lojasDaIntegracaoInk() {
-  const loja = lojaDoContexto();
+  const loja = lojaDoContextoOuNulo();
+  // Organization sem loja legada ainda não tem integração Ink. Isso é um ESTADO, não um erro:
+  // toda organization nasce assim, e a tela precisa mostrar "não configurada".
+  if (!loja) return [];
   return [[loja, {
     tokenConfigurado: await inkConectada(),
     // Fase 5c: webhook configurado = URL opaca emitida + segredo guardado na integração.
@@ -8437,50 +8450,66 @@ async function lojasDaIntegracaoInk() {
   }]];
 }
 
+// Tela de STATUS: abrir não pode depender de nada estar configurado, e nenhuma leitura daqui fala
+// com provider externo. Handler async sem try/catch vira unhandled rejection — a requisição fica
+// sem resposta e o proxy devolve 502, que foi o que aconteceu no primeiro acesso do Tenant #1.
 app.get('/api/admin/integrations', requireAdmin, async (req, res) => {
-  let log = [];
-  if (pgPool) {
-    try {
-      const { rows } = await pgPool.query(
-        `SELECT recebido_em AS "recebidoEm", verificado, loja FROM webhook_eventos
-          WHERE organization_id = $1 AND verificado ORDER BY recebido_em DESC LIMIT 1`,
-        [orgDoContexto()]
-      );
-      log = rows;
-    } catch (err) {
-      console.error(`[INTEGRACOES] falha ao ler último webhook: ${err.message}`);
-    }
-  } else {
-    try { log = JSON.parse(fs.readFileSync(WEBHOOK_LOG_FILE, 'utf8')); } catch { log = []; }
-  }
-
-  const reservaInk = (await lojasDaIntegracaoInk()).map(([loja, store]) => {
-    const ultimoEvento = log.find((e) => e.verificado && e.loja === loja);
-    return {
-      loja,
-      tokenConfigurado: store.tokenConfigurado,
-      webhookConfigurado: store.webhookConfigurado,
-      ultimoEventoEm: ultimoEvento ? ultimoEvento.recebidoEm : null,
-    };
-  });
-
-  const whatsappConfigurado = !!(WHATSAPP_SERVICE_URL && WHATSAPP_API_KEY);
-  let provider = WHATSAPP_PROVIDER_PADRAO.provider;
   try {
-    provider = (await readWhatsappProviderConfig()).provider;
+    let log = [];
+    if (pgPool) {
+      try {
+        const { rows } = await pgPool.query(
+          `SELECT recebido_em AS "recebidoEm", verificado, loja FROM webhook_eventos
+            WHERE organization_id = $1 AND verificado ORDER BY recebido_em DESC LIMIT 1`,
+          [orgDoContexto()]
+        );
+        log = rows;
+      } catch (err) {
+        console.error(`[INTEGRACOES] falha ao ler último webhook: ${err.message}`);
+      }
+    } else {
+      try { log = JSON.parse(fs.readFileSync(WEBHOOK_LOG_FILE, 'utf8')); } catch { log = []; }
+    }
+
+    const reservaInk = (await lojasDaIntegracaoInk()).map(([loja, store]) => {
+      const ultimoEvento = log.find((e) => e.verificado && e.loja === loja);
+      return {
+        loja,
+        tokenConfigurado: store.tokenConfigurado,
+        webhookConfigurado: store.webhookConfigurado,
+        ultimoEventoEm: ultimoEvento ? ultimoEvento.recebidoEm : null,
+      };
+    });
+
+    const inkStatus = reservaInk.length === 0
+      ? 'not_configured'
+      : (reservaInk.every((r) => r.tokenConfigurado && r.webhookConfigurado) ? 'conectada' : 'pendente');
+
+    const whatsappConfigurado = !!(WHATSAPP_SERVICE_URL && WHATSAPP_API_KEY);
+    let provider = WHATSAPP_PROVIDER_PADRAO.provider;
+    try {
+      provider = (await readWhatsappProviderConfig()).provider;
+    } catch (err) {
+      console.error(`[INTEGRACOES] falha ao ler provider do WhatsApp: ${err.message}`);
+    }
+    res.json({
+      reservaInk,
+      // Resumo explícito por provider: uma organization nova responde `not_configured`, e não um
+      // silêncio que a tela precise adivinhar a partir de uma lista vazia.
+      ink: { conectado: inkStatus === 'conectada', status: inkStatus },
+      whatsapp: {
+        // Configurado = variáveis de ambiente presentes; conectividade real (o serviço está de
+        // pé agora) é responsabilidade de /admin/whatsapp (GET /api/admin/whatsapp/visao-geral).
+        conectado: whatsappConfigurado,
+        observacao: whatsappConfigurado ? null : 'WHATSAPP_SERVICE_URL/WHATSAPP_API_KEY não configurados neste ambiente.',
+        status: whatsappConfigurado ? 'configurado' : 'not_configured',
+        provider,
+      },
+    });
   } catch (err) {
-    console.error(`[INTEGRACOES] falha ao ler provider do WhatsApp: ${err.message}`);
+    console.error(`[INTEGRACOES] falha ao montar a visão de integrações: ${mascararToken(String(err && err.message))}`);
+    res.status(500).json({ error: 'não foi possível ler o estado das integrações' });
   }
-  res.json({
-    reservaInk,
-    whatsapp: {
-      // Configurado = variáveis de ambiente presentes; conectividade real (o serviço está de
-      // pé agora) é responsabilidade de /admin/whatsapp (GET /api/admin/whatsapp/visao-geral).
-      conectado: whatsappConfigurado,
-      observacao: whatsappConfigurado ? null : 'WHATSAPP_SERVICE_URL/WHATSAPP_API_KEY não configurados neste ambiente.',
-      provider,
-    },
-  });
 });
 
 // ── Integrações: credencial manual da Ink e teste de conexão (Fase 4) ─────────────────────
