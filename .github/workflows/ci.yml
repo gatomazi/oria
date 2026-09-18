@@ -18,16 +18,20 @@ name: CI
 # podados daqueles commits estão versionados em `apps/panel/test/fixtures/legacy/`. Nenhum job
 # depende de repositório vizinho, caminho absoluto ou interpretador local.
 
-# Um commit de PR gera UM run, não dois. Com `pull_request` e `push` sem filtro, o mesmo commit
-# disparava as duas coisas e pagava o CI duas vezes. Agora `push` só olha para `main`, e o trabalho
-# de branch chega pelo `pull_request`.
+# UM run por commit, e só um. `pull_request` já cobre todo commit de branch com PR aberto (evento
+# `synchronize`); qualquer `push` aqui duplicaria esse mesmo commit. E `main` não passa por este
+# workflow: lá quem manda é `full-verification.yml`, que é superconjunto deste.
+#
+#   commit numa branch com PR  → 1 run de CI (pull_request), 0 de push
+#   merge em main              → 1 run de Full Verification, 0 de CI
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+  # Disparo manual para depurar o próprio pipeline. Sem PR não há base de diff, e aí o job
+  # `changes` liga TUDO (fail-closed) — ver scripts/ci/changes.mjs.
+  workflow_dispatch:
 
-# Um push novo no mesmo branch cancela o anterior: feedback rápido é o objetivo.
+# Um push novo no mesmo PR cancela o run anterior: feedback rápido é o objetivo.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -53,7 +57,8 @@ jobs:
       # Sem base confiável, o script liga tudo: filtro que erra para menos vira silêncio.
       - id: classificar
         run: |
-          base="${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+          # Só o PR traz base de diff. Em `workflow_dispatch` não há base, e o script liga tudo.
+          base="${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}"
           if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
             node scripts/ci/changes.mjs --github-output
           else
