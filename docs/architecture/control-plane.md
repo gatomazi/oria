@@ -1050,5 +1050,8 @@ Fora do escopo, por decisão explícita:
 - **Aceite do convite** — a rota que consome o convite e cria o membership é do **Tenant Plane**
   (é lá que a pessoa define a senha e entra). O control plane emite, reemite e revoga; o banco já
   tem `platform_consumir_convite(token_hash, user_id)` pronta, com uso único sob `FOR UPDATE`.
-  Ligar essa função a uma rota do painel é trabalho de outra frente — até lá, o convite existe mas
-  não pode ser aceito pela interface.
+  **Fechado depois deste documento:** o painel liga essa função a
+  `POST /api/admin/convite/aceitar` (com `platform_convite_pendente(hash)`, da migration 0020, para
+  ler o convite antes de criar a conta de quem ainda não tem uma) e serve a tela `/admin/convite`.
+  Contrato: `docs/architecture/invite-acceptance.md`. **Nada do control plane mudou** — nem rota,
+  nem tabela, nem a 0019.

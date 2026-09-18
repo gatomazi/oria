@@ -26,9 +26,9 @@ const FIXTURES = path.join(h.RAIZ_REPO, 'test', 'fixtures', 'tenancy');
 const CENARIO_A = path.join(FIXTURES, 'cenario-a.json');
 const CENARIO_B = path.join(FIXTURES, 'cenario-b.json');
 const FASE1 = 8;
-// Fases 2 (auth), 3 (tenant context), 4 (integrações), 5c, 7 (onboarding) e o control plane
-// (platform-admin) vêm depois; o rollback da Fase 1 desce todas.
-const DEPOIS_DA_FASE1 = 8;
+// Fases 2 (auth), 3 (tenant context), 4 (integrações), 5c, 7 (onboarding), o control plane
+// (platform-admin) e o aceite do convite (0020) vêm depois; o rollback da Fase 1 desce todas.
+const DEPOIS_DA_FASE1 = 9;
 
 const lerJson = (arquivo) => JSON.parse(fs.readFileSync(arquivo, 'utf8'));
 

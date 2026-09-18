@@ -118,7 +118,11 @@ function preflight(t, env, args) {
 }
 
 function semVazamento(texto, valores, ctx) {
-  for (const v of valores) assert.ok(!texto.includes(v), `${ctx}: valor sensível na saída`);
+  for (const v of valores) {
+    // A mensagem identifica QUAL item vazou sem imprimi-lo: posição na lista e tamanho bastam
+    // para achar a origem, e nenhum dos dois é o segredo.
+    assert.ok(!texto.includes(v), `${ctx}: valor sensível na saída (item ${valores.indexOf(v)}, ${v.length} caracteres)`);
+  }
 }
 
 function montarConfig(raiz) {
@@ -214,7 +218,20 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
     ...e.valoresProibidos(s, envEnsaio),
     prod.WHATSAPP_API_KEY, prod.WHATSAPP_SENDER_REF_SECRET, prod.WHATSAPP_SENDER_RESOLVER_KEY, prod.WHATSAPP_WEBHOOK_SECRET,
   ];
-  const semSegredo = (texto, ctx) => semVazamento(texto, proibidos, ctx);
+  // `semVazamento` procura SUBSTRING, e substring só é detector honesto quando o valor é longo e
+  // aleatório. A senha do Postgres de teste é uma palavra (`teste`, em scripts/test-db.mjs) e casa
+  // com prosa comum — "nos testes", "um teste compara" — em qualquer SQL que o pre-deploy ecoe.
+  // Um detector que grita por prosa é um detector que alguém acaba calando.
+  //
+  // São duas camadas. `valoresProibidos` (test/helpers/tenant1-ensaio.js) já entrega a senha do
+  // banco na forma em que ela vaza de verdade — `usuario:senha@`, longa o bastante para só casar de
+  // propósito — em vez de solta. E aqui a lista do que fica FORA da varredura é DECLARADA: hoje
+  // está vazia, e se algum valor curto novo aparecer este assert reprova e obriga alguém a olhar,
+  // em vez de deixá-lo passar em silêncio.
+  const curtos = [...new Set(proibidos.filter((v) => v.length < 12))];
+  assert.deepEqual(curtos, [],
+    'valor sensível curto não declarado — confira antes de deixá-lo fora da varredura de vazamento');
+  const semSegredo = (texto, ctx) => semVazamento(texto, proibidos.filter((v) => v.length >= 12), ctx);
   const tenant1 = (comando, args, env) => {
     const r = node(TENANT1, [comando, ...args], { PATH: process.env.PATH, ...env });
     semSegredo(r.saida, `tenant1 ${comando}`);
@@ -322,21 +339,16 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
   assert.equal(pdD.status, 0, pdD.saida);
   assert.match(pdD.saida, /entitlements: perfil tenant1-operacao-interna · ON: catalog, /);
   assert.match(pdD.saida, new RegExp(`entitlements: ${ORG}: nada mudou`));
-  // A D' aplica exatamente as migrations que o HEAD acrescentou depois da D0 — nem uma a mais.
-  // Antes isto era um `/No migrations to run!/` fixo, que só valia enquanto o HEAD tivesse o mesmo
-  // schema da D0: a primeira migration nova depois dela (a do control plane) derrubou o teste sem
-  // que nada estivesse errado. A lista agora é derivada do repositório, então o teste segue valendo
-  // conforme o schema andar, e o que ele guarda continua sendo o essencial — nenhuma migration
-  // INESPERADA roda neste degrau.
-  const migrationsDe = (dir) => fs.readdirSync(path.join(dir, 'migrations'))
-    .filter((f) => /^\d+_.+\.js$/.test(f))
-    .map((f) => f.replace(/\.js$/, ''))
-    .sort();
-  const novasDesdeD0 = migrationsDe(RAIZ).filter((m) => !migrationsDe(codigoD0).includes(m));
-  const rodadasNaD = [...pdD.saida.matchAll(/^> - (.+)$/gm)].map((m) => m[1].trim()).sort();
-  assert.deepEqual(rodadasNaD, novasDesdeD0,
-    `a D' rodou migrations diferentes das que o HEAD acrescentou depois da D0:\n${pdD.saida}`);
-  if (novasDesdeD0.length === 0) assert.match(pdD.saida, /No migrations to run!/);
+  // D0 é o snapshot de 8c024d2: as migrations posteriores a ele só existem no HEAD, e é o
+  // pre-deploy da D' que as aplica. Esta linha exigia `No migrations to run!` até a fusão do
+  // control plane (7f0a130, posterior a este teste) acrescentar a 0019 — a asserção passou a
+  // mentir sobre o que o runbook faz na D'. Agora ela DECLARA a lista: migration nova sem entrar
+  // aqui reprova, que é o ponto do dry-run.
+  assert.deepEqual(
+    [...pdD.saida.matchAll(/^### MIGRATION (\S+) \(UP\) ###$/gm)].map((m) => m[1]),
+    ['1790000400000_platform-admin', '1790000500000_convite-aceite'],
+    'o pre-deploy da D\' aplicou um conjunto de migrations diferente do declarado'
+  );
   semSegredo(pdD.saida, 'pre-deploy D\'');
   const depoisD = (await sup.query(`SELECT valor, atualizado_em FROM app_config WHERE chave = 'entitlements' AND organization_id = $1`, [ORG])).rows[0];
   assert.deepEqual(depoisD, antesD, 'seed do HEAD: nada muda');

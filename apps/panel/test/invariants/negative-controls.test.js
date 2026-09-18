@@ -154,6 +154,53 @@ const VIOLACOES = [
     de: '  const ator = validarAtor(entrada.actorUserId);',
     para: "  // VIOLAÇÃO DELIBERADA (negative control) — sujeito sintético\n  const ator = 'admin';",
   },
+  // ── Aceite do convite de owner (docs/architecture/invite-acceptance.md) ────────────────────
+  {
+    classe: 'convite/grant-da-role',
+    invariant: 'OPS-14',
+    teste: 'convite-aceite.test.js',
+    arquivo: 'lib/platform/app-role.js',
+    descricao: 'o GRANT EXECUTE das funções do convite some — a rota para de funcionar sob oria_app',
+    de: "  'platform_convite_pendente(TEXT)',\n  'platform_consumir_convite(TEXT, UUID)',\n]);",
+    para: '  // VIOLAÇÃO DELIBERADA (negative control) — "é função do control plane, o painel não precisa"\n]);',
+  },
+  {
+    classe: 'convite/motivo-vazado',
+    invariant: 'CONVITE',
+    teste: 'convite-aceite.test.js',
+    arquivo: 'lib/auth/invites.js',
+    descricao: 'a resposta distingue desconhecido/usado/revogado/expirado ("ajuda o suporte")',
+    de: "  return new ConviteError('convite_invalido', 404, MENSAGEM_GENERICA, { motivo });",
+    para: '  // VIOLAÇÃO DELIBERADA (negative control) — "a mensagem genérica confunde o cliente"\n'
+        + '  return new ConviteError(`convite_${motivo}`, 404, `convite ${motivo}`, { motivo });',
+  },
+  {
+    classe: 'convite/sessao-de-outro-email',
+    invariant: 'CONVITE',
+    teste: 'convite-aceite.test.js',
+    arquivo: 'lib/auth/invites.js',
+    descricao: 'quem já está logado consome o convite de outro e-mail ("aproveita a sessão aberta")',
+    de: '        if (auth.email !== c.email) {',
+    para: '        // VIOLAÇÃO DELIBERADA (negative control) — "já está logado, aproveita a sessão"\n'
+        + '        if (false && auth.email !== c.email) {',
+  },
+  {
+    classe: 'convite/conta-existente-troca-senha',
+    invariant: 'CONVITE',
+    teste: 'convite-aceite.test.js',
+    arquivo: 'lib/auth/invites.js',
+    descricao: 'o aceite redefine a senha de uma conta que já existe — tomada de conta pelo token',
+    de: '      } else if (existente) {\n'
+      + '        // Conta já existe: nada de criar, nada de trocar senha. Autentica primeiro, aceita depois.\n'
+      + "        throw new ConviteError('conta_existente', 409,\n"
+      + "          'este e-mail já tem conta no Oria — entre nela e aceite o convite de novo');\n"
+      + '      } else {',
+    para: '      } else if (existente) {\n'
+        + '        // VIOLAÇÃO DELIBERADA (negative control) — "o token prova que é a pessoa, então redefine"\n'
+        + "        await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [senhaHash, existente.id]);\n"
+        + '        userId = existente.id;\n'
+        + '      } else {',
+  },
   {
     classe: 'auth/csrf',
     invariant: 'FASE-2',
@@ -728,6 +775,8 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
   assert.deepEqual(
     [...new Set(VIOLACOES.map((v) => v.classe))].sort(),
     ['audit/sujeito', 'auth', 'auth/csrf', 'auth/fixation', 'auth/login-tenant', 'auth/revogacao',
+      'convite/conta-existente-troca-senha', 'convite/grant-da-role', 'convite/motivo-vazado',
+      'convite/sessao-de-outro-email',
       'creative/dual-read-confinamento', 'creative/dual-read-organization',
       'creative/tenant-env', 'dre/customer-de-outra-org', 'dre/loja-atribuida-padrao', 'dre/sem-loja',
       'entitlement', 'entitlement/ausencia', 'fase6/bypass-interno', 'integracoes/desconectar-cruzado', 'integracoes/env-global',
