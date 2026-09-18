@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AppShell } from './shell/AppShell';
@@ -56,23 +56,43 @@ const AnalyticsGa4Page = tela(() => import('./pages/analytics/AnalyticsGa4Page')
 const MetaAdsPage = tela(() => import('./pages/meta/MetaAdsPage'), 'MetaAdsPage');
 const GoogleAdsPage = tela(() => import('./pages/google-ads/GoogleAdsPage'), 'GoogleAdsPage');
 const CriativosPage = tela(() => import('./pages/criativos/CriativosPage'), 'CriativosPage');
+// Aceite de convite: rota ANÔNIMA (fora do ProtectedRoute e fora do AppShell). Quem abre ainda
+// pode não ter conta — é o passo em que a conta nasce.
+const AceitarConvitePage = tela(() => import('./pages/convite/AceitarConvitePage'), 'AceitarConvitePage');
+
+// Layout de tudo que exige sessão + Organization ativa. Antes, `ProtectedRoute` envolvia o
+// `<Routes>` inteiro, o que tornava impossível ter uma tela pública; agora ele é a rota-mãe das
+// telas do painel, e as anônimas ficam ao lado dela.
+function PainelAutenticado() {
+  return (
+    <ProtectedRoute>
+      <AppShell>
+        <Suspense
+          fallback={
+            <PageStack>
+              <Skeleton rows={1} height="56px" width="40%" />
+              <Skeleton variant="table" rows={6} />
+            </PageStack>
+          }
+        >
+          <Outlet />
+        </Suspense>
+      </AppShell>
+    </ProtectedRoute>
+  );
+}
 
 // Fase 5 (docs/plan.md) — cutover: todas as 29 páginas reais do admin, roteadas sob /admin/*,
 // substituindo os antigos sendFile em server.js. Caminhos abaixo espelham 1:1 as rotas reais.
 export function App() {
   return (
     <AuthProvider>
-      <ProtectedRoute>
-        <AppShell>
-          <Suspense
-            fallback={
-              <PageStack>
-                <Skeleton rows={1} height="56px" width="40%" />
-                <Skeleton variant="table" rows={6} />
-              </PageStack>
-            }
-          >
           <Routes>
+            <Route
+              path="/admin/convite"
+              element={<Suspense fallback={null}><AceitarConvitePage /></Suspense>}
+            />
+            <Route element={<PainelAutenticado />}>
             <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="/admin/playground" element={<Playground />} />
 
@@ -133,10 +153,8 @@ export function App() {
             <Route path="/admin/eventos" element={<EventosPage />} />
             <Route path="/admin/integracoes" element={<IntegracoesPage />} />
             <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
+            </Route>
           </Routes>
-          </Suspense>
-        </AppShell>
-      </ProtectedRoute>
     </AuthProvider>
   );
 }
