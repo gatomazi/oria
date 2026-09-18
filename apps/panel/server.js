@@ -12733,7 +12733,7 @@ app.post('/api/admin/whatsapp-web/fila/acao', requireAdmin, async (req, res) => 
 // Fase 3 (R-02): o antigo `multiStoreMode` saiu — não existe seletor de loja; a Store vem da
 // Organization da sessão.
 const PRODUCT_SETTINGS_FILE = path.join(PEDIDOS_DIR, 'product-settings.json');
-const PRODUCT_SETTINGS_DEFAULT = { productName: 'Orgulho Regional' };
+const PRODUCT_SETTINGS_DEFAULT = { productName: 'Oria' };
 if (!fs.existsSync(PRODUCT_SETTINGS_FILE)) fs.writeFileSync(PRODUCT_SETTINGS_FILE, JSON.stringify(PRODUCT_SETTINGS_DEFAULT, null, 2));
 
 app.get('/api/admin/settings/product', requireAdmin, async (req, res) => {
