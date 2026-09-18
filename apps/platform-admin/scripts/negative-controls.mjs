@@ -174,11 +174,66 @@ const CONTROLES = [
     para: '    efetivos[f] = true;\n    origem[f] = \'ausente\';',
     testes: ['test/plans.test.js'],
   },
+
+  // ── Interface ────────────────────────────────────────────────────────────────────────────
+  // A UI é servida pelo MESMO processo da API. Os defeitos abaixo são os atalhos que alguém
+  // escreveria de boa-fé e que apagam a fronteira entre "frontend" e superfície de plataforma.
+  {
+    nome: 'public-external-host',
+    descricao: 'carregar um script de CDN no index (o atalho "só preciso de uma bibliotequinha")',
+    arquivo: 'public/index.html',
+    de: '<link rel="stylesheet" href="/app.css">',
+    para: '<link rel="stylesheet" href="/app.css">\n<script src="https://cdn.exemplo.invalid/uma-lib.min.js"></script>',
+    testes: ['test/interface.test.js'],
+  },
+  {
+    nome: 'spa-fallback-swallows-api',
+    descricao: 'deixar o fallback de SPA capturar /api/* (o atalho "se não casou, devolve o index")',
+    arquivo: 'lib/app.js',
+    de: "      if (url.pathname.startsWith('/api/')) {",
+    para: "      if (false && url.pathname.startsWith('/api/')) {",
+    testes: ['test/interface.test.js'],
+  },
+  {
+    nome: 'ui-reads-cookie',
+    descricao: 'a UI ler document.cookie para "saber se está logada" antes de chamar a API',
+    arquivo: 'public/js/api.js',
+    de: 'async function pedir(metodo, caminho, corpo) {\n  const cabecalhos = {};',
+    para: 'async function pedir(metodo, caminho, corpo) {\n  const temSessao = document.cookie.includes(\'oria_platform_session\');\n  void temSessao;\n  const cabecalhos = {};',
+    testes: ['test/interface.test.js'],
+  },
+  {
+    nome: 'static-path-traversal',
+    descricao: 'decodificar o caminho antes de juntar com a raiz e largar a conferência de prefixo',
+    arquivo: 'lib/app.js',
+    de: "    const relativo = path.normalize(caminho).replace(/^(\\.\\.[/\\\\])+/, '');",
+    para: '    const relativo = decodeURIComponent(caminho);',
+    // Só decodificar NÃO basta para vazar: a conferência de prefixo ainda barra — defesa em
+    // profundidade funcionando. O defeito realista é o par, porque quem decodifica costuma achar
+    // que a conferência virou redundante ("já normalizei").
+    ajustes: [
+      {
+        de: '    if (!arquivo.startsWith(raizEstatica + path.sep) && arquivo !== raizEstatica) {\n      return http.responderErro(res, http.erro404());\n    }\n',
+        para: '',
+      },
+    ],
+    testes: ['test/interface.test.js'],
+  },
+  {
+    nome: 'ui-vocabulary-drift',
+    descricao: 'a UI perder uma feature do vocabulário e passar a esconder o entitlement da tela',
+    arquivo: 'public/js/vocabulario.js',
+    de: "  'advancedAutomations',\n  'catalog',",
+    para: "  'catalog',",
+    testes: ['test/interface.test.js'],
+  },
 ];
 
 function copiarApp(destino) {
   fs.mkdirSync(destino, { recursive: true });
-  for (const item of ['lib', 'test', 'scripts', 'node_modules', 'server.js', 'package.json']) {
+  // `public` entra na cópia porque a interface é sujeito sob teste tanto quanto `lib`: os controles
+  // `public-external-host`, `ui-reads-cookie` e `ui-vocabulary-drift` introduzem o defeito nela.
+  for (const item of ['lib', 'test', 'scripts', 'public', 'node_modules', 'server.js', 'package.json']) {
     const origem = path.join(RAIZ, item);
     if (!fs.existsSync(origem)) continue;
     fs.cpSync(origem, path.join(destino, item), { recursive: true, dereference: false, verbatimSymlinks: true });

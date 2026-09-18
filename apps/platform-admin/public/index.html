@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark">
+<title>Oria Admin · Control Plane</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+<!--
+  Casca do Oria Admin (control plane). Tudo é renderizado por /js/main.js.
+  Nenhum recurso externo: os ícones são SVG inline e a tipografia é a do sistema.
+-->
+<div id="raiz" class="raiz" data-estado="carregando">
+  <div class="boot" role="status" aria-live="polite">
+    <span class="boot-marca">Oria Admin</span>
+    <span class="boot-texto">Verificando sessão…</span>
+  </div>
+</div>
+
+<div id="avisos" class="avisos" role="status" aria-live="polite"></div>
+
+<script type="module" src="/js/main.js"></script>
+<noscript>
+  <p class="noscript">O Oria Admin precisa de JavaScript para funcionar. A API continua em /api/platform.</p>
+</noscript>
+</body>
+</html>
