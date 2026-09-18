@@ -19,7 +19,7 @@
 >
 > **Fontes de intenção:** [`levantamento-productizacao-saas-painel.md`](./levantamento-productizacao-saas-painel.md),
 > [`productization-audit-addendum-v2.md`](./productization-audit-addendum-v2.md) (prevalece em conflito),
-> [`../painel-estado-atual.md`](../../apps/panel/docs/painel-estado-atual.md).
+> `docs/painel-estado-atual.md` do repositório de origem (removido do Oria na limpeza de 18/09/2026; continua no `orgulhoregional`).
 
 ## Regra de leitura deste documento
 
