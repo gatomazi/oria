@@ -156,12 +156,23 @@ async function modulo(nome) {
 }
 
 // Todo valor sensível do ensaio, para conferir que nenhum aparece na saída.
+//
+// A senha do banco entra como `usuario:senha@` e não solta. A conferência é `includes`, e a senha
+// do Postgres de teste é uma palavra de dicionário — no CI, literalmente `teste`. Procurar por ela
+// solta acusa vazamento em qualquer saída que contenha a palavra: foi o que aconteceu quando o
+// pre-deploy passou a imprimir o SQL de uma migration cujos comentários em português dizem
+// "o teste compara as duas". Credencial vazada aparece na forma `usuario:senha@host`, e é essa
+// forma que interessa. Os segredos de verdade (sessão, chave mestra, tokens, hashes) são longos e
+// aleatórios, continuam conferidos soltos e não colidem com texto nenhum.
 function valoresProibidos(s, env) {
+  const u = new URL(env.DATABASE_URL);
   return [
     s.sessao, s.mestra, s.meta, s.openai, s.whatsappToken, s.senhaAdmin, env.TENANT1_OWNER_HASH, env.TENANT1_OWNER_SUL_HASH,
     ...Object.values(s.ga4),
     ...Object.values(s.ink).flatMap((x) => [x.token, x.feed, x.webhook]),
-    new URL(env.DATABASE_URL).password,
+    u.password ? `${u.username}:${u.password}@` : null,
+    // Senha longa o bastante para não ser palavra de dicionário também é conferida sozinha.
+    u.password && u.password.length >= 16 ? u.password : null,
   ].filter(Boolean);
 }
 

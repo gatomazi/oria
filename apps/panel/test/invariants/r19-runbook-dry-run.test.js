@@ -322,7 +322,21 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
   assert.equal(pdD.status, 0, pdD.saida);
   assert.match(pdD.saida, /entitlements: perfil tenant1-operacao-interna · ON: catalog, /);
   assert.match(pdD.saida, new RegExp(`entitlements: ${ORG}: nada mudou`));
-  assert.match(pdD.saida, /No migrations to run!/);
+  // A D' aplica exatamente as migrations que o HEAD acrescentou depois da D0 — nem uma a mais.
+  // Antes isto era um `/No migrations to run!/` fixo, que só valia enquanto o HEAD tivesse o mesmo
+  // schema da D0: a primeira migration nova depois dela (a do control plane) derrubou o teste sem
+  // que nada estivesse errado. A lista agora é derivada do repositório, então o teste segue valendo
+  // conforme o schema andar, e o que ele guarda continua sendo o essencial — nenhuma migration
+  // INESPERADA roda neste degrau.
+  const migrationsDe = (dir) => fs.readdirSync(path.join(dir, 'migrations'))
+    .filter((f) => /^\d+_.+\.js$/.test(f))
+    .map((f) => f.replace(/\.js$/, ''))
+    .sort();
+  const novasDesdeD0 = migrationsDe(RAIZ).filter((m) => !migrationsDe(codigoD0).includes(m));
+  const rodadasNaD = [...pdD.saida.matchAll(/^> - (.+)$/gm)].map((m) => m[1].trim()).sort();
+  assert.deepEqual(rodadasNaD, novasDesdeD0,
+    `a D' rodou migrations diferentes das que o HEAD acrescentou depois da D0:\n${pdD.saida}`);
+  if (novasDesdeD0.length === 0) assert.match(pdD.saida, /No migrations to run!/);
   semSegredo(pdD.saida, 'pre-deploy D\'');
   const depoisD = (await sup.query(`SELECT valor, atualizado_em FROM app_config WHERE chave = 'entitlements' AND organization_id = $1`, [ORG])).rows[0];
   assert.deepEqual(depoisD, antesD, 'seed do HEAD: nada muda');

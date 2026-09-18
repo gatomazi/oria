@@ -7,7 +7,7 @@
     "start": "node server.js",
     "test": "node scripts/test-db.mjs run -- node --test --test-concurrency=1 test/*.test.js",
     "test:unit": "node --test --test-concurrency=1 test/unit-*.test.js",
-    "test:negative": "node scripts/negative-controls.mjs",
+    "test:negative": "node scripts/test-db.mjs run -- node scripts/negative-controls.mjs",
     "build": "node scripts/build.mjs",
     "db:start": "node scripts/test-db.mjs start",
     "db:stop": "node scripts/test-db.mjs stop",
