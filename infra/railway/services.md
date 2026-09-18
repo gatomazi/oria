@@ -101,6 +101,37 @@ Nenhum runtime foi unificado e nenhum componente virou "aplicação da raiz".
 | Depende de | painel (`PANEL_SENDER_RESOLVER_URL`, domínio público https — ver **Rede**) e Meta (externo) |
 | Ingress público | **necessário**: o webhook da Meta precisa alcançar o serviço. As rotas internas continuam exigindo `API_KEY` e assinatura |
 
+## `oria-admin` — **ainda não criado**
+
+Control Plane (`apps/platform-admin`). O service **não existe** no projeto Railway; esta seção é a
+especificação para criá-lo.
+
+| item | valor |
+|---|---|
+| Root Directory | `apps/platform-admin` |
+| Runtime | Node (mesmo builder do painel) |
+| Build | `npm ci` — não há etapa de build: a UI é servida estaticamente de `public/` |
+| Start | `npm start` → `node server.js` (escuta em `PORT`, padrão 8080) |
+| Health endpoint | `GET /health` — público, responde `{"status":"ok"}` mesmo sem nenhum admin cadastrado |
+| Pre-deploy | **nenhum.** As migrations do control plane são do painel (`1790000400000_platform-admin`) e rodam no pre-deploy do `oria-panel`. O boot do Admin apenas **verifica** que elas foram aplicadas e morre com mensagem explícita se não foram |
+| Volume | não |
+| Banco | o **mesmo** Postgres do painel (`DATABASE_URL`) — não é um banco novo |
+| Ingress público | sim, `admin.oria.com.br` |
+
+Variáveis obrigatórias (nomes; valores nunca aqui): `DATABASE_URL`,
+`PLATFORM_ADMIN_SESSION_SECRET` (≥ 32, **novo**, não reaproveitar o `ADMIN_SESSION_SECRET` do
+painel), `PLATFORM_ADMIN_URL`.
+
+`PLATFORM_ADMIN_EMAIL` e `PLATFORM_ADMIN_PASSWORD` **não são variáveis do service**: são entrada de
+um comando pontual de bootstrap. Deixá-las gravadas no Railway é guardar a senha do dono da
+plataforma em texto no painel de infraestrutura. Ver
+[`../../docs/operations/platform-admin-bootstrap.md`](../../docs/operations/platform-admin-bootstrap.md).
+
+**O que o CLI não faz.** `railway add --service --repo` cria o service, mas **não** define o Root
+Directory — e sem ele o build sai da raiz do monorepo e falha com "No start command detected",
+exatamente como no primeiro deploy do painel. O Root Directory é ajuste de dashboard; depois dele o
+resto (variáveis, domínio) pode ir pelo CLI.
+
 ## Rede
 
 ```text
