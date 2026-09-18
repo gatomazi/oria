@@ -21,7 +21,8 @@ repositório legado, mas rodar a suíte não (ver `docs/architecture/source-migr
 ## Instalação
 
 ```bash
-npm run panel:install     # npm ci em apps/panel; o postinstall builda o admin
+npm run panel:install     # npm ci em apps/panel
+npm run panel:build       # SPA do painel → apps/panel/dist (o /admin só responde com ele)
 
 python3.12 -m venv apps/creative-generator/.venv
 apps/creative-generator/.venv/bin/pip install -r apps/creative-generator/requirements.txt
@@ -43,6 +44,10 @@ DATABASE_URL=<url impressa> ENCRYPTION_MASTER_KEY=$(node -e "console.log(require
   npm start                        # http://localhost:8080
 node scripts/test-db.mjs stop
 ```
+
+O `server.js` serve o SPA de `apps/panel/dist`, então `/admin` só responde depois de um
+`npm run build`. Para iterar no frontend sem rebuildar a cada mudança, deixe o `npm start` de pé e
+suba o Vite ao lado com `npm run dev` — ele faz proxy de `/api` para a porta 8080.
 
 Sem Postgres, dá para subir em modo de desenvolvimento declarado (`DATA_STORE_MODE=ephemeral-json`):
 o estado vai para JSON e não sobrevive a um restart — nunca use isso fora da sua máquina.

@@ -63,13 +63,13 @@ test('r19 §9 · registry: estado de cada feature bate com rotas, flags do Creat
   }
 
   // Navegação do admin: item comingSoon cuja chave é feature não pode estar implementado.
-  const nav = fs.readFileSync(path.join(h.RAIZ_REPO, 'admin', 'src', 'shell', 'nav.ts'), 'utf8');
+  const nav = fs.readFileSync(path.join(h.RAIZ_REPO, 'src', 'shell', 'nav.ts'), 'utf8');
   const emBreve = [...nav.matchAll(/\{\s*key:\s*'([^']+)'[^}]*comingSoon:\s*true/g)].map((m) => m[1]).filter((k) => FEATURES.includes(k));
   assert.deepEqual(emBreve, ['instagram']);
   for (const f of emBreve) assert.equal(ESTADO_DAS_FEATURES[f], 'em_breve');
 
   // O espelho do frontend só conhece features do vocabulário.
-  const espelho = fs.readFileSync(path.join(h.RAIZ_REPO, 'admin', 'src', 'state', 'entitlements.ts'), 'utf8');
+  const espelho = fs.readFileSync(path.join(h.RAIZ_REPO, 'src', 'state', 'entitlements.ts'), 'utf8');
   const chaves = [...espelho.match(/interface Entitlements \{([^}]*)\}/)[1].matchAll(/(\w+):\s*boolean/g)].map((m) => m[1]);
   for (const k of chaves) assert.ok(FEATURES.includes(k), `${k} do espelho fora do vocabulário`);
 

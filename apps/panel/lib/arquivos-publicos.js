@@ -11,10 +11,26 @@
 const path = require('path');
 const express = require('express');
 
-// Diretórios inteiros. `assets` guarda a marca do Oria (landing) e os logos/fontes da hotpage de
-// pagamento; `src` guarda o CSS/JS dessa hotpage. O SPA do painel NÃO sai daqui — ele tem rota
-// própria em server.js, servindo o build do Vite em admin/dist.
-const DIRETORIOS_PUBLICOS = ['assets', 'src'];
+// Diretórios inteiros. Sobrou UM: `assets`, com a marca do Oria (landing) e os logos/fontes da
+// hotpage de pagamento. O SPA do painel não sai daqui — ele tem rota própria em server.js,
+// servindo o build do Vite em `dist/`.
+//
+// `src` SAIU desta lista, e isso é uma correção de segurança, não arrumação. Quando o frontend do
+// painel subiu de `apps/panel/admin/src` para `apps/panel/src`, o diretório que aqui era servido
+// inteiro e sem autenticação passou a conter o código-fonte do painel: `src/main.tsx`,
+// `src/api/*.ts`, `src/auth/*.tsx`. Mantido como estava, `GET /src/api/integracoes.ts` devolveria
+// o fonte a qualquer um. Os dois arquivos que a hotpage realmente busca em runtime estão
+// nomeados um a um em ARQUIVOS_PUBLICOS — o resto de `src/` é build-time, o Vite empacota e
+// ninguém precisa alcançar pela URL.
+const DIRETORIOS_PUBLICOS = ['assets'];
+
+// Arquivos avulsos, nomeados um a um. `pedido.html` os carrega por URL em runtime (não passam
+// pelo Vite): são o CSS e o JS da hotpage de pagamento. Mora em `src/` junto com o SPA, mas só
+// estes dois saem daqui.
+const ARQUIVOS_PUBLICOS = {
+  '/src/pedido.css': 'src/pedido.css',
+  '/src/pedido.js': 'src/pedido.js',
+};
 
 // Páginas na raiz.
 //
@@ -30,7 +46,11 @@ const DIRETORIOS_PUBLICOS = ['assets', 'src'];
 //
 // `pedido.html` é a hotpage de pagamento Pix: o link vai para o cliente por WhatsApp (variável
 // `pedido.link_pagamento`, montada em server.js) e a página em si é servida pela rota
-// `/{idpedido}`, no fim do server.js. A entrada aqui mantém o nome do arquivo funcionando.
+// `/hotpix/:id`, no fim do server.js. A entrada aqui mantém o nome do arquivo funcionando.
+//
+// `index.html` NÃO entra nesta lista. Desde que o frontend subiu para a raiz do painel, existe um
+// `index.html` na raiz — mas ele é o template FONTE do Vite (aponta para `/src/main.tsx`), não o
+// build. Quem serve o painel é a rota `/admin` em server.js, com o `dist/index.html`.
 const PAGINAS_RAIZ = {
   '/': 'oria.html',
   '/oria': 'oria.html',
@@ -52,7 +72,7 @@ function montarArquivosPublicos(app, { raiz }) {
     app.use(`/${dir}`, express.static(path.join(raiz, dir), { index: false, setHeaders: aplicarNoCache }));
   }
 
-  for (const [rota, arquivo] of Object.entries(PAGINAS_RAIZ)) {
+  for (const [rota, arquivo] of Object.entries({ ...PAGINAS_RAIZ, ...ARQUIVOS_PUBLICOS })) {
     app.get(rota, (req, res) => {
       res.set('Cache-Control', 'no-cache');
       res.sendFile(path.join(raiz, arquivo));
@@ -60,4 +80,4 @@ function montarArquivosPublicos(app, { raiz }) {
   }
 }
 
-module.exports = { montarArquivosPublicos, DIRETORIOS_PUBLICOS, PAGINAS_RAIZ };
+module.exports = { montarArquivosPublicos, DIRETORIOS_PUBLICOS, ARQUIVOS_PUBLICOS, PAGINAS_RAIZ };

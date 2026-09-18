@@ -737,35 +737,35 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Admin em React/TS (Fase 5 — cutover, docs/plan.md) ──────────────────
-// Substitui os 29 `sendFile` de página-por-página que existiam aqui (histórico completo no
-// git log) por uma SPA: qualquer sub-rota de /admin/* serve o mesmo index.html, e o
-// react-router cuida do roteamento client-side (ver admin/src/App.tsx pra a lista real
-// de rotas). Os arquivos vanilla antigos (.html + controllers) moraram em admin-old/ — sem
-// rota, sem uso, servem só de histórico/rollback. O CSS deles continua ativo em src/ (ainda
-// importado pelo admin/ novo — ver admin/vite.config.ts e admin/src/main.tsx).
+// ── Painel em React/TS (SPA) ────────────────────────────────────────────
+// Qualquer sub-rota de /admin/* serve o mesmo index.html, e o react-router cuida do roteamento
+// client-side (ver src/App.tsx pra a lista real de rotas).
 //
-// Registrado ANTES do express.static genérico abaixo de propósito: o diretório `admin/` agora
-// existe de verdade na raiz do repo (era `admin-app/`), e o static genérico serviria
-// admin/index.html (o template fonte do Vite, não o build) pra qualquer request em /admin* se
-// rodasse primeiro — Express resolve por ordem de registro, então isso tem que vir antes.
+// PASTA ≠ URL. O frontend já morou em `apps/panel/admin/`, com o build em `admin/dist`; a pasta
+// acabou — `index.html`, `src/` e `vite.config.mjs` são da raiz do painel, e o build sai em
+// `dist/`. A URL `/admin` NÃO mudou junto: é por ela que o painel responde, a landing do Oria
+// aponta pra ela, e `base: '/admin/'` no vite.config.mjs é o que faz os assets baterem. Quem for
+// "corrigir" isso pra `/` numa próxima rodada: a raiz é a landing de propósito (é o que o domínio
+// abre, e é a página que o Google revisita na verificação do OAuth).
+//
 // Arquivos com hash no nome (Vite: index-<hash>.js/.css) nunca mudam de conteúdo sob o mesmo
 // nome — cache longo e imutável é seguro aqui. O index.html É o arquivo que muda a cada deploy
 // (referencia os hashes novos), por isso precisa do no-cache logo abaixo; sem isso, um
 // index.html antigo em cache (navegador ou Cloudflare, que fica na frente do Railway) continua
 // apontando pros arquivos hash antigos, que o build seguinte já sobrescreveu — página inteira
 // quebrada/desatualizada até um hard refresh, sem nenhum erro visível pro usuário.
-app.use('/admin/assets', express.static(path.join(__dirname, 'admin', 'dist', 'assets'), {
+app.use('/admin/assets', express.static(path.join(__dirname, 'dist', 'assets'), {
   maxAge: '1y',
   immutable: true,
 }));
 app.get(/^\/admin(\/.*)?$/, (req, res) => {
   res.set('Cache-Control', 'no-cache');
-  res.sendFile(path.join(__dirname, 'admin', 'dist', 'index.html'));
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-// Só a allowlist de arquivos abertos do produto (assets/, src/ e as páginas da raiz).
-// Nada de express.static na raiz do repo: servia código-fonte, docs, scripts e logs.
+// Só a allowlist de arquivos abertos do produto (assets/, as páginas da raiz e os dois arquivos
+// da hotpage em src/). Nada de express.static na raiz do repo: servia código-fonte, docs,
+// scripts e logs.
 //
 // Aqui ficavam também as rotas do site da Orgulho Regional, que este serviço servia junto com o
 // painel: a busca de cidades (`/`, `/{sul|centro|norte}` e sub-rotas, `/{uf}/{cidade}`), a loja de
@@ -978,7 +978,7 @@ app.post('/api/admin/pedidos/:id/sync', requireAdmin, async (req, res) => {
 
 const RESUMO_PAGO = new Set(['paid', 'succeeded', 'free']);
 // Só os status realmente ruins do enum documentado de payment_status (ver PAYMENT_STATUS_MAP em
-// admin/src/lib/statusMap.ts) — bug encontrado 2026-09-06 (usuário notou pedidos Entregues
+// src/lib/statusMap.ts) — bug encontrado 2026-09-06 (usuário notou pedidos Entregues
 // contando como "problema de pagamento" no dashboard): antes, QUALQUER status fora de
 // RESUMO_PAGO/PENDING_PAYMENT_STATUSES virava "problema" por padrão, incluindo status
 // desconhecido/não catalogado ou o campo simplesmente vindo nulo da Ink — um pedido entregue com

@@ -26,7 +26,8 @@ Node e Python.
 Guia completo: [`docs/operations/local-development.md`](docs/operations/local-development.md).
 
 ```bash
-npm run panel:install          # dependências do painel (builda o admin)
+npm run panel:install          # dependências do painel
+npm run panel:build            # SPA do painel → apps/panel/dist
 npm test                       # contratos + painel + gerador + Go (tudo)
 npm run contracts:check        # só os contratos cross-service
 ```

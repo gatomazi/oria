@@ -61,7 +61,7 @@ Built specifically and exclusively for Reserva Ink. The mechanism a generic e-co
 ## Brand Commitments
 
 - The SaaS brand is not yet named; Use Sul / Use Centro / Use Norte are the owner's stores, not the product brand, and must become tenant data rather than product identity.
-- An incumbent visual system exists and is established (`admin/src/components/ds/`); `DESIGN.md` is the visual source of truth for the panel.
+- An incumbent visual system exists and is established (`src/components/ds/`); `DESIGN.md` is the visual source of truth for the panel.
 - The tenant's brand (store name, wordmark, logo) appears as context inside the product; it does not define the SaaS identity.
 
 ## Evidence on Hand

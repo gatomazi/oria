@@ -25,7 +25,7 @@ const { spawn } = require('node:child_process');
 const h = require('./harness');
 
 const SERVER = path.join(h.RAIZ_REPO, 'server.js');
-const INDEX_DO_ADMIN = path.join(h.RAIZ_REPO, 'admin', 'dist', 'index.html');
+const INDEX_DO_PAINEL = path.join(h.RAIZ_REPO, 'dist', 'index.html');
 
 // Ambiente mínimo e explícito: nada do shell de quem roda o teste decide o resultado. Sem
 // Postgres de propósito — o que se mede aqui é roteamento, não dado.
@@ -117,11 +117,16 @@ test('site fora · os logs de busca e de loja do site não aceitam mais nada', a
 });
 
 // O painel é o produto: a remoção do site não pode ter encostado na rota do SPA. O 200 exige o
-// build do Vite (`npm run panel:build`), que o CI não roda (`npm ci --ignore-scripts`); por isso o
-// que se exige SEMPRE é que /admin seja resolvido pela rota do SPA e nunca pela landing — que é o
-// jeito como esta mudança quebraria o painel. Com o build presente, exige-se o index de verdade.
+// build do Vite (`npm run build`), que o CI não roda antes da suíte (`npm ci --ignore-scripts`);
+// por isso o que se exige SEMPRE é que /admin seja resolvido pela rota do SPA e nunca pela
+// landing — que é o jeito como esta mudança quebraria o painel. Com o build presente, exige-se o
+// index de verdade.
+//
+// A URL `/admin` não mudou quando a PASTA `apps/panel/admin/` deixou de existir (o frontend subiu
+// para a raiz do painel e o build saiu de `admin/dist` para `dist/`). Pasta e URL são coisas
+// diferentes, e este teste é quem trava a URL.
 test('site fora · /admin continua no SPA do painel, nunca na landing', async () => {
-  const temBuild = fs.existsSync(INDEX_DO_ADMIN);
+  const temBuild = fs.existsSync(INDEX_DO_PAINEL);
   for (const url of ['/admin', '/admin/pedidos']) {
     const res = await fetch(`${base}${url}`);
     const corpo = await res.text();
@@ -129,8 +134,36 @@ test('site fora · /admin continua no SPA do painel, nunca na landing', async ()
       `${url} caiu na landing em vez do SPA`);
     if (temBuild) {
       assert.equal(res.status, 200, url);
-      assert.equal(corpo, fs.readFileSync(INDEX_DO_ADMIN, 'utf8'), `${url} não serviu o index do build`);
+      assert.equal(corpo, fs.readFileSync(INDEX_DO_PAINEL, 'utf8'), `${url} não serviu o index do build`);
       assert.equal(res.headers.get('cache-control'), 'no-cache', url);
     }
+  }
+});
+
+// Controle da fusão de `apps/panel/admin/` na raiz do painel: `src/` deixou de ser um diretório
+// público inteiro no mesmo commit em que passou a guardar o código-fonte do painel. Se alguém
+// devolver `'src'` à lista de DIRETORIOS_PUBLICOS, o fonte do produto vira download aberto — e
+// nada mais no serviço reclamaria. O `index.html` da raiz é o template FONTE do Vite (aponta para
+// `/src/main.tsx`), não o build: servi-lo seria entregar uma página que não carrega.
+test('site fora · o código-fonte do painel não é servido pela porta estática', async () => {
+  const fontes = [
+    '/src/main.tsx', '/src/App.tsx', '/src/api/client.ts', '/src/auth/AuthContext.tsx',
+    '/src/shell/nav.ts', '/src/state/entitlements.ts',
+    '/index.html', '/vite.config.mjs', '/tsconfig.json',
+  ];
+  for (const url of fontes) {
+    const res = await fetch(`${base}${url}`);
+    assert.equal(res.status, 404, url);
+  }
+});
+
+// O CSS e o JS da hotpage de pagamento moram em `src/` junto com o painel e continuam públicos —
+// `pedido.html` os busca por URL em runtime, sem passar pelo Vite. São a razão de a allowlist
+// nomear arquivo por arquivo em vez de simplesmente fechar `src/` inteiro.
+test('site fora · o CSS e o JS da hotpage de pagamento continuam públicos', async () => {
+  for (const url of ['/src/pedido.css', '/src/pedido.js']) {
+    const res = await fetch(`${base}${url}`);
+    assert.equal(res.status, 200, url);
+    assert.equal(res.headers.get('cache-control'), 'no-cache', url);
   }
 });

@@ -14,9 +14,9 @@ Ler primeiro:
 
 - `painel-estado-atual.md`
 - implementação real de:
-  - `admin/src/pages` relacionada a Campanhas/Segmentos;
-  - `admin/src/api/campanhas.ts`;
-  - `admin/src/api/segments.ts`;
+  - `src/pages` relacionada a Campanhas/Segmentos;
+  - `src/api/campanhas.ts`;
+  - `src/api/segments.ts`;
   - rotas de campanhas e segmentos em `server.js`;
   - tabelas `segments`, `campaigns`, `campaign_recipients`;
   - `processarFilaDeCampanhas`;
@@ -1663,14 +1663,14 @@ Não criar endpoint redundante se a API atual já tiver lugar natural.
 Criar:
 
 ```text
-admin/src/api/mailchimp.ts
+src/api/mailchimp.ts
 ```
 
 E evoluir:
 
 ```text
-admin/src/api/campanhas.ts
-admin/src/api/segments.ts
+src/api/campanhas.ts
+src/api/segments.ts
 ```
 
 Tipar:
@@ -2622,7 +2622,7 @@ A entrega só é considerada pronta quando:
 
 # 61. Critérios de aceite técnicos
 
-- [ ] `npm --prefix admin run typecheck` passa;
+- [ ] `npm run typecheck` (em `apps/panel`) passa;
 - [ ] `npm run build` passa;
 - [ ] migrations são idempotentes;
 - [ ] boot sem Mailchimp configurado continua funcionando;

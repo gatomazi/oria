@@ -38,8 +38,10 @@ ou novo".
 - [ ] Source: repositório `gatomazi/oria`, **Root Directory** `apps/panel`. **Sem Root Directory, o
       build sai da raiz e falha com "No start command detected"** — a raiz é orquestradora e não tem `start`.
 - [ ] Watch Paths: `/apps/panel/**` (e `/contracts/**`, se quiser rebuild ao mudar contrato).
-- [ ] Build Command: `npm ci && npm run build` (o `postinstall` já buildaria o admin; repetir garante
-      o `admin/dist` mesmo com scripts desligados).
+- [ ] Build Command: `npm ci && npm run build` (`tsc -b && vite build` → `dist/`). Não há mais
+      `postinstall`: o frontend deixou de ser um app separado em `apps/panel/admin/` e o build é
+      explícito. O build usa `devDependencies` (`vite`, `typescript`) — se o builder instalar com
+      `NODE_ENV=production`, usar `npm ci --include=dev`.
 - [ ] Start Command: `npm start` (`node server.js`). Node vem de `engines.node >= 20.11`.
 - [ ] Healthcheck: o painel **não tem** `/health` hoje — usar `GET /` ou deixar sem healthcheck até
       existir um endpoint próprio (`infra/railway/services.md`).

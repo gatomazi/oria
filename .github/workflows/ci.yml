@@ -80,7 +80,7 @@ jobs:
         env:
           TEST_APP_ROLE: '1'
 
-      - name: build do admin
+      - name: build do SPA do painel (dist/)
         run: npm run build
 
   creatives:

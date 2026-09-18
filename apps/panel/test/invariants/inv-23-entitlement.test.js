@@ -5,7 +5,7 @@
 //
 // A violação que o negative control introduz é o código que está em produção hoje: um `catch` que
 // devolve permissão, e um spread de defaults com tudo `true` (`server.js:13390`,
-// `admin/src/state/entitlements.ts:14-22`). A rota protegida responde 200 com a fonte de
+// `src/state/entitlements.ts:14-22`). A rota protegida responde 200 com a fonte de
 // entitlements no chão — que é a definição de fail-open.
 
 const test = require('node:test');

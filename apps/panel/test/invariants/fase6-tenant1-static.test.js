@@ -15,7 +15,7 @@ const path = require('node:path');
 const h = require('./harness');
 const bypass = require('../../scripts/tenant1/sem-bypass.cjs');
 
-test('Fase 6 · server.js, lib/, routes/ e admin/src sem if internalTenant / useOrigens / ourStore / nome ou id fixo', () => {
+test('Fase 6 · server.js, lib/, routes/ e src/ sem if internalTenant / useOrigens / ourStore / nome ou id fixo', () => {
   const { achados, arquivos } = bypass.procurarBypass({ raiz: h.RAIZ_SUJEITO, raizAdmin: h.RAIZ_REPO });
   assert.ok(arquivos > 150, `arquivos de produto lidos: ${arquivos}`);
   assert.deepEqual(achados, []);
