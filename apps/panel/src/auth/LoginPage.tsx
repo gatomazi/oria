@@ -25,7 +25,7 @@ export function LoginPage() {
     <div className="ad-login-root">
       <main className="ad-login">
         <form className="ad-login__panel" onSubmit={handleSubmit}>
-          <h1 className="ad-login__title">Admin · Orgulho Regional</h1>
+          <h1 className="ad-login__title">Admin · Oria</h1>
           <Field label="E-mail">
             <Input
               type="email"

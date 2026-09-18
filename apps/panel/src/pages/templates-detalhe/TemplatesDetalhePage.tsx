@@ -280,7 +280,7 @@ function AmostraModal({ nome, headerMediaTipo, open, onClose, onSalvo }: {
       {headerMediaTipo === 'LOCATION' && (
         <>
           <Field label="Nome/local da amostra">
-            <Input type="text" placeholder="ex: Loja Orgulho Regional" value={sampleLocationNome} onChange={(e) => setSampleLocationNome(e.target.value)} />
+            <Input type="text" placeholder="ex: Loja Centro" value={sampleLocationNome} onChange={(e) => setSampleLocationNome(e.target.value)} />
           </Field>
           <Field label="Endereço da amostra (opcional)">
             <Input type="text" placeholder="ex: Rua Exemplo, 123" value={sampleLocationEndereco} onChange={(e) => setSampleLocationEndereco(e.target.value)} />

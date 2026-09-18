@@ -24,7 +24,7 @@ export function ConfiguracoesPage() {
   function salvar() {
     setSalvando(true);
     setMsg('');
-    updateProductSettings({ productName: nome.trim() || 'Orgulho Regional' })
+    updateProductSettings({ productName: nome.trim() || 'Oria' })
       .then(() => {
         setMsg('Salvo — recarregue a página pra ver o efeito na sidebar.');
         setSalvando(false);

@@ -245,7 +245,7 @@ test('OPS-22 · boot: leitura dupla parcial ou inválida → exit ≠ 0', () => 
     assert.notEqual(r.signal, 'SIGTERM', `ficou vivo: ${JSON.stringify(extra)}`);
     assert.notEqual(r.status, 0, `subiu com ${JSON.stringify(extra)}`);
     assert.match(saida, /\[CRIATIVOS\] configuração inválida: CREATIVE_LEGACY_READ_/);
-    assert.doesNotMatch(saida, /Orgulho Regional na porta/);
+    assert.doesNotMatch(saida, /Oria na porta/);
   }
 });
 
@@ -260,7 +260,7 @@ test('OPS-22 · boot: leitura dupla válida sobe e avisa que é temporária', as
       const limite = setTimeout(() => reject(new Error(`não escutou em 20s:\n${saida.slice(-2000)}`)), 20000);
       const ler = (buf) => {
         saida += buf;
-        if (/Orgulho Regional na porta/.test(saida)) { clearTimeout(limite); resolve(); }
+        if (/Oria na porta/.test(saida)) { clearTimeout(limite); resolve(); }
       };
       filho.stdout.on('data', ler);
       filho.stderr.on('data', ler);

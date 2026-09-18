@@ -299,7 +299,7 @@ export function TemplatesNovoPage() {
             {headerTipo === 'LOCATION' && (
               <>
                 <Field label="Nome/local da amostra">
-                  <Input type="text" placeholder="ex: Loja Orgulho Regional" value={sampleLocationNome} onChange={(e) => setSampleLocationNome(e.target.value)} />
+                  <Input type="text" placeholder="ex: Loja Centro" value={sampleLocationNome} onChange={(e) => setSampleLocationNome(e.target.value)} />
                 </Field>
                 <Field label="Endereço da amostra (opcional)">
                   <Input type="text" placeholder="ex: Rua Exemplo, 123" value={sampleLocationEndereco} onChange={(e) => setSampleLocationEndereco(e.target.value)} />
@@ -336,7 +336,7 @@ export function TemplatesNovoPage() {
             <InserirVariaveis tipo={tipoMsg} aoClicar={inserirVariavel} />
 
             <Field label="Rodapé (opcional, sem variável)" hint="Sem emoji e sem quebra de linha — a Meta rejeita.">
-              <Input type="text" placeholder="ex: Orgulho Regional" maxLength={60} value={footer} onChange={(e) => setFooter(e.target.value)} />
+              <Input type="text" placeholder="ex: nome da sua loja" maxLength={60} value={footer} onChange={(e) => setFooter(e.target.value)} />
             </Field>
             </FormSection>
 

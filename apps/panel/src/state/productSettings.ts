@@ -6,7 +6,7 @@ export interface ProductSettings {
   productName: string;
 }
 
-const DEFAULTS: ProductSettings = { productName: 'Orgulho Regional' };
+const DEFAULTS: ProductSettings = { productName: 'Oria' };
 
 let cache: ProductSettings | null = null;
 

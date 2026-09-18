@@ -242,7 +242,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     loadProductSettings().then(setSettings);
   }, []);
 
-  const nomeProduto = settings?.productName || 'Orgulho Regional';
+  const nomeProduto = settings?.productName || 'Oria';
 
   useEffect(() => {
     document.title = (routeInfo.title ? routeInfo.title + ' · ' : '') + 'Admin — ' + nomeProduto;

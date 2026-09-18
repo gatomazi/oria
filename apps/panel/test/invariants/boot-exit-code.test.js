@@ -58,7 +58,7 @@ function assertMorreu(r, mensagem) {
   assert.equal(typeof r.status, 'number', `sem código de saída (signal ${r.signal})`);
   assert.notEqual(r.status, 0, `configuração inválida saiu com 0 — o deploy não abortaria.\n${r.saida.slice(-2000)}`);
   assert.match(r.saida, mensagem, `saiu ≠ 0, mas não pelo motivo esperado.\n${r.saida.slice(-2000)}`);
-  assert.doesNotMatch(r.saida, /Orgulho Regional na porta/, 'escutou antes de morrer');
+  assert.doesNotMatch(r.saida, /Oria na porta/, 'escutou antes de morrer');
 }
 
 test('boot · DATA_STORE_MODE inválido → exit ≠ 0', () => {
@@ -161,7 +161,7 @@ async function subirEEscutar(extra) {
       const limite = setTimeout(() => reject(new Error(`não escutou em 20s:\n${saida.slice(-2000)}`)), 20000);
       const ler = (buf) => {
         saida += buf;
-        if (/Orgulho Regional na porta/.test(saida)) { clearTimeout(limite); resolve(); }
+        if (/Oria na porta/.test(saida)) { clearTimeout(limite); resolve(); }
       };
       filho.stdout.on('data', ler);
       filho.stderr.on('data', ler);

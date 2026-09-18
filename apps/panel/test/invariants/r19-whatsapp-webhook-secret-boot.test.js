@@ -75,7 +75,7 @@ function assertNaoSobe(r) {
   assert.equal(typeof r.status, 'number', `sem código de saída (signal ${r.signal})`);
   assert.notEqual(r.status, 0, `segredo do repasse inválido saiu com 0.\n${r.saida.slice(-2000)}`);
   assert.match(r.saida, /\[WHATSAPP_WEBHOOK\] WHATSAPP_WEBHOOK_SECRET (ausente|curto)/, `saiu ≠ 0 por outro motivo.\n${r.saida.slice(-2000)}`);
-  assert.doesNotMatch(r.saida, /Orgulho Regional na porta/, 'escutou antes de morrer');
+  assert.doesNotMatch(r.saida, /Oria na porta/, 'escutou antes de morrer');
 }
 
 async function subirEEscutar(extra) {
@@ -86,7 +86,7 @@ async function subirEEscutar(extra) {
       const limite = setTimeout(() => reject(new Error(`não escutou em 20s:\n${saida.slice(-2000)}`)), 20000);
       const ler = (buf) => {
         saida += buf;
-        if (/Orgulho Regional na porta/.test(saida)) { clearTimeout(limite); resolve(); }
+        if (/Oria na porta/.test(saida)) { clearTimeout(limite); resolve(); }
       };
       filho.stdout.on('data', ler);
       filho.stderr.on('data', ler);

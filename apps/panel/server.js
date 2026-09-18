@@ -15989,6 +15989,6 @@ const PORT = process.env.PORT || 8080;
 // `.then` só garante a ORDEM. No modo efêmero declarado ela resolve de imediato.
 avaliacaoDoModuloConcluida = true;
 verificarPostgresOuMorrer().then(() => {
-  app.listen(PORT, () => console.log(`Orgulho Regional na porta ${PORT}`));
+  app.listen(PORT, () => console.log(`Oria na porta ${PORT}`));
   if (moduloCriativos) moduloCriativos.iniciarWorker();
 });
