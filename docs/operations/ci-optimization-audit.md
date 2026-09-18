@@ -249,43 +249,57 @@ Na Verificação Completa o agregado é `full-gate`, e lá **nada pode ser pulad
 | jobs condicionais | nenhum: tudo roda sempre |
 | cancelamento de run superado | não configurado |
 
-### Depois — ESTIMADO (base declarada)
+### Depois — MEDIDO (PR #1, runs 35394926454 e 35394886466)
 
-Base: tempo local × fator 1,5–2 para `ubuntu-latest`, mais ~40 s de setup por job (medido: 13 s de
-container + 3 s de checkout/setup + 7 s de `npm ci`).
+O pipeline novo rodou de verdade: uma vez pelo evento `push` da branch e outra pelo `pull_request`
+do PR #1. Os dois terminaram **verdes**, com `0 skipped · 0 todo · 0 cancelled` em todos os shards.
 
-| job | base local | ESTIMADO em CI |
+| job | run `pull_request` | run `push` |
 |---|---|---|
-| `changes` | — | ~30 s |
-| `contracts` | — | ~10 s (MEDIDO hoje: 6–7 s) |
-| `panel-pure 1/2` (gate) | 213 s | **~5–7 min** ← novo caminho crítico |
-| `panel-pure 2/2` | 9,5 s | ~1 min |
-| `panel-db 1..4/4` (sob `oria_app`) | ~130 s cada | **~4–6 min** cada, em paralelo |
-| `panel-migrations` | 2 s | ~1 min |
-| `panel-build` | 12 s (MEDIDO em CI) | ~1 min |
-| `platform-admin` | — | ~2,5 min (MEDIDO hoje) |
-| `creatives` / `whatsapp` | — | ~15 s / ~1 min (MEDIDO hoje) |
+| `o que o diff afeta` | 8 s | 8 s |
+| `contratos cross-service` | 6 s | 9 s |
+| `painel · sem banco 1/2` (só o gate de productização) | 218 s | 219 s |
+| `painel · sem banco 2/2` (25 arquivos, 313 testes) | 19 s | 18 s |
+| `painel · banco 1/4` (contém `negative-controls`) | **680 s** | **739 s** |
+| `painel · banco 2/4` | 105 s | 99 s |
+| `painel · banco 3/4` | 96 s | 108 s |
+| `painel · banco 4/4` | 103 s | 99 s |
+| `painel · migrations do zero e idempotentes` | 31 s | 33 s |
+| `painel · build do SPA` | 24 s | 29 s |
+| `control plane (Oria Admin)` | 159 s | 164 s |
+| `gerador de criativos (Python)` | 13 s | 13 s |
+| `serviço de whatsapp (Go)` | 59 s | 52 s |
+| `ci-gate` | 3 s | 3 s |
+| **wall time do run** | **702 s (11 min 42 s)** | **767 s (12 min 47 s)** |
 
-**Wall time estimado de um PR que mexe no painel: ~6–8 min** (contra 25–36 min medidos hoje), com o
-gate de productização como caminho crítico. PR que só mexe no Go ou no control plane: **~1–3 min**.
-Verificação Completa (as duas roles): **~8–10 min de wall**, com mais CPU total — 8 shards de banco
-em vez de 4, mas em paralelo.
-
-CPU total aproximada: hoje ~2150 s num job; depois ~2400–3000 s somados em ~10 jobs paralelos. A
-otimização troca CPU por latência, e só para o que o diff afeta.
-
-Esses números serão substituídos por medição assim que o novo pipeline rodar (§11, primeira ação).
+Contra os 25–36 min medidos no pipeline antigo: **~3× mais rápido** num diff que liga **tudo**
+(este PR mexe em `scripts/**` e `package.json`, então nenhum job foi pulado — o caso mais caro).
 
 ### 9.1 Como o time trabalha hoje muda quem recebe o ganho — FATO OBSERVADO
 
 Os 18 runs existentes do workflow são **todos em `main`**: o trabalho vai direto para a branch
 principal, sem PR. Com a divisão adotada isso significa:
 
-- **hoje (push em `main`)**: passa a rodar a **Verificação Completa** — ESTIMADO ~8–10 min de wall
-  contra 25–36 min medidos, porque o que era um job sequencial vira ~14 jobs paralelos com as duas
-  roles preservadas;
-- **o CI rápido de ~6–8 min** só entra em cena quando o trabalho passar a vir por branch/PR. A
-  infraestrutura já está pronta para isso; a mudança de hábito é humana, não técnica.
+- **hoje (push em `main`)**: passa a rodar a **Verificação Completa** — ESTIMADO ~12–14 min de wall
+  (o mesmo shard `db 1/4` domina, agora nas duas roles), contra 25–36 min medidos, porque o que era
+  um job sequencial vira ~18 jobs paralelos com as duas roles preservadas;
+- **o CI rápido, MEDIDO em 11 min 42 s no PR #1** (caso mais caro, com todos os jobs ligados), só
+  entra em cena quando o trabalho passar a vir por branch/PR. A infraestrutura já está pronta; a
+  mudança de hábito é humana, não técnica.
+
+### 9.2 O gargalo mudou de lugar — MEDIDO
+
+A duplicação sob `oria_app` deixou de ser o problema. O caminho crítico agora é **um arquivo**:
+`test/invariants/negative-controls.test.js`, dentro do shard `db 1/4`, que sozinho leva o shard a
+680–739 s enquanto os outros três fecham em 96–108 s. Era invisível antes, diluído nos 1057 s da
+suíte.
+
+Consequência prática: sem esse arquivo, o wall time do CI rápido cairia para a ordem de **~4 min**
+(o próximo maior job é o gate, com 218 s). É o alvo óbvio da próxima rodada — e a rodada 21 já
+previa, em D7, que os controles negativos globais ficassem em execução separada.
+
+CPU total: ~1520 s somados nos 14 jobs do run do PR, contra ~2150 s no job único do pipeline antigo
+— menos CPU **e** menos latência, porque a suíte deixou de rodar duas vezes.
 
 ## 10. Oportunidades identificadas e **não** implementadas
 
@@ -318,14 +332,17 @@ Registradas como recomendação factual, fora do escopo autorizado desta frente:
 
 ### Decisões em aberto (OPEN)
 
-- **OPEN-1 — branch protection.** Trocar os checks obrigatórios por `ci-gate` é configuração do
-  GitHub, não código. Enquanto não for feita, um PR pode ficar "verde" com os checks antigos
-  ausentes. **Impacto: alto.** Precisa de alguém com admin no repositório.
-- **OPEN-2 — rodar `productization:gate` no nightly?** Hoje ele não roda em CI nenhum. Rodá-lo
-  exigiria decidir o que fazer com o exit 2 (rollout bloqueado por OPS/dogfood, que é o estado
-  esperado hoje). Não implementado.
-- **OPEN-3 — 4 shards é o número certo?** Com o gate fora do grupo de banco, 4 shards de ~130 s
-  locais já não dominam o wall. Rever depois da primeira medição real.
+- **OPEN-1 — branch protection.** MEDIDO: `main` **não tem proteção nenhuma** hoje
+  (`GET /branches/main/protection` → 404 "Branch not protected", `GET /rulesets` → lista vazia). Não
+  existe check obrigatório a trocar; o que existe é uma proteção a **criar**, exigindo `ci-gate`.
+  Enquanto não existir, nada impede um merge com CI vermelho. **Impacto: alto**, e é decisão de
+  quem administra o repositório — esta frente não alterou nada.
+- **OPEN-2 — 4 shards de banco é o número certo?** MEDIDO no PR #1: `db 1/4` levou 680 s e os outros
+  três, 96–108 s. O desbalanceamento não se resolve com mais shards: ele é **um arquivo**
+  (`negative-controls`). Mais shards só dividiriam melhor os 300 s restantes. Recomendação: manter 4
+  e tratar o arquivo (job próprio, como D7 já previa), em vez de mexer no número.
+- **OPEN-3 — nightly do gate.** Implementado (§5.1), mas **nunca executado**: o primeiro nightly é
+  quem vai dizer se o gate sai 2 (o esperado hoje) e se o summary sai como projetado.
 
 ### Riscos
 
@@ -341,9 +358,12 @@ Registradas como recomendação factual, fora do escopo autorizado desta frente:
 ### Blockers
 
 - **BLOCKER-1 (não bloqueia o merge, bloqueia a adoção):** OPEN-1, a branch protection.
-- **BLOCKER-2:** os workflows novos **nunca rodaram no GitHub Actions**. A validação feita aqui é
-  estática (YAML válido, grafo de `needs` consistente, `bash -n` nos scripts inline) mais execução
-  local dos runners. `actionlint` não está instalado nesta máquina — **NOT VERIFIED**.
+- **BLOCKER-2 — RESOLVIDO.** Os workflows rodaram de verdade: `ci.yml` em dois eventos (`push` e
+  `pull_request` do PR #1), os dois verdes, com `ci-gate` fechando o run. `full-verification.yml`
+  ainda **não** rodou (depende de push em `main`, nightly ou dispatch) — **NOT VERIFIED**, e o job
+  do gate de productização dentro dele também.
+- `actionlint` continua não instalado nesta máquina; a validação estática foi YAML + grafo de
+  `needs` + `bash -n` — hoje complementada pela execução real.
 
 ## 12. Fluxo local do desenvolvedor (D19)
 
@@ -364,13 +384,14 @@ main/release: a Verificação Completa.
 
 - **NOT VERIFIED** — duração por teste **dentro do CI** (logs exigem admin; `gh` não foi usado
   porque a conta ativa é a corporativa). Tudo por arquivo é medição local.
-- **NOT VERIFIED** — comportamento real dos dois workflows no GitHub Actions (nunca executados).
+- **VERIFICADO depois da auditoria inicial** — `ci.yml` executou nos eventos `push` e
+  `pull_request` (runs 35394886466 e 35394926454), ambos verdes. `full-verification.yml` continua
+  **NOT VERIFIED**: só roda em `main`, nightly ou dispatch.
 - **NOT VERIFIED** — `actionlint` (não instalado).
 - **NOT VERIFIED** — tempo da suíte completa do painel local (não executada de propósito).
-- **NOT VERIFIED** — se algum teste do grupo `db` depende de rodar **depois** de outro do mesmo
-  grupo. Nenhum indício disso foi encontrado (cada arquivo cria o próprio banco ou usa o banco
-  migrado do zero), e os arquivos amostrados passaram isolados — mas só a primeira execução shardada
-  prova.
+- **VERIFICADO** — nenhum teste do grupo `db` dependia de rodar depois de outro: os quatro shards
+  passaram em paralelo, cada um no seu Postgres, com 0 falhas e 0 skips em duas execuções
+  independentes.
 - **NOT VERIFIED** — efeito do sharding sobre testes sensíveis a tempo (leases de 1 s, boot em até
   20 s). Em CI cada shard tem runner próprio, o que tende a **melhorar** — mas é previsão.
 
