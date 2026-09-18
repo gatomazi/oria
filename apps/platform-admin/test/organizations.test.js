@@ -67,7 +67,7 @@ test('criação · Organization + Store 1:1 + assinatura + convite + onboarding 
   assert.equal(c.store.nome, 'Primeira Store');
   assert.equal(c.subscription.plano.chave, 'internal');
 
-  // O plano técnico `internal` concede exatamente as 10 features do perfil do Tenant #1.
+  // O plano técnico `internal` concede exatamente as features COMERCIAIS do perfil do Tenant #1.
   const { FEATURES_INTERNAL } = h.sujeito('lib/entitlements.js');
   const ligadas = Object.entries(c.entitlements).filter(([, v]) => v).map(([k]) => k).sort();
   assert.deepEqual(ligadas, [...FEATURES_INTERNAL].sort());
@@ -298,7 +298,7 @@ test('suspensão · A suspensa, B normal: efeito real e dados preservados', asyn
 
   // 2. B não foi afetada.
   const entB = await app.cliente.get(`/api/platform/organizations/${b.id}/entitlements`);
-  assert.equal(entB.corpo.efetivos.catalog, true);
+  assert.equal(entB.corpo.efetivos.financial, true);
 
   // 3. Os jobs/schedulers deixam de ver A.
   const { rows: ativas } = await app.pool.query('SELECT id FROM platform_organizations_ativas()');
@@ -315,7 +315,7 @@ test('suspensão · A suspensa, B normal: efeito real e dados preservados', asyn
   // 5. Reativar restaura.
   await app.cliente.post(`/api/platform/organizations/${a.id}/reactivate`, { motivo: 'regularizado' });
   const voltou = await app.cliente.get(`/api/platform/organizations/${a.id}/entitlements`);
-  assert.equal(voltou.corpo.efetivos.catalog, true);
+  assert.equal(voltou.corpo.efetivos.financial, true);
 });
 
 test('suspender de novo é idempotente e não duplica auditoria', async () => {

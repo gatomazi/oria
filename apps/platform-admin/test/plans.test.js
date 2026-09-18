@@ -40,14 +40,16 @@ test.after(async () => {
 // ── Registry ─────────────────────────────────────────────────────────────────────────────────
 
 test('registry · as TRÊS cópias do vocabulário de features batem (app, painel e banco)', async () => {
-  const doApp = h.sujeito('lib/entitlements.js').FEATURES;
+  const { FEATURES: doApp, FEATURES_DEPRECIADAS } = h.sujeito('lib/entitlements.js');
 
   // 1. O registry canônico do painel.
   const doPainel = require(require('node:path').join(
     h.RAIZ_REPO, '..', 'panel', 'lib', 'platform', 'entitlements.js'
-  )).FEATURES;
-  assert.deepEqual([...doApp].sort(), [...doPainel].sort(),
+  ));
+  assert.deepEqual([...doApp].sort(), [...doPainel.FEATURES].sort(),
     'o vocabulário do control plane divergiu do registry canônico do painel');
+  assert.deepEqual([...FEATURES_DEPRECIADAS].sort(), Object.keys(doPainel.FEATURES_DEPRECIADAS).sort(),
+    'a lista de chaves depreciadas do control plane divergiu do painel');
 
   // 2. O domain `platform_feature` do banco.
   const { rows } = await app.pool.query(
@@ -57,11 +59,18 @@ test('registry · as TRÊS cópias do vocabulário de features batem (app, paine
                         WHERE t.typname = 'platform_feature' LIMIT 1)`
   );
   const doBanco = [...rows[0].def.matchAll(/'([A-Za-z_]+)'/g)].map((m) => m[1]);
-  assert.deepEqual([...doBanco].sort(), [...doApp].sort(),
-    'o domain platform_feature do banco divergiu do registry');
+  // O domain AINDA aceita as sete chaves reclassificadas. É deliberado: estreitar o domain é a
+  // última fase da depreciação (Phase E), depois que nenhuma linha e nenhum ambiente carregarem
+  // mais as chaves antigas. O que NÃO pode acontecer é o domain aceitar algo que não seja nem
+  // vocabulário comercial nem chave declarada como depreciada — aí seria divergência de verdade.
+  assert.deepEqual([...doBanco].sort(), [...doApp, ...FEATURES_DEPRECIADAS].sort(),
+    'o domain platform_feature do banco divergiu do registry + depreciadas');
+  for (const f of FEATURES_DEPRECIADAS) {
+    assert.ok(!doApp.includes(f), `${f} está depreciada e no vocabulário comercial ao mesmo tempo`);
+  }
 });
 
-test('registry · o plano `internal` tem exatamente as 10 features do perfil do Tenant #1', async () => {
+test('registry · o plano `internal` tem exatamente as features comerciais do perfil do Tenant #1', async () => {
   const perfil = require(require('node:path').join(
     h.RAIZ_REPO, '..', 'panel', 'config', 'entitlements', 'tenant1-entitlements.json'
   ));
@@ -70,16 +79,34 @@ test('registry · o plano `internal` tem exatamente as 10 features do perfil do 
       WHERE p.chave = 'internal' AND f.habilitada ORDER BY f.feature`
   );
   assert.deepEqual(rows.map((r) => r.feature), [...perfil.features].sort());
-  assert.equal(rows.length, 10);
+  assert.equal(rows.length, 3);
   // As duas que o comando manda NÃO incluir automaticamente.
   assert.ok(!rows.some((r) => ['instagram', 'advancedAutomations'].includes(r.feature)));
+  // E nenhuma das sete reclassificadas sobrou no plano (migration 0022).
+  const { FEATURES_DEPRECIADAS } = h.sujeito('lib/entitlements.js');
+  for (const f of FEATURES_DEPRECIADAS) {
+    assert.ok(!rows.some((r) => r.feature === f), `${f} continua no plano internal como feature comercial`);
+  }
+});
+
+test('registry · chave reclassificada é recusada em plano e em override, com motivo', async () => {
+  const { FEATURES_DEPRECIADAS } = h.sujeito('lib/entitlements.js');
+  for (const [i, f] of FEATURES_DEPRECIADAS.entries()) {
+    const plano = await app.cliente.post('/api/platform/plans', { chave: `reclassificada_${i}`, nome: 'X', features: [f] });
+    assert.equal(plano.status, 422, `${f} foi aceita num plano`);
+    assert.equal(plano.corpo.erro, 'feature_desconhecida');
+
+    const over = await app.cliente.put(`/api/platform/organizations/${org.id}/entitlements/${f}`,
+      { permitido: true, motivo: 'não deveria funcionar' });
+    assert.equal(over.status, 422, `${f} aceitou override novo`);
+  }
 });
 
 // ── Plans ────────────────────────────────────────────────────────────────────────────────────
 
 test('unknown feature reject · criar plano com feature fora do vocabulário é 422', async () => {
   const r = await app.cliente.post('/api/platform/plans',
-    { chave: 'invalido', nome: 'Inválido', features: ['catalog', 'teletransporte'] });
+    { chave: 'invalido', nome: 'Inválido', features: ['financial', 'teletransporte'] });
   assert.equal(r.status, 422);
   assert.equal(r.corpo.erro, 'feature_desconhecida');
   assert.deepEqual(r.corpo.detalhes.features, ['teletransporte']);
@@ -117,7 +144,7 @@ test('two active subscriptions reject · o banco torna a segunda impossível', a
 
 test('plan change updates access · trocar de plano muda o acesso efetivo na hora', async () => {
   const magro = await app.cliente.post('/api/platform/plans',
-    { chave: 'magro', nome: 'Magro', features: ['catalog'] });
+    { chave: 'magro', nome: 'Magro', features: ['financial'] });
   assert.equal(magro.status, 201);
 
   const antes = await app.cliente.get(`/api/platform/organizations/${org.id}/entitlements`);
@@ -128,7 +155,7 @@ test('plan change updates access · trocar de plano muda o acesso efetivo na hor
   assert.equal(troca.status, 200);
   assert.equal(troca.corpo.plano.chave, 'magro');
   assert.equal(troca.corpo.entitlements.efetivos.whatsapp, false);
-  assert.equal(troca.corpo.entitlements.efetivos.catalog, true);
+  assert.equal(troca.corpo.entitlements.efetivos.financial, true);
   assert.equal(troca.corpo.entitlements.origem.whatsapp, 'ausente');
 
   // A antiga foi cancelada, não deletada: o histórico fica.
@@ -161,20 +188,20 @@ test('override > plan · o override CONCEDE o que o plano não dá', async () =>
 });
 
 test('override > plan · o override também NEGA o que o plano dá', async () => {
-  const r = await app.cliente.put(`/api/platform/organizations/${org.id}/entitlements/catalog`,
+  const r = await app.cliente.put(`/api/platform/organizations/${org.id}/entitlements/financial`,
     { permitido: false, motivo: 'suspenso temporariamente' });
   assert.equal(r.status, 200);
-  assert.equal(r.corpo.efetivos.catalog, false);
-  assert.equal(r.corpo.origem.catalog, 'override');
+  assert.equal(r.corpo.efetivos.financial, false);
+  assert.equal(r.corpo.origem.financial, 'override');
   // Sem `permitido: false` o override seria só "conceder"; a precedência precisa valer nos dois
   // sentidos, senão a plataforma não consegue cortar acesso sem trocar o plano da Organization.
 });
 
 test('remove override → inherit · remover devolve a decisão ao PLANO, não a false', async () => {
-  const remover = await app.cliente.delete(`/api/platform/organizations/${org.id}/entitlements/catalog`);
+  const remover = await app.cliente.delete(`/api/platform/organizations/${org.id}/entitlements/financial`);
   assert.equal(remover.status, 200);
-  assert.equal(remover.corpo.efetivos.catalog, true, 'voltou false em vez de herdar do plano');
-  assert.equal(remover.corpo.origem.catalog, 'plano');
+  assert.equal(remover.corpo.efetivos.financial, true, 'voltou false em vez de herdar do plano');
+  assert.equal(remover.corpo.origem.financial, 'plano');
 
   const outro = await app.cliente.delete(`/api/platform/organizations/${org.id}/entitlements/whatsapp`);
   assert.equal(outro.status, 200);
@@ -183,7 +210,7 @@ test('remove override → inherit · remover devolve a decisão ao PLANO, não a
 });
 
 test('remover override inexistente é 404', async () => {
-  const r = await app.cliente.delete(`/api/platform/organizations/${org.id}/entitlements/refunds`);
+  const r = await app.cliente.delete(`/api/platform/organizations/${org.id}/entitlements/instagram`);
   assert.equal(r.status, 404);
 });
 
@@ -221,24 +248,24 @@ test('o resolver puro nega por ausência, por suspensão e por falta de assinatu
 
   const suspensa = resolverAcessoEfetivo({
     organizationStatus: 'suspended', assinaturaAtiva: true,
-    featuresDoPlano: { catalog: true }, overrides: { whatsapp: true },
+    featuresDoPlano: { financial: true }, overrides: { whatsapp: true },
   });
-  assert.equal(suspensa.efetivos.catalog, false);
+  assert.equal(suspensa.efetivos.financial, false);
   assert.equal(suspensa.efetivos.whatsapp, false);
 
   const semAssinatura = resolverAcessoEfetivo({
-    organizationStatus: 'active', assinaturaAtiva: false, featuresDoPlano: { catalog: true },
+    organizationStatus: 'active', assinaturaAtiva: false, featuresDoPlano: { financial: true },
   });
-  assert.equal(semAssinatura.efetivos.catalog, false);
+  assert.equal(semAssinatura.efetivos.financial, false);
 
   // E o caso feliz, para o teste não passar por estar sempre negando.
   const ok = resolverAcessoEfetivo({
     organizationStatus: 'active', assinaturaAtiva: true,
-    featuresDoPlano: { catalog: true, refunds: false }, overrides: { refunds: true, financial: false },
+    featuresDoPlano: { financial: true, instagram: false }, overrides: { instagram: true, financial: false },
   });
-  assert.equal(ok.efetivos.catalog, true);
-  assert.equal(ok.efetivos.refunds, true);
-  assert.equal(ok.origem.refunds, 'override');
+  assert.equal(ok.efetivos.financial, false, 'o override nega o que o plano concede');
+  assert.equal(ok.efetivos.instagram, true);
+  assert.equal(ok.origem.instagram, 'override');
   assert.equal(ok.efetivos.financial, false);
   assert.equal(ok.origem.financial, 'override');
 });

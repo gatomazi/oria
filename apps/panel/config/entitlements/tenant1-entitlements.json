@@ -1,17 +1,10 @@
 {
   "versao": 1,
   "perfil": "tenant1-operacao-interna",
-  "descricao": "Tenant #1 (Organization Use Origens): features implementadas e usadas hoje pela operação interna. Não é plano comercial (PD-005/PD-009 abertos). Derivação: docs/productization/round19-trilha-h.md.",
+  "descricao": "Tenant #1 (Organization Use Origens): FEATURES COMERCIAIS implementadas e usadas hoje pela operação interna. Não é plano comercial (PD-005/PD-009 abertos). Catálogo, Trocas e Reembolsos saíram desta lista por reclassificação para connector capabilities da Reserva Ink, e os quatro modos de criativos por reclassificação para module capabilities de creative_generator — sem perda de acesso: ver docs/architecture/features-vs-connectors.md §Migração sem regressão. Derivação: docs/productization/round19-trilha-h.md.",
   "features": [
-    "catalog",
-    "creative_clean_angles",
-    "creative_funnel_visual",
     "creative_generator",
-    "creative_multi_product",
-    "creative_remarketing",
-    "exchanges",
     "financial",
-    "refunds",
     "whatsapp"
   ]
 }

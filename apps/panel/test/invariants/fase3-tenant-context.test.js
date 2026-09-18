@@ -362,14 +362,14 @@ test('OPS-21 · seed de entitlements: explícito, vocabulário fechado, idempote
   await assert.rejects(seedEntitlements(db.url, { ENTITLEMENTS_SEED_FEATURES: 'financial' }), /ORGANIZATION_IDS/);
   await assert.rejects(seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_N, ENTITLEMENTS_SEED_FEATURES: 'tudo' }), /vocabulário/);
   await assert.rejects(
-    seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: crypto.randomUUID(), ENTITLEMENTS_SEED_FEATURES: 'catalog' }),
+    seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: crypto.randomUUID(), ENTITLEMENTS_SEED_FEATURES: 'financial' }),
     /inexistente/
   );
   for (let i = 0; i < 2; i += 1) {
-    await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_N, ENTITLEMENTS_SEED_FEATURES: 'catalog' });
+    await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_N, ENTITLEMENTS_SEED_FEATURES: 'financial' });
   }
   const { rows } = await sup.query(`SELECT valor FROM app_config WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_N]);
-  assert.deepEqual(rows.map((r) => r.valor), [{ catalog: true }]);
+  assert.deepEqual(rows.map((r) => r.valor), [{ financial: true }]);
   const { rows: outras } = await sup.query(`SELECT organization_id FROM app_config WHERE chave = 'entitlements' ORDER BY organization_id`);
   assert.deepEqual(outras.map((r) => r.organization_id), [ORG_A, ORG_B, ORG_N]);
 });

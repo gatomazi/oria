@@ -125,8 +125,8 @@ test.before(async () => {
   await semear('B', ORG_B, 'centro');
 
   const { seedEntitlements } = await import(pathToFileURL(path.join(h.RAIZ_REPO, 'scripts', 'tenancy', 'seed-entitlements.mjs')));
-  await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_A, ENTITLEMENTS_SEED_FEATURES: 'financial,whatsapp,refunds,catalog' });
-  await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_B, ENTITLEMENTS_SEED_FEATURES: 'whatsapp,refunds' });
+  await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_A, ENTITLEMENTS_SEED_FEATURES: 'financial,whatsapp' });
+  await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_B, ENTITLEMENTS_SEED_FEATURES: 'whatsapp' });
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oria-f3-srv-'));
   const processo = await h.subirProcessoDoPainel((porta) => spawn(process.execPath, [SERVER], {
@@ -199,7 +199,13 @@ test('A/B · entitlement por Organization: A tem financeiro, B não', async () =
   const b = await navegador().entrar('srv-b@teste.oria');
   const rb = await b.req('GET', '/api/admin/financeiro/despesas');
   assert.deepEqual([rb.status, rb.json], [403, { erro: 'feature_nao_disponivel', feature: 'financial' }]);
-  assert.equal((await b.req('GET', '/api/admin/produtos')).status, 403, 'catálogo não semeado → negado');
+  // Catálogo NÃO é mais feature comercial (virou connector capability da Reserva Ink): a recusa
+  // para B não pode mais vir do plano. Enquanto o guard de capability não estiver ligado em
+  // server.js, quem recusa é a própria integração ausente — nunca `feature_nao_disponivel`.
+  const produtosB = await b.req('GET', '/api/admin/produtos');
+  assert.notDeepEqual(produtosB.json, { erro: 'feature_nao_disponivel', feature: 'catalog' },
+    'catálogo voltou a ser negado pelo plano');
+  assert.notEqual(produtosB.status, 200, 'sem Reserva Ink conectada, o catálogo não pode responder dado');
   const plano = (await b.req('GET', '/api/admin/entitlements')).json;
   assert.equal(plano.financial, false);
   assert.equal(plano.whatsapp, true);

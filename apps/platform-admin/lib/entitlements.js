@@ -28,11 +28,22 @@ const FEATURES = Object.freeze([
   'whatsapp',
   'instagram',
   'advancedAutomations',
+  'financial',
+  'creative_generator',
+]);
+
+// Chaves que já foram feature comercial e não são mais (cópia declarada de
+// `apps/panel/lib/platform/entitlements.js` → FEATURES_DEPRECIADAS). Três viraram connector
+// capability da Reserva Ink, quatro viraram module capability do Gerador de Criativos.
+//
+// O domain `platform_feature` do banco AINDA aceita as sete: a remoção física é migration
+// posterior (Phase E). Até lá o control plane trata a diferença como deliberada — nunca oferece
+// uma delas como checkbox de plano (§19 do complemento), nunca aceita override novo nelas, e
+// `resolverAcessoEfetivo` nem as calcula, porque o laço é sobre FEATURES.
+const FEATURES_DEPRECIADAS = Object.freeze([
   'catalog',
   'exchanges',
   'refunds',
-  'financial',
-  'creative_generator',
   'creative_clean_angles',
   'creative_remarketing',
   'creative_funnel_visual',
@@ -40,17 +51,12 @@ const FEATURES = Object.freeze([
 ]);
 
 // Perfil do Tenant #1 (apps/panel/config/entitlements/tenant1-entitlements.json). É o conteúdo do
-// plano técnico `internal`, semeado pela migration. Sem `instagram` e sem `advancedAutomations`.
+// plano técnico `internal`. Sem `instagram` e sem `advancedAutomations`, e sem as sete chaves
+// reclassificadas — o acesso do Tenant #1 àquelas áreas passou a vir do connector conectado e do
+// próprio módulo de criativos, não do plano.
 const FEATURES_INTERNAL = Object.freeze([
-  'catalog',
-  'creative_clean_angles',
-  'creative_funnel_visual',
   'creative_generator',
-  'creative_multi_product',
-  'creative_remarketing',
-  'exchanges',
   'financial',
-  'refunds',
   'whatsapp',
 ]);
 
@@ -72,10 +78,22 @@ class FeatureDesconhecidaError extends Error {
 }
 
 // Rejeita, nunca "ignora silenciosamente". Pedir feature que não existe é erro de programação.
+//
+// Chave DEPRECIADA cai aqui junto com as desconhecidas, de propósito: é assim que "não permitir
+// novos overrides" (§19) e "não voltar como checkbox de plano" (§28) viram regra de servidor, e
+// não só de tela. A mensagem diz que a chave foi reclassificada, para o erro não parecer typo.
 function exigirFeaturesConhecidas(features) {
   if (!Array.isArray(features)) throw new FeatureDesconhecidaError(['(não é lista)']);
   const desconhecidas = [...new Set(features.filter((f) => !FEATURES.includes(f)))];
-  if (desconhecidas.length) throw new FeatureDesconhecidaError(desconhecidas);
+  if (desconhecidas.length) {
+    const depreciadas = desconhecidas.filter((f) => FEATURES_DEPRECIADAS.includes(f));
+    const err = new FeatureDesconhecidaError(desconhecidas);
+    if (depreciadas.length) {
+      err.depreciadas = depreciadas;
+      err.message = `${err.message} (reclassificada, não é mais feature comercial: ${depreciadas.join(', ')})`;
+    }
+    throw err;
+  }
   return features;
 }
 
@@ -138,6 +156,7 @@ function acessoA(feature, resolucao) {
 
 module.exports = {
   FEATURES,
+  FEATURES_DEPRECIADAS,
   FEATURES_INTERNAL,
   ORIGENS,
   FeatureDesconhecidaError,

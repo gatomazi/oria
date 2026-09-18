@@ -347,7 +347,7 @@ test('preflight · rodada 19: perfil de entitlements obrigatório e validado', a
   const ok = await pf.preflight(envCompleto(), { banco: false });
   const [perfil] = achar(ok, 'entitlements', 'tenant1-entitlements.json');
   assert.equal(perfil.status, pf.OK);
-  assert.match(perfil.texto, /perfil tenant1-operacao-interna válido · ON: catalog, .*whatsapp/);
+  assert.match(perfil.texto, /perfil tenant1-operacao-interna válido · ON: creative_generator, .*whatsapp/);
   assert.ok(!/instagram|advancedAutomations/.test(perfil.texto));
 
   const semPerfil = envCompleto();
@@ -395,9 +395,9 @@ function assertListaDaReleaseB(modulo, env) {
     const divergentes = {
       'a mais': `${LISTA_TENANT1},instagram`,
       faltando: LISTA_TENANT1.split(',').slice(1).join(','),
-      repetida: `${LISTA_TENANT1},catalog`,
+      repetida: `${LISTA_TENANT1},financial`,
       curinga: '*',
-      trocada: LISTA_TENANT1.replace('refunds', 'advancedAutomations'),
+      trocada: LISTA_TENANT1.replace('financial', 'advancedAutomations'),
     };
     for (const [caso, valor] of Object.entries(divergentes)) {
       for (const estagio of ['release-n', 'after-ops14', 'cleanup']) {
@@ -412,7 +412,7 @@ function assertListaDaReleaseB(modulo, env) {
     delete semLista.ENTITLEMENTS_SEED_FEATURES;
     const [ausente] = achou(await modulo.preflight(semLista, { banco: false }), 'ENTITLEMENTS_SEED_FEATURES');
     assert.equal(ausente.status, modulo.BLOCK, 'a RELEASE B precisa da lista');
-    assert.match(ausente.texto, /só lê esta variável; valor esperado \(igual ao perfil\): catalog,/);
+    assert.match(ausente.texto, /só lê esta variável; valor esperado \(igual ao perfil\): creative_generator,/);
   })();
 }
 

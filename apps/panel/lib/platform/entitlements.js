@@ -18,20 +18,46 @@ const { contextoAtual } = require('./tenant-runtime');
 
 // TD-012 (V1): vocabulário FECHADO de features que o backend protege. Pedir uma feature fora
 // daqui é erro de programação e nega. Não é catálogo comercial (PD-005/PD-009 seguem abertos).
+//
+// Rodada "features × connectors × capabilities": este vocabulário passou a ser SÓ capacidade
+// comercial do Oria. O critério aplicado item a item (§2) foi:
+//
+//     "se amanhã o Oria trocar a Reserva Ink por outro fornecedor,
+//      isso continua existindo como capacidade do Oria?"
+//
+// Sete chaves saíram daqui. A classificação e a evidência de código estão em
+// docs/architecture/features-vs-connectors.md; o resumo é FEATURES_DEPRECIADAS logo abaixo.
 const FEATURES = Object.freeze([
   'whatsapp',
   'instagram',
   'advancedAutomations',
-  'catalog',
-  'exchanges',
-  'refunds',
   'financial',
   'creative_generator',
-  'creative_clean_angles',
-  'creative_remarketing',
-  'creative_funnel_visual',
-  'creative_multi_product',
 ]);
+
+// Chaves que JÁ FORAM feature comercial e não são mais. Ficam DECLARADAS (não apagadas) por três
+// motivos concretos:
+//   1. o domain `platform_feature` do banco ainda as aceita — a remoção física é migration
+//      posterior (Phase E, complemento §17), e até lá o teste de registry precisa saber que a
+//      diferença entre código e banco é DELIBERADA;
+//   2. `app_config.entitlements` de organizations já semeadas ainda tem as chaves gravadas, e
+//      elas precisam ser lidas como RUÍDO IGNORADO, nunca como concessão;
+//   3. quem procurar a chave antiga acha aqui para onde ela foi.
+//
+// São `deprecated`, `non-commercial` e IGNORADAS na resolução de entitlement: fora de FEATURES,
+// `checkEntitlement` as nega como "feature desconhecida" e `planoEfetivo` nem as devolve. Nenhuma
+// volta a ser checkbox de plano (complemento §18/§19).
+const FEATURES_DEPRECIADAS = Object.freeze({
+  // → Connector capabilities da Reserva Ink (lib/platform/connector-capabilities.js).
+  catalog: 'connector_capability: ink.products, ink.collections, ink.product_clusters, ink.promotions, ink.catalog_sync, ink.product_feed, ink.inventory',
+  exchanges: 'connector_capability: ink.exchanges',
+  refunds: 'connector_capability: ink.refunds',
+  // → Module capabilities do Gerador (lib/creative-core/module-capabilities.js).
+  creative_clean_angles: 'module_capability: creative_generator/clean_angles',
+  creative_remarketing: 'module_capability: creative_generator/remarketing',
+  creative_funnel_visual: 'module_capability: creative_generator/funnel_visual',
+  creative_multi_product: 'module_capability: creative_generator/multi_product',
+});
 
 // Rodada 19 (§9): estado de IMPLEMENTAÇÃO de cada feature do vocabulário. É fato do código, não
 // plano comercial (PD-005/PD-009 seguem abertos). Só `implementada` pode ser semeada por
@@ -44,15 +70,8 @@ const ESTADO_DAS_FEATURES = Object.freeze({
   whatsapp: 'implementada',
   instagram: 'em_breve',
   advancedAutomations: 'nao_implementada',
-  catalog: 'implementada',
-  exchanges: 'implementada',
-  refunds: 'implementada',
   financial: 'implementada',
   creative_generator: 'implementada',
-  creative_clean_angles: 'implementada',
-  creative_remarketing: 'implementada',
-  creative_funnel_visual: 'implementada',
-  creative_multi_product: 'implementada',
 });
 const FEATURES_IMPLEMENTADAS = Object.freeze(FEATURES.filter((f) => ESTADO_DAS_FEATURES[f] === 'implementada'));
 
@@ -142,6 +161,7 @@ async function planoEfetivo(carregarPlano) {
 
 module.exports = {
   FEATURES,
+  FEATURES_DEPRECIADAS,
   ESTADO_DAS_FEATURES,
   FEATURES_IMPLEMENTADAS,
   EntitlementDeniedError,

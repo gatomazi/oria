@@ -5,34 +5,37 @@
 // API. Quando o backend devolve um valor que não está aqui, a UI mostra o valor cru — nunca
 // esconde e nunca inventa um rótulo.
 
+// Só FEATURE COMERCIAL. Connector capability (Reserva Ink) e module capability (modos do Gerador)
+// NÃO aparecem como checkbox de plano — são outro eixo, e a tela de planos não é o lugar deles.
 export const FEATURES = Object.freeze([
   'whatsapp',
   'instagram',
   'advancedAutomations',
-  'catalog',
-  'exchanges',
-  'refunds',
   'financial',
   'creative_generator',
-  'creative_clean_angles',
-  'creative_remarketing',
-  'creative_funnel_visual',
-  'creative_multi_product',
 ]);
 
 export const ROTULO_FEATURE = Object.freeze({
   whatsapp: 'WhatsApp',
   instagram: 'Instagram',
   advancedAutomations: 'Automações avançadas',
-  catalog: 'Catálogo',
-  exchanges: 'Trocas',
-  refunds: 'Reembolsos',
   financial: 'Financeiro',
-  creative_generator: 'Gerador de criativos',
-  creative_clean_angles: 'Criativos · ângulos limpos',
-  creative_remarketing: 'Criativos · remarketing',
-  creative_funnel_visual: 'Criativos · funil visual',
-  creative_multi_product: 'Criativos · multiproduto',
+  creative_generator: 'Gerador de Criativos',
+});
+
+// Agrupamento comercial da tela de plano (comando §11 · complemento §7). É só apresentação: a
+// autoridade continua sendo FEATURES. Toda feature precisa estar em exatamente um grupo — a tela
+// monta a lista a partir dos grupos, então feature fora de grupo sumiria do formulário.
+export const GRUPOS_DE_FEATURES = Object.freeze([
+  Object.freeze({ titulo: 'Comunicação', features: Object.freeze(['whatsapp', 'instagram', 'advancedAutomations']) }),
+  Object.freeze({ titulo: 'Financeiro', features: Object.freeze(['financial']) }),
+  Object.freeze({ titulo: 'Criativos', features: Object.freeze(['creative_generator']) }),
+]);
+
+// Read-only, para o detalhe do plano (complemento §24): o que uma feature inclui hoje por dentro.
+// Não é editável e não é entitlement — é o registry de module capabilities do painel, rotulado.
+export const INCLUI_ATUALMENTE = Object.freeze({
+  creative_generator: Object.freeze(['Ângulos limpos', 'Remarketing', 'Funil visual', 'Multiproduto']),
 });
 
 // Como a feature ficou como ficou (contrato §10.6 — `entitlements.origem`).

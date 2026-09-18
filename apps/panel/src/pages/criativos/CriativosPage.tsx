@@ -49,9 +49,9 @@ export function CriativosPage() {
   if (!habilitado) {
     avisos.push(
       <Callout key="flag" tone="info" title="Gerador de Criativos desligado nesta conta">
-        O módulo é liberado pelas flags <code>creative_generator</code> e dos motores (<code>creative_clean_angles</code>,{' '}
-        <code>creative_remarketing</code>, <code>creative_funnel_visual</code>, <code>creative_multi_product</code>). Veja o roteiro em
-        docs/creative-generator/MANUAL_TEST_GUIDE.md.
+        O módulo inteiro é liberado por uma única feature do plano: <code>creative_generator</code>. Os motores
+        (ângulos limpos, remarketing, funil visual, multiproduto) vêm junto com ele — não são features separadas.
+        Veja o roteiro em docs/creative-generator/MANUAL_TEST_GUIDE.md.
       </Callout>,
     );
   }
