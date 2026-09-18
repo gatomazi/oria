@@ -274,7 +274,7 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
   const envPreDeploy = { ...prodSemArquivo, PATH: process.env.PATH, HOME: process.env.HOME, TENANCY_MAPPING_JSON: JSON.stringify(JSON.parse(fs.readFileSync(mapa, 'utf8'))) };
   const pdB = sh(preDeploy, { cwd: codigoB, env: envPreDeploy });
   assert.equal(pdB.status, 0, pdB.saida);
-  assert.match(pdB.saida, /entitlements: catalog, .* ligadas em 1 organization\(s\)/);
+  assert.match(pdB.saida, /entitlements: creative_generator, .* ligadas em 1 organization\(s\)/);
   assert.match(pdB.saida, new RegExp(`whatsapp: organization ${ORG} ← número ${NUMERO}, WABA ${WABA}, token final .{4}: importado`));
   semSegredo(pdB.saida, 'pre-deploy B');
   assert.equal(fs.readFileSync(arqMapa, 'utf8'), envPreDeploy.TENANCY_MAPPING_JSON);
@@ -337,7 +337,7 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
   const antesD = (await sup.query(`SELECT valor, atualizado_em FROM app_config WHERE chave = 'entitlements' AND organization_id = $1`, [ORG])).rows[0];
   const pdD = sh(preDeployHead, { cwd: RAIZ, env: envPreDeployD });
   assert.equal(pdD.status, 0, pdD.saida);
-  assert.match(pdD.saida, /entitlements: perfil tenant1-operacao-interna · ON: catalog, /);
+  assert.match(pdD.saida, /entitlements: perfil tenant1-operacao-interna · ON: creative_generator, /);
   assert.match(pdD.saida, new RegExp(`entitlements: ${ORG}: nada mudou`));
   // D0 é o snapshot de 8c024d2: as migrations posteriores a ele só existem no HEAD, e é o
   // pre-deploy da D' que as aplica. Esta linha exigia `No migrations to run!` até a fusão do
@@ -346,7 +346,7 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
   // aqui reprova, que é o ponto do dry-run.
   assert.deepEqual(
     [...pdD.saida.matchAll(/^### MIGRATION (\S+) \(UP\) ###$/gm)].map((m) => m[1]),
-    ['1790000400000_platform-admin', '1790000500000_convite-aceite'],
+    ['1790000400000_platform-admin', '1790000500000_convite-aceite', '1790000600000_features-reclassificadas'],
     'o pre-deploy da D\' aplicou um conjunto de migrations diferente do declarado'
   );
   semSegredo(pdD.saida, 'pre-deploy D\'');
