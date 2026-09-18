@@ -164,7 +164,28 @@ Partição atual — MEDIDO (peso local somado):
 `node scripts/ci/suites.mjs verify --shards 4 --pure-shards 2` prova que a união dos shards é a
 suíte inteira, sem sobra e sem repetição — e roda **antes** de qualquer shard, no job `changes`.
 
-### 5.1 Suítes que não foram shardadas (D7)
+### 5.1 Second Tenant Gate no nightly
+
+`full-verification.yml` tem um job `second tenant gate (nightly)` que roda **só** em `schedule` e
+`workflow_dispatch` (num push de main ele fica `skipped`, e o `full-gate` aceita esse `skipped` por
+exceção declarada). O gate roda a suíte inteira por conta própria, mais o Go e o Gerador.
+
+A tradução do contrato de saída é feita por `scripts/ci/gate-summary.mjs` e **preserva a semântica do
+gate**:
+
+| exit do gate | significado | job no nightly |
+|---|---|---|
+| 0 | CODE PASS + OPS verificados + dogfood cumprido (`OVERALL READY`) | verde |
+| 1 | CODE bloqueado — check FAIL ou NOT VERIFIED | **vermelho** (é regressão de código) |
+| 2 | CODE PASS, `OVERALL BLOCKED` por OPS/dogfood | **verde**, com `PRODUCTIZATION ROLLOUT = BLOCKED` em destaque no summary |
+| 64 / JSON ilegível | uso inválido ou erro interno | **vermelho** (estado desconhecido não é sucesso) |
+
+O summary publica CODE, OPS (verificados/total, com os pendentes nomeados), DOGFOOD e OVERALL,
+derivados dos campos reais do JSON do gate (`codeStatus`, `ops[]`, `dogfood.status`, `overall`,
+`bloqueios[]`) — nada é inferido nem reescrito. Para gate de release/rollout a régua é outra:
+`--strict` exige `OVERALL READY` e reprova no exit 2.
+
+### 5.2 Suítes que não foram shardadas (D7)
 
 - `migrations do zero` + `migrations idempotentes`: job próprio, sequencial, Postgres próprio.
 - `negative-controls` global e o dry-run de release (`r19-runbook-dry-run`, `release-preflight`,

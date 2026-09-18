@@ -225,13 +225,71 @@ jobs:
       - run: go build ./...
       - run: go test -race -count=1 ./...
 
+  productization-gate:
+    name: second tenant gate (nightly)
+    runs-on: ubuntu-latest
+    # Só no nightly e sob demanda: o gate roda a suíte inteira por conta própria, mais o Go e o
+    # Gerador de Criativos. A cada push de main isso seria o mesmo trabalho duas vezes.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+      WHATSAPP_GO_DIR: ${{ github.workspace }}/services/whatsapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/whatsapp/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --ignore-scripts
+        working-directory: apps/panel
+      - run: pip install -r apps/creative-generator/requirements.txt
+      # A semântica do gate é preservada inteira, e quem a traduz é o gate-summary.mjs:
+      #   exit 1 → CODE bloqueado (regressão ou check não verificado) → job VERMELHO
+      #   exit 2 → CODE PASS, rollout bloqueado por OPS/dogfood       → job verde, estado em destaque
+      #   exit 0 → OVERALL READY
+      # Nem tratar 2 como regressão de código, nem esconder que o rollout está bloqueado. Para um
+      # gate de release a régua é outra (`--strict` exige OVERALL READY); aqui é nightly de
+      # engenharia.
+      - name: second tenant gate
+        run: |
+          set +e
+          node apps/panel/scripts/productization/gate.mjs --json > gate.json
+          codigo=$?
+          set -e
+          node scripts/ci/gate-summary.mjs --json gate.json --exit "$codigo"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: second-tenant-gate
+          path: gate.json
+          if-no-files-found: warn
+
   full-gate:
     name: full-gate
     runs-on: ubuntu-latest
-    needs: [contracts, panel-pure, panel-db, panel-migrations, panel-build, platform-admin, creatives, whatsapp]
+    needs: [contracts, panel-pure, panel-db, panel-migrations, panel-build, platform-admin, creatives, whatsapp, productization-gate]
     if: always()
     steps:
-      # Aqui NADA pode ser pulado: a verificação completa não é condicional.
+      # Aqui NADA pode ser pulado — com uma exceção declarada: o gate de productização só existe no
+      # nightly/dispatch, então `skipped` é o estado correto dele num push de main.
       - name: tudo rodou e passou
         run: |
           set -uo pipefail
@@ -239,6 +297,11 @@ jobs:
           avaliar() {
             if [ "$2" = "success" ]; then echo "ok      $1"; else echo "REPROVA $1 ($2)"; falhou=1; fi
           }
+          case "${{ needs.productization-gate.result }}" in
+            success)  echo "ok      productization-gate" ;;
+            skipped)  echo "ok      productization-gate (só roda no nightly/dispatch)" ;;
+            *)        echo "REPROVA productization-gate (${{ needs.productization-gate.result }})"; falhou=1 ;;
+          esac
           avaliar contracts        "${{ needs.contracts.result }}"
           avaliar panel-pure       "${{ needs.panel-pure.result }}"
           avaliar panel-db         "${{ needs.panel-db.result }}"
