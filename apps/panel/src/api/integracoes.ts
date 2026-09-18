@@ -1,7 +1,11 @@
 import { api } from './client';
 
 export interface ReservaInkStatus {
-  loja: string;
+  /** Identidade canônica da Store. É por ela que a linha é identificada. */
+  storeId: string;
+  /** Chave do sistema de loja única. NULL em Store nativa do Oria — é compatibilidade, não identidade. */
+  loja: string | null;
+  nome: string | null;
   tokenConfigurado: boolean;
   webhookConfigurado: boolean;
   ultimoEventoEm: string | null;
@@ -13,8 +17,14 @@ export interface WhatsappStatus {
   provider?: 'meta_api' | 'whatsapp_web';
 }
 
+export interface ConnectorStatus {
+  conectado: boolean;
+  status: 'not_configured' | 'pendente' | 'conectada' | 'configurado';
+}
+
 export interface IntegrationsData {
   reservaInk: ReservaInkStatus[];
+  ink: ConnectorStatus;
   whatsapp: WhatsappStatus;
 }
 

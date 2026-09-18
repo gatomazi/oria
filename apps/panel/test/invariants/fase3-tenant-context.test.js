@@ -16,6 +16,7 @@ const { pathToFileURL } = require('node:url');
 const express = require('express');
 
 const h = require('./harness');
+const { concederFeatures } = require('../helpers/linhas');
 const { createAuth, resolverConfigAuth } = h.sujeito('lib/auth/index.js');
 const { createLoginLimiter } = h.sujeito('lib/auth/rate-limit.js');
 const senhas = h.sujeito('lib/auth/password.js');
@@ -116,9 +117,10 @@ test.before(async () => {
   segmentos.B = await semearSegmento(ORG_B, 'segmento de B');
   await semearSegmento(ORG_N, 'segmento de N');
 
-  // Plano explícito só para A (TD-012: nada ligado por omissão). B tem um "quase true".
-  const { seedEntitlements } = await import(pathToFileURL(path.join(h.RAIZ_REPO, 'scripts', 'tenancy', 'seed-entitlements.mjs')));
-  await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_A, ENTITLEMENTS_SEED_FEATURES: 'financial' });
+  // Plano explícito só para A (TD-012: nada ligado por omissão). B recebe assinatura com a feature
+  // DESLIGADA e, de quebra, um `app_config` com o velho "quase true" — que não concede mais nada.
+  await concederFeatures(sup, ORG_A, { financial: true });
+  await concederFeatures(sup, ORG_B, { financial: false });
   await sup.query(
     `INSERT INTO app_config (organization_id, chave, valor) VALUES ($1, 'entitlements', '{"financial":"true"}'::jsonb)`, [ORG_B]
   );
@@ -346,13 +348,14 @@ test('fase 3 · TD-012: carregador sem contexto, feature desconhecida e plano de
     await assert.rejects(entitlements.checkEntitlement(carregador, 'criativos'), entitlements.EntitlementDeniedError);
     await assert.rejects(entitlements.checkEntitlement(carregador, 'whatsapp'), entitlements.EntitlementDeniedError);
   });
-  await sup.query(`UPDATE app_config SET valor = '{"financial": false}' WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_A]);
+  // Desligar a feature é no PLANO, que é a fonte. Mexer em app_config não muda mais nada.
+  await concederFeatures(sup, ORG_A, { financial: false });
   try {
     await runtime.comContexto({ organizationId: ORG_A }, async () => {
       await assert.rejects(entitlements.checkEntitlement(carregador, 'financial'), entitlements.EntitlementDeniedError);
     });
   } finally {
-    await sup.query(`UPDATE app_config SET valor = '{"financial": true}' WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_A]);
+    await concederFeatures(sup, ORG_A, { financial: true });
   }
 });
 
@@ -370,8 +373,11 @@ test('OPS-21 · seed de entitlements: explícito, vocabulário fechado, idempote
   }
   const { rows } = await sup.query(`SELECT valor FROM app_config WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_N]);
   assert.deepEqual(rows.map((r) => r.valor), [{ financial: true }]);
+  // `app_config` só tem linha de quem foi semeado por este script legado (ORG_N) e da linha de
+  // compatibilidade que este arquivo planta em B. A concessão real de A e B vem do PLANO, e não
+  // deixa rastro aqui — é a diferença que a migration 0023 introduziu.
   const { rows: outras } = await sup.query(`SELECT organization_id FROM app_config WHERE chave = 'entitlements' ORDER BY organization_id`);
-  assert.deepEqual(outras.map((r) => r.organization_id), [ORG_A, ORG_B, ORG_N]);
+  assert.deepEqual(outras.map((r) => r.organization_id), [ORG_B, ORG_N]);
 });
 
 // ── Runtime: modo estrito ─────────────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const h = require('./harness');
 const senhas = h.sujeito('lib/auth/password.js');
-const { inserir, limparCache } = require('../helpers/linhas');
+const { inserir, limparCache, concederFeatures } = require('../helpers/linhas');
 
 // 5c R1 (PD-023 fechado), última forma do painel que autentica o repasse pela query. A rota é a
 // mesma do painel em produção hoje (`req.query.secret !== WHATSAPP_WEBHOOK_SECRET`) e a do commit
@@ -130,9 +130,20 @@ async function prepararPainelDb(raiz, prefixo) {
   limparCache();
   const { rows: [u] } = await sup.query('INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id', [EMAIL, await senhas.gerarHash(SENHA)]);
   await sup.query('INSERT INTO organization_members (organization_id, user_id, papel) VALUES ($1, $2, $3)', [ORG, u.id, 'owner']);
+  // Este cenário monta o banco no schema de uma RELEASE ANTIGA, anterior às tabelas do control
+  // plane — `plans` nem existe aqui. A concessão continua sendo em `app_config`, que é o que o
+  // painel daquela época lê. Não é regressão: é o caminho de compatibilidade sendo exercitado.
   await sup.query(`INSERT INTO app_config (organization_id, chave, valor) VALUES ($1, 'entitlements', '{"whatsapp": true}'::jsonb)`, [ORG]);
+  if (await temTabela(sup, 'plans')) await concederFeatures(sup, ORG, { whatsapp: true });
   db.campanha = (await inserir(sup, 'campaigns', { organization_id: ORG, loja: LOJA, nome: 'campanha r19' })).id;
   return db;
+}
+
+// O schema deste arquivo varia por cenário (release antiga vs. HEAD): a concessão canônica só é
+// possível onde as tabelas do control plane existem.
+async function temTabela(cliente, nome) {
+  const { rows } = await cliente.query('SELECT to_regclass($1) AS t', [`public.${nome}`]);
+  return !!rows[0].t;
 }
 
 async function novoDestinatario(db) {

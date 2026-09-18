@@ -27,8 +27,18 @@
 --   · Catálogo / Trocas / Reembolsos passam a depender do Connector Ink conectado (as rotas já
 --     falham sozinhas, com 409, quando não há segredo da Ink) — não do plano;
 --   · os quatro modos de criativos passam a vir de `creative_generator`, que o `internal` mantém.
--- O runtime do painel lê `app_config.entitlements`, não `plan_features`; aquelas linhas seguem
--- intactas e as chaves antigas viram ruído ignorado (FEATURES_DEPRECIADAS).
+-- ATENÇÃO — esta premissa MUDOU. O cabeçalho original dizia que o painel lia
+-- `app_config.entitlements` e não `plan_features`, e que por isso o DELETE abaixo não afetava o
+-- runtime. Isso valia quando esta migration foi escrita; deixou de valer com a 0023, que tornou
+-- `plan_features` a FONTE CANÔNICA lida pelo painel.
+--
+-- Consequência concreta: o DELETE abaixo tira as sete chaves do acesso efetivo do Tenant #1 NA
+-- HORA. O raciocínio de "sem regressão" continua de pé — Catálogo/Trocas/Reembolsos passam a
+-- depender do Connector conectado, e os modos de criativos passam a vir de `creative_generator` —
+-- mas isso agora depende de os guards de capability estarem LIGADOS no runtime (a fiação P1, que
+-- esta branch entregou como pendência). Sem ela, as rotas ficam sem guard de eixo nenhum.
+--
+-- Por isso esta migration não deve ser aplicada antes de a composição do `internal` ser decidida.
 
 DELETE FROM plan_features
  WHERE feature::text IN (

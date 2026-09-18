@@ -93,3 +93,36 @@ async function inserir(client, tabela, valores = {}) {
 }
 
 module.exports = { inserir, colunas, limparCache };
+
+// Concede features a uma Organization pela FONTE CANÔNICA: plano + assinatura ativa, como o Oria
+// Admin faz. Substitui o antigo seed em `app_config.entitlements`, que deixou de ser fonte de
+// verdade — fixture que semeia app_config concede nada, e é assim que deve ser.
+async function concederFeatures(client, organizationId, features) {
+  // O id INTEIRO, sem truncar: dois ids diferentes podem compartilhar os primeiros caracteres, e
+  // truncar fazia duas Organizations caírem no mesmo plano — uma herdava as features da outra.
+  const chave = `teste_${String(organizationId).replace(/-/g, '')}`;
+  const { rows } = await client.query(
+    `INSERT INTO plans (chave, nome, status) VALUES ($1, $2, 'active')
+     ON CONFLICT (chave) DO UPDATE SET nome = EXCLUDED.nome RETURNING id`,
+    [chave, `Plano de teste ${chave}`]
+  );
+  const planId = rows[0].id;
+  const lista = Array.isArray(features)
+    ? features.map((f) => [f, true])
+    : Object.entries(features);
+  for (const [feature, habilitada] of lista) {
+    await client.query(
+      `INSERT INTO plan_features (plan_id, feature, habilitada) VALUES ($1, $2, $3)
+       ON CONFLICT (plan_id, feature) DO UPDATE SET habilitada = EXCLUDED.habilitada`,
+      [planId, feature, habilitada]
+    );
+  }
+  await client.query(
+    `INSERT INTO organization_subscriptions (organization_id, plan_id, status) VALUES ($1, $2, 'active')
+     ON CONFLICT DO NOTHING`,
+    [organizationId, planId]
+  );
+  return planId;
+}
+
+module.exports.concederFeatures = concederFeatures;

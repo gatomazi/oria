@@ -27,7 +27,7 @@ const { createIntegrationResolver } = h.sujeito('lib/platform/integrations.js');
 const { createSecretStore } = h.sujeito('lib/secrets/store.js');
 const { createKeyring } = h.sujeito('lib/secrets/keyring.js');
 const wa = h.sujeito('lib/platform/whatsapp-sender.js');
-const { limparCache } = require('../helpers/linhas');
+const { limparCache, concederFeatures } = require('../helpers/linhas');
 
 const SERVER = path.join(h.RAIZ_SUJEITO, 'server.js');
 const MOCK = path.join(h.RAIZ_REPO, 'test', 'helpers', 'provider-mock.cjs');
@@ -157,6 +157,7 @@ test.before(async () => {
     await sup.query(
       `INSERT INTO app_config (organization_id, chave, valor) VALUES ($1, 'entitlements', '{"whatsapp": true}'::jsonb)`, [org]
     );
+    await concederFeatures(sup, org, { whatsapp: true });
   }
 
   const urlGo = await subirGoFalso();
@@ -294,12 +295,12 @@ test('resolver interno · chave do serviço e assinatura do painel, os dois obri
 test('resolver interno · plano sem WhatsApp, número trocado ou desconectado: recusa', async () => {
   const refA = await refDe(ORG_A);
   const refB = await refDe(ORG_B);
-  await sup.query(`UPDATE app_config SET valor = '{"whatsapp": false}'::jsonb WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_B]);
+  await concederFeatures(sup, ORG_B, { whatsapp: false });
   try {
     const r = await resolverReq({ ref: refB });
     assert.deepEqual([r.status, r.json.codigo], [403, 'FEATURE_DISABLED']);
   } finally {
-    await sup.query(`UPDATE app_config SET valor = '{"whatsapp": true}'::jsonb WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_B]);
+    await concederFeatures(sup, ORG_B, { whatsapp: true });
   }
 
   // A troca de número (com o token dele): a referência antiga não resolve para o número novo.
@@ -590,13 +591,13 @@ test('INV-31 · organization_id no corpo não é autoridade; chave e formato obr
 });
 
 test('5c · plano sem WhatsApp: nenhum contexto sai para o serviço', async () => {
-  await sup.query(`UPDATE app_config SET valor = '{"whatsapp": false}'::jsonb WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_B]);
+  await concederFeatures(sup, ORG_B, { whatsapp: false });
   try {
     const r = await interno('inbound-context', { waba_id: R[ORG_B].waba, phone_number_id: R[ORG_B].phone });
     assert.deepEqual([r.status, r.json.codigo], [403, 'FEATURE_DISABLED']);
     assert.equal((await interno('ref-context', { ref: await refDe(ORG_B) })).status, 403);
   } finally {
-    await sup.query(`UPDATE app_config SET valor = '{"whatsapp": true}'::jsonb WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_B]);
+    await concederFeatures(sup, ORG_B, { whatsapp: true });
   }
 });
 

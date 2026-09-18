@@ -17,7 +17,7 @@ const h = require('./harness');
 const senhas = h.sujeito('lib/auth/password.js');
 const { sqlProvisionarAppRole } = h.sujeito('lib/platform/app-role.js');
 const manifesto = h.sujeito('lib/platform/tenancy-manifest.js');
-const { inserir, limparCache } = require('../helpers/linhas');
+const { inserir, limparCache, concederFeatures } = require('../helpers/linhas');
 
 const SERVER = path.join(h.RAIZ_SUJEITO, 'server.js');
 const CENARIO_A = path.join(h.RAIZ_REPO, 'test', 'fixtures', 'tenancy', 'cenario-a.json');
@@ -124,9 +124,11 @@ test.before(async () => {
   await semear('A', ORG_A, 'sul');
   await semear('B', ORG_B, 'centro');
 
-  const { seedEntitlements } = await import(pathToFileURL(path.join(h.RAIZ_REPO, 'scripts', 'tenancy', 'seed-entitlements.mjs')));
-  await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_A, ENTITLEMENTS_SEED_FEATURES: 'financial,whatsapp' });
-  await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_B, ENTITLEMENTS_SEED_FEATURES: 'whatsapp' });
+  // Duas mudanças se encontram aqui: a concessão vem da FONTE CANÔNICA (plano + assinatura, como o
+  // Oria Admin faz — migration 0023), e a lista perdeu `catalog`/`refunds`, que deixaram de ser
+  // features comerciais e viraram capacidades do connector.
+  await concederFeatures(sup, ORG_A, ['financial', 'whatsapp']);
+  await concederFeatures(sup, ORG_B, ['whatsapp']);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oria-f3-srv-'));
   const processo = await h.subirProcessoDoPainel((porta) => spawn(process.execPath, [SERVER], {
@@ -421,7 +423,7 @@ test('A/B · status do WhatsApp pelo wamid só altera o destinatário da Organiz
 });
 
 test('INV-22 · Creative Core no servidor real grava na Organization da sessão, não na env', async () => {
-  await sup.query(`UPDATE app_config SET valor = valor || '{"creative_generator": true}'::jsonb WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_A]);
+  await concederFeatures(sup, ORG_A, ['financial', 'whatsapp', 'creative_generator']);
   const a = await navegador().entrar('srv-a@teste.oria');
   const r = await a.req('PUT', '/api/admin/criativos/settings/openai-key', { corpo: { apiKey: 'sk-fase3-aaaaaaaaaaaaaaaaaaaaaaaa' } });
   assert.equal(r.status, 200, r.texto);

@@ -220,6 +220,61 @@ const VIOLACOES = [
     de: "    if (anterior) await sessoes.revogarPorToken(anterior, { motivo: 'substituida_no_login' });",
     para: '    // VIOLAÇÃO DELIBERADA (negative control) — sessão anterior preservada\n    void anterior;',
   },
+  // ── Entitlement canônico ───────────────────────────────────────────────────────────────────
+  {
+    classe: 'entitlement/app-config-como-fonte',
+    invariant: 'ENT-01',
+    teste: 'entitlement-canonico.test.js',
+    arquivo: 'lib/platform/entitlements.js',
+    descricao: 'o painel volta a resolver entitlement por app_config — a segunda fonte de verdade que deixou o Tenant #1 sem acesso',
+    de: "      'SELECT feature FROM entitlements_efetivos($1)',\n      [ctx.organizationId]\n    );\n    if (!rows.length) return null;\n    return Object.fromEntries(rows.map((r) => [r.feature, true]));",
+    para: '      // VIOLAÇÃO DELIBERADA (negative control) — volta para a cópia local\n'
+        + "      `SELECT valor FROM app_config WHERE chave = 'entitlements' AND organization_id = $1`,\n"
+        + '      [ctx.organizationId]\n    );\n'
+        + '    const valor = rows.length === 1 ? rows[0].valor : null;\n'
+        + "    return valor && typeof valor === 'object' && !Array.isArray(valor) ? valor : null;",
+  },
+  // ── Connector Ink sem loja_legada (§29) ────────────────────────────────────────────────────
+  {
+    classe: 'connector/leitura-por-loja',
+    invariant: 'STORE-01',
+    teste: 'fase4-server-integrations.test.js',
+    arquivo: 'server.js',
+    descricao: 'o escopo de leitura volta a ser a chave legada em vez da Store',
+    de: "  if (!loja) {\n    return { sql: `store_id = $${proximoParametro}`, params: [storeId], usados: 1 };\n  }",
+    para: '  // VIOLAÇÃO DELIBERADA (negative control) — "a loja é o escopo de sempre"\n'
+        + '  if (!loja) {\n    return { sql: `loja = $${proximoParametro}`, params: [storeId], usados: 1 };\n  }',
+  },
+  {
+    classe: 'connector/chamador-exige-loja-legada',
+    invariant: 'STORE-02',
+    teste: 'fase4-server-integrations.test.js',
+    arquivo: 'server.js',
+    descricao: 'o caminho da Ink volta a exigir chave legada para existir',
+    de: '  if (!ctx.storeId || !(await inkConectada())) return [];\n  return [{ storeId: ctx.storeId, loja: ctx.loja || null }];',
+    para: '  // VIOLAÇÃO DELIBERADA (negative control) — "sem loja não há Ink"\n'
+        + '  if (!ctx.loja || !(await inkConectada())) return [];\n  return [{ storeId: ctx.storeId, loja: ctx.loja }];',
+  },
+  {
+    classe: 'connector/store-nativa-no-path-legado',
+    invariant: 'STORE-03',
+    teste: 'fase4-server-integrations.test.js',
+    arquivo: 'server.js',
+    descricao: 'Store nativa (sem chave legada) passa a enxergar linha histórica pelo ramo de compatibilidade',
+    de: "    sql: `(store_id = $${proximoParametro} OR (store_id IS NULL AND loja = $${proximoParametro + 1}))`,",
+    para: '    // VIOLAÇÃO DELIBERADA (negative control) — ramo legado sem exigir chave\n'
+        + '    sql: `(store_id = $${proximoParametro} OR store_id IS NULL)`,',
+  },
+  {
+    classe: 'connector/save-sem-atomicidade',
+    invariant: 'STORE-04',
+    teste: 'fase4-server-integrations.test.js',
+    arquivo: 'lib/platform/integrations.js',
+    descricao: 'gravar credencial volta a commitar o segredo antes da auditoria',
+    de: '      const resultado = await executar(ligado, cliente);\n      await cliente.query(\'COMMIT\');',
+    para: '      // VIOLAÇÃO DELIBERADA (negative control) — commit antes de terminar\n'
+        + '      await cliente.query(\'COMMIT\');\n      const resultado = await executar(ligado, cliente);',
+  },
   // ── Fase 3 · tenant context + entitlements ─────────────────────────────────────────────────
   {
     classe: 'tenancy/loja-do-request',
@@ -228,10 +283,10 @@ const VIOLACOES = [
     arquivo: 'server.js',
     descricao: 'rota volta a aceitar loja da query (req.query.loja)',
     de: "  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });\n"
-      + '  const lojas = [lojaDoContexto()];',
+      + '  const lojas = [lojaLegadaDoContexto()];',
     para: "  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });\n"
         + '  // VIOLAÇÃO DELIBERADA (negative control) — "o filtro de loja da tela"\n'
-        + '  const lojas = [req.query.loja || lojaDoContexto()];',
+        + '  const lojas = [req.query.loja || lojaLegadaDoContexto()];',
   },
   {
     classe: 'tenancy/agregacao-lojas',
@@ -239,7 +294,7 @@ const VIOLACOES = [
     teste: 'fase3-static.test.js',
     arquivo: 'server.js',
     descricao: 'fetchAcrossInkStores() de volta: a consulta percorre todas as lojas da instalação',
-    de: '  for (const loja of await lojasInkDoContexto()) {\n    try {\n      const data = await inkApiRequest(loja, pathAndQuery);',
+    de: '  for (const { loja } of await storesInkDoContexto()) {\n    try {\n      const data = await inkApiRequest(loja, pathAndQuery);',
     para: '  // VIOLAÇÃO DELIBERADA (negative control) — reintrodução de fetchAcrossInkStores()\n'
         + '  for (const loja of LOJAS_LEGADAS) {\n    try {\n      const data = await inkApiRequest(loja, pathAndQuery);',
   },
@@ -380,9 +435,9 @@ const VIOLACOES = [
     teste: 'fase3-static.test.js',
     arquivo: 'server.js',
     descricao: 'lojaAtribuidaPadrao() reaparece',
-    de: 'async function financeiroDaLoja(loja, from, to) {',
-    para: '// VIOLAÇÃO DELIBERADA (negative control)\nfunction lojaAtribuidaPadrao() { return lojaDoContexto(); }\n\n'
-        + 'async function financeiroDaLoja(loja, from, to) {',
+    de: 'async function financeiroDaLoja(from, to) {',
+    para: '// VIOLAÇÃO DELIBERADA (negative control)\nfunction lojaAtribuidaPadrao() { return lojaLegadaDoContexto(); }\n\n'
+        + 'async function financeiroDaLoja(from, to) {',
   },
   {
     classe: 'secrets/resposta',
@@ -775,11 +830,13 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
   assert.deepEqual(
     [...new Set(VIOLACOES.map((v) => v.classe))].sort(),
     ['audit/sujeito', 'auth', 'auth/csrf', 'auth/fixation', 'auth/login-tenant', 'auth/revogacao',
+      'connector/chamador-exige-loja-legada', 'connector/leitura-por-loja',
+      'connector/save-sem-atomicidade', 'connector/store-nativa-no-path-legado',
       'convite/conta-existente-troca-senha', 'convite/grant-da-role', 'convite/motivo-vazado',
       'convite/sessao-de-outro-email',
       'creative/dual-read-confinamento', 'creative/dual-read-organization',
       'creative/tenant-env', 'dre/customer-de-outra-org', 'dre/loja-atribuida-padrao', 'dre/sem-loja',
-      'entitlement', 'entitlement/ausencia', 'fase6/bypass-interno', 'integracoes/desconectar-cruzado', 'integracoes/env-global',
+      'entitlement', 'entitlement/app-config-como-fonte', 'entitlement/ausencia', 'fase6/bypass-interno', 'integracoes/desconectar-cruzado', 'integracoes/env-global',
       'integracoes/resolver-global', 'integracoes/token-de-outra-org', 'jobs/contexto', 'jobs/lease-ignorado', 'oauth/org-do-navegador',
       'onboarding/chave-sem-pedido', 'onboarding/erro-bruto', 'onboarding/gate', 'onboarding/ja-existe-uma', 'onboarding/segunda-fonte',
       'recuperacao/escopo', 'secrets', 'secrets/log', 'secrets/resposta', 'tenancy/agregacao-lojas',

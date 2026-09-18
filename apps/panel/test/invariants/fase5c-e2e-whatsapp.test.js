@@ -37,7 +37,7 @@ const { createIntegrationResolver } = h.sujeito('lib/platform/integrations.js');
 const { createSecretStore } = h.sujeito('lib/secrets/store.js');
 const { createKeyring } = h.sujeito('lib/secrets/keyring.js');
 const wa = h.sujeito('lib/platform/whatsapp-sender.js');
-const { limparCache } = require('../helpers/linhas');
+const { limparCache, concederFeatures } = require('../helpers/linhas');
 
 const DIR_GO = process.env.WHATSAPP_GO_DIR || path.resolve(h.RAIZ_REPO, '..', '..', 'services', 'whatsapp');
 const GO = spawnSync('go', ['version'], { encoding: 'utf8' });
@@ -242,7 +242,7 @@ test.before(async () => {
   for (const [email, org] of [['e2e-a@teste.oria', ORG_A], ['e2e-b@teste.oria', ORG_B]]) {
     const { rows: [u] } = await sup.query('INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id', [email, await senhas.gerarHash(SENHA)]);
     await sup.query('INSERT INTO organization_members (organization_id, user_id, papel) VALUES ($1, $2, $3)', [org, u.id, 'owner']);
-    await sup.query(`INSERT INTO app_config (organization_id, chave, valor) VALUES ($1, 'entitlements', '{"whatsapp": true}'::jsonb)`, [org]);
+    await concederFeatures(sup, org, { whatsapp: true });
   }
   limparCache();
 

@@ -71,10 +71,15 @@ const TABELAS_TENANT = Object.freeze([
   t('pedidos_backfill_jobs', 'loja'),
   t('pedidos_ink', 'loja', {
     uniques: [{ nome: 'uq_pedidos_ink_org', colunas: ['organization_id', 'loja', 'ink_order_id'] }],
+    nota: 'A 0021 acrescentou `store_id` (FK composta com organization_id → stores) e a unicidade '
+      + 'canônica `uq_pedidos_ink_store`, parcial em store_id. `loja` deixou de ser obrigatória e o '
+      + 'índice legado continua para as releases já publicadas. Linha nova identifica a Store.',
   }),
   t('pedidos_ink_itens', 'loja', {
     pk: { colunas: ['loja', 'item_id'], promover: 'uq_pedidos_ink_itens_org' },
     uniques: [{ nome: 'uq_pedidos_ink_itens_org', colunas: ['organization_id', 'loja', 'item_id'] }],
+    nota: 'A 0021 trocou a PK por substituta (organization_id, id) — coluna de PK não pode ser nula '
+      + 'e `loja` passou a ser opcional. A unicidade de negócio canônica é `uq_pedidos_ink_itens_store`.',
   }),
   t('produtos_feed', 'loja', {
     pk: { colunas: ['loja', 'produto_id'], promover: 'uq_produtos_feed_org' },
@@ -95,6 +100,8 @@ const TABELAS_TENANT = Object.freeze([
   t('sync_estado', 'loja', {
     pk: { colunas: ['loja'], promover: 'uq_sync_estado_org' },
     uniques: [{ nome: 'uq_sync_estado_org', colunas: ['organization_id', 'loja'] }],
+    nota: 'A 0021 trocou a PK por substituta (organization_id, id) e acrescentou `store_id`; a marca '
+      + 'de sincronização de Store nativa é identificada por `uq_sync_estado_store`.',
   }),
   t('utm_campaigns', 'loja'),
   t('origens_migration_city_uf_map', 'loja', {
@@ -121,7 +128,11 @@ const TABELAS_TENANT = Object.freeze([
     nota: 'o link público resolve por token: índice não-único para a busca; unicidade por Organization (token de 192 bits)',
   }),
   t('webhook_eventos', 'loja_ou_sem_loja', {
-    nota: 'loja NULL = entrega que não se identificou; dono declarado por sem_loja, nunca inferido',
+    nota: 'loja NULL = entrega que não se identificou; dono declarado por sem_loja, nunca inferido. '
+      + 'A 0021 acrescentou `store_id` (FK composta com organization_id → stores) e o índice de leitura '
+      + 'por Store. NÃO há CHECK exigindo identidade de Store aqui, ao contrário de pedidos_ink: esta '
+      + 'tabela registra a entrega que não se identificou, e exigir Store transformaria "não atribuí" '
+      + 'em "não registro".',
   }),
   t('whatsapp_web_outbox', 'loja_ou_sem_loja', {
     fks: [{ coluna: 'campaign_recipient_id', pai: 'campaign_recipients', onDelete: 'CASCADE' }],

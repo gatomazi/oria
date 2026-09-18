@@ -15,6 +15,10 @@ const ROLE_RE = /^[a-z_][a-z0-9_]{0,62}$/;
 // Funções SECURITY DEFINER que o processo Node chama antes de existir contexto de tenant.
 const FUNCOES_DA_APLICACAO = Object.freeze([
   'auth_memberships(UUID)',
+  // Entitlement canônico: o painel lê o plano efetivo da Organization do contexto sem receber
+  // GRANT nas tabelas comerciais da plataforma (que são globais privadas).
+  'entitlements_estado(UUID)',
+  'entitlements_efetivos(UUID)',
   'tenancy_organizations_para_jobs()',
   'tenancy_organization_da_loja(TEXT)',
   'tenancy_organization_do_wamid(TEXT)',

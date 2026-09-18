@@ -31,9 +31,11 @@ const SQL = `INSERT INTO audit_log (criado_em, actor_user_id, action, entity_typ
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING id, organization_id`;
 
-async function registrarAuditoria(pool, entrada) {
+// Parâmetros do INSERT, separados da execução — é o que permite gravar tanto num pool quanto
+// dentro de uma transação que já está aberta.
+function parametrosDeAuditoria(entrada) {
   const ator = validarAtor(entrada.actorUserId);
-  const params = [
+  return [
     entrada.criadoEm || new Date().toISOString(),
     ator,
     entrada.action,
@@ -44,6 +46,19 @@ async function registrarAuditoria(pool, entrada) {
     JSON.stringify(entrada.after ?? null),
     entrada.organizationId || null,
   ];
+}
+
+// Grava a auditoria num cliente que JÁ está numa transação com o contexto de Organization posto.
+// Existe para o caso em que a auditoria precisa ser atômica com a escrita que ela descreve: ou as
+// duas acontecem, ou nenhuma. Sem isto, a auditoria abriria transação própria e um erro nela
+// deixaria a escrita anterior comitada e sem rastro.
+async function registrarAuditoriaEm(cliente, entrada) {
+  const { rows } = await cliente.query(SQL, parametrosDeAuditoria(entrada));
+  return rows[0];
+}
+
+async function registrarAuditoria(pool, entrada) {
+  const params = parametrosDeAuditoria(entrada);
   // Dono conhecido: grava dentro do contexto dele (vale sob RLS forçada).
   if (entrada.organizationId) {
     return comOrganization(pool, entrada.organizationId, (c) => c.query(SQL, params)).then((r) => r.rows[0]);
@@ -52,4 +67,4 @@ async function registrarAuditoria(pool, entrada) {
   return rows[0];
 }
 
-module.exports = { AuditError, validarAtor, registrarAuditoria };
+module.exports = { AuditError, validarAtor, registrarAuditoria, registrarAuditoriaEm };
