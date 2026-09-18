@@ -293,6 +293,43 @@ const TABELAS_GLOBAIS = Object.freeze([
     tabela: 'onboarding_idempotencia',
     motivo: 'chave de idempotência (pessoa, chave) → Organization criada (Fase 7); só função SECURITY DEFINER, com a Organization do contexto',
   }),
+
+  // ── Control Plane (Oria Admin · apps/platform-admin) ───────────────────────────────────────
+  // Nenhuma delas é tenant-owned: elas FALAM SOBRE Organizations (FK de referência), não pertencem
+  // a uma. Ficam fora da RLS e fora do alcance da role da aplicação do painel — quem as usa é
+  // outro deployable, com a sua própria conexão. Contrato: docs/architecture/control-plane.md.
+  Object.freeze({
+    tabela: 'platform_admins',
+    motivo: 'identidade do operador da plataforma (control plane); é o par de `users`, e não pertence a nenhuma Organization',
+  }),
+  Object.freeze({
+    tabela: 'platform_admin_sessions',
+    motivo: 'sessão do platform admin (só o SHA-256 do token); cookie e segredo separados dos do painel',
+  }),
+  Object.freeze({
+    tabela: 'plans',
+    motivo: 'vocabulário técnico de acesso do control plane; existe antes de qualquer assinatura e é compartilhado por todas as Organizations',
+  }),
+  Object.freeze({
+    tabela: 'plan_features',
+    motivo: 'features de um plano; filha de `plans`, mesma natureza global',
+  }),
+  Object.freeze({
+    tabela: 'organization_subscriptions',
+    motivo: 'quem assina o quê é decisão de PLATAFORMA: o tenant não pode ler nem alterar a própria assinatura',
+  }),
+  Object.freeze({
+    tabela: 'organization_entitlement_overrides',
+    motivo: 'override concedido pela plataforma; se fosse tenant-owned, o tenant poderia conceder features a si mesmo',
+  }),
+  Object.freeze({
+    tabela: 'organization_owner_invites',
+    motivo: 'convite do owner emitido pelo control plane: só o hash do token, consumido por função SECURITY DEFINER',
+  }),
+  Object.freeze({
+    tabela: 'platform_audit_logs',
+    motivo: 'rastro das ações do control plane; atravessa Organizations por desenho e não pode ser lido nem apagado pelo tenant',
+  }),
 ]);
 
 const TABELAS_GLOBAIS_DA_APLICACAO = Object.freeze(['users', 'sessions', 'oauth_states']);
@@ -300,6 +337,9 @@ const TABELAS_GLOBAIS_DA_APLICACAO = Object.freeze(['users', 'sessions', 'oauth_
 // Globais que a role da aplicação NÃO pode ler nem escrever diretamente.
 const TABELAS_GLOBAIS_PRIVADAS = Object.freeze([
   'tenancy_mapeamentos', 'external_resource_claims', 'job_leases', 'onboarding_invites', 'onboarding_idempotencia',
+  'platform_admins', 'platform_admin_sessions', 'plans', 'plan_features',
+  'organization_subscriptions', 'organization_entitlement_overrides', 'organization_owner_invites',
+  'platform_audit_logs',
 ]);
 
 function nomesTenant() {

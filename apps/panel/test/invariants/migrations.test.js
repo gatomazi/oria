@@ -90,6 +90,7 @@ test('migrations · do zero, num banco vazio, aplicam todas na ordem', async (t)
       '1790000060000_ink-webhook-token',
       '1790000120000_job-leases',
       '1790000300000_onboarding',
+      '1790000400000_platform-admin',
     ]);
     assert.ok((await tabelas(pool)).includes('integration_secrets'));
   } finally { await pool.end(); }
