@@ -83,6 +83,46 @@ jobs:
       - name: build do SPA do painel (dist/)
         run: npm run build
 
+  platform-admin:
+    name: control plane (Oria Admin)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Mesmo contrato do job do painel: com TEST_DATABASE_URL, o test-db.mjs do control plane
+      # aplica as migrations do PAINEL nesse banco e não sobe container próprio.
+      TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # O schema do control plane mora nas migrations do painel, e é o node-pg-migrate instalado
+      # lá que as aplica — por isso as dependências do painel entram neste job também.
+      - run: npm ci --ignore-scripts
+        working-directory: apps/panel
+      - run: npm ci --ignore-scripts
+        working-directory: apps/platform-admin
+
+      - name: suíte do control plane
+        run: npm test
+        working-directory: apps/platform-admin
+
+      - name: controles negativos do control plane
+        run: npm run test:negative
+        working-directory: apps/platform-admin
+
   creatives:
     name: gerador de criativos (Python)
     runs-on: ubuntu-latest

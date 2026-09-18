@@ -18,6 +18,9 @@ const ETAPAS = [
   { id: 'contracts', titulo: 'contratos cross-service (fonte canônica == cópias)', cmd: [process.execPath, ['scripts/check-contracts.mjs']] },
   { id: 'panel', titulo: 'painel · npm test (suíte + invariants + E2E com o binário Go)', cmd: ['npm', ['--prefix', 'apps/panel', 'test']] },
   { id: 'panel-build', titulo: 'painel · npm run build (SPA → dist/)', cmd: ['npm', ['--prefix', 'apps/panel', 'run', 'build']] },
+  // O control plane é outro deployable, mas roda sobre o MESMO schema do painel: `test-db.mjs`
+  // aplica as migrations do painel antes da suíte. Por isso ele vem depois do painel aqui.
+  { id: 'platform-admin', titulo: 'control plane · npm test (Oria Admin sobre o schema do painel)', cmd: ['npm', ['--prefix', 'apps/platform-admin', 'test']] },
   { id: 'creatives', titulo: 'gerador de criativos · run_tests.py', cmd: [process.execPath, ['scripts/creatives.mjs', 'test']] },
   { id: 'whatsapp', titulo: 'serviço whatsapp · go vet + build + test -race', cmd: [process.execPath, ['scripts/whatsapp.mjs', 'test']] },
 ];
