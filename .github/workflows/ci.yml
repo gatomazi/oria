@@ -18,13 +18,16 @@ name: CI
 # podados daqueles commits estão versionados em `apps/panel/test/fixtures/legacy/`. Nenhum job
 # depende de repositório vizinho, caminho absoluto ou interpretador local.
 
+# Um commit de PR gera UM run, não dois. Com `pull_request` e `push` sem filtro, o mesmo commit
+# disparava as duas coisas e pagava o CI duas vezes. Agora `push` só olha para `main`, e o trabalho
+# de branch chega pelo `pull_request`.
 on:
   pull_request:
+    branches: [main]
   push:
-    branches-ignore: [main]
+    branches: [main]
 
-# Um push novo no mesmo branch cancela o anterior: feedback rápido é o objetivo, e a verificação
-# completa de main não passa por aqui.
+# Um push novo no mesmo branch cancela o anterior: feedback rápido é o objetivo.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

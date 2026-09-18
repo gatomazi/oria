@@ -50,7 +50,8 @@ function main(argv) {
     r = JSON.parse(fs.readFileSync(arquivo, 'utf8'));
   } catch (err) {
     escrever([
-      '## Second Tenant Gate', '',
+      '## PRODUCTIZATION', '',
+      '```', 'PRODUCTIZATION', 'CODE: UNKNOWN', 'ROLLOUT: UNKNOWN', '```', '',
       `**Não foi possível ler o relatório do gate** (${err.message}).`,
       `O gate saiu com ${saidaDoGate}. Estado desconhecido é reprovação: silêncio não é sucesso.`,
     ]);
@@ -62,8 +63,16 @@ function main(argv) {
   const pendentes = ops.filter((o) => !['VERIFIED', 'NOT APPLICABLE'].includes(o.status));
   const reprovados = (Array.isArray(r.code) ? r.code : []).filter((c) => c.status !== 'PASS');
 
-  const linhas = ['## Second Tenant Gate', ''];
-  if (saidaDoGate === 2) linhas.push('> ### PRODUCTIZATION ROLLOUT = BLOCKED', '>', '> O CÓDIGO está pronto. O que falta é operacional (OPS e/ou dogfood) — não é regressão.', '');
+  // O bloco em destaque no topo existe para uma coisa só: ninguém deve precisar ler a tabela para
+  // descobrir que o rollout está bloqueado.
+  const rollout = saidaDoGate === 0 ? 'READY' : r.overall === 'READY' ? 'READY' : r.overall === 'BLOCKED' ? 'BLOCKED' : 'UNKNOWN';
+  const codeBloco = saidaDoGate === 1 ? 'BLOCKED' : (r.codeStatus ?? '?');
+  const linhas = [
+    '## PRODUCTIZATION', '',
+    '```', 'PRODUCTIZATION', `CODE: ${codeBloco}`, `ROLLOUT: ${rollout}`, '```', '',
+  ];
+  if (saidaDoGate === 2) linhas.push('> **ROLLOUT BLOCKED** — o CÓDIGO está pronto; o que falta é operacional (OPS e/ou dogfood). Não é regressão de código.', '');
+  linhas.push('### Second Tenant Gate', '');
   linhas.push(
     '| bloco | estado |', '|---|---|',
     `| CODE | \`${r.codeStatus ?? '?'}\` |`,
