@@ -36,6 +36,13 @@ const FUNCOES_DA_APLICACAO = Object.freeze([
   'onboarding_reservar_organizacao(UUID, TEXT, TEXT)',
   'onboarding_emitir_convite(TEXT, TEXT, TIMESTAMPTZ)',
   'onboarding_consumir_convite(TEXT)',
+  // Aceite do convite emitido pelo control plane (lib/auth/invites.js). As duas nascem com
+  // `REVOKE ALL … FROM PUBLIC` (0019 e 0020) e são o ÚNICO acesso do painel a
+  // `organization_owner_invites`, que continua global PRIVADA: a role não lê a tabela, lê a
+  // projeção estreita que estas funções devolvem. O par roda na mesma transação — a leitura trava
+  // a linha, o consumo a marca.
+  'platform_convite_pendente(TEXT)',
+  'platform_consumir_convite(TEXT, UUID)',
 ]);
 
 const { TABELAS_GLOBAIS_DA_APLICACAO, TABELAS_GLOBAIS_PRIVADAS } = require('./tenancy-manifest');
