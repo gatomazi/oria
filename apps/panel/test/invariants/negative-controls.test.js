@@ -220,6 +220,20 @@ const VIOLACOES = [
     de: "    if (anterior) await sessoes.revogarPorToken(anterior, { motivo: 'substituida_no_login' });",
     para: '    // VIOLAÇÃO DELIBERADA (negative control) — sessão anterior preservada\n    void anterior;',
   },
+  // ── Entitlement canônico ───────────────────────────────────────────────────────────────────
+  {
+    classe: 'entitlement/app-config-como-fonte',
+    invariant: 'ENT-01',
+    teste: 'entitlement-canonico.test.js',
+    arquivo: 'lib/platform/entitlements.js',
+    descricao: 'o painel volta a resolver entitlement por app_config — a segunda fonte de verdade que deixou o Tenant #1 sem acesso',
+    de: "      'SELECT feature FROM entitlements_efetivos($1)',\n      [ctx.organizationId]\n    );\n    if (!rows.length) return null;\n    return Object.fromEntries(rows.map((r) => [r.feature, true]));",
+    para: '      // VIOLAÇÃO DELIBERADA (negative control) — volta para a cópia local\n'
+        + "      `SELECT valor FROM app_config WHERE chave = 'entitlements' AND organization_id = $1`,\n"
+        + '      [ctx.organizationId]\n    );\n'
+        + '    const valor = rows.length === 1 ? rows[0].valor : null;\n'
+        + "    return valor && typeof valor === 'object' && !Array.isArray(valor) ? valor : null;",
+  },
   // ── Connector Ink sem loja_legada (§29) ────────────────────────────────────────────────────
   {
     classe: 'connector/leitura-por-loja',
@@ -822,7 +836,7 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
       'convite/sessao-de-outro-email',
       'creative/dual-read-confinamento', 'creative/dual-read-organization',
       'creative/tenant-env', 'dre/customer-de-outra-org', 'dre/loja-atribuida-padrao', 'dre/sem-loja',
-      'entitlement', 'entitlement/ausencia', 'fase6/bypass-interno', 'integracoes/desconectar-cruzado', 'integracoes/env-global',
+      'entitlement', 'entitlement/app-config-como-fonte', 'entitlement/ausencia', 'fase6/bypass-interno', 'integracoes/desconectar-cruzado', 'integracoes/env-global',
       'integracoes/resolver-global', 'integracoes/token-de-outra-org', 'jobs/contexto', 'jobs/lease-ignorado', 'oauth/org-do-navegador',
       'onboarding/chave-sem-pedido', 'onboarding/erro-bruto', 'onboarding/gate', 'onboarding/ja-existe-uma', 'onboarding/segunda-fonte',
       'recuperacao/escopo', 'secrets', 'secrets/log', 'secrets/resposta', 'tenancy/agregacao-lojas',

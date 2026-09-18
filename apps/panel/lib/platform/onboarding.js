@@ -372,8 +372,11 @@ function createOnboardingService({ poolReal, env = process.env, agora = () => ne
       [organizationId]
     );
     const integracoes = await lerIntegracoes(c, organizationId);
+    // O passo `entitlements` confere a FONTE CANÔNICA — assinatura ativa com ao menos uma feature
+    // concedida —, não mais uma linha em `app_config`. O plano vem do Oria Admin; exigir a cópia
+    // local transformava "o Admin já concedeu" em "falta rodar um script".
     const { rows: plano } = await c.query(
-      `SELECT jsonb_typeof(valor) = 'object' AS ok FROM app_config WHERE organization_id = $1 AND chave = 'entitlements'`,
+      'SELECT EXISTS (SELECT 1 FROM entitlements_efetivos($1)) AS ok',
       [organizationId]
     );
     const { rows: [estrutura] } = await c.query(

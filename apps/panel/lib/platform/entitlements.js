@@ -112,20 +112,49 @@ function requireEntitlement(carregarPlano, feature) {
   };
 }
 
-// Plano da Organization do CONTEXTO (app_config 'entitlements', uma linha por Organization).
-// `pool` é a fachada do tenant-runtime: a query roda sob RLS com a Organization da sessão. JSON
-// ausente ou inválido → null → nega.
+// Plano da Organization do CONTEXTO, lido da FONTE CANÔNICA: a assinatura ativa, as features do
+// plano e os overrides — as mesmas tabelas que o Oria Admin escreve.
+//
+// Antes isto lia `app_config` com a chave `entitlements`, que só um script de linha de comando
+// escrevia. O resultado é que uma Organization criada pela interface do Admin tinha plano concedido
+// e o painel não via nada: tudo 403, com a tela dizendo "não incluído no plano". Duas fontes de
+// verdade que nunca conversaram — agora é uma só.
+//
+// A leitura passa por `entitlements_efetivos`/`entitlements_estado` (SECURITY DEFINER, concedidas à
+// role da aplicação no OPS-14): o painel pergunta o que ESTA Organization pode, e não tem acesso ao
+// catálogo de planos da plataforma. A Organization vem do contexto autenticado, nunca do request.
+//
+// Devolve `null` quando não há acesso a conceder (suspensa, sem assinatura ativa, plano vazio) —
+// e `null` nega tudo, que é o comportamento fail-closed que já existia.
 function carregadorDaOrganizacao(pool) {
   return async () => {
     // Predicado explícito além da RLS: sem contexto não há de quem ler — erro, e o erro nega.
     const ctx = contextoAtual();
     if (!ctx) throw new Error('entitlements fora de um contexto de Organization');
     const { rows } = await pool.query(
-      `SELECT valor FROM app_config WHERE chave = 'entitlements' AND organization_id = $1`,
+      'SELECT feature FROM entitlements_efetivos($1)',
       [ctx.organizationId]
     );
-    const valor = rows.length === 1 ? rows[0].valor : null;
-    return valor && typeof valor === 'object' && !Array.isArray(valor) ? valor : null;
+    if (!rows.length) return null;
+    return Object.fromEntries(rows.map((r) => [r.feature, true]));
+  };
+}
+
+// Estado do acesso, para a UI distinguir as causas. "Suspensa", "sem assinatura" e "plano sem esta
+// feature" são três coisas diferentes, e dizer "não incluído no plano" para as três é mentira em
+// dois casos.
+async function estadoDoAcesso(pool) {
+  const ctx = contextoAtual();
+  if (!ctx) throw new Error('estado de acesso fora de um contexto de Organization');
+  const { rows } = await pool.query(
+    'SELECT organizacao_ativa, assinatura_ativa, plano_chave FROM entitlements_estado($1)',
+    [ctx.organizationId]
+  );
+  const r = rows[0] || {};
+  return {
+    organizacaoAtiva: !!r.organizacao_ativa,
+    assinaturaAtiva: !!r.assinatura_ativa,
+    plano: r.plano_chave || null,
   };
 }
 
@@ -148,5 +177,6 @@ module.exports = {
   checkEntitlement,
   requireEntitlement,
   carregadorDaOrganizacao,
+  estadoDoAcesso,
   planoEfetivo,
 };
