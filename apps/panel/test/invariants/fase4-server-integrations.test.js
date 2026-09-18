@@ -27,7 +27,7 @@ const runtime = h.sujeito('lib/platform/tenant-runtime.js');
 const { createIntegrationResolver } = h.sujeito('lib/platform/integrations.js');
 const { createSecretStore } = h.sujeito('lib/secrets/store.js');
 const { createKeyring } = h.sujeito('lib/secrets/keyring.js');
-const { inserir, limparCache } = require('../helpers/linhas');
+const { inserir, limparCache, concederFeatures } = require('../helpers/linhas');
 
 const SERVER = path.join(h.RAIZ_SUJEITO, 'server.js');
 const MOCK = path.join(h.RAIZ_REPO, 'test', 'helpers', 'provider-mock.cjs');
@@ -129,6 +129,9 @@ test.before(async () => {
     await sup.query(
       `INSERT INTO app_config (organization_id, chave, valor) VALUES ($1, 'entitlements', '{"financial": true, "catalog": true}'::jsonb)`, [org]
     );
+    // A concessão que VALE vem da fonte canônica (plano + assinatura), como o Oria Admin faz. A
+    // linha em app_config acima fica de propósito: ela não concede nada, e há teste provando isso.
+    await concederFeatures(sup, org, { financial: true, catalog: true });
   }
 
   mockLog = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'oria-f4-mock-')), 'chamadas.jsonl');

@@ -20,6 +20,7 @@ const path = require('node:path');
 const express = require('express');
 
 const h = require('./harness');
+const { concederFeatures } = require('../helpers/linhas');
 const onboarding = h.sujeito('lib/platform/onboarding.js');
 const { createAuth, resolverConfigAuth } = h.sujeito('lib/auth/index.js');
 const { createLoginLimiter } = h.sujeito('lib/auth/rate-limit.js');
@@ -361,12 +362,18 @@ test('E2E · integrações mock + entitlement explícito → onboarding complete
   assert.deepEqual([passo(e, 'meta').status, passo(e, 'meta').lastErrorCode], ['blocked', 'INTEGRATION_SECRET_EXPIRED']);
   assert.equal(e.status, 'in_progress', 'opcional bloqueado não bloqueia o onboarding');
 
-  // Entitlement: operação de plataforma, lista explícita. Repetir não duplica.
+  // Entitlement: o passo confere a FONTE CANÔNICA (assinatura ativa com feature concedida), que é
+  // o que o Oria Admin escreve. `semearEntitlements` continua existindo e continua gravando em
+  // `app_config`, mas isso virou registro legado: sozinho, NÃO completa o passo.
   e = await s.semearEntitlements(e2e.org, ['whatsapp']);
-  await s.semearEntitlements(e2e.org, ['whatsapp']);
-  assert.equal(passo(e, 'entitlements').status, 'complete');
+  assert.notEqual(passo(e, 'entitlements').status, 'complete',
+    'gravar app_config não pode mais completar o passo — não é fonte de verdade');
+
+  await concederFeatures(sup, e2e.org, { whatsapp: true });
+  e = await s.estado(e2e.org, { userId: e2e.owner });
+  assert.equal(passo(e, 'entitlements').status, 'complete', 'plano concedido pelo Admin completa o passo');
   assert.deepEqual(await q(`SELECT valor FROM app_config WHERE organization_id = $1 AND chave = 'entitlements'`, [e2e.org]),
-    [{ valor: { whatsapp: true } }]);
+    [{ valor: { whatsapp: true } }], 'a escrita legada continua acontecendo, só não decide nada');
   await assert.rejects(s.semearEntitlements(e2e.org, ['plano_gratis']), codigo('ONBOARDING_INPUT_INVALID'));
   await assert.rejects(s.semearEntitlements(ORG_SUL, ['whatsapp']), codigo('ONBOARDING_NOT_FOUND'),
     'Organization que não passou por onboarding não recebe plano por aqui');
