@@ -16,6 +16,21 @@ Oria Admin  = Control Plane   apps/platform-admin   service oria-admin   /api/pl
 Oria Panel  = Tenant Plane    apps/panel            service oria-panel   /api/admin/*
 ```
 
+Cada um tem o seu host canônico (convenção definitiva de domínios):
+
+```text
+https://oria.com.br          landing pública + /hotpix/{id}     PUBLIC_SITE_URL
+https://app.oria.com.br      Tenant Plane (painel do cliente)   APP_URL
+https://admin.oria.com.br    Control Plane (ESTE app)           PLATFORM_ADMIN_URL
+```
+
+O subdomínio separa **aplicações**, não Organizations: o `Host` nunca escolhe tenant. A Organization
+alvo continua vindo da rota + sessão.
+
+A API do Admin é **same-origin** (`https://admin.oria.com.br/api/platform/...`): o frontend e o
+backend saem do mesmo processo e do mesmo host. Não há CORS, e o browser nunca chama o host do
+painel com chave de serviço.
+
 Os dois compartilham **o mesmo PostgreSQL**. Não compartilham processo, código de runtime,
 cookie, sessão nem identidade:
 
@@ -23,7 +38,7 @@ cookie, sessão nem identidade:
 |---|---|---|
 | Identidade | `platform_admins` | `users` |
 | Sessão | `platform_admin_sessions` | `sessions` |
-| Cookie | `__Host-oria_platform_admin` (prod) / `oria_platform_admin` (dev) | `__Host-oria_session` / `oria_session` |
+| Cookie | `__Host-oria_platform_session` (prod) / `oria_platform_session` (dev) | `__Host-oria_session` / `oria_session` |
 | Prefixo | `/api/platform/*` | `/api/admin/*` |
 | Segredo | `PLATFORM_ADMIN_SESSION_SECRET` | `ADMIN_SESSION_SECRET` |
 
@@ -106,7 +121,7 @@ Migration: `apps/panel/migrations/1790000400000_platform-admin.js`
 
 Invariante: **sempre existe ao menos um `platform_owner` com `status='active'`**. Desativar,
 excluir ou rebaixar o último é `409 ultimo_platform_owner`. Garantido por função SQL que conta
-dentro da mesma transação (`platform_admin_contar_owners_ativos`), não só por checagem no Node.
+dentro da mesma transação (`platform_admin_owners_ativos`, mais um trigger `BEFORE UPDATE OR DELETE`), não só por checagem no Node.
 
 ### 3.2 `platform_admin_sessions`
 
@@ -184,7 +199,24 @@ Convite é **diferente** do `onboarding_invites` do painel (Fase 7): aquele é o
 *self-service* em que a pessoa aceita o convite e **cria** a Organization. Aqui a Organization já
 existe; o convite só liga uma pessoa a ela como owner.
 
-### 3.7 `platform_audit_logs`
+### 3.7 `platform_organization_creations`
+
+```text
+admin_id        UUID → platform_admins ON DELETE CASCADE
+chave_hash      TEXT CHECK ~ '^[0-9a-f]{64}$'     ← SHA-256 da idempotencyKey
+organization_id UUID → organizations ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
+digest          TEXT CHECK ~ '^[0-9a-f]{64}$'     ← SHA-256 dos parâmetros da criação
+criado_em
+PRIMARY KEY (admin_id, chave_hash)
+```
+
+Idempotência da criação de Organization. A FK é adiada de propósito: a reserva é gravada **antes**
+do `INSERT` em `organizations`, para que dois pedidos simultâneos com a mesma chave serializem na
+PK — o segundo espera o COMMIT/ROLLBACK do primeiro em vez de criar uma segunda Organization.
+
+Nunca "este admin já criou uma, devolve essa": a chave é explícita e por admin.
+
+### 3.8 `platform_audit_logs`
 
 ```text
 id              BIGINT GENERATED ALWAYS AS IDENTITY PK   ← log: ordem monotônica é o ponto
@@ -229,11 +261,17 @@ teste falha*) e um negative control prova que a suíte reprova quando alguém ti
 ### 4.1 Cookie
 
 ```text
-produção:  __Host-oria_platform_admin=<token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=…
-dev:       oria_platform_admin=<token>;        HttpOnly; SameSite=Strict; Path=/; Max-Age=…
+produção:  __Host-oria_platform_session=<token>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=…
+dev:       oria_platform_session=<token>;        HttpOnly; SameSite=Strict; Path=/; Max-Age=…
 ```
 
 O token é 256 bits aleatórios em `base64url` (43 chars). No banco fica só o SHA-256.
+
+**Host-only, sem exceção.** O cookie **não** tem atributo `Domain`. É isso que impede a sessão do
+Admin de chegar a `app.oria.com.br` ou a `oria.com.br`. O prefixo `__Host-` é a trava: o browser
+só o aceita com `Secure`, `Path=/` e **sem** `Domain` — em produção o próprio nome recusa a
+configuração errada. Fora de HTTPS o prefixo não pode ser usado, então o nome de desenvolvimento é
+o mesmo sem ele.
 
 ### 4.2 CSRF
 
@@ -249,6 +287,23 @@ em `base64url`. Ele é devolvido por `POST /api/platform/auth/login` e por
 Comparação `timingSafeEqual`.
 
 Ausente ou inválido → **403 `csrf`**. SameSite=Strict é segunda camada, não a única.
+
+### 4.2.1 Validação de origem
+
+Toda mutação (tudo que não é `GET`/`HEAD`/`OPTIONS`, **login incluído**) confere o header `Origin`:
+
+| Origin | resultado |
+|---|---|
+| `PLATFORM_ADMIN_URL` (`https://admin.oria.com.br`) | permitido |
+| `APP_URL` (`https://app.oria.com.br`) | **403 `origem_nao_permitida`** |
+| `PUBLIC_SITE_URL` (`https://oria.com.br`) | **403 `origem_nao_permitida`** |
+| qualquer outra | **403 `origem_nao_permitida`** |
+| ausente | permitido **fora de produção** (curl, script, teste); **403 em produção** |
+
+Compartilhar o domínio-base não dá poder administrativo. Leituras não são barradas por origem — ali
+quem protege é a sessão.
+
+O frontend não precisa fazer nada: sendo same-origin, o browser manda `Origin` sozinho.
 
 ### 4.3 Fixation
 
@@ -459,6 +514,9 @@ Valor inválido de `SECOND_TENANT_ENABLED` (nem `0`/`1`/vazio) → o processo **
 | `PLATFORM_ADMIN_SESSION_SECRET` | **sim em produção** | ≥ 32 caracteres |
 | `PORT` | não | default `8080` |
 | `NODE_ENV` | não | `production` liga Secure/`__Host-` |
+| `PLATFORM_ADMIN_URL` | **sim em produção** | origem canônica deste app (`https://admin.oria.com.br`) |
+| `APP_URL` | não | host do Tenant Plane; entra só para ser **negado** como origem |
+| `PUBLIC_SITE_URL` | não | landing; idem |
 | `SECOND_TENANT_ENABLED` | não | `0` (padrão) ou `1` |
 | `PLATFORM_ADMIN_SESSION_TTL_HOURS` | não | default `8`, 1..24 |
 | `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` | não | **só** para `npm run platform-admin:bootstrap` |
@@ -469,6 +527,7 @@ Em produção, o processo **não sobe** se:
 
 - `DATABASE_URL` ausente, ou o banco não responde, ou as migrations mínimas não rodaram;
 - `PLATFORM_ADMIN_SESSION_SECRET` ausente ou com menos de 32 caracteres;
+- `PLATFORM_ADMIN_URL` ausente, ou com path, query, credencial embutida, `http` ou `localhost`;
 - `SECOND_TENANT_ENABLED` com valor inválido.
 
 Fora de produção, um segredo de desenvolvimento é gerado em memória, com aviso no log.
@@ -509,7 +568,7 @@ Railway.
 #### `POST /api/platform/auth/login` — público
 
 ```json
-{ "email": "pessoa@exemplo.com", "senha": "…", "manterOutrasSessoes": false }
+{ "email": "pessoa@exemplo.com", "senha": "…", "manterOutrasSessoes": false, "returnUrl": "/organizations" }
 ```
 
 `200`:
@@ -518,17 +577,24 @@ Railway.
 {
   "admin": { "id": "uuid", "email": "…", "nome": "…", "papel": "platform_owner" },
   "csrfToken": "…",
-  "expiraEm": "2026-09-18T04:00:00.000Z"
+  "expiraEm": "2026-09-18T04:00:00.000Z",
+  "destino": "https://admin.oria.com.br/"
 }
 ```
 
 `Set-Cookie` com o cookie da §4.1.
+
+`returnUrl` (opcional no corpo) só aceita **caminho local**: `/organizations/abc?aba=planos` vira
+`https://admin.oria.com.br/organizations/abc?aba=planos`. `https://evil.example`, `//evil.example`,
+`javascript:` e barra invertida caem no destino padrão (`/`) — sem erro, e sem obedecer. Contra open
+redirect. Fora de produção, `destino` sai relativo (não há URL canônica configurada).
 
 | erro | status |
 |---|---|
 | `credenciais_invalidas` | 401 |
 | `rate_limited` (+ `Retry-After`) | 429 |
 | `bootstrap_pendente` — nenhum admin existe ainda | 503 |
+| `origem_nao_permitida` — Origin não é `PLATFORM_ADMIN_URL` | 403 |
 | `autenticacao_indisponivel` — banco fora | 503 |
 
 #### `POST /api/platform/auth/logout`
@@ -553,7 +619,7 @@ Sessão + CSRF. Revoga a sessão atual e limpa o cookie. → `204`.
   "planos":        { "ativos": 0 },
   "admins":        { "ativos": 0 },
   "bootstrapInternoDisponivel": true,
-  "second_tenant_enabled": false
+  "secondTenantEnabled": false
 }
 ```
 
@@ -846,8 +912,26 @@ GET /api/platform/organizations/:organizationId/integrations
   }], "proximoCursor": null }
 ```
 
+```json
+{ "itens": [{
+    "organizationId": "uuid", "organizationNome": "…",
+    "provider": "ink", "status": "connected",
+    "displayName": "ink · sul",
+    "segredosValidos": 2, "segredosVencidos": 0,
+    "atualizadoEm": "…",
+    "lastTestEm": null, "lastSuccessEm": null,
+    "lastErrorCode": null
+  }], "proximoCursor": null }
+```
+
 `status`: `connected` \| `disconnected` \| `error`. `lastErrorCode` vem do vocabulário fechado
 `PROVIDER_*`. **Nunca** token, secret, `config`, id de conta externa, nem mensagem de provider.
+
+> **Honestidade sobre `lastTestEm`/`lastSuccessEm`.** A tabela `integrations` **não** tem coluna de
+> "último teste" nem de "último sucesso". Derivá-las de `atualizado_em` seria dado fabricado, então
+> elas vêm **`null`** até existir fonte factual (§17 do comando). O que existe de verdade é
+> `atualizadoEm`, `status` e a contagem de segredos válidos/vencidos. O frontend deve mostrar
+> estado vazio para os dois campos nulos, não inventar "testado agora".
 
 `POST /api/platform/organizations/:organizationId/integrations/:provider/test` fica **fora da
 V1 desta noite** (exigiria chamar provider real com segredo de tenant). A ação `integration.tested`
@@ -928,6 +1012,10 @@ Regras para o frontend, derivadas deste contrato:
 5. Não invente dado: quando um campo vem `null`, mostre estado vazio honesto, não placeholder
    fabricado.
 6. Não renderize ação de impersonation. Ela não existe e não vai existir na V1.
+7. Não monte URL absoluta com host escrito à mão. Tudo no Admin é caminho relativo; quem transforma
+   em absoluto é o backend, a partir de `PLATFORM_ADMIN_URL`. Link para o painel do cliente, se um
+   dia existir na UI, usa `APP_URL` — e nunca carrega sessão junto.
+8. Se usar `returnUrl` no login, mande **caminho relativo**. Host absoluto é descartado.
 
 ---
 
@@ -959,3 +1047,8 @@ Fora do escopo, por decisão explícita:
 - **Teste de integração disparado pelo Admin** — a rota não entra nesta noite (§10.9).
 - **Role dedicada do control plane no Postgres** — passo posterior (§2).
 - **Rate limit distribuído** — em memória, processo único, como no painel.
+- **Aceite do convite** — a rota que consome o convite e cria o membership é do **Tenant Plane**
+  (é lá que a pessoa define a senha e entra). O control plane emite, reemite e revoga; o banco já
+  tem `platform_consumir_convite(token_hash, user_id)` pronta, com uso único sob `FOR UPDATE`.
+  Ligar essa função a uma rota do painel é trabalho de outra frente — até lá, o convite existe mas
+  não pode ser aceito pela interface.

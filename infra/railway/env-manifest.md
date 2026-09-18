@@ -55,6 +55,32 @@ painel, `getEnv` no Go, `Procfile` e `gunicorn.conf.py` no Gerador).
 **Fase 7 (travada):** `SECOND_TENANT_ENABLED` (ausente/`0` em produção; o preflight bloqueia ligada),
 `ONBOARDING_STEP_REQUIREMENTS`.
 
+## PLATFORM ADMIN ONLY (service `oria-admin` · `apps/platform-admin`)
+
+Control Plane. Sessão, cookie e segredo **separados** do painel — nada aqui é reaproveitado de lá.
+Contrato: `docs/architecture/control-plane.md`; runbook: `docs/operations/platform-admin-bootstrap.md`.
+
+| variável | obrigatória | observação |
+|---|---|---|
+| `DATABASE_URL` | sim | **o mesmo Postgres do painel**. Não existe terceiro banco |
+| `PLATFORM_ADMIN_SESSION_SECRET` | sim em produção | ≥ 32 caracteres. Novo e específico do Admin; **não** é o `ADMIN_SESSION_SECRET` do painel |
+| `PLATFORM_ADMIN_URL` | sim em produção | `https://admin.oria.com.br` — origem canônica deste app. Todo link gerado sai dela, e toda mutação precisa vir dela. Sem path, sem query, sem credencial; `https` e nunca `localhost` em produção |
+| `APP_URL` | não | `https://app.oria.com.br`. Entra só para ser **negado** como origem de mutação. Nunca vira sessão nem autorização do control plane |
+| `PUBLIC_SITE_URL` | não | `https://oria.com.br`. Idem: compartilhar domínio-base não dá poder administrativo |
+| `PORT` | não | default `8080` |
+| `NODE_ENV` | sim em produção | `production` liga `Secure`, o prefixo `__Host-` do cookie e o fail-fast |
+| `PLATFORM_ADMIN_SESSION_TTL_HOURS` | não | default `8`, entre 1 e 24 |
+| `SECOND_TENANT_ENABLED` | não | ausente/`0` em produção. O Tenant #1 passa pelo bootstrap interno, não por esta flag |
+| `ONBOARDING_STEP_REQUIREMENTS` | não | mesmo formato do painel; sem ela, a criação exige `passos` no request |
+| `PLATFORM_ADMIN_STATIC_DIR` | não | onde está o build do frontend (default `public/`) |
+
+**NÃO são variáveis do service:** `PLATFORM_ADMIN_EMAIL` e `PLATFORM_ADMIN_PASSWORD`. Elas são
+entrada de um comando pontual (`npm run platform-admin:bootstrap`), rodado uma vez com os valores
+que o usuário escolher. Deixá-las gravadas no service transformaria uma credencial de uso único em
+segredo permanente. Não existe senha padrão.
+
+Domínio: `admin.oria.com.br` (ver `infra/railway/services.md`). Health: `GET /health`. Sem volume.
+
 ## CREATIVES ONLY
 
 | variável | obrigatória | observação |
