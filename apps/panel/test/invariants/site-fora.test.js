@@ -95,8 +95,6 @@ test('site fora · nenhuma página do site responde', async () => {
     '/sc/tijucas', '/pr/curitiba', '/go/goiania',
     '/stories/frame1-sul.html',
     '/data/cities.json', '/data/collections.json', '/data/config.json', '/data/produtos.json',
-    // Existe no disco (os scripts da migração interna leem), mas data/ não é mais servido.
-    '/data/df-regioes-administrativas.json',
     '/src/loja.js', '/src/loja.css',
     '/assets/og-image.png', '/assets/mockups/camiseta-preta.png',
   ];

@@ -1,12 +1,7 @@
 # `migrations/` — migrations de schema do painel (node-pg-migrate)
 
-**Não confundir com `scripts/migracao-*.mjs`.** Aquilo é a migração de *catálogo* da Use Origens
-(mover produtos de Centro/Norte para Sul). Isto aqui é migração de *schema do Postgres*.
-
-| Pasta | O que é | Quem roda |
-|---|---|---|
-| `migrations/` | schema do banco, versionado, controlado por `node-pg-migrate` (tabela `pgmigrations`) | `npm run migrate:up`, no pre-deploy |
-| `scripts/migracao-*.mjs` | migração de catálogo de produtos entre lojas | operador, sob demanda |
+Schema do banco, versionado, controlado por `node-pg-migrate` (tabela `pgmigrations`) e aplicado
+por `npm run migrate:up`, no pre-deploy.
 
 ## Comandos
 

@@ -34,19 +34,16 @@ function criarRaizFalsa() {
     // Código, dados e operação — nunca públicos.
     'server.js': 'segredo',
     'package.json': '{}',
-    'migracao.log': 'log',
+    'deploy.log': 'log',
     '.env': 'OPENAI_API_KEY=x',
     'lib/creative-core/client.js': 'js',
     'routes/criativos.js': 'js',
     'services/creative-core/service.py': 'py',
     'docs/plan.md': 'md',
-    'scripts/migracao-config.mjs': 'js',
+    'scripts/test-db.mjs': 'js',
     'test/arquivos-publicos.test.js': 'js',
     'desktop/package.json': '{}',
     'db/pedidos.json': '{}',
-    // Único sobrevivente de data/: dicionário das regiões administrativas do DF, lido pelos
-    // scripts da migração interna. Nunca foi público e continua não sendo.
-    'data/df-regioes-administrativas.json': '[]',
     // Site da Orgulho Regional: removido do repositório, e recusado aqui mesmo quando existe.
     'index.html': '<h1>home do site</h1>',
     'loja.html': '<h1>loja</h1>',
@@ -119,11 +116,10 @@ test('given html js and css, when served, then they revalidate on every request'
 test('given source code docs scripts logs and internal data, when requested, then they return 404', async (t) => {
   const base = await subirApp(t);
   const privados = [
-    '/server.js', '/package.json', '/migracao.log', '/.env',
+    '/server.js', '/package.json', '/deploy.log', '/.env',
     '/lib/creative-core/client.js', '/routes/criativos.js', '/services/creative-core/service.py',
-    '/docs/plan.md', '/scripts/migracao-config.mjs', '/test/arquivos-publicos.test.js',
+    '/docs/plan.md', '/scripts/test-db.mjs', '/test/arquivos-publicos.test.js',
     '/desktop/package.json', '/db/pedidos.json',
-    '/data/df-regioes-administrativas.json',
     '/src/../server.js', '/assets/%2e%2e/server.js',
   ];
   for (const url of privados) {

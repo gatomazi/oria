@@ -304,12 +304,10 @@ test('migrations · migration que falha → exit ≠ 0 e rollback do lote inteir
   } finally { await pool.end(); }
 });
 
-test('migrations · a pasta não é confundida com scripts/migracao-*.mjs', () => {
-  const fs = require('node:fs');
-  const readme = fs.readFileSync(path.join(RAIZ, 'migrations', 'README.md'), 'utf8');
-  assert.match(readme, /scripts\/migracao-\*\.mjs/,
-    'o README precisa dizer explicitamente qual é a diferença — os nomes são quase iguais');
-});
+// Havia aqui um teste exigindo que migrations/README.md explicasse a diferença entre esta pasta e
+// `scripts/migracao-*.mjs` (os nomes eram quase iguais). Aqueles scripts eram da migração de
+// catálogo da Use Origens, pontual, e saíram do repositório junto com o site — não existe mais
+// ambiguidade a desfazer, e o parágrafo do README saiu junto.
 
 test('migrations · nenhum DDL nem backfill roda no boot (critério de saída 4 da Fase 0)', () => {
   const fs = require('node:fs');

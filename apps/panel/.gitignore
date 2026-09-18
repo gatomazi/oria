@@ -17,11 +17,6 @@ docs/webhook-log.json
 desktop/node_modules/
 desktop/dist/
 
-# Saída e estado dos scripts de migração (regeneráveis, escritos em runtime)
-migracao.log
-verificar.log
-scripts/.migracao-estado.jsonl
-
 # Prints do painel para documentação. Ficam SÓ na máquina: as telas mostram dados reais de
 # cliente — nome completo, e-mail e telefone aparecem inteiros em Pedidos e em Recuperação.
 # Mesma razão de docs/webhook-log.json acima. Git não esquece: uma vez empurrado, apagar depois
