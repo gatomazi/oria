@@ -16,7 +16,7 @@ da criação do service.
 
 ## 2. Branch / HEAD
 
-`main`, HEAD `167baa7`. As branches de trabalho (`feature/platform-admin`, `refactor/panel-flatten`)
+`main`, HEAD `b20afcf`. As branches de trabalho (`feature/platform-admin`, `refactor/panel-flatten`)
 já foram integradas.
 
 ## 3. Merge para `main`
@@ -36,12 +36,28 @@ conflito entre elas.
 
 Feito. `origin/main` = `167baa7`.
 
-## 5. CI
+## 5. CI — **verde**
 
-Em execução no momento em que este relatório foi escrito — a fila acumulou seis pushes e o job do
-painel leva ~30 min. O run anterior (`4a7d712`) fechou **verde nos quatro jobs**. Localmente,
-na árvore mesclada, rodei o que o CI roda: control plane 130/130, invariantes de migration do
-painel 30/30, `repo:self-check` e contratos OK.
+`b20afcf`: os cinco jobs passaram (painel, control plane, contratos/autocontenção, Gerador, Go).
+
+Antes disso o CI reprovou duas vezes, e as duas eram achados legítimos do merge — nenhum deles
+apareceria sem juntar as frentes:
+
+1. **Dry-run do runbook.** O teste exigia `No migrations to run!` na RELEASE D'. Isso só valia
+   enquanto o HEAD tivesse o mesmo schema da D0; a primeira migration nova depois dela (a do
+   control plane) derrubou o teste sem que nada estivesse errado. A expectativa passou a ser
+   derivada do repositório (migrations do HEAD menos as da D0), então continua valendo conforme o
+   schema andar — e o que o teste guarda segue sendo o essencial: nenhuma migration **inesperada**
+   roda naquele degrau.
+2. **Falso positivo de vazamento de segredo.** A conferência procurava a senha do banco solta no
+   texto. A senha do Postgres de teste é palavra de dicionário (no CI, `teste`), e o pre-deploy
+   passou a imprimir o SQL de uma migration cujos comentários dizem "o teste compara as duas".
+   Agora procura `usuario:senha@`, que é a forma em que credencial vaza de verdade; os segredos
+   longos e aleatórios continuam conferidos sozinhos.
+
+Também corrigi o `test:negative` do control plane, que não subia banco: o script exigia
+`ADMIN_TEST_DATABASE_URL` e a própria mensagem de erro mandava rodar pelo comando que não a
+definia.
 
 **Corrigi uma lacuna aqui:** os 110 testes do control plane **não eram executados por ninguém** —
 nem pelo `test-all.mjs`, nem pelo CI. Agora há um job próprio (`a7c2e23`) rodando a suíte e os
@@ -190,7 +206,7 @@ tocados pela migration do control plane rodaram de novo na árvore mesclada.
 
 ## 29. Commits
 
-22 commits novos em `main` desde `1c74ec1`, incluindo os três merges. Nenhum segredo, nenhum valor
+24 commits novos em `main` desde `1c74ec1`, incluindo os três merges. Nenhum segredo, nenhum valor
 real de variável.
 
 ## 30. Blockers
@@ -199,7 +215,7 @@ real de variável.
 2. **O convite ainda não pode ser aceito pela interface.** A rota de aceite é do Tenant Plane
    (painel); está sendo construída em `feature/invite-acceptance`. Sem ela, o convite é emitido mas
    o owner não entra pela UI.
-3. **CI ainda em execução** no momento da escrita.
+3. ~~CI em execução~~ — **resolvido**: verde nos cinco jobs em `b20afcf`.
 
 ## 31. O que você precisa fazer amanhã
 
