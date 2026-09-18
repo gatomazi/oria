@@ -145,9 +145,19 @@ plan_features(plan_id UUID → plans ON DELETE CASCADE, feature TEXT, habilitada
 (`apps/panel/lib/platform/entitlements.js` → `FEATURES`). Um teste compara a lista do `CHECK` com
 o registry: divergir reprova.
 
-Vocabulário (12): `whatsapp`, `instagram`, `advancedAutomations`, `catalog`, `exchanges`,
-`refunds`, `financial`, `creative_generator`, `creative_clean_angles`, `creative_remarketing`,
-`creative_funnel_visual`, `creative_multi_product`.
+Vocabulário comercial (5): `whatsapp`, `instagram`, `advancedAutomations`, `financial`,
+`creative_generator`.
+
+Sete chaves foram **reclassificadas** e saíram do vocabulário comercial:
+
+- `catalog`, `exchanges`, `refunds` → **connector capabilities** da Reserva Ink;
+- `creative_clean_angles`, `creative_remarketing`, `creative_funnel_visual`,
+  `creative_multi_product` → **module capabilities** de `creative_generator`.
+
+Elas seguem aceitas pelo `CHECK` do domain (remoção física é a última fase da depreciação), mas o
+código nega: o teste de registry compara o `CHECK` com `FEATURES ∪ FEATURES_DEPRECIADAS` e exige
+que as duas listas sejam disjuntas. A classificação item a item, com evidência de código, está em
+[`features-vs-connectors.md`](./features-vs-connectors.md).
 
 ### 3.4 `organization_subscriptions`
 
@@ -452,13 +462,17 @@ nega, plano nulo nega — e **nunca** faz `{ ...DEFAULTS, ...plano }`.
 
 ### 7.1 O plano técnico `internal`
 
-Semeado pela migration (é **dado**, não bypass), com **exatamente** as 10 features do perfil do
-Tenant #1 (`apps/panel/config/entitlements/tenant1-entitlements.json`):
+Semeado pela migration (é **dado**, não bypass), com **exatamente** as features comerciais do
+perfil do Tenant #1 (`apps/panel/config/entitlements/tenant1-entitlements.json`):
 
 ```text
-catalog · creative_clean_angles · creative_funnel_visual · creative_generator
-creative_multi_product · creative_remarketing · exchanges · financial · refunds · whatsapp
+creative_generator · financial · whatsapp
 ```
+
+A migration `0022` tirou do plano as sete chaves reclassificadas. Isso **não** removeu acesso: as
+áreas de Catálogo, Trocas e Reembolsos passaram a depender do Connector Ink conectado, e os quatro
+modos de criativos vêm de `creative_generator`. Ver
+[`features-vs-connectors.md` § Migração sem regressão](./features-vs-connectors.md#migração-sem-regressão).
 
 **Não** inclui `instagram` nem `advancedAutomations`. Não implica allow-all: as duas ausentes são
 negadas como qualquer outra ausência. Um teste compara a semente com o JSON do perfil: divergir
@@ -663,7 +677,7 @@ não há fonte (§17 do comando).
 {
   "id": "uuid", "chave": "internal", "nome": "Internal", "descricao": "…",
   "status": "active",
-  "features": ["catalog", "whatsapp", "…"],
+  "features": ["financial", "whatsapp", "…"],
   "assinaturasAtivas": 1,
   "criadoEm": "…", "atualizadoEm": "…"
 }
@@ -732,7 +746,7 @@ passou por onboarding (é o caso de Organizations legadas).
   "organization": { "id": "uuid", "nome": "Use Origens", "status": "active", "criadoEm": "…" },
   "store": { "id": "uuid", "nome": "Use Origens" },
   "subscription": { "id": "uuid", "plano": { "chave": "internal", "nome": "Internal" }, "status": "active" },
-  "entitlements": { "catalog": true, "whatsapp": true, "instagram": false, "…": false },
+  "entitlements": { "financial": true, "whatsapp": true, "instagram": false, "…": false },
   "invite": {
     "id": "uuid", "email": "pessoa@exemplo.com", "papel": "owner",
     "token": "43-chars-base64url",
@@ -771,8 +785,8 @@ passou por onboarding (é o caso de Organizations legadas).
   "plano": { "id": "uuid", "chave": "internal", "nome": "Internal", "features": ["…"] },
   "subscription": { "id": "uuid", "status": "active", "iniciadaEm": "…" },
   "entitlements": {
-    "efetivos": { "catalog": true, "instagram": false, "…": false },
-    "origem":   { "catalog": "plano", "whatsapp": "override", "instagram": "ausente" }
+    "efetivos": { "financial": true, "instagram": false, "…": false },
+    "origem":   { "financial": "plano", "whatsapp": "override", "instagram": "ausente" }
   },
   "overrides": [{ "feature": "whatsapp", "permitido": true, "motivo": "…", "criadoEm": "…" }],
   "onboarding": { "status": "…", "proximoPasso": "…", "passos": [ … ], "atualizadoEm": "…" },
