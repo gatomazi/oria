@@ -52,7 +52,7 @@ const GRUPOS_BASE: VariavelGrupo[] = [
       {
         chave: 'pedido.link_pagamento',
         label: 'Link de pagamento completo — pro CORPO do texto (só evento pix.pendente)',
-        exemplo: 'https://orgulhoregional.com.br/AbCdEfGhIj',
+        exemplo: 'https://orgulhoregional.com.br/hotpix/AbCdEfGhIj',
       },
       {
         chave: 'pedido.id_pagamento',

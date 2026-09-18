@@ -161,7 +161,10 @@
   }
 
   function init() {
-    var id = window.location.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+    // A hotpage responde em /hotpix/{id}: o id é o ÚLTIMO segmento do caminho, não o caminho
+    // inteiro (que era o caso quando a rota era /{id}, sem prefixo).
+    var segmentos = window.location.pathname.split('/').filter(Boolean);
+    var id = segmentos.length ? segmentos[segmentos.length - 1] : '';
     if (!id) { renderErro('Pedido não encontrado.'); return; }
 
     fetch('/api/pedidos/' + encodeURIComponent(id))

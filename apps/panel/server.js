@@ -12867,7 +12867,7 @@ const VARIAVEIS_EXEMPLO = {
   'pedido.transportadora': 'Correios',
   'pedido.previsao_entrega': '15/09/2026',
   'pedido.rastreio': 'https://exemplo.com/rastreio',
-  'pedido.link_pagamento': 'https://orgulhoregional.com.br/AbCdEfGhIj',
+  'pedido.link_pagamento': 'https://orgulhoregional.com.br/hotpix/AbCdEfGhIj',
   'pedido.id_pagamento': 'AbCdEfGhIj',
   'carrinho.produto': 'Camiseta Exemplo',
   'carrinho.itens': '2x Camiseta Azul',
@@ -13474,7 +13474,8 @@ async function enviarLembretePix(chave, registro, eventoConfig, order) {
   try {
     const hotpage = await garantirHotpagePedidoPix(registro.loja, registro.inkOrderId, order);
     if (hotpage) {
-      vars['pedido.link_pagamento'] = `${SITE_BASE_URL}/${hotpage.id}`;
+      // Caminho canônico da hotpage: `/hotpix/{id}` (ver a rota no fim deste arquivo).
+      vars['pedido.link_pagamento'] = `${SITE_BASE_URL}/hotpix/${hotpage.id}`;
       vars['pedido.id_pagamento'] = hotpage.id;
     }
   } catch (err) {
@@ -15954,9 +15955,24 @@ app.get('/api/pedidos/:id', async (req, res) => {
   });
 });
 
-// Hotpage pública do pedido: https://orgulhoregional.com.br/{idpedido}
-// Fica por último — só entra em jogo se nenhuma rota estática/regional acima combinou
-app.get(new RegExp(`^/([A-Za-z0-9_-]{10,14})$`), (req, res) => {
+// Hotpage pública de pagamento Pix: `/hotpix/{id}`.
+//
+// O prefixo é o ponto. A rota morava em `/{id}` — um segmento só, sem prefixo nenhum —, o que a
+// deixava ambígua com QUALQUER outra rota de um segmento do serviço: a landing, `/admin`,
+// `/oria`, `/politica-de-privacidade`. O que segurava a ambiguidade era a ordem de registro mais
+// um regex de comprimento (10-14 caracteres), e nada disso aparece em quem lê a rota nova: um id
+// de 12 caracteres com o nome de uma página futura já teria colidido em silêncio.
+//
+// O esquema antigo não ficou respondendo em paralelo, e é de propósito: os links de pagamento que
+// já saíram para clientes foram gerados pela stack legada (outro domínio, outro servidor, ainda no
+// ar), e continuam sendo servidos por ela. Neste serviço nada foi enviado ainda — então é corte
+// limpo, sem redirect e sem rota de um segmento sobrevivendo "por garantia".
+// test/invariants/hotpix.test.js trava os dois lados: `/hotpix/{id}` serve, `/{id}` não.
+//
+// Sem autenticação por decisão de produto: o id do link É a credencial (a mesma capability que
+// `/api/pedidos/:id` e `/assets/pedidos/:id.png` já usam). O HTML aqui é estático — quem resolve o
+// id e busca o dado é `src/pedido.js`, contra a API.
+app.get('/hotpix/:id', (req, res) => {
   res.sendFile(path.join(__dirname, 'pedido.html'));
 });
 
