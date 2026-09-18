@@ -327,6 +327,10 @@ const TABELAS_GLOBAIS = Object.freeze([
     motivo: 'convite do owner emitido pelo control plane: só o hash do token, consumido por função SECURITY DEFINER',
   }),
   Object.freeze({
+    tabela: 'platform_organization_creations',
+    motivo: 'idempotência da criação de Organization pelo control plane: (platform admin, chave) → Organization; nasce antes da própria Organization (FK adiada)',
+  }),
+  Object.freeze({
     tabela: 'platform_audit_logs',
     motivo: 'rastro das ações do control plane; atravessa Organizations por desenho e não pode ser lido nem apagado pelo tenant',
   }),
@@ -339,7 +343,7 @@ const TABELAS_GLOBAIS_PRIVADAS = Object.freeze([
   'tenancy_mapeamentos', 'external_resource_claims', 'job_leases', 'onboarding_invites', 'onboarding_idempotencia',
   'platform_admins', 'platform_admin_sessions', 'plans', 'plan_features',
   'organization_subscriptions', 'organization_entitlement_overrides', 'organization_owner_invites',
-  'platform_audit_logs',
+  'platform_organization_creations', 'platform_audit_logs',
 ]);
 
 function nomesTenant() {
