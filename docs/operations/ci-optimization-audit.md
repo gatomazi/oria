@@ -185,6 +185,27 @@ derivados dos campos reais do JSON do gate (`codeStatus`, `ops[]`, `dogfood.stat
 `bloqueios[]`) — nada é inferido nem reescrito. Para gate de release/rollout a régua é outra:
 `--strict` exige `OVERALL READY` e reprova no exit 2.
 
+#### Prova no Actions — MEDIDO
+
+O `full-verification.yml` rodou de verdade numa branch descartável (run 35397175247), onde **só o
+gatilho** diferia do workflow final. Resultado: **17 jobs, todos verdes**, incluindo os **8 shards de
+banco nas duas roles** (`owner` e `app`) e o job do gate.
+
+O gate saiu com **exit 2** e o job ficou **verde**, com o summary abrindo assim:
+
+```
+PRODUCTIZATION
+CODE: PASS
+ROLLOUT: BLOCKED
+```
+
+e, abaixo, `CODE PASS · OPS 2/36 verificados · DOGFOOD NOT STARTED · OVERALL BLOCKED`, mais a lista
+nominal dos OPS pendentes — tudo vindo do JSON do gate. É exatamente o contrato: pendência
+operacional não vira regressão de código, e rollout bloqueado não vira silêncio.
+
+Tempos: job do gate **1049 s** (ele roda a suíte inteira por conta própria), wall do
+`full-verification` **1063 s**; sem o gate, os outros 16 jobs fecham em **704 s**.
+
 ### 5.2 Suítes que não foram shardadas (D7)
 
 - `migrations do zero` + `migrations idempotentes`: job próprio, sequencial, Postgres próprio.
