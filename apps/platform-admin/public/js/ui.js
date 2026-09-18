@@ -18,11 +18,18 @@ export function esc(valor) {
     .replace(/'/g, '&#39;');
 }
 
+// Fragmento de markup montado por ESTA camada — nunca por dado de fora. É o que `html` devolve e
+// o que `cru()` marca. Tem `toString()` para que os pontos que escrevem em `innerHTML` continuem
+// recebendo texto sem conversão explícita.
+function fragmento(texto) {
+  return { [MARCA_CRUA]: true, texto, toString() { return texto; } };
+}
+
 // Idempotente de propósito: `cru(cru(x))` é `cru(x)`. Sem isso, um fragmento já marcado que
 // passasse por `cru()` de novo viraria "[object Object]" na tela — falha silenciosa, o pior tipo.
 export function cru(texto) {
   if (texto && typeof texto === 'object' && texto[MARCA_CRUA]) return texto;
-  return { [MARCA_CRUA]: true, texto: String(texto) };
+  return fragmento(String(texto));
 }
 
 function interpolar(valor) {
@@ -32,10 +39,17 @@ function interpolar(valor) {
   return esc(valor);
 }
 
+// Devolve um FRAGMENTO, não uma string. Essa é a diferença que faz composição funcionar: um
+// `html` interpolado dentro de outro `html` é markup que este código escreveu, e entra inteiro;
+// qualquer outro valor cai em `esc()`. Quando isto devolvia string, o template aninhado era
+// indistinguível de dado e saía escapado — a tela mostrava `<strong>` como texto.
+//
+// A regra de segurança não muda: markup vem de template literal escrito aqui; valor interpolado
+// é escapado sempre, a menos que alguém o marque explicitamente com `cru()`.
 export function html(partes, ...valores) {
   let saida = partes[0];
   for (let i = 0; i < valores.length; i += 1) saida += interpolar(valores[i]) + partes[i + 1];
-  return saida;
+  return fragmento(saida);
 }
 
 // ── Ícones (SVG inline; nenhum arquivo externo, nenhuma fonte de ícones) ──────────────────

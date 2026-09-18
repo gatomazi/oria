@@ -33,6 +33,14 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // reprovar. O defeito é sempre REALISTA — é o atalho que alguém escreveria de boa-fé.
 const CONTROLES = [
   {
+    nome: 'markup-escapado',
+    descricao: 'o template devolver STRING em vez de fragmento — o atalho natural, e o que fazia `<strong>` aparecer como texto na tela',
+    arquivo: 'public/js/ui.js',
+    de: '  return fragmento(saida);\n}',
+    para: '  return saida;\n}',
+    testes: ['test/render.test.js'],
+  },
+  {
     nome: 'bypassrls',
     descricao: 'listar Organizations por query global crua, em vez do read model (o atalho "sou admin, posso ver tudo")',
     arquivo: 'lib/readmodels.js',
