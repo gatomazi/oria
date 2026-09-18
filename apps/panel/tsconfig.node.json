@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": true,
+    // A config do Vite virou `.mjs` (o manifesto do painel é CommonJS). Para o `tsc -b` continuar
+    // enxergando o arquivo, precisa aceitar JS; `checkJs` fica desligado porque o que se quer aqui
+    // é a config no projeto, não tipagem de JS.
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["vite.config.mjs"]
+}

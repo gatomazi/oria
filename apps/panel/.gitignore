@@ -13,6 +13,12 @@ img-cache/
 docs/webhook-log.json
 
 
+# Build do SPA do painel (Vite) e o cache incremental do tsc. Antes era `admin/dist` +
+# `admin/node_modules`; a pasta `admin/` acabou e o frontend mora na raiz do painel.
+dist/
+*.tsbuildinfo
+*.local
+
 # App desktop (Electron)
 desktop/node_modules/
 desktop/dist/
