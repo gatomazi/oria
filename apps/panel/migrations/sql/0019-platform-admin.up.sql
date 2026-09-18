@@ -500,6 +500,9 @@ $fn$;
 -- Nenhuma delas é pública. Quando o control plane ganhar role própria (passo posterior, com o
 -- precedente do OPS-14), o GRANT EXECUTE nessas funções é a única mudança necessária.
 REVOKE ALL ON FUNCTION platform_admin_owners_ativos() FROM PUBLIC;
+-- A função do trigger também sai de PUBLIC: o trigger continua disparando (a checagem de
+-- EXECUTE de trigger acontece na CRIAÇÃO, não a cada linha), e ninguém a chama à mão.
+REVOKE ALL ON FUNCTION platform_admin_proteger_ultimo_owner() FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_bootstrap_reservar() FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_listar_organizations(TEXT, TEXT, INTEGER, TIMESTAMPTZ, UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_organization_resumo(UUID) FROM PUBLIC;
