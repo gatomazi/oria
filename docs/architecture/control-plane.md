@@ -145,14 +145,19 @@ plan_features(plan_id UUID → plans ON DELETE CASCADE, feature TEXT, habilitada
 (`apps/panel/lib/platform/entitlements.js` → `FEATURES`). Um teste compara a lista do `CHECK` com
 o registry: divergir reprova.
 
-Vocabulário comercial (5): `whatsapp`, `instagram`, `advancedAutomations`, `financial`,
-`creative_generator`.
+Vocabulário (11), em duas camadas:
 
-Sete chaves foram **reclassificadas** e saíram do vocabulário comercial:
+- **comercial (8)**: `whatsapp`, `instagram`, `advancedAutomations`, `financial`,
+  `creative_generator`, `meta_ads`, `google_ads`, `analytics_ga4`;
+- **em transição (3)**: `catalog`, `exchanges`, `refunds` — já classificadas como **connector
+  capabilities** da Reserva Ink, ainda no vocabulário porque `requireEntitlement` confere essas
+  chaves nas rotas de Catálogo, Trocas e Reembolsos. Tirá-las antes de o guard de connector ser
+  ligado não seria reclassificação: seria `403` em tela que funciona.
 
-- `catalog`, `exchanges`, `refunds` → **connector capabilities** da Reserva Ink;
-- `creative_clean_angles`, `creative_remarketing`, `creative_funnel_visual`,
-  `creative_multi_product` → **module capabilities** de `creative_generator`.
+Quatro chaves foram **reclassificadas de fato** e saíram: `creative_clean_angles`,
+`creative_remarketing`, `creative_funnel_visual` e `creative_multi_product` → **module
+capabilities** de `creative_generator`. Puderam sair porque o consumidor runtime delas já tinha
+migrado.
 
 Elas seguem aceitas pelo `CHECK` do domain (remoção física é a última fase da depreciação), mas o
 código nega: o teste de registry compara o `CHECK` com `FEATURES ∪ FEATURES_DEPRECIADAS` e exige
@@ -462,21 +467,26 @@ nega, plano nulo nega — e **nunca** faz `{ ...DEFAULTS, ...plano }`.
 
 ### 7.1 O plano técnico `internal`
 
-Semeado pela migration (é **dado**, não bypass), com **exatamente** as features comerciais do
-perfil do Tenant #1 (`apps/panel/config/entitlements/tenant1-entitlements.json`):
+Semeado pelas migrations (é **dado**, não bypass), com a composição declarada em
+`apps/platform-admin/lib/entitlements.js` → `FEATURES_INTERNAL`:
 
 ```text
-creative_generator · financial · whatsapp
+whatsapp · financial · creative_generator · meta_ads · google_ads · analytics_ga4
+catalog · exchanges · refunds        (em transição)
 ```
 
-A migration `0022` tirou do plano as sete chaves reclassificadas. Isso **não** removeu acesso: as
-áreas de Catálogo, Trocas e Reembolsos passaram a depender do Connector Ink conectado, e os quatro
-modos de criativos vêm de `creative_generator`. Ver
-[`features-vs-connectors.md` § Migração sem regressão](./features-vs-connectors.md#migração-sem-regressão).
+A migration `0024` é **aditiva**: acrescenta `meta_ads`, `google_ads` e `analytics_ga4` ao plano e
+ao domain, e não apaga nada. Ela **não** tira `catalog`, `exchanges` nem `refunds` (o runtime ainda
+as confere) e **não** apaga os quatro modos de criativos, que passaram a vir de
+`creative_generator` no código novo mas ainda são lidos do plano pelo código de produção atual — a
+limpeza física é uma migration separada, para depois do deploy. Enquanto isso, as quatro linhas
+antigas ficam como ruído inofensivo (o Oria Admin só renderiza features do vocabulário, e a
+resolução efetiva itera sobre `FEATURES`). A ordem correta é converter o consumidor primeiro. Ver
+[`features-vs-connectors.md` § Plano de retirada](./features-vs-connectors.md#plano-de-retirada-10).
 
 **Não** inclui `instagram` nem `advancedAutomations`. Não implica allow-all: as duas ausentes são
-negadas como qualquer outra ausência. Um teste compara a semente com o JSON do perfil: divergir
-reprova.
+negadas como qualquer outra ausência. Um teste compara a semente com `FEATURES_INTERNAL`, e outro
+exige que o plano contenha tudo que o perfil do Tenant #1 liga: divergir reprova.
 
 ### 7.2 Efeito da suspensão (§14)
 

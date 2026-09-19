@@ -33,6 +33,20 @@ const FEATURES = Object.freeze([
   'advancedAutomations',
   'financial',
   'creative_generator',
+  'meta_ads',
+  'google_ads',
+  'analytics_ga4',
+  // ── Em transição ────────────────────────────────────────────────────────────────────────────
+  // Conceitualmente já são CONNECTOR CAPABILITIES (ver docs/architecture/features-vs-connectors.md).
+  // Continuam aqui porque o runtime delas ainda não migrou: `requireEntitlement` confere estas
+  // chaves nas rotas de Catálogo, Trocas e Reembolsos. Tirá-las agora não seria reclassificação —
+  // seria 403 em telas que funcionam hoje, porque chave fora de FEATURES é negada como desconhecida.
+  //
+  // Saem quando o runtime correspondente migrar para "connector conectado + capability suportada".
+  // O plano de retirada está em docs/architecture/features-vs-connectors.md.
+  'catalog',
+  'exchanges',
+  'refunds',
 ]);
 
 // Chaves que JÁ FORAM feature comercial e não são mais. Ficam DECLARADAS (não apagadas) por três
@@ -42,21 +56,32 @@ const FEATURES = Object.freeze([
 //      diferença entre código e banco é DELIBERADA;
 //   2. `app_config.entitlements` de organizations já semeadas ainda tem as chaves gravadas, e
 //      elas precisam ser lidas como RUÍDO IGNORADO, nunca como concessão;
-//   3. quem procurar a chave antiga acha aqui para onde ela foi.
+//   3. quem procurar a chave antiga acha aqui para onde ela foi;
+//   4. `plan_features` ainda carrega as quatro linhas até a migration de limpeza — a 0024 é aditiva
+//      de propósito, porque o código de produção anterior as lê do plano e o pre-deploy migra antes
+//      de a release nova assumir. Elas chegam aqui via `entitlements_efetivos` e são descartadas
+//      por `planoEfetivo`; nunca concedem nada.
 //
 // São `deprecated`, `non-commercial` e IGNORADAS na resolução de entitlement: fora de FEATURES,
 // `checkEntitlement` as nega como "feature desconhecida" e `planoEfetivo` nem as devolve. Nenhuma
 // volta a ser checkbox de plano (complemento §18/§19).
 const FEATURES_DEPRECIADAS = Object.freeze({
-  // → Connector capabilities da Reserva Ink (lib/platform/connector-capabilities.js).
-  catalog: 'connector_capability: ink.products, ink.collections, ink.product_clusters, ink.promotions, ink.catalog_sync, ink.product_feed, ink.inventory',
-  exchanges: 'connector_capability: ink.exchanges',
-  refunds: 'connector_capability: ink.refunds',
   // → Module capabilities do Gerador (lib/creative-core/module-capabilities.js).
+  // Estas quatro SAÍRAM de verdade: nenhum runtime as consulta. `resolveFlags` liga os quatro
+  // motores a partir de `creative_generator`, e é só isso que decide acesso hoje.
   creative_clean_angles: 'module_capability: creative_generator/clean_angles',
   creative_remarketing: 'module_capability: creative_generator/remarketing',
   creative_funnel_visual: 'module_capability: creative_generator/funnel_visual',
   creative_multi_product: 'module_capability: creative_generator/multi_product',
+});
+
+// Chaves JÁ RECLASSIFICADAS como capacidade, mas cujo runtime ainda depende delas como entitlement.
+// Ficam em FEATURES (senão o guard nega tudo) e ficam registradas aqui com a condição de saída —
+// para ninguém apagá-las do plano achando que é só limpeza de vocabulário.
+const FEATURES_EM_TRANSICAO = Object.freeze({
+  catalog: 'connector_capability: ink.products, ink.collections, ink.product_clusters, ink.promotions, ink.catalog_sync, ink.product_feed, ink.inventory — sai quando o Catálogo Ink migrar',
+  exchanges: 'connector_capability: ink.exchanges — sai quando o runtime de Trocas migrar',
+  refunds: 'connector_capability: ink.refunds — sai quando o runtime de Reembolsos migrar',
 });
 
 // Rodada 19 (§9): estado de IMPLEMENTAÇÃO de cada feature do vocabulário. É fato do código, não
@@ -64,6 +89,9 @@ const FEATURES_DEPRECIADAS = Object.freeze({
 // `npm run tenancy:seed-entitlements`; o teste `r19-entitlement-seed` confere esta tabela contra as
 // rotas protegidas (feature-routes.js), as flags do Creative Core e a navegação do admin.
 //   implementada       há rota/motor que confere a feature e tela que a usa
+//   sem_guard          a área existe e está no ar, mas NENHUMA rota confere esta chave ainda —
+//                      a feature descreve o produto, não protege nada. Não pode ser semeada
+//                      como se protegesse; ligar o guard é o que a promove a `implementada`.
 //   em_breve           declarada na navegação como comingSoon; nenhuma rota a confere
 //   nao_implementada   só existe no vocabulário; nenhuma rota nem tela a confere
 const ESTADO_DAS_FEATURES = Object.freeze({
@@ -72,6 +100,16 @@ const ESTADO_DAS_FEATURES = Object.freeze({
   advancedAutomations: 'nao_implementada',
   financial: 'implementada',
   creative_generator: 'implementada',
+  // Meta Ads, Google Ads e GA4 estão no ar e são parte do que o Oria vende, mas nenhuma rota
+  // confere a chave: entraram no vocabulário nesta rodada para o plano poder descrevê-las.
+  meta_ads: 'sem_guard',
+  google_ads: 'sem_guard',
+  analytics_ga4: 'sem_guard',
+  // Em transição: o runtime ainda confere estas chaves, então continuam implementadas enquanto
+  // estiverem em FEATURES.
+  catalog: 'implementada',
+  exchanges: 'implementada',
+  refunds: 'implementada',
 });
 const FEATURES_IMPLEMENTADAS = Object.freeze(FEATURES.filter((f) => ESTADO_DAS_FEATURES[f] === 'implementada'));
 
@@ -190,6 +228,7 @@ async function planoEfetivo(carregarPlano) {
 
 module.exports = {
   FEATURES,
+  FEATURES_EM_TRANSICAO,
   FEATURES_DEPRECIADAS,
   ESTADO_DAS_FEATURES,
   FEATURES_IMPLEMENTADAS,

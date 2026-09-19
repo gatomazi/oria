@@ -160,7 +160,7 @@ test('r19 §1 · banco: preflight → plan → apply → verify do arquivo de ro
   const plano = await e.executar('plan', args, env);
   assert.equal(plano.codigo, 0, plano.linhas.join('\n'));
   assert.ok(plano.linhas.includes('  alvo de rollout: sim (rollout: true, cenário B)'), plano.linhas.join('\n'));
-  assert.ok(plano.linhas.some((l) => l.startsWith('    entitlements (perfil tenant1-operacao-interna): creative_generator, ')), plano.linhas.join('\n'));
+  assert.ok(plano.linhas.some((l) => l.startsWith('    entitlements (perfil tenant1-operacao-interna): catalog, ')), plano.linhas.join('\n'));
   assert.ok(plano.linhas.includes(`  whatsapp: WABA 1200000000009 + número 5511900000009 → ${B} (declarado)`));
   assert.ok(plano.linhas.some((l) => l.includes('organization') && l.includes('"Use Origens"')));
   assert.ok(plano.linhas.includes('  ações destrutivas: nenhuma'));

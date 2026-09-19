@@ -5,14 +5,22 @@
 // API. Quando o backend devolve um valor que não está aqui, a UI mostra o valor cru — nunca
 // esconde e nunca inventa um rótulo.
 
-// Só FEATURE COMERCIAL. Connector capability (Reserva Ink) e module capability (modos do Gerador)
-// NÃO aparecem como checkbox de plano — são outro eixo, e a tela de planos não é o lugar deles.
+// Módulo capability (modos do Gerador) NÃO aparece como checkbox de plano — é outro eixo, e a
+// tela de planos não é o lugar dele. Catálogo, Trocas e Reembolsos aparecem: já foram
+// classificados como capacidade do Connector Ink, mas o painel ainda os confere como entitlement,
+// então tirá-los do formulário esconderia do operador uma chave que decide acesso de verdade.
 export const FEATURES = Object.freeze([
   'whatsapp',
   'instagram',
   'advancedAutomations',
   'financial',
   'creative_generator',
+  'meta_ads',
+  'google_ads',
+  'analytics_ga4',
+  'catalog',
+  'exchanges',
+  'refunds',
 ]);
 
 export const ROTULO_FEATURE = Object.freeze({
@@ -21,6 +29,12 @@ export const ROTULO_FEATURE = Object.freeze({
   advancedAutomations: 'Automações avançadas',
   financial: 'Financeiro',
   creative_generator: 'Gerador de Criativos',
+  meta_ads: 'Meta Ads',
+  google_ads: 'Google Ads',
+  analytics_ga4: 'Analytics (GA4)',
+  catalog: 'Catálogo',
+  exchanges: 'Trocas',
+  refunds: 'Reembolsos',
 });
 
 // Agrupamento comercial da tela de plano (comando §11 · complemento §7). É só apresentação: a
@@ -30,6 +44,10 @@ export const GRUPOS_DE_FEATURES = Object.freeze([
   Object.freeze({ titulo: 'Comunicação', features: Object.freeze(['whatsapp', 'instagram', 'advancedAutomations']) }),
   Object.freeze({ titulo: 'Financeiro', features: Object.freeze(['financial']) }),
   Object.freeze({ titulo: 'Criativos', features: Object.freeze(['creative_generator']) }),
+  Object.freeze({ titulo: 'Mídia e analytics', features: Object.freeze(['meta_ads', 'google_ads', 'analytics_ga4']) }),
+  // Em transição para capacidade do Connector Ink: continuam no formulário enquanto o painel as
+  // conferir como entitlement. Ver docs/architecture/features-vs-connectors.md § Plano de retirada.
+  Object.freeze({ titulo: 'Loja (Connector Ink)', features: Object.freeze(['catalog', 'exchanges', 'refunds']) }),
 ]);
 
 // Read-only, para o detalhe do plano (complemento §24): o que uma feature inclui hoje por dentro.

@@ -128,8 +128,8 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       '1790000400000_platform-admin',
       '1790000500000_convite-aceite',
       '1790000600000_store-id-connector-ink',
-      '1790000700000_features-reclassificadas',
       '1790000800000_entitlement-canonico',
+      '1790000900000_composicao-do-internal',
     ]);
   } finally {
     await pool.end();

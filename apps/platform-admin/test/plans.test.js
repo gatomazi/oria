@@ -13,6 +13,7 @@ const h = require('./harness');
 let db;
 let app;
 let org;
+let entitlementsDaCriacao;
 
 test.before(async () => {
   db = await h.bancoNovo();
@@ -30,6 +31,7 @@ test.before(async () => {
   });
   assert.equal(r.status, 201, JSON.stringify(r.corpo));
   org = r.corpo.organization;
+  entitlementsDaCriacao = r.corpo.entitlements;
 });
 
 test.after(async () => {
@@ -58,34 +60,63 @@ test('registry · as TRÊS cópias do vocabulário de features batem (app, paine
                          JOIN pg_type t ON t.oid = c.contypid
                         WHERE t.typname = 'platform_feature' LIMIT 1)`
   );
-  const doBanco = [...rows[0].def.matchAll(/'([A-Za-z_]+)'/g)].map((m) => m[1]);
-  // O domain AINDA aceita as sete chaves reclassificadas. É deliberado: estreitar o domain é a
-  // última fase da depreciação (Phase E), depois que nenhuma linha e nenhum ambiente carregarem
-  // mais as chaves antigas. O que NÃO pode acontecer é o domain aceitar algo que não seja nem
-  // vocabulário comercial nem chave declarada como depreciada — aí seria divergência de verdade.
+  // Dígitos entram na classe: `analytics_ga4` tem um, e sem eles a chave era descartada do parse
+  // e parecia estar FALTANDO no domain — o teste reprovava por um defeito dele, não do banco.
+  const doBanco = [...rows[0].def.matchAll(/'([A-Za-z0-9_]+)'/g)].map((m) => m[1]);
+  // O domain AINDA aceita as chaves depreciadas. É deliberado: estreitar o domain é a última fase
+  // da depreciação (Phase E), depois que nenhuma linha e nenhum ambiente carregarem mais as
+  // chaves antigas. O que NÃO pode acontecer é o domain aceitar algo que não seja nem vocabulário
+  // comercial nem chave declarada como depreciada — aí seria divergência de verdade.
   assert.deepEqual([...doBanco].sort(), [...doApp, ...FEATURES_DEPRECIADAS].sort(),
     'o domain platform_feature do banco divergiu do registry + depreciadas');
+  // E o caminho contrário: feature do vocabulário que o banco não aceita seria plano impossível
+  // de gravar. Foi o que aconteceu com meta_ads/google_ads/analytics_ga4 até a 0024.
+  for (const f of doApp) assert.ok(doBanco.includes(f), `${f} está no vocabulário e o domain recusa`);
   for (const f of FEATURES_DEPRECIADAS) {
     assert.ok(!doApp.includes(f), `${f} está depreciada e no vocabulário comercial ao mesmo tempo`);
   }
 });
 
-test('registry · o plano `internal` tem exatamente as features comerciais do perfil do Tenant #1', async () => {
-  const perfil = require(require('node:path').join(
-    h.RAIZ_REPO, '..', 'panel', 'config', 'entitlements', 'tenant1-entitlements.json'
-  ));
+test('registry · o plano `internal` é o declarado, e contém tudo que o perfil do Tenant #1 liga', async () => {
+  const { FEATURES, FEATURES_INTERNAL, FEATURES_DEPRECIADAS } = h.sujeito('lib/entitlements.js');
   const { rows } = await app.pool.query(
     `SELECT f.feature::text AS feature FROM plans p JOIN plan_features f ON f.plan_id = p.id
       WHERE p.chave = 'internal' AND f.habilitada ORDER BY f.feature`
   );
-  assert.deepEqual(rows.map((r) => r.feature), [...perfil.features].sort());
-  assert.equal(rows.length, 3);
+  const noPlano = rows.map((r) => r.feature);
+
+  // As quatro chaves depreciadas PODEM continuar gravadas: a migration 0024 é aditiva de propósito
+  // (o código de produção atual ainda as lê do plano, e o pre-deploy roda antes da troca de
+  // release), e a limpeza física é uma migration posterior. Elas são ruído — o que conta é o resto.
+  const vigentes = noPlano.filter((f) => !FEATURES_DEPRECIADAS.includes(f));
+  assert.deepEqual(vigentes, [...FEATURES_INTERNAL].sort(), 'a composição do internal divergiu do declarado');
+  for (const f of noPlano) {
+    assert.ok(FEATURES.includes(f) || FEATURES_DEPRECIADAS.includes(f),
+      `${f} está no plano internal e não é vocabulário nem chave depreciada declarada`);
+  }
+
   // As duas que o comando manda NÃO incluir automaticamente.
-  assert.ok(!rows.some((r) => ['instagram', 'advancedAutomations'].includes(r.feature)));
-  // E nenhuma das sete reclassificadas sobrou no plano (migration 0022).
-  const { FEATURES_DEPRECIADAS } = h.sujeito('lib/entitlements.js');
+  assert.ok(!noPlano.some((f) => ['instagram', 'advancedAutomations'].includes(f)));
+  // As três novas entraram.
+  for (const f of ['meta_ads', 'google_ads', 'analytics_ga4']) {
+    assert.ok(noPlano.includes(f), `${f} não entrou no plano internal`);
+  }
+
+  // O que importa para o acesso: uma chave depreciada gravada NUNCA vira entitlement efetivo.
+  // Uma Organization criada agora sobre o `internal` recebe exatamente as features do vocabulário.
+  const efetivas = Object.entries(entitlementsDaCriacao).filter(([, v]) => v).map(([k]) => k).sort();
+  assert.deepEqual(efetivas, [...FEATURES_INTERNAL].sort());
   for (const f of FEATURES_DEPRECIADAS) {
-    assert.ok(!rows.some((r) => r.feature === f), `${f} continua no plano internal como feature comercial`);
+    assert.ok(!(f in entitlementsDaCriacao), `${f} apareceu nos entitlements efetivos: ruído virou concessão`);
+  }
+
+  // Sem regressão para o Tenant #1: o plano contém tudo que o perfil legado liga. O perfil é
+  // SUBCONJUNTO do plano — ele semeia app_config, que não decide mais nada (migration 0023).
+  const perfil = require(require('node:path').join(
+    h.RAIZ_REPO, '..', 'panel', 'config', 'entitlements', 'tenant1-entitlements.json'
+  ));
+  for (const f of perfil.features) {
+    assert.ok(noPlano.includes(f), `o perfil liga ${f} e o plano internal não concede: seria regressão`);
   }
 });
 

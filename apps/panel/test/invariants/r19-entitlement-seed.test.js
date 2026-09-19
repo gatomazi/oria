@@ -30,11 +30,11 @@ const PERFIL = path.join(h.RAIZ_REPO, 'config', 'entitlements', 'tenant1-entitle
 
 // Lista ON documentada em docs/productization/round19-trilha-h.md. Mudar o perfil exige mudar
 // aqui e no documento, de propósito.
-// Encolheu na rodada "features × connectors × capabilities": catalog/exchanges/refunds viraram
-// connector capability da Reserva Ink e os quatro modos de criativos viraram module capability de
-// `creative_generator`. Nenhuma funcionalidade saiu do ar — ver
-// test/invariants/capabilities-classificacao.test.js §20.
-const ON_TENANT1 = ['creative_generator', 'financial', 'whatsapp'];
+// Encolheu na rodada "features × connectors × capabilities": os quatro modos de criativos viraram
+// module capability de `creative_generator`. Catálogo, Trocas e Reembolsos CONTINUAM aqui — foram
+// reclassificados no papel, mas o runtime ainda confere a chave, e tirá-las seria perder acesso.
+// Nenhuma funcionalidade saiu do ar — ver test/invariants/capabilities-classificacao.test.js §20.
+const ON_TENANT1 = ['catalog', 'creative_generator', 'exchanges', 'financial', 'refunds', 'whatsapp'];
 
 const importar = (arquivo, marca = '') => import(`${pathToFileURL(arquivo).href}${marca}`);
 
@@ -53,7 +53,7 @@ function gravarJson(dir, nome, conteudo) {
 // ── 1. registry × código ─────────────────────────────────────────────────────────────────────
 test('r19 §9 · registry: estado de cada feature bate com rotas, flags do Creative Core e navegação', () => {
   assert.deepEqual(Object.keys(ESTADO_DAS_FEATURES).sort(), [...FEATURES].sort(), 'toda feature do vocabulário tem estado');
-  for (const estado of Object.values(ESTADO_DAS_FEATURES)) assert.ok(['implementada', 'em_breve', 'nao_implementada'].includes(estado));
+  for (const estado of Object.values(ESTADO_DAS_FEATURES)) assert.ok(['implementada', 'sem_guard', 'em_breve', 'nao_implementada'].includes(estado));
 
   const protegidasPorRota = new Set(ROTAS.map(([, f]) => f));
   const conferidasPeloGerador = new Set(FEATURES_DO_GERADOR);
@@ -74,10 +74,15 @@ test('r19 §9 · registry: estado de cada feature bate com rotas, flags do Creat
   const chaves = [...espelho.match(/interface Entitlements \{([^}]*)\}/)[1].matchAll(/(\w+):\s*boolean/g)].map((m) => m[1]);
   for (const k of chaves) assert.ok(FEATURES.includes(k), `${k} do espelho fora do vocabulário`);
 
-  // Sem rota, sem motor e sem item de navegação: não implementada.
+  // Sem rota, sem motor e sem item de navegação: ou a área nem existe (`nao_implementada`), ou
+  // existe e nenhuma rota confere a chave (`sem_guard`). O que não pode é aparecer como
+  // `implementada` — foi por isso que a lista deixou de ser uma igualdade fixa.
   const semUso = FEATURES.filter((f) => !protegidasPorRota.has(f) && !conferidasPeloGerador.has(f) && !emBreve.includes(f));
-  assert.deepEqual(semUso, ['advancedAutomations']);
+  assert.deepEqual(semUso, ['advancedAutomations', 'meta_ads', 'google_ads', 'analytics_ga4']);
   assert.equal(ESTADO_DAS_FEATURES.advancedAutomations, 'nao_implementada');
+  for (const f of ['meta_ads', 'google_ads', 'analytics_ga4']) {
+    assert.equal(ESTADO_DAS_FEATURES[f], 'sem_guard', `${f} não confere a chave em rota nenhuma`);
+  }
 });
 
 // ── 2. perfil do Tenant #1 ───────────────────────────────────────────────────────────────────
@@ -101,11 +106,13 @@ function assertValidacao(s) {
   rejeita(['*'], /curinga proibido/);
   rejeita(['all'], /curinga proibido/);
   rejeita(['instagram'], /não implementada.*instagram \(em_breve\)/);
+  // Feature sem guard de rota não pode ser semeada como se protegesse alguma coisa.
+  rejeita(['meta_ads'], /não implementada.*meta_ads \(sem_guard\)/);
   rejeita(['financial', 'advancedAutomations'], /não implementada.*advancedAutomations \(nao_implementada\)/);
   rejeita([], /vazia/);
   rejeita(['financial', 'financial'], /repetida/);
-  // As sete chaves reclassificadas saíram do vocabulário: pedir uma delas é pedir o que não existe.
-  for (const antiga of ['catalog', 'exchanges', 'refunds', 'creative_clean_angles', 'creative_multi_product']) {
+  // As chaves depreciadas saíram do vocabulário: pedir uma delas é pedir o que não existe.
+  for (const antiga of ['creative_clean_angles', 'creative_multi_product']) {
     rejeita([antiga], new RegExp(`fora do vocabulário: ${antiga}`));
   }
   assert.deepEqual(s.validarFeaturesDoSeed(['whatsapp', 'financial'], 'x'), ['financial', 'whatsapp']);
@@ -128,7 +135,7 @@ test('r19 §9 · validação: desconhecida, não implementada, curinga, all/defa
   const s = await importar(SEED);
   assertValidacao(s);
   // Ambiente: perfil e lista juntos é ambíguo; lista solta passa pela mesma regra.
-  assert.throws(() => s.featuresDoAmbiente({ ENTITLEMENTS_SEED_PROFILE: PERFIL, ENTITLEMENTS_SEED_FEATURES: 'financial' }), /diverge do perfil.*faltando: .*ambíguo; esperado: creative_generator,/);
+  assert.throws(() => s.featuresDoAmbiente({ ENTITLEMENTS_SEED_PROFILE: PERFIL, ENTITLEMENTS_SEED_FEATURES: 'financial' }), /diverge do perfil.*faltando: .*ambíguo; esperado: catalog,creative_generator,/);
   assert.throws(() => s.featuresDoAmbiente({ ENTITLEMENTS_SEED_PROFILE: PERFIL, ENTITLEMENTS_SEED_FEATURES: `${ON_TENANT1.join(',')},instagram` }), /a mais: instagram/);
   // Mesma lista (a variável da RELEASE B continua no ambiente): o perfil manda, sem erro.
   assert.deepEqual(s.featuresDoAmbiente({ ENTITLEMENTS_SEED_PROFILE: PERFIL, ENTITLEMENTS_SEED_FEATURES: [...ON_TENANT1].reverse().join(', ') }).features, ON_TENANT1);
@@ -193,9 +200,9 @@ test('r19 §9 · seed por perfil: liga exatamente o perfil, é idempotente e rec
   const cli = spawnSync(process.execPath, [SEED], { cwd: h.RAIZ_REPO, encoding: 'utf8', env, timeout: 60000 });
   assert.equal(cli.status, 0, `${cli.stdout}${cli.stderr}`);
   const saida = `${cli.stdout}${cli.stderr}`;
-  assert.match(saida, /perfil tenant1-operacao-interna · ON: creative_generator, /);
-  assert.match(saida, new RegExp(`${outra}: ligadas agora: creative_generator`));
-  assert.match(saida, /não ligadas por este seed: instagram \(em_breve\), advancedAutomations \(nao_implementada\)/);
+  assert.match(saida, /perfil tenant1-operacao-interna · ON: catalog, creative_generator, /);
+  assert.match(saida, new RegExp(`${outra}: ligadas agora: catalog, creative_generator`));
+  assert.match(saida, /não ligadas por este seed: instagram \(em_breve\), advancedAutomations \(nao_implementada\), meta_ads \(sem_guard\), google_ads \(sem_guard\), analytics_ga4 \(sem_guard\)/);
   assert.ok(!saida.includes(senha));
   const pw = new URL(urlComMarca).password;
   if (pw) assert.ok(!saida.includes(pw), 'senha do banco na saída');

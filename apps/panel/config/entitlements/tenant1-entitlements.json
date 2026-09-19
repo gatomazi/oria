@@ -1,10 +1,13 @@
 {
   "versao": 1,
   "perfil": "tenant1-operacao-interna",
-  "descricao": "Tenant #1 (Organization Use Origens): FEATURES COMERCIAIS implementadas e usadas hoje pela operação interna. Não é plano comercial (PD-005/PD-009 abertos). Catálogo, Trocas e Reembolsos saíram desta lista por reclassificação para connector capabilities da Reserva Ink, e os quatro modos de criativos por reclassificação para module capabilities de creative_generator — sem perda de acesso: ver docs/architecture/features-vs-connectors.md §Migração sem regressão. Derivação: docs/productization/round19-trilha-h.md.",
+  "descricao": "Tenant #1 (Organization Use Origens): features COM GUARD DE ROTA que a operação interna usa hoje. Não é plano comercial (PD-005/PD-009 abertos) e não é mais a composição do plano `internal`: este arquivo semeia app_config.entitlements, que deixou de ser fonte de verdade na migration 0023 (ver docs/architecture/entitlement-canonico.md). Os quatro modos de criativos saíram por reclassificação para module capabilities de creative_generator, sem perda de acesso: ver docs/architecture/features-vs-connectors.md. Catálogo, Trocas e Reembolsos continuam aqui porque o runtime ainda confere a chave. Derivação: docs/productization/round19-trilha-h.md.",
   "features": [
+    "catalog",
     "creative_generator",
+    "exchanges",
     "financial",
+    "refunds",
     "whatsapp"
   ]
 }

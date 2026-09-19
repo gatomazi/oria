@@ -124,11 +124,12 @@ test.before(async () => {
   await semear('A', ORG_A, 'sul');
   await semear('B', ORG_B, 'centro');
 
-  // Duas mudanças se encontram aqui: a concessão vem da FONTE CANÔNICA (plano + assinatura, como o
-  // Oria Admin faz — migration 0023), e a lista perdeu `catalog`/`refunds`, que deixaram de ser
-  // features comerciais e viraram capacidades do connector.
-  await concederFeatures(sup, ORG_A, ['financial', 'whatsapp']);
-  await concederFeatures(sup, ORG_B, ['whatsapp']);
+  // A concessão vem da FONTE CANÔNICA (plano + assinatura ativa), como o Oria Admin faz — o antigo
+  // `seed-entitlements` escrevia em `app_config`, que deixou de ser fonte (migration 0023).
+  // `catalog` e `refunds` continuam na lista: foram classificadas como capacidade do Connector
+  // Ink, mas o runtime ainda as confere como entitlement.
+  await concederFeatures(sup, ORG_A, ['financial', 'whatsapp', 'refunds', 'catalog']);
+  await concederFeatures(sup, ORG_B, ['whatsapp', 'refunds']);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oria-f3-srv-'));
   const processo = await h.subirProcessoDoPainel((porta) => spawn(process.execPath, [SERVER], {
@@ -201,13 +202,10 @@ test('A/B · entitlement por Organization: A tem financeiro, B não', async () =
   const b = await navegador().entrar('srv-b@teste.oria');
   const rb = await b.req('GET', '/api/admin/financeiro/despesas');
   assert.deepEqual([rb.status, rb.json], [403, { erro: 'feature_nao_disponivel', feature: 'financial' }]);
-  // Catálogo NÃO é mais feature comercial (virou connector capability da Reserva Ink): a recusa
-  // para B não pode mais vir do plano. Enquanto o guard de capability não estiver ligado em
-  // server.js, quem recusa é a própria integração ausente — nunca `feature_nao_disponivel`.
-  const produtosB = await b.req('GET', '/api/admin/produtos');
-  assert.notDeepEqual(produtosB.json, { erro: 'feature_nao_disponivel', feature: 'catalog' },
-    'catálogo voltou a ser negado pelo plano');
-  assert.notEqual(produtosB.status, 200, 'sem Reserva Ink conectada, o catálogo não pode responder dado');
+  // Catálogo já está classificado como capacidade do Connector Ink, mas o guard ainda é o
+  // comercial: enquanto `requireEntitlement` conferir `catalog`, quem não tem a chave no plano
+  // leva 403. Quando o guard de connector for ligado, esta asserção vira `409`.
+  assert.equal((await b.req('GET', '/api/admin/produtos')).status, 403, 'catálogo não semeado → negado');
   const plano = (await b.req('GET', '/api/admin/entitlements')).json;
   assert.equal(plano.financial, false);
   assert.equal(plano.whatsapp, true);
@@ -423,7 +421,7 @@ test('A/B · status do WhatsApp pelo wamid só altera o destinatário da Organiz
 });
 
 test('INV-22 · Creative Core no servidor real grava na Organization da sessão, não na env', async () => {
-  await concederFeatures(sup, ORG_A, ['financial', 'whatsapp', 'creative_generator']);
+  await concederFeatures(sup, ORG_A, ['financial', 'whatsapp', 'refunds', 'catalog', 'creative_generator']);
   const a = await navegador().entrar('srv-a@teste.oria');
   const r = await a.req('PUT', '/api/admin/criativos/settings/openai-key', { corpo: { apiKey: 'sk-fase3-aaaaaaaaaaaaaaaaaaaaaaaa' } });
   assert.equal(r.status, 200, r.texto);

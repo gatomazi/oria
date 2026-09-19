@@ -19,6 +19,13 @@ const ROTAS = Object.freeze([
   [/^\/api\/admin\/(financeiro|dashboard\/financeiro|dashboard\/lucro-produtos|analytics\/consolidado)(\/|$)/, 'financial'],
   [/^\/api\/admin\/(whatsapp|whatsapp-web|whatsapp-templates|campaigns|segments|automacao-eventos|automation-settings|recuperacao|dashboard\/recuperacao-resumo)(\/|$)/, 'whatsapp'],
   [/^\/api\/admin\/criativos(\/|$)/, 'creative_generator'],
+  // ── Em transição ────────────────────────────────────────────────────────────────────────────
+  // Conceitualmente são capacidades do Connector Ink (ROTAS_CAPABILITY abaixo descreve o destino).
+  // Continuam no eixo de FEATURE porque o guard de capability ainda não está ligado em server.js:
+  // movê-las agora não trocaria um guard por outro — deixaria estas rotas SEM guard de eixo nenhum.
+  [/\/reembolsos(\/|$)/, 'refunds'],
+  [/^\/api\/admin\/trocas(\/|$)/, 'exchanges'],
+  [/^\/api\/admin\/(produtos|produto-tipos|categorias|category-assignments|category-jobs|agrupamentos|promocoes|estoque|controle-estoque)(\/|$)/, 'catalog'],
 ]);
 
 // Rotas que migraram de feature comercial para connector capability nesta rodada.
@@ -30,11 +37,13 @@ const ROTAS = Object.freeze([
 // A evidência da reclassificação está em docs/architecture/features-vs-connectors.md: cada um
 // destes handlers é proxy ou cache da API da Reserva Ink; nenhum tem domínio próprio do Oria.
 //
-// PENDENTE DE FIAÇÃO: `server.js` ainda só consome `featureDaRota`. Enquanto o guard de
-// capability não estiver ligado lá, estas rotas seguem protegidas por sessão + contexto de
-// Organization + a própria integração da Ink (que devolve 409 INTEGRATION_NOT_CONNECTED quando
-// não há segredo). Sair do eixo de feature é, por construção, AFROUXAR — nunca tira acesso de
-// quem já tem (§20).
+// DESTINO, AINDA NÃO LIGADO. Este mapa descreve para onde cada rota vai quando o runtime dela
+// migrar para "Connector conectado + capability suportada". Até lá as mesmas rotas continuam em
+// `ROTAS`, no eixo de feature — porque `server.js` só consome `featureDaRota`, e tirá-las de lá
+// antes da fiação removeria a verificação em vez de trocá-la.
+//
+// É por isso que as duas tabelas se sobrepõem de propósito nesta fase: uma diz onde a rota está
+// protegida HOJE, a outra diz para onde ela vai.
 const ROTAS_CAPABILITY = Object.freeze([
   [/\/reembolsos(\/|$)/, 'ink.refunds'],
   [/^\/api\/admin\/trocas(\/|$)/, 'ink.exchanges'],
