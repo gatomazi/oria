@@ -108,17 +108,26 @@ test('flags ficam todas desligadas por padrão', () => {
   assert.deepEqual(enabledEngines(flags), []);
 });
 
-test('sem creative_generator nenhum motor liga, mesmo com a flag do motor', () => {
+test('sem creative_generator nenhum motor liga, mesmo com a chave antiga do motor no plano', () => {
   assert.equal(resolveFlags({ creative_clean_angles: true }, '').creative_clean_angles, false);
 });
 
-test('entitlement ou env liga flags; motor e multipeça são checados separadamente', () => {
-  const flags = resolveFlags({ creative_generator: true }, 'creative_clean_angles, creative_remarketing');
-  assert.deepEqual(enabledEngines(flags), ['CLEAN_ANGLES', 'REMARKETING']);
+// MUDOU nesta rodada: os quatro modos deixaram de ser entitlement comercial e viraram module
+// capabilities de `creative_generator` (complemento §9/§10). Antes, ligar o gerador sem ligar o
+// motor deixava a conta com um gerador sem nenhum motor; esse estado não existe mais. O que
+// continua valendo é a checagem de motor INEXISTENTE.
+test('o módulo ligado libera todos os modos V1; motor inexistente continua recusado', () => {
+  const flags = resolveFlags({ creative_generator: true }, '');
+  assert.deepEqual(enabledEngines(flags).sort(), ['CLEAN_ANGLES', 'FUNNEL_VISUAL', 'REMARKETING']);
   assert.equal(checkEngineAccess(flags, 'CLEAN_ANGLES', 'single_product'), null);
-  assert.match(checkEngineAccess(flags, 'FUNNEL_VISUAL', 'single_product'), /não está habilitado/);
-  assert.match(checkEngineAccess(flags, 'CLEAN_ANGLES', 'multi_product'), /multipeça/);
+  assert.equal(checkEngineAccess(flags, 'FUNNEL_VISUAL', 'single_product'), null);
+  assert.equal(checkEngineAccess(flags, 'CLEAN_ANGLES', 'multi_product'), null);
   assert.match(checkEngineAccess(flags, 'ORGANIC', 'single_product'), /inexistente/);
+});
+
+test('a env liga o MÓDULO; motor avulso na env não liga mais nada', () => {
+  assert.deepEqual(enabledEngines(resolveFlags({}, 'creative_clean_angles, creative_remarketing')), []);
+  assert.deepEqual(enabledEngines(resolveFlags({}, 'creative_generator')).sort(), ['CLEAN_ANGLES', 'FUNNEL_VISUAL', 'REMARKETING']);
 });
 
 // ── cliente do core ──────────────────────────────────────────────────────────
@@ -366,6 +375,8 @@ test('rotas exigem admin e respeitam flags desligadas por padrão', async () => 
     assert.deepEqual(status.body.engines, []);
     assert.equal((await call('GET', '/products')).status, 403);
     assert.equal((await call('POST', '/jobs', {})).status, 403);
+    // Módulo desligado: nenhum modo interno passa, inclusive multipeça.
+    assert.equal((await call('POST', '/jobs', { engine: 'REMARKETING', product_mode: 'multi_product' })).status, 403);
   } finally {
     server.close();
   }
@@ -414,8 +425,12 @@ test('fluxo completo pela API: key, marca, produto, lote, asset e histórico', a
     assert.equal((await call('POST', '/products', { name: 'X', type: 'y', images: [{ data_base64: Buffer.from('<svg/>').toString('base64') }] })).status, 400);
 
     const input = jobInput({ productId: prod.body.id, brandId: brand.body.id });
-    assert.equal((await call('POST', '/jobs', { ...input, engine: 'REMARKETING' })).status, 403, 'motor desligado');
-    assert.equal((await call('POST', '/jobs', { ...input, product_mode: 'multi_product' })).status, 403, 'multipeça desligado');
+    // Motor inexistente continua sendo recusado. Motor EXISTENTE não é mais recusado por
+    // entitlement: com o módulo ligado, todos os modos V1 estão disponíveis (complemento §9/§10).
+    // A recusa por módulo desligado está no teste "rotas exigem admin e respeitam flags
+    // desligadas por padrão", e a classificação inteira em
+    // test/invariants/capabilities-classificacao.test.js.
+    assert.equal((await call('POST', '/jobs', { ...input, engine: 'ORGANIC' })).status, 400, 'motor inexistente');
 
     const preview = await call('POST', '/preview', input);
     assert.equal(preview.status, 200);

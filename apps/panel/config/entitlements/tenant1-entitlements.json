@@ -1,14 +1,10 @@
 {
   "versao": 1,
   "perfil": "tenant1-operacao-interna",
-  "descricao": "Tenant #1 (Organization Use Origens): features implementadas e usadas hoje pela operação interna. Não é plano comercial (PD-005/PD-009 abertos). Derivação: docs/productization/round19-trilha-h.md.",
+  "descricao": "Tenant #1 (Organization Use Origens): features COM GUARD DE ROTA que a operação interna usa hoje. Não é plano comercial (PD-005/PD-009 abertos) e não é mais a composição do plano `internal`: este arquivo semeia app_config.entitlements, que deixou de ser fonte de verdade na migration 0023 (ver docs/architecture/entitlement-canonico.md). Os quatro modos de criativos saíram por reclassificação para module capabilities de creative_generator, sem perda de acesso: ver docs/architecture/features-vs-connectors.md. Catálogo, Trocas e Reembolsos continuam aqui porque o runtime ainda confere a chave. Derivação: docs/productization/round19-trilha-h.md.",
   "features": [
     "catalog",
-    "creative_clean_angles",
-    "creative_funnel_visual",
     "creative_generator",
-    "creative_multi_product",
-    "creative_remarketing",
     "exchanges",
     "financial",
     "refunds",

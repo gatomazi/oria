@@ -12,7 +12,7 @@ import {
   html, cru, icone, dataHora, selo, avisar, abrirDrawer, rodapeDrawer, erroNoDrawer,
   caixaDeErro, carregando, avisoCaixa, listaVazia,
 } from '../ui.js';
-import { FEATURES, ROTULO_FEATURE } from '../vocabulario.js';
+import { ROTULO_FEATURE, GRUPOS_DE_FEATURES, INCLUI_ATUALMENTE } from '../vocabulario.js';
 
 export async function renderizar(alvo) {
   const owner = podeGerirPlataforma();
@@ -99,35 +99,44 @@ function cartaoDePlano(p, owner) {
       ${tecnico ? cru(avisoCaixa('info', 'Plano técnico do Tenant #1.',
         'Semeado pela migration a partir do perfil de entitlements do Tenant #1. Não é allow-all: o que não está na lista é negado como qualquer ausência.')) : ''}
 
-      <div class="entitlements" style="margin-top:12px">
-        ${cru(FEATURES.map((f) => html`
-          <div class="entitlement">
-            <div style="min-width:0">
-              <div class="nome">${ROTULO_FEATURE[f] || f}</div>
-              <div class="origem mono">${f}</div>
-            </div>
-            <div class="direita">${concedidas.has(f) ? selo('inclusa', 'ok') : selo('fora', '')}</div>
-          </div>`).join(''))}
-      </div>
+      ${cru(GRUPOS_DE_FEATURES.map((g) => html`
+        <h4 class="grupo-features">${g.titulo}</h4>
+        <div class="entitlements">
+          ${cru(g.features.map((f) => html`
+            <div class="entitlement">
+              <div style="min-width:0">
+                <div class="nome">${ROTULO_FEATURE[f] || f}</div>
+                <div class="origem mono">${f}</div>
+                ${concedidas.has(f) && INCLUI_ATUALMENTE[f]
+                  ? html`<div class="inclui">Inclui atualmente: ${INCLUI_ATUALMENTE[f].join(' · ')}</div>`
+                  : ''}
+              </div>
+              <div class="direita">${concedidas.has(f) ? selo('inclusa', 'ok') : selo('fora', '')}</div>
+            </div>`).join(''))}
+        </div>`).join(''))}
     </section>`;
 }
 
 // ── Mutações ──────────────────────────────────────────────────────────────────────────────
 
+// Um checkbox por FEATURE COMERCIAL, agrupado como o cliente lê o catálogo. Connector capability
+// e modo interno de módulo não têm checkbox aqui — não são o que se vende.
 function caixasDeFeatures(selecionadas) {
   const marcadas = new Set(selecionadas || []);
-  return html`
+  return cru(GRUPOS_DE_FEATURES.map((g) => html`
+    <h4 class="grupo-features">${g.titulo}</h4>
     <div class="entitlements">
-      ${cru(FEATURES.map((f) => html`
+      ${cru(g.features.map((f) => html`
         <label class="entitlement" style="cursor:pointer">
           <div style="min-width:0">
             <div class="nome">${ROTULO_FEATURE[f] || f}</div>
             <div class="origem mono">${f}</div>
+            ${INCLUI_ATUALMENTE[f] ? html`<div class="inclui">Inclui atualmente: ${INCLUI_ATUALMENTE[f].join(' · ')}</div>` : ''}
           </div>
           <input type="checkbox" data-feature="${f}"${marcadas.has(f) ? ' checked' : ''}
                  style="width:16px;height:16px;flex:none">
         </label>`).join(''))}
-    </div>`;
+    </div>`).join(''));
 }
 
 const featuresMarcadas = (fundo) => [...fundo.querySelectorAll('[data-feature]')]

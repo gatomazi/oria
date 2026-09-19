@@ -56,7 +56,7 @@ test('login e logout são auditados com sujeito real', async () => {
 
 test('plan change sem audit → teste falha (a auditoria é a asserção)', async () => {
   const antes = await contar('subscription.changed', org.id);
-  await app.cliente.post('/api/platform/plans', { chave: 'outro', nome: 'Outro', features: ['catalog'] });
+  await app.cliente.post('/api/platform/plans', { chave: 'outro', nome: 'Outro', features: ['financial'] });
   const r = await app.cliente.put(`/api/platform/organizations/${org.id}/subscription`,
     { planoChave: 'outro', motivo: 'auditoria obrigatória' });
   assert.equal(r.status, 200);
@@ -140,7 +140,7 @@ test('a auditoria RECUSA segredo, em qualquer profundidade, em vez de redigir em
     assert.throws(() => exigirSemSegredo(v), AuditError, `aceitou ${JSON.stringify(v)}`);
   }
   // O que é legítimo passa.
-  assert.doesNotThrow(() => exigirSemSegredo({ email: 'a@b.com', status: 'active', features: ['catalog'] }));
+  assert.doesNotThrow(() => exigirSemSegredo({ email: 'a@b.com', status: 'active', features: ['financial'] }));
 });
 
 test('ação fora do vocabulário é recusada', async () => {

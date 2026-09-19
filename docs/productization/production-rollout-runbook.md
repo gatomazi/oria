@@ -332,9 +332,16 @@ Nada aqui altera produção, exceto quando o passo diz "configurar": são variá
   - `ENTITLEMENTS_SEED_PROFILE=config/entitlements/tenant1-entitlements.json` (fonte da verdade; a B
     ignora, o HEAD usa);
   - `ENTITLEMENTS_SEED_FEATURES` = **exatamente** a linha do perfil, porque o seed da B só lê esta variável:
-    `catalog,creative_clean_angles,creative_funnel_visual,creative_generator,creative_multi_product,creative_remarketing,exchanges,financial,refunds,whatsapp`.
+    `catalog,creative_generator,exchanges,financial,refunds,whatsapp`.
     Qualquer divergência → BLOCK no preflight, que mostra o valor esperado.
-  - **OFF:** `instagram` (comingSoon) e `advancedAutomations` (sem uso).
+  - **OFF:** `instagram` (comingSoon), `advancedAutomations` (sem uso) e `meta_ads`/`google_ads`/
+    `analytics_ga4` (no plano, mas ainda sem guard de rota — ver `ESTADO_DAS_FEATURES`).
+  - A lista encolheu de 10 para 6 na rodada de reclassificação, e isso **não** tira acesso: os
+    quatro modos de criativos viraram module capability de `creative_generator`, que continua
+    ligada. `catalog`, `exchanges` e `refunds` seguem na lista — foram classificados como
+    connector capability, mas o runtime ainda os confere como entitlement. O código da B é
+    anterior e tem o vocabulário antigo, mas aceita a lista menor sem reclamar — ela é subconjunto
+    do vocabulário dele. Ver `docs/architecture/features-vs-connectors.md`.
 - [ ] **OPS-19 (release N)** — opcional: `ALLOW_LEGACY_ADMIN_PASSWORD=1` + `LEGACY_ADMIN_USER_EMAIL`.
 - [ ] **OPS-24 (release N)** — `ALLOW_LEGACY_INTEGRATION_ENV=1`.
   - **Manter** até o CLEANUP: `INK_TOKEN_*`, `INK_FEED_URL_*`, `INK_WEBHOOK_SECRET_*`,

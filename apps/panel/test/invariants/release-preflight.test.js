@@ -395,9 +395,9 @@ function assertListaDaReleaseB(modulo, env) {
     const divergentes = {
       'a mais': `${LISTA_TENANT1},instagram`,
       faltando: LISTA_TENANT1.split(',').slice(1).join(','),
-      repetida: `${LISTA_TENANT1},catalog`,
+      repetida: `${LISTA_TENANT1},financial`,
       curinga: '*',
-      trocada: LISTA_TENANT1.replace('refunds', 'advancedAutomations'),
+      trocada: LISTA_TENANT1.replace('financial', 'advancedAutomations'),
     };
     for (const [caso, valor] of Object.entries(divergentes)) {
       for (const estagio of ['release-n', 'after-ops14', 'cleanup']) {
