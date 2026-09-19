@@ -61,11 +61,13 @@ test.before(async () => {
   // Exatamente o estado do Tenant #1: plano concedido pelo Admin, NADA em app_config.
   await criarOrganizationComPlano(ORG_A, 'Tenant Um', {
     planoChave: 'internal_teste',
-    features: { whatsapp: true, financial: true, creative_generator: true, catalog: false },
+    // `instagram` é feature comercial que o plano NÃO concede — o equivalente, no vocabulário
+    // reclassificado, ao que `catalog` era antes de virar capacidade do connector.
+    features: { whatsapp: true, financial: true, creative_generator: true, instagram: false },
   });
   await criarOrganizationComPlano(ORG_B, 'Outro Tenant', {
     planoChave: 'outro_teste',
-    features: { whatsapp: true, refunds: true },
+    features: { whatsapp: true, advancedAutomations: true },
   });
 });
 
@@ -84,15 +86,15 @@ test('canônico · Organization criada pelo Admin tem acesso SEM nenhuma linha e
   assert.equal(plano.whatsapp, true, 'feature do plano precisa chegar ao painel sem seed');
   assert.equal(plano.financial, true);
   assert.equal(plano.creative_generator, true);
-  assert.equal(plano.catalog, false, 'feature desabilitada no plano continua negada');
-  assert.equal(plano.instagram, false, 'feature fora do plano é negada por ausência');
+  assert.equal(plano.instagram, false, 'feature desabilitada no plano continua negada');
+  assert.equal(plano.advancedAutomations, false, 'feature fora do plano é negada por ausência');
 });
 
 test('canônico · o guard de rota concede pelo plano e nega o que o plano não tem', async () => {
   await em(ORG_A, async () => {
     const carregar = carregadorDaOrganizacao(pool);
     assert.equal(await checkEntitlement(carregar, 'whatsapp'), true);
-    await assert.rejects(() => checkEntitlement(carregar, 'catalog'), EntitlementDeniedError);
+    await assert.rejects(() => checkEntitlement(carregar, 'instagram'), EntitlementDeniedError);
   });
 });
 
@@ -168,8 +170,8 @@ test('canônico · o plano de uma Organization não vaza para outra', async () =
   const b = await em(ORG_B, () => planoEfetivo(carregadorDaOrganizacao(pool)));
   assert.equal(a.financial, true);
   assert.equal(b.financial, false, 'B não tem financial no plano dela');
-  assert.equal(b.refunds, true);
-  assert.equal(a.refunds, false, 'A não tem refunds no plano dela');
+  assert.equal(b.advancedAutomations, true);
+  assert.equal(a.advancedAutomations, false, 'A não tem advancedAutomations no plano dela');
 });
 
 test('canônico · sem contexto de Organization, o resolver recusa em vez de adivinhar', async () => {
