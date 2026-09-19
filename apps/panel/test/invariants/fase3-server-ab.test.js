@@ -124,8 +124,10 @@ test.before(async () => {
   await semear('A', ORG_A, 'sul');
   await semear('B', ORG_B, 'centro');
 
-  // A concessão vem da fonte canônica (plano + assinatura ativa), como o Oria Admin faz. O antigo
-  // `seed-entitlements` escrevia em `app_config`, que deixou de ser fonte — ver a migration 0023.
+  // A concessão vem da FONTE CANÔNICA (plano + assinatura ativa), como o Oria Admin faz — o antigo
+  // `seed-entitlements` escrevia em `app_config`, que deixou de ser fonte (migration 0023).
+  // `catalog` e `refunds` continuam na lista: foram classificadas como capacidade do Connector
+  // Ink, mas o runtime ainda as confere como entitlement.
   await concederFeatures(sup, ORG_A, ['financial', 'whatsapp', 'refunds', 'catalog']);
   await concederFeatures(sup, ORG_B, ['whatsapp', 'refunds']);
 
@@ -200,6 +202,9 @@ test('A/B · entitlement por Organization: A tem financeiro, B não', async () =
   const b = await navegador().entrar('srv-b@teste.oria');
   const rb = await b.req('GET', '/api/admin/financeiro/despesas');
   assert.deepEqual([rb.status, rb.json], [403, { erro: 'feature_nao_disponivel', feature: 'financial' }]);
+  // Catálogo já está classificado como capacidade do Connector Ink, mas o guard ainda é o
+  // comercial: enquanto `requireEntitlement` conferir `catalog`, quem não tem a chave no plano
+  // leva 403. Quando o guard de connector for ligado, esta asserção vira `409`.
   assert.equal((await b.req('GET', '/api/admin/produtos')).status, 403, 'catálogo não semeado → negado');
   const plano = (await b.req('GET', '/api/admin/entitlements')).json;
   assert.equal(plano.financial, false);

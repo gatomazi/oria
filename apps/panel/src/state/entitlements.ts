@@ -1,5 +1,10 @@
 // Entitlements da Organization ativa (TD-012 V1). Espelho do backend, que é a autoridade: a tela só
 // usa isto para esconder o que o servidor já nega. Fail-closed: erro ou ausência = sem a feature.
+//
+// Catálogo, Trocas e Reembolsos JÁ foram classificados como capacidade do Connector Ink, mas
+// continuam aqui: o backend ainda as confere como entitlement, e o espelho precisa refletir o que
+// o servidor faz — não o que ele vai fazer. Saem quando o guard de connector for ligado, junto com
+// o read model do connector. Ver docs/architecture/features-vs-connectors.md § Plano de retirada.
 import { api } from '../api/client';
 
 export interface Entitlements {

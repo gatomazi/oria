@@ -365,14 +365,14 @@ test('OPS-21 · seed de entitlements: explícito, vocabulário fechado, idempote
   await assert.rejects(seedEntitlements(db.url, { ENTITLEMENTS_SEED_FEATURES: 'financial' }), /ORGANIZATION_IDS/);
   await assert.rejects(seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_N, ENTITLEMENTS_SEED_FEATURES: 'tudo' }), /vocabulário/);
   await assert.rejects(
-    seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: crypto.randomUUID(), ENTITLEMENTS_SEED_FEATURES: 'catalog' }),
+    seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: crypto.randomUUID(), ENTITLEMENTS_SEED_FEATURES: 'financial' }),
     /inexistente/
   );
   for (let i = 0; i < 2; i += 1) {
-    await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_N, ENTITLEMENTS_SEED_FEATURES: 'catalog' });
+    await seedEntitlements(db.url, { ENTITLEMENTS_SEED_ORGANIZATION_IDS: ORG_N, ENTITLEMENTS_SEED_FEATURES: 'financial' });
   }
   const { rows } = await sup.query(`SELECT valor FROM app_config WHERE organization_id = $1 AND chave = 'entitlements'`, [ORG_N]);
-  assert.deepEqual(rows.map((r) => r.valor), [{ catalog: true }]);
+  assert.deepEqual(rows.map((r) => r.valor), [{ financial: true }]);
   // `app_config` só tem linha de quem foi semeado por este script legado (ORG_N) e da linha de
   // compatibilidade que este arquivo planta em B. A concessão real de A e B vem do PLANO, e não
   // deixa rastro aqui — é a diferença que a migration 0023 introduziu.

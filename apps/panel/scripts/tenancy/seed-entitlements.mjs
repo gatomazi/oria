@@ -9,7 +9,7 @@
 //                                        junto com o perfil é ambíguo e reprova.
 //
 // Formato do perfil (versão 1):
-//   { "versao": 1, "perfil": "nome-do-perfil", "descricao": "...", "features": ["catalog", ...] }
+//   { "versao": 1, "perfil": "nome-do-perfil", "descricao": "...", "features": ["financial", ...] }
 //
 // Regras (as duas formas passam pela mesma validação):
 //   - feature fora do vocabulário fechado de lib/platform/entitlements.js → erro;

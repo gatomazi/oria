@@ -239,8 +239,8 @@ const CONTROLES = [
     nome: 'ui-vocabulary-drift',
     descricao: 'a UI perder uma feature do vocabulário e passar a esconder o entitlement da tela',
     arquivo: 'public/js/vocabulario.js',
-    de: "  'advancedAutomations',\n  'catalog',",
-    para: "  'catalog',",
+    de: "  'advancedAutomations',\n  'financial',",
+    para: "  'financial',",
     testes: ['test/interface.test.js'],
   },
 ];
