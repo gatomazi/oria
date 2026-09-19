@@ -101,8 +101,9 @@ Existe ainda um **quarto worktree**, não citado no comando:
    `1790000600000_store-id-connector-ink.js` (SQL `0021`, frente A) e
    `feature/connector-capabilities` tem `1790000600000_features-reclassificadas.js` (SQL `0022`).
    Mesmo prefixo `1790000600000` em migrations diferentes: ordenação ambígua no node-pg-migrate e
-   risco de "já aplicada" mal resolvido. Renomear a da frente B (p.ex. `1790000700000`) antes do
-   merge. Decisão de quem integrar a frente B, não desta auditoria.
+   risco de "já aplicada" mal resolvido. Renomear a da frente B antes do merge, pela regra da §10.5
+   (próximo timestamp livre, não um número fixo). Decisão de quem integrar a frente B, não desta
+   auditoria.
 2. **BLOCKER-C2 (MEDIUM) — sobreposição de arquivos entre frente A (já em `main`) e frente B.**
    Quatro testes tocados pelos dois lados: `inv-td003-postgres-obrigatorio.test.js`,
    `migrations.test.js`, `r19-runbook-dry-run.test.js`, `tenancy-migrations.test.js` (listas de
@@ -176,7 +177,8 @@ Somente existência, sem leitura de valores:
 1. Esperar as frentes A e B terminarem. A frente A já está em `main` (`edf5625`, `723b3fb`);
    a B continua em `feature/connector-capabilities`.
 2. Frente B: renomear `1790000600000_features-reclassificadas.js` para um timestamp posterior ao
-   `1790000600000_store-id-connector-ink.js` (BLOCKER-C1), rebasear/mesclar em `main` resolvendo à
+   `1790000600000_store-id-connector-ink.js` e à mais recente de `main` no momento do merge
+   (regra da §10.5; BLOCKER-C1), rebasear/mesclar em `main` resolvendo à
    mão os 4 testes de lista de migrations (BLOCKER-C2) e rodar o CI completo.
 3. Depois do merge, confirmar `git cherry main feature/connector-capabilities` vazio e
    `git branch --merged main` listando os três branches.
@@ -265,10 +267,13 @@ aguarda autorização.
 - `1790000600000_store-id-connector-ink.js` (SQL `0021`) está em `main`, tem um único commit no
   histórico (`edf5625`), `md5` `1356c65fdc35959a70504150e788bfe8`, e **não foi tocada**. A frente B
   não a contém (o branch nasceu antes).
-- Proposta para a B: `1790000700000_features-reclassificadas.js` (passo de 100000 usado pelas
-  anteriores; máximo atual `1790000600000` tanto em `main` quanto na B). O SQL segue `0022`.
-  **Reconfirmar o máximo no momento da integração.** Só executar dentro de `oria-capabilities` e
-  quando a B estiver pronta.
+- Regra para a B (não fixar número, ele envelhece — a proposta `1790000700000` desta auditoria
+  já ficou obsoleta quando `main` recebeu `1790000800000_entitlement-canonico.js`, SQL `0023`):
+  no momento do merge da frente B, usar o **próximo timestamp livre, posterior à migration mais
+  recente de `main`**. Exemplo apenas ilustrativo: se a maior for `1790000800000_...`, a da B passa
+  a `1790000900000_features-reclassificadas.js`. **Reconfirmar a árvore real de `main` antes do
+  rename**, e conferir também a numeração dos SQL (`0022` da B convive com `0021` e `0023` já em
+  `main`). Só executar dentro de `oria-capabilities` e quando a B estiver pronta.
 - A B não foi publicada no `origin`: nenhuma migration publicada seria reescrita. Somente bancos
   locais que já aplicaram `1790000600000_features-reclassificadas` precisariam ser recriados.
 - Ao renomear, atualizar os 4 testes que listam migrations por nome (`inv-td003-postgres-obrigatorio`,
