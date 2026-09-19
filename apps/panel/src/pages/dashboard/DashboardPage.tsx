@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button, Callout, Card, DataTable, EmptyState, ErrorState, Icon, InfoTooltip, KpiCard, KpiStrip, PageHeader, PageStack, Skeleton, StatusBadge } from '../../components/ds';
 import { copiar, formatValor, plural, tempoDesde, waLink } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
+import { mesmaLoja, porEscopo } from './escopoLoja';
 import { adminStores } from '../../state/adminStores';
 import {
   getDashboardAbandonedCarts,
@@ -56,10 +57,6 @@ import '../../pedidos-central.css';
 // Porte de src/dashboard.js — reconstruído (docs/claude-dashboard-visual-graficos.md) como
 // dashboard operacional com gráficos reais, mantendo tudo que já existia (vincular Pix,
 // copiar link, health de integrações) e sem tocar em nenhuma outra página.
-
-function porEscopo<T extends { loja: string }>(lista: T[], escopo: string): T[] {
-  return lista.filter((item) => item.loja === escopo);
-}
 
 interface Fetched<T> {
   data: T | null;
@@ -309,22 +306,19 @@ function OrderFlow({ pedidos }: { pedidos: DashboardPedido[] }) {
   );
 }
 
-function IntegrationHealth({ erros, escopo, integracoes }: { erros: { loja: string }[]; escopo: string; integracoes: IntegrationsData | null }) {
-  const lojas = [adminStores.get(escopo)].filter(Boolean);
+function IntegrationHealth({ erros, escopo, integracoes }: { erros: { loja: string | null }[]; escopo: string; integracoes: IntegrationsData | null }) {
+  // A Store nativa do Oria não tem chave legada, então `adminStores.get` não a conhece — e a linha da
+  // Reserva Ink sumia do card. Ela aparece sempre; o nome da loja legada só complementa o rótulo.
+  const loja = adminStores.get(escopo);
+  const temErro = erros.some((e) => mesmaLoja(e.loja, escopo));
   return (
     <Card title="Canais e integrações">
       <ul className="ad-saude-lista">
-        {lojas.map((loja) => {
-          if (!loja) return null;
-          const temErro = erros.some((e) => e.loja === loja.id);
-          return (
-            <li className="ad-saude-item" key={loja.id}>
-              <span className={`ad-status-dot ad-status-dot--${temErro ? 'erro' : 'ok'}`} />
-              <span>Reserva Ink · {loja.name}</span>
-              <span className="ad-saude-status">{temErro ? 'Atenção' : 'OK'}</span>
-            </li>
-          );
-        })}
+        <li className="ad-saude-item">
+          <span className={`ad-status-dot ad-status-dot--${temErro ? 'erro' : 'ok'}`} />
+          <span>{loja ? `Reserva Ink · ${loja.name}` : 'Reserva Ink'}</span>
+          <span className="ad-saude-status">{temErro ? 'Atenção' : 'OK'}</span>
+        </li>
         {integracoes && (
           <>
             <li className="ad-saude-item">
@@ -511,7 +505,7 @@ export function DashboardPage() {
   const escopo = useLojaAtiva() ?? '';
   const [periodo, setPeriodo] = useState<PeriodoId>(PERIODO_PADRAO);
   const [pedidos, setPedidos] = useState<Fetched<DashboardOrdersData>>({ data: null, erro: '' });
-  const [carrinhos, setCarrinhos] = useState<Fetched<{ carrinhos: DashboardCarrinho[]; erros: { loja: string; error: string }[] }>>({ data: null, erro: '' });
+  const [carrinhos, setCarrinhos] = useState<Fetched<{ carrinhos: DashboardCarrinho[]; erros: { loja: string | null; error: string }[] }>>({ data: null, erro: '' });
   const [integracoes, setIntegracoes] = useState<IntegrationsData | null>(null);
   const [recuperacao, setRecuperacao] = useState<Fetched<RecuperacaoResumo>>({ data: null, erro: '' });
   const [financeiro, setFinanceiro] = useState<Fetched<DashboardFinanceiroData>>({ data: null, erro: '' });
@@ -547,7 +541,7 @@ export function DashboardPage() {
   // descontando a mídia de todas mostraria um prejuízo que não existe.
   const midiaFinanceiro = useMemo(() => porEscopo(financeiro.data?.midia || [], escopo), [financeiro.data, escopo]);
   let erros = (pedidos.data?.erros || []).concat(carrinhos.data?.erros || []);
-  erros = erros.filter((e) => e.loja === escopo);
+  erros = erros.filter((e) => mesmaLoja(e.loja, escopo));
 
   const pedidosPeriodo = useMemo(() => pedidosNoPeriodo(todosPedidos, dias), [todosPedidos, dias]);
   const hoje = hojeISO();

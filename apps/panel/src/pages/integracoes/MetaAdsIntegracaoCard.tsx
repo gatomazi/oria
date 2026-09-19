@@ -150,8 +150,8 @@ export function MetaAdsIntegracaoCard() {
       {!erro && dados && conexao && (
         <div className="ds-stack">
           {!dados.oauthConfigurado && (
-            <Callout tone="warning" title="OAuth da Meta não configurado neste ambiente">
-              Faltam as variáveis <code>META_APP_ID</code>, <code>META_APP_SECRET</code> e/ou <code>META_OAUTH_REDIRECT_URI</code>.
+            <Callout tone="warning" title="Conexão com a Meta indisponível no momento">
+              A conexão com a Meta ainda não está habilitada na plataforma. Assim que estiver, o botão Conectar fica disponível aqui.
             </Callout>
           )}
 
@@ -170,7 +170,7 @@ export function MetaAdsIntegracaoCard() {
                       {conexao.status === 'disconnected' ? 'Conectar' : 'Reconectar'}
                     </a>
                   ) : (
-                    <Button variant="secondary" size="sm" disabled title="Configure META_APP_ID/META_APP_SECRET/META_OAUTH_REDIRECT_URI">
+                    <Button variant="secondary" size="sm" disabled title="Conexão com a Meta ainda não habilitada na plataforma">
                       {conexao.status === 'disconnected' ? 'Conectar' : 'Reconectar'}
                     </Button>
                   )

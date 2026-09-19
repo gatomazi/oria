@@ -24,6 +24,13 @@ const { variantesTelefone, acharCompraDoCarrinho } = require('./lib/recuperacao/
 const atribuicaoCampanha = require('./lib/campanhas/atribuicao');
 const app     = express();
 
+// Handlers `async` do Express 4 não têm a promise observada: um `throw` dentro deles virava
+// `unhandledRejection` e a requisição ficava sem resposta (a tela em "Carregando" para sempre).
+// Instalado ANTES de qualquer rota, para todas passarem por `next(err)` → `erroCentral`, registrado
+// no fim do arquivo. Ver lib/platform/http-safety.js.
+const httpSafety = require('./lib/platform/http-safety');
+httpSafety.instalarSegurancaAsync();
+
 // Rede de segurança: uma promise rejeitada sem `.catch`/`await` em qualquer lugar do processo
 // (ex: numa integração externa) derruba o Node inteiro por padrão a partir da v15 — o que tiraria
 // do ar até a busca de cidades, sem nada nos logs além do processo simplesmente sumindo. Loga em
@@ -1109,7 +1116,9 @@ app.get('/api/admin/dashboard/abandoned-carts', requireAdmin, async (req, res) =
 // conta de /api/admin/recuperacao, via calcularMetricasEnvio), sem bater na Ink nem no serviço de
 // WhatsApp: é rápido de propósito, pra não pesar o carregamento do Dashboard.
 app.get('/api/admin/dashboard/recuperacao-resumo', requireAdmin, async (req, res) => {
-  const lojaFiltro = lojaLegadaDoContexto();
+  // Chave legada OU nula: o estado de envios é `app_config` da Organization (RLS), então a Store
+  // nativa lê o próprio estado — registros dela não têm `loja`.
+  const lojaFiltro = lojaLegadaDoContextoOuNula();
   try {
     const [envios, lembretes] = await Promise.all([readCarrinhoEnvios(), readPixLembretes()]);
     res.json(calcularMetricasEnvio(envios, lembretes, lojaFiltro));
@@ -1183,8 +1192,11 @@ async function pedidosPagosDesde(desdeIso) {
 // do Dashboard), pra não duplicar a mesma conta em dois lugares. "Conversão"/"receita recuperada"
 // só conta carrinho — o `concluido` do Pix também cobre expirado/cancelado, não só "pagou".
 function calcularMetricasEnvio(envios, lembretes, lojaFiltro) {
-  const enviosFiltrados = Object.values(envios).filter((r) => r.loja === lojaFiltro);
-  const lembretesFiltrados = Object.values(lembretes).filter((r) => r.loja === lojaFiltro);
+  // `lojaFiltro` é a chave legada da Store ou nula (Store nativa). Registro sem `loja` é o da Store
+  // nativa, então ausente e nula são a MESMA coisa — `undefined === null` daria "nenhum registro".
+  const daLoja = (r) => (r.loja || null) === (lojaFiltro || null);
+  const enviosFiltrados = Object.values(envios).filter(daLoja);
+  const lembretesFiltrados = Object.values(lembretes).filter(daLoja);
   const todasTentativas = [
     ...enviosFiltrados.flatMap((r) => r.envios || []),
     ...lembretesFiltrados.flatMap((r) => r.envios || []),
@@ -1619,36 +1631,46 @@ const LUCRO_AGRUPAMENTOS = {
 app.get('/api/admin/dashboard/lucro-produtos', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'lucro por produto exige Postgres configurado' });
   const dias = Math.max(1, Math.min(Number.parseInt(req.query.dias, 10) || 30, 180));
-  const lojas = [lojaLegadaDoContexto()];
   const agrupar = Object.prototype.hasOwnProperty.call(LUCRO_AGRUPAMENTOS, req.query.agrupar) ? req.query.agrupar : 'produto';
   const { chave, rotulo } = LUCRO_AGRUPAMENTOS[agrupar];
-  const params = [lojas, Array.from(RESUMO_PAGO), dias];
-  const filtroPedido = `p.loja = ANY($1)
-    AND p.payment_status = ANY($2)
-    AND p.is_troca IS NOT TRUE
-    AND p.criado_em >= ((now() AT TIME ZONE 'America/Sao_Paulo')::date - ($3::int - 1))::timestamp AT TIME ZONE 'America/Sao_Paulo'`;
+  // Identidade canônica: `organization_id + store_id` (a chave legada só entra como ramo de
+  // compatibilidade quando a Store tem uma). O pedido é filtrado UMA vez, num CTE, e os itens
+  // entram pela identidade do pedido — sem `loja` na junção, que é NULA na Store nativa.
+  const escopo = escopoDaStore(4);
+  const params = [orgDoContexto(), Array.from(RESUMO_PAGO), dias, ...escopo.params];
+  const pedidosDoPeriodo = `WITH ped AS (
+       SELECT store_id, loja, ink_order_id
+       FROM pedidos_ink
+       WHERE organization_id = $1
+         AND ${escopo.sql}
+         AND payment_status = ANY($2)
+         AND is_troca IS NOT TRUE
+         AND criado_em >= ((now() AT TIME ZONE 'America/Sao_Paulo')::date - ($3::int - 1))::timestamp AT TIME ZONE 'America/Sao_Paulo'
+     )`;
+  const itemDoPedido = `i.organization_id = $1 AND i.ink_order_id = p.ink_order_id
+         AND (i.store_id = p.store_id OR (i.store_id IS NULL AND i.loja = p.loja))`;
   try {
     const { rows } = await pgPool.query(
-      `SELECT ${chave} AS chave,
+      `${pedidosDoPeriodo}
+       SELECT ${chave} AS chave,
               ${rotulo} AS nome,
               SUM(i.quantidade) AS pecas,
-              COUNT(DISTINCT i.loja || ':' || i.ink_order_id) AS pedidos,
+              COUNT(DISTINCT p.ink_order_id) AS pedidos,
               SUM(i.valor_venda - i.desconto_rateado) AS lucro_bruto,
               SUM(i.custo_producao) AS custo_producao,
               SUM(i.lucro_operacional) AS lucro_operacional
        FROM pedidos_ink_itens i
-       JOIN pedidos_ink p ON p.loja = i.loja AND p.ink_order_id = i.ink_order_id
-       WHERE ${filtroPedido}
+       JOIN ped p ON ${itemDoPedido}
        GROUP BY 1
        ORDER BY lucro_operacional DESC
        LIMIT 50`,
       params
     );
     const { rows: cobertura } = await pgPool.query(
-      `SELECT COUNT(*) AS sem_itens
-       FROM pedidos_ink p
-       WHERE ${filtroPedido}
-         AND NOT EXISTS (SELECT 1 FROM pedidos_ink_itens i WHERE i.loja = p.loja AND i.ink_order_id = p.ink_order_id)`,
+      `${pedidosDoPeriodo}
+       SELECT COUNT(*) AS sem_itens
+       FROM ped p
+       WHERE NOT EXISTS (SELECT 1 FROM pedidos_ink_itens i WHERE ${itemDoPedido})`,
       params
     );
     res.json({
@@ -7147,49 +7169,52 @@ app.delete('/api/admin/promocoes/:id', requireAdmin, async (req, res) => {
 // Tudo somente leitura — a API não documenta endpoint de "solicitar saque" nem de antecipação
 // via API (ambos "fora de escopo" segundo a própria doc), então essa tela nunca oferece essas
 // ações, só mostra o histórico.
+// Identidade canônica: `organization_id + store_id` do contexto, e a credencial Ink é a da
+// Organization (`inkApiRequestDaStore`). `loja` sai só como rótulo de compatibilidade — NULA para a
+// Store nativa do Oria — e nunca como condição para a consulta existir.
 app.get('/api/admin/financeiro/resumo', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
   try {
-    const data = await inkApiRequest(loja, '/v1/stores/balance');
-    res.json({ loja, saldo: data.balance });
+    const data = await inkApiRequestDaStore('/v1/stores/balance');
+    res.json({ storeId, loja: lojaLegadaDoContextoOuNula(), saldo: data.balance });
   } catch (err) {
-    console.error(`[FINANCEIRO] falha ao buscar saldo (${loja}): ${err.message}`);
+    console.error(`[FINANCEIRO] falha ao buscar saldo (store ${storeId}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível buscar o saldo' });
   }
 });
 
 app.get('/api/admin/financeiro/movimentacoes', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
   const params = new URLSearchParams({ page: String(req.query.page || 1), per_page: '25' });
   if (req.query.start_date) params.set('start_date', req.query.start_date);
   if (req.query.end_date) params.set('end_date', req.query.end_date);
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/balance_extract?${params.toString()}`);
-    res.json({ loja, extrato: data.balance_extract || [], page: data.page, totalPages: data.total_pages, hasMore: data.has_more });
+    const data = await inkApiRequestDaStore(`/v1/stores/balance_extract?${params.toString()}`);
+    res.json({ storeId, loja: lojaLegadaDoContextoOuNula(), extrato: data.balance_extract || [], page: data.page, totalPages: data.total_pages, hasMore: data.has_more });
   } catch (err) {
-    console.error(`[FINANCEIRO] falha ao buscar extrato (${loja}): ${err.message}`);
+    console.error(`[FINANCEIRO] falha ao buscar extrato (store ${storeId}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível buscar o extrato' });
   }
 });
 
 app.get('/api/admin/financeiro/antecipacoes', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
   try {
-    const data = await inkApiRequest(loja, '/v1/stores/prepayments?per_page=100');
-    res.json({ loja, antecipacoes: data.prepayments || [] });
+    const data = await inkApiRequestDaStore('/v1/stores/prepayments?per_page=100');
+    res.json({ storeId, loja: lojaLegadaDoContextoOuNula(), antecipacoes: data.prepayments || [] });
   } catch (err) {
-    console.error(`[FINANCEIRO] falha ao buscar antecipações (${loja}): ${err.message}`);
+    console.error(`[FINANCEIRO] falha ao buscar antecipações (store ${storeId}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível buscar as antecipações' });
   }
 });
 
 app.get('/api/admin/financeiro/saques', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
   try {
-    const data = await inkApiRequest(loja, '/v1/stores/withdraws?per_page=100');
-    res.json({ loja, saques: data.withdraws || [] });
+    const data = await inkApiRequestDaStore('/v1/stores/withdraws?per_page=100');
+    res.json({ storeId, loja: lojaLegadaDoContextoOuNula(), saques: data.withdraws || [] });
   } catch (err) {
-    console.error(`[FINANCEIRO] falha ao buscar saques (${loja}): ${err.message}`);
+    console.error(`[FINANCEIRO] falha ao buscar saques (store ${storeId}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível buscar os saques' });
   }
 });
@@ -7362,9 +7387,10 @@ app.get('/api/admin/dashboard/customers', requireAdmin, async (req, res) => {
 // depois e-mail como fallback, igual o anti-spam de carrinho já faz (`clienteJaComprou`).
 app.get('/api/admin/clientes', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });
-  const lojas = [lojaLegadaDoContexto()];
 
   try {
+    // O escopo é canônico (`organization_id + store_id`, com o ramo de compatibilidade só quando a
+    // Store tem chave legada) e vive dentro de `buscarClientesAgregados`.
     const clientes = await buscarClientesAgregados();
     res.json({ clientes });
   } catch (err) {
@@ -9145,10 +9171,13 @@ async function listarPropriedadesGA4(accessToken) {
 app.get('/api/admin/integrations/google-analytics/status', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
-    const loja = lojaLegadaDoContexto();
-    const { rows } = await pgPool.query(
-      'SELECT * FROM google_analytics_connections WHERE organization_id = $1 AND loja = $2', [orgDoContexto(), loja]
-    );
+    // Leitura de status: a Store nativa (sem chave legada) simplesmente não tem conexão GA4 — a
+    // tabela ainda é indexada por `loja`. É "desconectado", não erro; conectar segue exigindo a
+    // chave até a tabela ganhar `store_id` (dívida registrada, fora desta rodada).
+    const loja = lojaLegadaDoContextoOuNula();
+    const { rows } = loja
+      ? await pgPool.query('SELECT * FROM google_analytics_connections WHERE organization_id = $1 AND loja = $2', [orgDoContexto(), loja])
+      : { rows: [] };
     const conexoes = [mapGaConnectionRow(rows[0] || null, loja)];
     res.json({ conexoes, oauthConfigurado: googleOAuthConfigurado() });
   } catch (err) {
@@ -11334,9 +11363,15 @@ async function financeiroDaLoja(from, to) {
 // Fase 4 · gasto de mídia da Organization do contexto, pela fonte única (F-01). A loja é a da
 // Store da sessão; nenhum parâmetro do request entra.
 function midiaDaOrganizacao(from, to) {
+  const loja = lojaLegadaDoContextoOuNula();
+  // A atribuição de conta de anúncio ainda é por `loja_atribuida` (chave legada). A Store nativa
+  // não tem chave, então nenhuma conta pode ser atribuída a ela: não há gasto a somar, e isso não é
+  // erro — antes lançava e o Dashboard logava "gasto de mídia indisponível" a cada carregamento.
+  // O contrato do resolver (loja obrigatória, nada atribuído por dedução) continua intacto.
+  if (!loja) return Promise.resolve({ fontes: [], porDia: [], sinalizados: [] });
   return resolverMidiaDaOrganizacao(pgPool, {
     organizationId: orgDoContexto(),
-    loja: lojaLegadaDoContexto(),
+    loja,
     from,
     to,
     // Google Ads só vira aviso de "não conectado" se esta Organization de fato tem a integração.
@@ -13872,7 +13907,11 @@ async function sincronizarControleEstoque(loja) {
 }
 
 async function sincronizarControleEstoqueDaOrganizacao() {
-  for (const { loja } of await storesInkDoContexto()) {
+  // Controle de estoque ainda grava em tabela cuja coluna `loja` é obrigatória (não foi convertido
+  // para `store_id`), então só roda para Store com chave legada. Store nativa não é "falha": não há
+  // o que sincronizar por este caminho — antes ela entrava aqui com `loja` nula e logava erro a
+  // cada ciclo.
+  for (const loja of await lojasLegadasInkDoContexto()) {
     try {
       await sincronizarControleEstoque(loja);
     } catch (err) {
@@ -13927,7 +13966,10 @@ async function syncPedidosInkParaPostgres() {
 
 const SYNC_PEDIDOS_INTERVAL_MS = 60 * 60 * 1000;
 JOBS.agendar('sync-pedidos-ink', SYNC_PEDIDOS_INTERVAL_MS, () => syncPedidosInkParaPostgres());
-syncPedidosInkParaPostgres().catch((err) => console.error(`[SYNC_PEDIDOS] falha no sync inicial: ${err.message}`));
+// Não há sync "no boot" fora do runner: chamar `syncPedidosInkParaPostgres()` daqui rodava SEM
+// contexto de Organization e falhava em todo boot ("operação de store fora de um contexto de
+// Organization") — desde a Fase 3 ele nunca sincronizou nada. Quem sincroniza é o ciclo horário
+// acima (por Organization, sob contexto) e o webhook, que mantém o cache fresco entre um ciclo e outro.
 
 // Backfill histórico sob demanda (não é o sync incremental de hora em hora acima) — busca
 // pedidos desde uma data bem antiga informada pelo admin, pra cobrir o gap de antes da loja
@@ -14968,7 +15010,7 @@ app.get('/api/admin/whatsapp-templates', requireAdmin, async (req, res) => {
     res.json({ templates });
   } catch (err) {
     console.error(`[WHATSAPP] falha ao listar templates: ${err.message}`);
-    res.status(err.status || 502).json({ error: err.message });
+    res.status(err.status || 502).json({ error: err.message, codigo: err.codigo || null });
   }
 });
 
@@ -16132,6 +16174,10 @@ app.get('/api/pedidos/:id', async (req, res) => {
 app.get('/hotpix/:id', (req, res) => {
   res.sendFile(path.join(__dirname, 'pedido.html'));
 });
+
+// Último middleware do app: todo erro que uma rota, um middleware ou uma promise rejeitada
+// encaminhar para `next(err)` termina aqui, com resposta HTTP controlada e sem stack no corpo.
+app.use(httpSafety.criarErroCentral());
 
 const PORT = process.env.PORT || 8080;
 

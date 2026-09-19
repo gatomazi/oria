@@ -208,7 +208,7 @@ export function serieRecuperacao(porDia: Record<string, number>, dias: number): 
 }
 
 export interface MidiaDia {
-  loja: string;
+  loja: string | null;
   dia: string;
   spend: number;
 }
@@ -254,7 +254,7 @@ export function resultadoFinanceiro(
   // loja mostraria a receita dela contra a mídia de todas.
   midia.forEach((m) => {
     if (m.dia < inicioISO || m.dia > fimISO) return;
-    if (lojasNoEscopo && !lojasNoEscopo.has(m.loja)) return;
+    if (lojasNoEscopo && !lojasNoEscopo.has(m.loja ?? '')) return;
     total.midia += m.spend;
   });
   total.lucroAposMidia = total.lucroOperacional - total.midia;

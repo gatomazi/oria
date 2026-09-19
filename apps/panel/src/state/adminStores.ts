@@ -14,8 +14,8 @@ const STORES: Record<string, StoreInfo> = {
 const ORDER = ['sul', 'centro', 'norte'];
 
 export const adminStores = {
-  get(id: string): StoreInfo | null {
-    return STORES[id] ?? null;
+  get(id: string | null | undefined): StoreInfo | null {
+    return (id && STORES[id]) || null;
   },
   list(): StoreInfo[] {
     return ORDER.map((id) => STORES[id]);
@@ -23,10 +23,11 @@ export const adminStores = {
   ids(): string[] {
     return [...ORDER];
   },
-  name(id: string): string {
-    return STORES[id]?.name ?? id;
+  // Store nativa do Oria não tem chave legada (`id` nulo): não há nome a mostrar.
+  name(id: string | null | undefined): string {
+    return id ? STORES[id]?.name ?? id : '—';
   },
-  color(id: string): string {
-    return STORES[id]?.color ?? '#4d543d';
+  color(id: string | null | undefined): string {
+    return (id && STORES[id]?.color) || '#4d543d';
   },
 };

@@ -282,11 +282,12 @@ const VIOLACOES = [
     teste: 'fase3-static.test.js',
     arquivo: 'server.js',
     descricao: 'rota volta a aceitar loja da query (req.query.loja)',
-    de: "  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });\n"
-      + '  const lojas = [lojaLegadaDoContexto()];',
+    de: "  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });\n\n"
+      + '  try {\n    // O escopo é canônico (',
     para: "  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });\n"
         + '  // VIOLAÇÃO DELIBERADA (negative control) — "o filtro de loja da tela"\n'
-        + '  const lojas = [req.query.loja || lojaLegadaDoContexto()];',
+        + '  const lojas = [req.query.loja || lojaLegadaDoContexto()];\n\n'
+        + '  try {\n    // O escopo é canônico (',
   },
   {
     classe: 'tenancy/agregacao-lojas',
@@ -733,6 +734,65 @@ const VIOLACOES = [
     para: '  // VIOLAÇÃO DELIBERADA (negative control) — "sem WHATSAPP_SERVICE_URL o WhatsApp está desligado"\n'
         + '  if (!producao || !env.WHATSAPP_SERVICE_URL || segredoConfigurado(env.WHATSAPP_WEBHOOK_SECRET)) return { ok: true };',
   },
+  // ── Rodada de dogfooding (2026-09-19) · Store nativa + handlers async ──────────────────────────
+  {
+    classe: 'http/async-sem-rede',
+    invariant: 'HTTP-01',
+    teste: 'http-safety.test.js',
+    arquivo: 'lib/platform/http-safety.js',
+    descricao: 'a promise rejeitada do handler async deixa de ser observada: a requisição nunca responde (o "Carregando" infinito)',
+    de: "  if (retorno && typeof retorno.then === 'function') {",
+    para: "  // VIOLAÇÃO DELIBERADA (negative control) — comportamento do Express 4 puro: ninguém olha a promise\n"
+        + "  if (false && retorno && typeof retorno.then === 'function') {",
+  },
+  {
+    classe: 'http/erro-vaza-stack',
+    invariant: 'HTTP-02',
+    teste: 'http-safety.test.js',
+    arquivo: 'lib/platform/http-safety.js',
+    descricao: 'erro desconhecido devolve o stack no corpo da resposta',
+    de: '  return { ...ERRO_INTERNO };',
+    para: "  // VIOLAÇÃO DELIBERADA (negative control) — \"ajuda a depurar em produção\"\n"
+        + "  return { status: 500, error: String(err && err.stack ? err.stack : err), codigo: 'INTERNAL_ERROR' };",
+  },
+  {
+    classe: 'store-nativa/clientes-exige-loja-legada',
+    invariant: 'STORE-05',
+    teste: 'store-nativa-dogfooding.test.js',
+    arquivo: 'server.js',
+    descricao: 'Clientes volta a exigir a chave legada da Store (a variável morta que fazia a tela pendurar)',
+    de: "  try {\n    // O escopo é canônico (`organization_id + store_id`, com o ramo de compatibilidade só quando a",
+    para: "  const lojas = [lojaLegadaDoContexto()]; // VIOLAÇÃO DELIBERADA (negative control)\n"
+        + "  try {\n    // O escopo é canônico (`organization_id + store_id`, com o ramo de compatibilidade só quando a",
+  },
+  {
+    classe: 'store-nativa/financeiro-exige-loja-legada',
+    invariant: 'STORE-06',
+    teste: 'store-nativa-dogfooding.test.js',
+    arquivo: 'server.js',
+    descricao: 'Financeiro (saldo) volta a exigir a chave legada da Store',
+    de: "  const storeId = storeDoContexto();\n  try {\n    const data = await inkApiRequestDaStore('/v1/stores/balance');",
+    para: "  const loja = lojaLegadaDoContexto(); // VIOLAÇÃO DELIBERADA (negative control)\n"
+        + "  const storeId = storeDoContexto();\n  try {\n    const data = await inkApiRequestDaStore('/v1/stores/balance');",
+  },
+  {
+    classe: 'store-nativa/lucro-produtos-join-por-loja',
+    invariant: 'STORE-07',
+    teste: 'store-nativa-dogfooding.test.js',
+    arquivo: 'server.js',
+    descricao: 'itens do lucro por produto ligados ao pedido só pela chave `loja` (NULA na Store nativa): o ranking some',
+    de: '         AND (i.store_id = p.store_id OR (i.store_id IS NULL AND i.loja = p.loja))`;',
+    para: '         AND i.loja = p.loja`; // VIOLAÇÃO DELIBERADA (negative control)',
+  },
+  {
+    classe: 'dashboard/escopo-loja-nula',
+    invariant: 'DASH-01',
+    teste: 'dashboard-escopo-loja.test.js',
+    arquivo: 'src/pages/dashboard/escopoLoja.ts',
+    descricao: 'o Dashboard volta a comparar `loja === escopo`: null !== \'\' filtra tudo e mostra zeros',
+    de: '  return chaveDeLoja(a) === chaveDeLoja(b);',
+    para: '  return a === b; // VIOLAÇÃO DELIBERADA (negative control)',
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────
@@ -742,6 +802,8 @@ function copiarLib(destino) {
   // Fase 3: os controles de rota e do Creative Core também violam server.js e routes/.
   fs.cpSync(path.join(RAIZ_REPO, 'routes'), path.join(destino, 'routes'), { recursive: true });
   fs.copyFileSync(path.join(RAIZ_REPO, 'server.js'), path.join(destino, 'server.js'));
+  // Rodada de dogfooding: o controle do Dashboard viola o front (escopoLoja.ts) e roda o teste dele.
+  fs.cpSync(path.join(RAIZ_REPO, 'src', 'pages', 'dashboard'), path.join(destino, 'src', 'pages', 'dashboard'), { recursive: true });
   // A cópia precisa resolver as mesmas dependências (express, pg) que o lib/ real.
   fs.symlinkSync(path.join(RAIZ_REPO, 'node_modules'), path.join(destino, 'node_modules'), 'dir');
 }
@@ -835,11 +897,12 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
       'convite/conta-existente-troca-senha', 'convite/grant-da-role', 'convite/motivo-vazado',
       'convite/sessao-de-outro-email',
       'creative/dual-read-confinamento', 'creative/dual-read-organization',
-      'creative/tenant-env', 'dre/customer-de-outra-org', 'dre/loja-atribuida-padrao', 'dre/sem-loja',
-      'entitlement', 'entitlement/app-config-como-fonte', 'entitlement/ausencia', 'fase6/bypass-interno', 'integracoes/desconectar-cruzado', 'integracoes/env-global',
+      'creative/tenant-env', 'dashboard/escopo-loja-nula', 'dre/customer-de-outra-org', 'dre/loja-atribuida-padrao', 'dre/sem-loja',
+      'entitlement', 'entitlement/app-config-como-fonte', 'entitlement/ausencia', 'fase6/bypass-interno', 'http/async-sem-rede', 'http/erro-vaza-stack', 'integracoes/desconectar-cruzado', 'integracoes/env-global',
       'integracoes/resolver-global', 'integracoes/token-de-outra-org', 'jobs/contexto', 'jobs/lease-ignorado', 'oauth/org-do-navegador',
       'onboarding/chave-sem-pedido', 'onboarding/erro-bruto', 'onboarding/gate', 'onboarding/ja-existe-uma', 'onboarding/segunda-fonte',
-      'recuperacao/escopo', 'secrets', 'secrets/log', 'secrets/resposta', 'tenancy/agregacao-lojas',
+      'recuperacao/escopo', 'secrets', 'secrets/log', 'secrets/resposta', 'store-nativa/clientes-exige-loja-legada', 'store-nativa/financeiro-exige-loja-legada',
+      'store-nativa/lucro-produtos-join-por-loja', 'tenancy/agregacao-lojas',
       'tenancy/candidato-unico', 'tenancy/loja-do-request', 'tenancy/mapping', 'tenancy/ownership',
       'tenancy/ownership-id', 'tenancy/rls-context', 'webhook', 'webhook/ink-segredo-de-outra-org', 'webhook/ink-segredo-do-ambiente',
       'whatsapp/entrada-divergente', 'whatsapp/entrada-org-do-corpo', 'whatsapp/health-como-remetente', 'whatsapp/par-cruzado', 'whatsapp/ref-forjada', 'whatsapp/remetente-global',
