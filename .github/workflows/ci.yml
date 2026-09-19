@@ -1,24 +1,77 @@
 name: CI
 
-# Monorepo Oria: um job por componente, mais os contratos cross-service.
+# Monorepo Oria — CI RÁPIDO (PR e branches). A verificação completa mora em
+# `.github/workflows/full-verification.yml` e roda em main, nightly e sob demanda.
 #
 # Regra herdada do painel: teste pulado é verde na saída do CI, e isso é exatamente o modo de falha
 # que a productização combate. Por isso o Postgres é efêmero, as migrations rodam do zero e nenhum
-# passo aceita "não rodou" como sucesso.
+# passo aceita "não rodou" como sucesso. Nada aqui remove teste: o que muda é (1) não rodar a suíte
+# inteira duas vezes, (2) partir o que depende de banco em shards e (3) só rodar o que o diff afeta.
+#
+# ── INVARIANTE DE ISOLAMENTO (não relaxar) ─────────────────────────────────────────────────────
+# Cada job que roda testes de banco declara o SEU `services: postgres`. Dois shards nunca dividem o
+# mesmo banco/container. Já custou 28 falhas falsas quando dois testes de banco rodaram no mesmo
+# container. Paralelizar testes de banco dentro do MESMO banco continua proibido; o paralelismo é
+# entre jobs, e cada job tem o seu Postgres.
 #
 # Os contratos de rollout que rodam o código REAL de commits antigos são autocontidos: os snapshots
 # podados daqueles commits estão versionados em `apps/panel/test/fixtures/legacy/`. Nenhum job
 # depende de repositório vizinho, caminho absoluto ou interpretador local.
 
+# UM run por commit, e só um. `pull_request` já cobre todo commit de branch com PR aberto (evento
+# `synchronize`); qualquer `push` aqui duplicaria esse mesmo commit. E `main` não passa por este
+# workflow: lá quem manda é `full-verification.yml`, que é superconjunto deste.
+#
+#   commit numa branch com PR  → 1 run de CI (pull_request), 0 de push
+#   merge em main              → 1 run de Full Verification, 0 de CI
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [main]
+  # Disparo manual para depurar o próprio pipeline. Sem PR não há base de diff, e aí o job
+  # `changes` liga TUDO (fail-closed) — ver scripts/ci/changes.mjs.
+  workflow_dispatch:
+
+# Um push novo no mesmo PR cancela o run anterior: feedback rápido é o objetivo.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  changes:
+    name: o que o diff afeta
+    runs-on: ubuntu-latest
+    outputs:
+      panel: ${{ steps.classificar.outputs.panel }}
+      panel_full: ${{ steps.classificar.outputs.panel_full }}
+      platform_admin: ${{ steps.classificar.outputs.platform_admin }}
+      creatives: ${{ steps.classificar.outputs.creatives }}
+      whatsapp: ${{ steps.classificar.outputs.whatsapp }}
+      contracts: ${{ steps.classificar.outputs.contracts }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Sem base confiável, o script liga tudo: filtro que erra para menos vira silêncio.
+      - id: classificar
+        run: |
+          # Só o PR traz base de diff. Em `workflow_dispatch` não há base, e o script liga tudo.
+          base="${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            node scripts/ci/changes.mjs --github-output
+          else
+            node scripts/ci/changes.mjs --base "$base" --head "${{ github.sha }}" --github-output
+          fi
+      # O particionamento da suíte é verificado antes de qualquer shard rodar: a união dos shards
+      # precisa ser a suíte inteira, sem sobra e sem repetição.
+      - run: node scripts/ci/suites.mjs verify --shards 4 --pure-shards 2
+
   contracts:
     name: contratos cross-service e autocontenção
     runs-on: ubuntu-latest
+    needs: changes
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,9 +81,43 @@ jobs:
       # Falha se voltar a existir caminho absoluto de máquina ou dependência de repo vizinho.
       - run: npm run repo:self-check
 
-  panel:
-    name: painel (Node)
+  panel-pure:
+    name: painel · sem banco ${{ matrix.index }}/2
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.panel == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [1, 2]
+    env:
+      WHATSAPP_GO_DIR: ${{ github.workspace }}/services/whatsapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # productization-gate.test.js roda o gate em subprocessos com go vet/build/test.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/whatsapp/go.sum
+      - run: npm ci --ignore-scripts
+        working-directory: apps/panel
+      # Sem Postgres de propósito: um arquivo mal classificado reprova alto aqui (o harness lança
+      # sem INVARIANTS_DATABASE_URL), nunca se pula.
+      - run: node scripts/ci/panel-suite.mjs --group pure --shards 2 --index ${{ matrix.index }}
+
+  panel-db:
+    name: painel · banco ${{ matrix.index }}/4 (oria_app)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.panel == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [1, 2, 3, 4]
+    # ISOLAMENTO: este bloco dá a ESTE job um Postgres só dele. Nenhum outro shard o enxerga.
     services:
       postgres:
         image: postgres:16-alpine
@@ -47,9 +134,6 @@ jobs:
       # scripts/test-db.mjs usa TEST_DATABASE_URL e pula o Docker quando ela existe.
       TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
       WHATSAPP_GO_DIR: ${{ github.workspace }}/services/whatsapp
-    defaults:
-      run:
-        working-directory: apps/panel
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,33 +143,68 @@ jobs:
         with:
           go-version: '1.25'
           cache-dependency-path: services/whatsapp/go.sum
-
       - run: npm ci --ignore-scripts
+        working-directory: apps/panel
+      # No PR a suíte de banco roda SOB oria_app (NOSUPERUSER/NOBYPASSRLS), que é como produção
+      # conecta e o modo que prova RLS/tenancy. A execução com a role dona não some: ela roda na
+      # verificação completa (main/nightly/release), junto com esta.
+      - run: node scripts/ci/panel-suite.mjs --group db --shards 4 --index ${{ matrix.index }} --app-role
 
+  panel-migrations:
+    name: painel · migrations do zero e idempotentes
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.panel == 'true'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+    defaults:
+      run:
+        working-directory: apps/panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
       - name: migrations do zero
         run: npm run migrate:up
-        env:
-          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-
       - name: migrations são idempotentes
         run: npm run migrate:up
-        env:
-          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
 
-      - name: suíte do painel
-        run: npm test
-
-      - name: suíte sob a role da aplicação (oria_app)
-        run: npm run test:app-role
-        env:
-          TEST_APP_ROLE: '1'
-
-      - name: build do SPA do painel (dist/)
-        run: npm run build
+  panel-build:
+    name: painel · build do SPA
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.panel == 'true'
+    defaults:
+      run:
+        working-directory: apps/panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      # Não depende de banco nem de teste: sai do caminho crítico e falha em ~1 min quando quebra.
+      - run: npm run build
 
   platform-admin:
     name: control plane (Oria Admin)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.platform_admin == 'true'
     services:
       postgres:
         image: postgres:16-alpine
@@ -126,6 +245,8 @@ jobs:
   creatives:
     name: gerador de criativos (Python)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.creatives == 'true'
     defaults:
       run:
         working-directory: apps/creative-generator
@@ -141,6 +262,8 @@ jobs:
   whatsapp:
     name: serviço de whatsapp (Go)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.whatsapp == 'true'
     services:
       postgres:
         image: postgres:16-alpine
@@ -166,3 +289,38 @@ jobs:
       - run: go vet ./...
       - run: go build ./...
       - run: go test -race -count=1 ./...
+
+  ci-gate:
+    name: ci-gate
+    runs-on: ubuntu-latest
+    needs: [changes, contracts, panel-pure, panel-db, panel-migrations, panel-build, platform-admin, creatives, whatsapp]
+    if: always()
+    steps:
+      # É este o check que a branch protection deve exigir. Job pulado por não ser afetado passa;
+      # job que falhou, foi cancelado ou não rodou por erro de dependência REPROVA — "não rodou"
+      # nunca conta como sucesso.
+      - name: todos os jobs afetados passaram
+        run: |
+          set -uo pipefail
+          falhou=0
+          avaliar() {
+            case "$2" in
+              success|skipped) echo "ok      $1 ($2)" ;;
+              *) echo "REPROVA $1 ($2)"; falhou=1 ;;
+            esac
+          }
+          avaliar changes          "${{ needs.changes.result }}"
+          avaliar contracts        "${{ needs.contracts.result }}"
+          avaliar panel-pure       "${{ needs.panel-pure.result }}"
+          avaliar panel-db         "${{ needs.panel-db.result }}"
+          avaliar panel-migrations "${{ needs.panel-migrations.result }}"
+          avaliar panel-build      "${{ needs.panel-build.result }}"
+          avaliar platform-admin   "${{ needs.platform-admin.result }}"
+          avaliar creatives        "${{ needs.creatives.result }}"
+          avaliar whatsapp         "${{ needs.whatsapp.result }}"
+          # `changes` nunca pode ser pulado: sem ele os filtros não existiram.
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "REPROVA changes não concluiu"
+            falhou=1
+          fi
+          exit $falhou

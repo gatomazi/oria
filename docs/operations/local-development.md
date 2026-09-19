@@ -86,6 +86,22 @@ npm run whatsapp:test
 npm run contracts:check      # fonte canônica == cópias nos dois serviços
 ```
 
+Para iterar sem esperar a suíte inteira, na mesma partição que o CI usa (ver
+`docs/operations/ci-optimization-audit.md`):
+
+```bash
+npm run panel:test:pure      # os arquivos que não tocam banco, sem subir Postgres
+npm run panel:test:db        # os que tocam banco, com Postgres efêmero próprio
+npm run panel:test:rls       # idem, sob oria_app (como produção conecta)
+npm run panel:test:shard -- --group db --shards 4 --index 2 --app-role
+npm run ci:suites -- plan    # como a suíte está particionada, com os pesos
+npm run ci:changes -- --base main --head HEAD   # o que este diff liga no CI
+```
+
+Cada shard local usa container próprio (`oria-test-pg-db-2` ≠ `oria-test-pg-db-3`): dois shards
+nunca dividem o mesmo Postgres — a regra que nasceu das falhas falsas de testes de banco
+simultâneos no mesmo container.
+
 Detalhes que costumam morder:
 
 - **Um container por execução.** `TEST_PG_CONTAINER=<nome>` separa execuções paralelas; o script para

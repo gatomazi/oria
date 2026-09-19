@@ -1,0 +1,313 @@
+name: Full Verification
+
+# Verificação COMPLETA do monorepo Oria — o que o CI de PR não faz.
+#
+# Diferença para `ci.yml` (o CI rápido):
+#   - nada é condicional: todos os componentes rodam, qualquer que tenha sido o diff;
+#   - a suíte de banco do painel roda NAS DUAS roles (a dona e `oria_app`), como antes da rodada 21;
+#   - migrations do zero e idempotência têm job próprio, com Postgres próprio.
+#
+# Quando roda: push em main, agendada (nightly) e sob demanda (workflow_dispatch). Antes de release
+# e antes de qualquer mudança de tenancy/schema chegar a produção, é este workflow que decide.
+#
+# ── INVARIANTE DE ISOLAMENTO (não relaxar) ─────────────────────────────────────────────────────
+# Um Postgres por job. Dois shards nunca dividem banco: foi assim que apareceram 28 falhas falsas.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 06:00 UTC ≈ 03:00 em Brasília.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: full-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contracts:
+    name: contratos cross-service e autocontenção
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-contracts.mjs
+      - run: npm run repo:self-check
+      # A união dos shards precisa continuar sendo a suíte inteira.
+      - run: node scripts/ci/suites.mjs verify --shards 4 --pure-shards 2
+
+  panel-pure:
+    name: painel · sem banco ${{ matrix.index }}/2
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [1, 2]
+    env:
+      WHATSAPP_GO_DIR: ${{ github.workspace }}/services/whatsapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/whatsapp/go.sum
+      - run: npm ci --ignore-scripts
+        working-directory: apps/panel
+      - run: node scripts/ci/panel-suite.mjs --group pure --shards 2 --index ${{ matrix.index }}
+
+  panel-db:
+    name: painel · banco ${{ matrix.index }}/4 (${{ matrix.role }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [1, 2, 3, 4]
+        # `owner`: a role dona, como a suíte sempre rodou. `app`: sob oria_app, o que produção usa.
+        role: [owner, app]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+      WHATSAPP_GO_DIR: ${{ github.workspace }}/services/whatsapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/whatsapp/go.sum
+      - run: npm ci --ignore-scripts
+        working-directory: apps/panel
+      - name: suíte de banco (role dona)
+        if: matrix.role == 'owner'
+        run: node scripts/ci/panel-suite.mjs --group db --shards 4 --index ${{ matrix.index }}
+      - name: suíte de banco sob oria_app
+        if: matrix.role == 'app'
+        run: node scripts/ci/panel-suite.mjs --group db --shards 4 --index ${{ matrix.index }} --app-role
+
+  panel-migrations:
+    name: painel · migrations do zero e idempotentes
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+    defaults:
+      run:
+        working-directory: apps/panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - name: migrations do zero
+        run: npm run migrate:up
+      - name: migrations são idempotentes
+        run: npm run migrate:up
+
+  panel-build:
+    name: painel · build do SPA
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+
+  platform-admin:
+    name: control plane (Oria Admin)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+        working-directory: apps/panel
+      - run: npm ci --ignore-scripts
+        working-directory: apps/platform-admin
+      - name: suíte do control plane
+        run: npm test
+        working-directory: apps/platform-admin
+      - name: controles negativos do control plane
+        run: npm run test:negative
+        working-directory: apps/platform-admin
+
+  creatives:
+    name: gerador de criativos (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/creative-generator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: run_tests.py
+        run: python run_tests.py
+
+  whatsapp:
+    name: serviço de whatsapp (Go)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      WEBHOOK_TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/postgres
+    defaults:
+      run:
+        working-directory: services/whatsapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/whatsapp/go.sum
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test -race -count=1 ./...
+
+  productization-gate:
+    name: second tenant gate (nightly)
+    runs-on: ubuntu-latest
+    # Só no nightly e sob demanda: o gate roda a suíte inteira por conta própria, mais o Go e o
+    # Gerador de Criativos. A cada push de main isso seria o mesmo trabalho duas vezes.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: oria_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:teste@127.0.0.1:5432/oria_test
+      WHATSAPP_GO_DIR: ${{ github.workspace }}/services/whatsapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/whatsapp/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --ignore-scripts
+        working-directory: apps/panel
+      - run: pip install -r apps/creative-generator/requirements.txt
+      # A semântica do gate é preservada inteira, e quem a traduz é o gate-summary.mjs:
+      #   exit 1 → CODE bloqueado (regressão ou check não verificado) → job VERMELHO
+      #   exit 2 → CODE PASS, rollout bloqueado por OPS/dogfood       → job verde, estado em destaque
+      #   exit 0 → OVERALL READY
+      # Nem tratar 2 como regressão de código, nem esconder que o rollout está bloqueado. Para um
+      # gate de release a régua é outra (`--strict` exige OVERALL READY); aqui é nightly de
+      # engenharia.
+      - name: second tenant gate
+        run: |
+          set +e
+          node apps/panel/scripts/productization/gate.mjs --json > gate.json
+          codigo=$?
+          set -e
+          node scripts/ci/gate-summary.mjs --json gate.json --exit "$codigo"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: second-tenant-gate
+          path: gate.json
+          if-no-files-found: warn
+
+  full-gate:
+    name: full-gate
+    runs-on: ubuntu-latest
+    needs: [contracts, panel-pure, panel-db, panel-migrations, panel-build, platform-admin, creatives, whatsapp, productization-gate]
+    if: always()
+    steps:
+      # Aqui NADA pode ser pulado — com uma exceção declarada: o gate de productização só existe no
+      # nightly/dispatch, então `skipped` é o estado correto dele num push de main.
+      - name: tudo rodou e passou
+        run: |
+          set -uo pipefail
+          falhou=0
+          avaliar() {
+            if [ "$2" = "success" ]; then echo "ok      $1"; else echo "REPROVA $1 ($2)"; falhou=1; fi
+          }
+          case "${{ needs.productization-gate.result }}" in
+            success)  echo "ok      productization-gate" ;;
+            skipped)  echo "ok      productization-gate (só roda no nightly/dispatch)" ;;
+            *)        echo "REPROVA productization-gate (${{ needs.productization-gate.result }})"; falhou=1 ;;
+          esac
+          avaliar contracts        "${{ needs.contracts.result }}"
+          avaliar panel-pure       "${{ needs.panel-pure.result }}"
+          avaliar panel-db         "${{ needs.panel-db.result }}"
+          avaliar panel-migrations "${{ needs.panel-migrations.result }}"
+          avaliar panel-build      "${{ needs.panel-build.result }}"
+          avaliar platform-admin   "${{ needs.platform-admin.result }}"
+          avaliar creatives        "${{ needs.creatives.result }}"
+          avaliar whatsapp         "${{ needs.whatsapp.result }}"
+          exit $falhou
