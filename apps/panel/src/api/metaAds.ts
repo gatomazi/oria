@@ -27,6 +27,8 @@ export interface MetaConta {
   ultimoSyncEm: string | null;
   // A qual loja o tráfego desta conta leva — base do MER. null = ainda não definido.
   lojaAtribuida: string | null;
+  // A conta é da Store da sessão? (canônico por store_id; o texto legado só vale com chave legada.)
+  atribuidaAEstaStore: boolean;
 }
 
 export interface MetaSincronizacao {

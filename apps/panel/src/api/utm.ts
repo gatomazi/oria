@@ -2,7 +2,9 @@ import { api } from './client';
 
 export interface UtmCampaign {
   id: string;
-  loja: string;
+  // Chave legada da loja — nula na Store nativa do Oria (a identidade canônica é `storeId`).
+  storeId: string | null;
+  loja: string | null;
   nome: string;
   destinationUrl: string;
   source: string;

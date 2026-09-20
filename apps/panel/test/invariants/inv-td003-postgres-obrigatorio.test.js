@@ -130,6 +130,7 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       '1790000600000_store-id-connector-ink',
       '1790000800000_entitlement-canonico',
       '1790000900000_composicao-do-internal',
+      '1790001000000_midia-store-id',
     ]);
   } finally {
     await pool.end();

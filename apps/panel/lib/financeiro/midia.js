@@ -11,14 +11,20 @@
 //   - mais de um selecionado é erro de integridade — nunca "o primeiro";
 //   - recurso sem loja atribuída, ou atribuído a outra loja, fica FORA do total e é sinalizado;
 //   - nada é atribuído por dedução (nenhum "se só há uma loja, é ela");
-//   - a loja vem da Store da Organization do contexto, nunca do request.
+//   - a Store vem da Organization do contexto, nunca do request.
+//
+// Atribuição, em dois ramos SEPARADOS (mesmo desenho do `escopoDaStore` do server.js):
+//   canônico       a conta tem `store_id` → é da Store do contexto se `store_id = storeId`.
+//   compatibilidade a conta NÃO tem `store_id` mas tem `loja_atribuida` (linha histórica) → só casa
+//                  quando a Store do contexto TEM chave legada e é a mesma. Store nativa do Oria
+//                  (sem chave) nunca entra neste ramo: sem chave, não há o que casar.
 //
 // Provider fora do total volta com `conectado: false` e `motivo` — `totalizarMidia` o lista em
 // `faltando`, e a tela diz que o resultado está parcial em vez de mostrar lucro alto demais.
 
 const PROVIDERS = Object.freeze({
   meta: Object.freeze({
-    contas: `SELECT meta_account_id AS id, loja_atribuida FROM meta_ad_accounts
+    contas: `SELECT meta_account_id AS id, loja_atribuida, store_id FROM meta_ad_accounts
               WHERE organization_id = $1 AND selecionada`,
     gasto: `SELECT to_char(data, 'YYYY-MM-DD') AS dia, SUM(spend) AS spend FROM meta_insights_daily
              WHERE organization_id = $1 AND meta_account_id = $2 AND level = 'account'
@@ -28,7 +34,7 @@ const PROVIDERS = Object.freeze({
   // Nível 'customer' é o total da conta; a régua 'conversions' evita contar o mesmo gasto por
   // régua de conversão.
   google_ads: Object.freeze({
-    contas: `SELECT customer_id AS id, loja_atribuida FROM google_ads_customers
+    contas: `SELECT customer_id AS id, loja_atribuida, store_id FROM google_ads_customers
               WHERE organization_id = $1 AND selecionada`,
     gasto: `SELECT to_char(data, 'YYYY-MM-DD') AS dia, SUM(custo) AS spend FROM google_ads_insights_daily
              WHERE organization_id = $1 AND customer_id = $2 AND level = 'customer'
@@ -44,10 +50,21 @@ class MidiaIntegridadeError extends Error {
   }
 }
 
+// Por que a conta NÃO entra no total, ou `null` se entra.
+//   sem_loja     conta sem Store atribuída (nem `store_id`, nem `loja_atribuida`)
+//   outra_loja   conta atribuída a outra Store
+function motivoDeExclusao(conta, { storeId, loja }) {
+  if (conta.store_id) return storeId && conta.store_id === storeId ? null : 'outra_loja';
+  if (!conta.loja_atribuida) return 'sem_loja';
+  return loja && conta.loja_atribuida === loja ? null : 'outra_loja';
+}
+
 // `relevante(provider)` decide se provider não conectado vira aviso (a operação usa o canal?).
-async function resolverMidiaDaOrganizacao(pool, { organizationId, loja, from, to, relevante = () => true }) {
+// Identidade da Store: `storeId` (canônica) e/ou `loja` (chave legada, nula na Store nativa). Sem
+// nenhuma das duas não há a quem atribuir — erro, nunca "a única Store".
+async function resolverMidiaDaOrganizacao(pool, { organizationId, storeId = null, loja = null, from, to, relevante = () => true }) {
   if (!organizationId) throw new Error('mídia sem organization');
-  if (!loja) throw new Error('mídia sem loja da Store');
+  if (!storeId && !loja) throw new Error('mídia sem loja nem store da Store');
   const fontes = [];
   const porDia = [];
   const sinalizados = [];
@@ -59,7 +76,7 @@ async function resolverMidiaDaOrganizacao(pool, { organizationId, loja, from, to
       fontes.push({ provider, spend: null, conectado: false, relevante: await relevante(provider) });
       continue;
     }
-    const motivo = !conta.loja_atribuida ? 'sem_loja' : conta.loja_atribuida !== loja ? 'outra_loja' : null;
+    const motivo = motivoDeExclusao(conta, { storeId, loja });
     if (motivo) {
       sinalizados.push({ provider, recurso: conta.id, motivo });
       fontes.push({ provider, spend: null, conectado: false, relevante: true, motivo });
@@ -70,7 +87,7 @@ async function resolverMidiaDaOrganizacao(pool, { organizationId, loja, from, to
     for (const r of rows) {
       const spend = Number(r.spend);
       total += spend;
-      porDia.push({ provider, loja, dia: r.dia, spend });
+      porDia.push({ provider, storeId, loja, dia: r.dia, spend });
     }
     fontes.push({ provider, spend: total, conectado: true, recurso: conta.id });
   }

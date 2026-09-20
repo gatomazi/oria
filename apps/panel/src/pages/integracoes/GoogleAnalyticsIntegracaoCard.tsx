@@ -79,7 +79,7 @@ function LinhaLoja({ conexao, oauthConfigurado, recarregar }: { conexao: GaConne
                 {conexao.status === 'disconnected' ? 'Conectar' : 'Reconectar'}
               </a>
             ) : (
-              <Button variant="secondary" size="sm" disabled title="Configure GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/GOOGLE_OAUTH_REDIRECT_URI">
+              <Button variant="secondary" size="sm" disabled title="Conexão com o Google ainda não habilitada na plataforma">
                 Conectar
               </Button>
             )
@@ -152,8 +152,8 @@ export function GoogleAnalyticsIntegracaoCard() {
       {!erro && dados && (
         <div className="ds-stack">
           {!dados.oauthConfigurado && (
-            <Callout tone="warning" title="OAuth do Google não configurado neste ambiente">
-              Faltam as variáveis <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code> e/ou <code>GOOGLE_OAUTH_REDIRECT_URI</code>.
+            <Callout tone="warning" title="Configuração da plataforma indisponível">
+              A conexão com o Google Analytics ainda não está habilitada na plataforma. Assim que estiver, o botão Conectar fica disponível aqui.
             </Callout>
           )}
           <div>

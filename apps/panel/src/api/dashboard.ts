@@ -83,6 +83,10 @@ export interface DashboardFinanceiroData {
   // Gasto de mídia por loja × dia, vindo das contas de anúncio conectadas. Vazio quando nenhuma
   // conta tem loja atribuída — o painel não inventa zero pra quem não conectou.
   midia: { loja: string | null; dia: string; spend: number }[];
+  // Estado de cada fonte de mídia (Meta, Google Ads). `null` = o servidor não conseguiu ler — a tela
+  // não afirma nem "sem mídia" nem "gasto zero".
+  midiaFontes: { provider: string; conectado: boolean; relevante: boolean; motivo: string | null }[] | null;
+  midiaSinalizada: { provider: string; recurso: string; motivo: string }[];
 }
 
 export function getDashboardFinanceiro(dias = 180) {

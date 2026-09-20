@@ -403,6 +403,20 @@ function orgDoContexto() {
   return ctx.organizationId;
 }
 
+// A conta de anúncio (linha de `meta_ad_accounts` / `google_ads_customers`) é desta Store?
+//
+//   canônico        `store_id` da conta = Store do contexto
+//   compatibilidade conta SEM `store_id`, atribuída pelo texto `loja_atribuida` — só quando a Store do
+//                   contexto TEM chave legada e é a mesma. Store nativa nunca cai neste ramo.
+//
+// É a mesma regra de `motivoDeExclusao` em lib/financeiro/midia.js (a fonte do gasto), aplicada à
+// linha que a tela mostra — as duas não podem discordar sobre "esta conta é da minha loja".
+function contaAtribuidaAEstaStore(conta) {
+  if (conta.store_id) return conta.store_id === storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
+  return !!(conta.loja_atribuida && loja && conta.loja_atribuida === loja);
+}
+
 // Stores que o contexto pode operar na Ink: a Store da Organization, se houver credencial.
 // Devolve a identidade CANÔNICA (`storeId`) e, junto, a chave legada quando existir — a chave serve
 // para rótulo e para os fluxos ainda não convertidos, nunca como condição de existência.
@@ -1730,17 +1744,27 @@ app.get('/api/admin/dashboard/financeiro', requireAdmin, async (req, res) => {
     // calculado acima. Sem mídia o painel volta a mostrar o lucro do produto, que é o que ele
     // mostrava antes desta adição.
     let midia = [];
+    // `null` = não foi possível ler o estado da mídia (diferente de "nenhuma conta conectada"): a
+    // tela não pode afirmar nem "sem mídia" nem "gasto zero" sem saber.
+    let midiaFontes = null;
+    let midiaSinalizada = [];
     try {
       // Fonte única (lib/financeiro/midia.js): a mesma do consolidado. Recurso sem loja, ou de
       // outra loja, fica fora — não é somado na loja errada.
       const r = await midiaDaOrganizacao(diaISOBrasil(dias - 1), diaISOBrasil(0));
       midia = r.porDia;
+      midiaFontes = r.fontes.map((f) => ({ provider: f.provider, conectado: f.conectado, relevante: f.relevante !== false, motivo: f.motivo || null }));
+      midiaSinalizada = r.sinalizados;
     } catch (err) {
       console.error(`[DASHBOARD_FINANCEIRO] gasto de mídia indisponível: ${err.message}`);
     }
 
     res.json({
       midia: midia.map((m) => ({ loja: m.loja, dia: m.dia, spend: Number(m.spend) })),
+      // Estado das fontes de mídia: distingue "não conectada" / "conta sem loja atribuída" de
+      // "conectada e sem gasto no período" — que são coisas diferentes para o lucro.
+      midiaFontes,
+      midiaSinalizada,
       dias,
       sincronizadoEm: syncs[0] && syncs[0].sincronizado_em ? new Date(syncs[0].sincronizado_em).toISOString() : null,
       linhas: rows.map((r) => ({
@@ -7754,12 +7778,12 @@ app.delete('/api/admin/segments/:id', requireAdmin, exigirRecurso('segments'), a
 // depende do Google Analytics: performance real por GA4 é integração futura (Fase 2/3 da spec).
 // Regra central da spec: nunca fabricar número — sem GA4 conectado, este módulo só cria, salva e
 // padroniza links; não mostra sessão/receita nenhuma.
-const UTM_SELECT_COLS = `id, loja, nome, url_destino, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+const UTM_SELECT_COLS = `id, store_id, loja, nome, url_destino, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
   url_completa, criado_em, atualizado_em, arquivada_em`;
 
 function mapUtmCampanhaRow(r) {
   return {
-    id: String(r.id), loja: r.loja, nome: r.nome, destinationUrl: r.url_destino,
+    id: String(r.id), storeId: r.store_id, loja: r.loja, nome: r.nome, destinationUrl: r.url_destino,
     source: r.utm_source, medium: r.utm_medium, campaign: r.utm_campaign,
     content: r.utm_content, term: r.utm_term, fullUrl: r.url_completa,
     criadoEm: r.criado_em, atualizadoEm: r.atualizado_em, arquivadaEm: r.arquivada_em,
@@ -7796,8 +7820,10 @@ function montarUrlUtm(destinationUrl, { source, medium, campaign, content, term 
 
 // Valida + normaliza o corpo de criar/editar; devolve { erro } ou os valores prontos pra gravar.
 function prepararUtmCampanha(body) {
-  // Loja da Store da sessão (Fase 3); o corpo nunca escolhe.
-  const loja = lojaLegadaDoContexto();
+  // Store da sessão; o corpo nunca escolhe. `loja` (chave legada, nula na Store nativa) só espelha o
+  // texto histórico.
+  const storeId = storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   const nome = String(body?.nome || '').trim();
   if (!nome) return { erro: 'nome é obrigatório' };
   const source = normalizarUtmValor(body?.source);
@@ -7810,16 +7836,17 @@ function prepararUtmCampanha(body) {
   if (!campaign) return { erro: 'utm_campaign é obrigatório' };
   const fullUrl = montarUrlUtm(body?.destinationUrl, { source, medium, campaign, content, term });
   if (!fullUrl) return { erro: 'URL de destino inválida — use uma URL completa (http:// ou https://)' };
-  return { loja, nome, destinationUrl: String(body.destinationUrl).trim(), source, medium, campaign, content, term, fullUrl };
+  return { storeId, loja, nome, destinationUrl: String(body.destinationUrl).trim(), source, medium, campaign, content, term, fullUrl };
 }
 
 app.get('/api/admin/utm/campaigns', requireAdmin, async (req, res) => {
   if (!pgPool) return res.json({ campanhas: [] });
-  const loja = lojaLegadaDoContexto();
   const status = req.query.status === 'arquivadas' ? 'arquivadas' : req.query.status === 'todas' ? 'todas' : 'ativas';
-  const condicoes = [];
-  const params = [];
-  if (loja) { params.push(loja); condicoes.push(`loja = $${params.length}`); }
+  // Escopo canônico (`organization_id + store_id`); a campanha histórica, sem `store_id`, só entra
+  // quando a Store tem chave legada — Store nativa nunca cai nesse ramo.
+  const escopo = escopoDaStore(2);
+  const params = [orgDoContexto(), ...escopo.params];
+  const condicoes = ['organization_id = $1', escopo.sql];
   if (status === 'ativas') condicoes.push('arquivada_em IS NULL');
   else if (status === 'arquivadas') condicoes.push('arquivada_em IS NOT NULL');
   const where = condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : '';
@@ -7850,9 +7877,9 @@ app.post('/api/admin/utm/campaigns', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'UTM Tracker exige Postgres configurado' });
   try {
     const { rows } = await pgPool.query(
-      `INSERT INTO utm_campaigns (loja, nome, url_destino, utm_source, utm_medium, utm_campaign, utm_content, utm_term, url_completa)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING ${UTM_SELECT_COLS}`,
-      [prep.loja, prep.nome, prep.destinationUrl, prep.source, prep.medium, prep.campaign, prep.content, prep.term, prep.fullUrl]
+      `INSERT INTO utm_campaigns (store_id, loja, nome, url_destino, utm_source, utm_medium, utm_campaign, utm_content, utm_term, url_completa)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${UTM_SELECT_COLS}`,
+      [prep.storeId, prep.loja, prep.nome, prep.destinationUrl, prep.source, prep.medium, prep.campaign, prep.content, prep.term, prep.fullUrl]
     );
     res.json({ campanha: mapUtmCampanhaRow(rows[0]) });
   } catch (err) {
@@ -7867,10 +7894,11 @@ app.patch('/api/admin/utm/campaigns/:id', requireAdmin, exigirRecurso('utm_campa
   if (!pgPool) return res.status(503).json({ error: 'UTM Tracker exige Postgres configurado' });
   try {
     const { rows } = await pgPool.query(
-      `UPDATE utm_campaigns SET loja=$1, nome=$2, url_destino=$3, utm_source=$4, utm_medium=$5, utm_campaign=$6,
-         utm_content=$7, utm_term=$8, url_completa=$9, atualizado_em=now()
-       WHERE id=$10 RETURNING ${UTM_SELECT_COLS}`,
-      [prep.loja, prep.nome, prep.destinationUrl, prep.source, prep.medium, prep.campaign, prep.content, prep.term, prep.fullUrl, req.params.id]
+      `UPDATE utm_campaigns SET store_id=$1, loja=$2, nome=$3, url_destino=$4, utm_source=$5, utm_medium=$6, utm_campaign=$7,
+         utm_content=$8, utm_term=$9, url_completa=$10, atualizado_em=now()
+       WHERE id=$11 RETURNING ${UTM_SELECT_COLS}`,
+      [prep.storeId, prep.loja, prep.nome, prep.destinationUrl, prep.source, prep.medium, prep.campaign, prep.content, prep.term, prep.fullUrl,
+        req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'campanha não encontrada' });
     res.json({ campanha: mapUtmCampanhaRow(rows[0]) });
@@ -7900,9 +7928,9 @@ app.post('/api/admin/utm/campaigns/:id/duplicate', requireAdmin, exigirRecurso('
     if (!rows.length) return res.status(404).json({ error: 'campanha não encontrada' });
     const o = rows[0];
     const { rows: novaRows } = await pgPool.query(
-      `INSERT INTO utm_campaigns (loja, nome, url_destino, utm_source, utm_medium, utm_campaign, utm_content, utm_term, url_completa)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING ${UTM_SELECT_COLS}`,
-      [o.loja, `${o.nome} (cópia)`, o.url_destino, o.utm_source, o.utm_medium, o.utm_campaign, o.utm_content, o.utm_term, o.url_completa]
+      `INSERT INTO utm_campaigns (store_id, loja, nome, url_destino, utm_source, utm_medium, utm_campaign, utm_content, utm_term, url_completa)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${UTM_SELECT_COLS}`,
+      [o.store_id, o.loja, `${o.nome} (cópia)`, o.url_destino, o.utm_source, o.utm_medium, o.utm_campaign, o.utm_content, o.utm_term, o.url_completa]
     );
     res.json({ campanha: mapUtmCampanhaRow(novaRows[0]) });
   } catch (err) {
@@ -9918,7 +9946,7 @@ app.get('/api/admin/integrations/google-ads/status', requireAdmin, async (req, r
     const conexao = await obterConexaoGoogleAds();
     const { rows: contas } = await pgPool.query(
       `SELECT customer_id, nome, currency, timezone_name, manager, test_account, selecionada,
-              loja_atribuida, to_char(last_synced_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS last_synced_at
+              loja_atribuida, store_id, to_char(last_synced_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS last_synced_at
          FROM google_ads_customers ORDER BY selecionada DESC, nome NULLS LAST, customer_id`
     );
     res.json({
@@ -9943,6 +9971,8 @@ app.get('/api/admin/integrations/google-ads/status', requireAdmin, async (req, r
         teste: c.test_account,
         selecionada: c.selecionada,
         lojaAtribuida: c.loja_atribuida,
+        // A conta é da Store da sessão? (canônico por store_id; texto legado só com chave legada.)
+        atribuidaAEstaStore: contaAtribuidaAEstaStore(c),
         ultimoSync: c.last_synced_at,
       })),
     });
@@ -9966,7 +9996,8 @@ app.post('/api/admin/integrations/google-ads/contas/:customerId/selecionar', req
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   const id = gadsMetricas.normalizarCustomerId(req.params.customerId);
   if (!id) return res.status(400).json({ error: 'customer id inválido' });
-  const loja = lojaLegadaDoContexto();
+  // Store canônica; a chave legada (nula na Store nativa) só espelha o texto histórico.
+  const loja = lojaLegadaDoContextoOuNula();
   const org = orgDoContexto();
   const conn = await pgPool.connect();
   try {
@@ -9991,8 +10022,8 @@ app.post('/api/admin/integrations/google-ads/contas/:customerId/selecionar', req
       await conn.query('SELECT integracao_liberar_recursos($1, $2, $3)', ['google_ads', 'customer', a.customer_id]);
     }
     await conn.query(
-      'UPDATE google_ads_customers SET selecionada = true, loja_atribuida = $2, atualizado_em = now() WHERE organization_id = $3 AND customer_id = $1',
-      [id, loja, org]
+      'UPDATE google_ads_customers SET selecionada = true, store_id = $4, loja_atribuida = $2, atualizado_em = now() WHERE organization_id = $3 AND customer_id = $1',
+      [id, loja, org, storeDoContexto()]
     );
     await conn.query('COMMIT');
     res.json({ ok: true });
@@ -10019,11 +10050,13 @@ app.post('/api/admin/integrations/google-ads/contas/:customerId/loja', requireAd
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   const id = gadsMetricas.normalizarCustomerId(req.params.customerId);
   if (!id) return res.status(400).json({ error: 'customer id inválido' });
-  const loja = lojaLegadaDoContexto();
+  // Store canônica; a chave legada (nula na Store nativa) só espelha o texto histórico.
+  const storeId = storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   try {
     const { rowCount } = await pgPool.query(
-      'UPDATE google_ads_customers SET loja_atribuida = $2, atualizado_em = now() WHERE organization_id = $3 AND customer_id = $1',
-      [id, loja, orgDoContexto()]
+      'UPDATE google_ads_customers SET store_id = $4, loja_atribuida = $2, atualizado_em = now() WHERE organization_id = $3 AND customer_id = $1',
+      [id, loja, orgDoContexto(), storeId]
     );
     if (!rowCount) return res.status(404).json({ error: 'conta não encontrada' });
     res.json({ ok: true });
@@ -10098,6 +10131,7 @@ app.get('/api/admin/analytics/google-ads/overview', requireAdmin, async (req, re
         customerId: conta.customer_id,
         customerIdFormatado: gadsMetricas.formatarCustomerId(conta.customer_id),
         nome: conta.nome, moeda: conta.currency, lojaAtribuida: conta.loja_atribuida,
+        atribuidaAEstaStore: contaAtribuidaAEstaStore(conta),
       },
       dias,
       // As datas exatas do recorte. Sem elas não existe comparação possível com a interface do
@@ -10722,6 +10756,8 @@ app.get('/api/admin/integrations/meta/status', requireAdmin, async (req, res) =>
         metaAccountId: c.meta_account_id, nome: c.nome, currency: c.currency,
         timezoneName: c.timezone_name, accountStatus: c.account_status,
         selecionada: c.selecionada, ultimoSyncEm: c.last_synced_at, lojaAtribuida: c.loja_atribuida,
+        // A conta é da Store da sessão? (canônico por store_id; texto legado só com chave legada.)
+        atribuidaAEstaStore: contaAtribuidaAEstaStore(c),
       })),
       sincronizacoes: logs.map((l) => ({
         id: l.id, tipo: l.sync_type, status: l.status, iniciadoEm: l.started_at, finalizadoEm: l.finished_at,
@@ -10834,9 +10870,12 @@ app.get('/api/admin/integrations/meta/ad-accounts', requireAdmin, async (req, re
 app.post('/api/admin/integrations/meta/select-account', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'a integração com a Meta exige Postgres configurado' });
   const { metaAccountId } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  // A conta atende a Store da Organization da sessão (PD-016, 1:1). Identidade canônica: `store_id`;
+  // a chave legada (nula na Store nativa) só espelha `loja_atribuida` para as telas e relatórios
+  // antigos, e nunca é condição para a conta ser atribuída.
+  const storeId = storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   if (!metaAccountId) return res.status(400).json({ error: 'metaAccountId é obrigatório' });
-  // A conta atende a Store da Organization da sessão (PD-016, 1:1).
   const cliente = await pgPool.connect();
   try {
     // Uma transação porque o índice parcial só permite UMA conta selecionada: desmarcar e marcar
@@ -10865,9 +10904,9 @@ app.post('/api/admin/integrations/meta/select-account', requireAdmin, async (req
       await cliente.query('SELECT integracao_liberar_recursos($1, $2, $3)', ['meta', 'ad_account', a.meta_account_id]);
     }
     await cliente.query(
-      `UPDATE meta_ad_accounts SET selecionada = true, loja_atribuida = $2, atualizado_em = now()
+      `UPDATE meta_ad_accounts SET selecionada = true, store_id = $4, loja_atribuida = $2, atualizado_em = now()
        WHERE meta_account_id = $1 AND organization_id = $3`,
-      [idConta, loja, org]
+      [idConta, loja, org, storeId]
     );
     await cliente.query('COMMIT');
   } catch (err) {
@@ -11318,6 +11357,12 @@ app.get('/api/admin/analytics/meta/ads/:adId', requireAdmin, async (req, res) =>
 // Fase 3: o antigo `lojaAtribuidaPadrao()` ("se a instalação tem uma loja só, é ela") saiu — era o
 // padrão proibido por INV-09. A loja vem da Store da Organization da sessão.
 
+// Nome da Store da sessão, para rótulo. A Organization é a do contexto (a RLS confere de novo).
+async function nomeDaStoreDoContexto() {
+  const { rows } = await pgPool.query('SELECT nome FROM stores WHERE id = $1 AND organization_id = $2', [storeDoContexto(), orgDoContexto()]);
+  return rows[0] ? rows[0].nome : null;
+}
+
 // Financeiro real da loja no período, direto de pedidos_ink. Só pedido pago e que não é troca —
 // mesma regra do dashboard financeiro, pra os dois nunca divergirem.
 async function financeiroDaLoja(from, to) {
@@ -11363,15 +11408,12 @@ async function financeiroDaLoja(from, to) {
 // Fase 4 · gasto de mídia da Organization do contexto, pela fonte única (F-01). A loja é a da
 // Store da sessão; nenhum parâmetro do request entra.
 function midiaDaOrganizacao(from, to) {
-  const loja = lojaLegadaDoContextoOuNula();
-  // A atribuição de conta de anúncio ainda é por `loja_atribuida` (chave legada). A Store nativa
-  // não tem chave, então nenhuma conta pode ser atribuída a ela: não há gasto a somar, e isso não é
-  // erro — antes lançava e o Dashboard logava "gasto de mídia indisponível" a cada carregamento.
-  // O contrato do resolver (loja obrigatória, nada atribuído por dedução) continua intacto.
-  if (!loja) return Promise.resolve({ fontes: [], porDia: [], sinalizados: [] });
   return resolverMidiaDaOrganizacao(pgPool, {
     organizationId: orgDoContexto(),
-    loja,
+    // Identidade canônica primeiro. A chave legada (nula na Store nativa) só habilita o ramo de
+    // compatibilidade para conta antiga atribuída pelo texto `loja_atribuida`.
+    storeId: storeDoContexto(),
+    loja: lojaLegadaDoContextoOuNula(),
     from,
     to,
     // Google Ads só vira aviso de "não conectado" se esta Organization de fato tem a integração.
@@ -11418,12 +11460,15 @@ async function atribuicaoGA4(loja, from, to) {
 // mensalidade é uma linha só, não doze — editar o valor não exige caçar registros, e não existem
 // despesas fantasma para meses que ainda não aconteceram.
 
-async function listarDespesas(loja) {
+// Escopo canônico da Store do contexto (`organization_id + store_id`); a linha histórica, sem
+// `store_id`, só entra quando a Store tem chave legada — Store nativa nunca cai nesse ramo.
+async function listarDespesas() {
+  const escopo = escopoDaStore(2);
   const { rows } = await pgPool.query(
     `SELECT id, categoria, descricao, valor, to_char(data,'YYYY-MM-DD') AS data,
             recorrencia, to_char(fim,'YYYY-MM-DD') AS fim, notas
-     FROM despesas_operacionais WHERE loja = $1 ORDER BY data DESC, id DESC`,
-    [loja]
+     FROM despesas_operacionais WHERE organization_id = $1 AND ${escopo.sql} ORDER BY data DESC, id DESC`,
+    [orgDoContexto(), ...escopo.params]
   );
   // valor vem NUMERIC (string no driver) — converte na fronteira, como no resto do módulo.
   return rows.map((r) => ({ ...r, valor: Number(r.valor) }));
@@ -11431,9 +11476,8 @@ async function listarDespesas(loja) {
 
 app.get('/api/admin/financeiro/despesas', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'despesas exigem Postgres configurado' });
-  const loja = lojaLegadaDoContexto();
   try {
-    const despesas = await listarDespesas(loja);
+    const despesas = await listarDespesas();
     // Quando o período vem junto, devolve também o total expandido — é o que a tela do Resultado
     // consome sem precisar reimplementar a recorrência no frontend.
     let periodo = null;
@@ -11452,14 +11496,14 @@ app.get('/api/admin/financeiro/despesas', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/financeiro/despesas', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'despesas exigem Postgres configurado' });
-  const loja = lojaLegadaDoContexto();
   const { despesa, erros } = financeiroDespesas.validarDespesa(req.body);
   if (erros) return res.status(400).json({ error: erros.join('; ') });
   try {
+    // Store canônica; `loja` só espelha a chave histórica (nula na Store nativa).
     const { rows } = await pgPool.query(
-      `INSERT INTO despesas_operacionais (loja, categoria, descricao, valor, data, recorrencia, fim, notas)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [loja, despesa.categoria, despesa.descricao, despesa.valor, despesa.data, despesa.recorrencia, despesa.fim,
+      `INSERT INTO despesas_operacionais (store_id, loja, categoria, descricao, valor, data, recorrencia, fim, notas)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [storeDoContexto(), lojaLegadaDoContextoOuNula(), despesa.categoria, despesa.descricao, despesa.valor, despesa.data, despesa.recorrencia, despesa.fim,
         req.body.notas ? String(req.body.notas).slice(0, 500) : null]
     );
     res.status(201).json({ id: rows[0].id, despesa });
@@ -11680,23 +11724,21 @@ app.get('/api/admin/analytics/consolidado', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'o consolidado exige Postgres configurado' });
   let periodo;
   try { periodo = resolverPeriodoMeta(req.query.from, req.query.to); } catch (err) { return res.status(400).json({ error: err.message }); }
-  // A loja é a da Store da sessão; nenhum parâmetro do request a sobrescreve (F-01).
-  const loja = lojaLegadaDoContexto();
-  if (!loja) {
-    return res.status(409).json({
-      error: 'defina em Integrações a qual loja a conta de anúncios atribui o tráfego — sem isso o MER compararia receita e gasto de escopos diferentes',
-      codigo: 'META_LOJA_NAO_DEFINIDA',
-    });
-  }
+  // A Store é a da sessão; nenhum parâmetro do request a sobrescreve (F-01). Identidade canônica:
+  // `storeId`. A chave legada (`loja`, nula na Store nativa) só habilita o GA4 antigo, que ainda é
+  // indexado por ela.
+  const storeId = storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
 
   try {
     const { fontes, sinalizados } = await midiaDaOrganizacao(periodo.from, periodo.to);
     const [dadosLoja, meta, ga4, conexaoMeta, despesasCadastradas] = await Promise.all([
       financeiroDaLoja(periodo.from, periodo.to),
       atribuicaoMeta(periodo.from, periodo.to, fontes),
-      atribuicaoGA4(loja, periodo.from, periodo.to),
+      // GA4 ainda é por chave legada (conexão e cache indexados por `loja`): sem chave, não há GA4.
+      loja ? atribuicaoGA4(loja, periodo.from, periodo.to) : Promise.resolve(null),
       obterConexaoMeta(),
-      listarDespesas(loja),
+      listarDespesas(),
     ]);
     const despesas = financeiroDespesas.totalizarDespesas(despesasCadastradas, periodo.from, periodo.to);
 
@@ -11721,7 +11763,7 @@ app.get('/api/admin/analytics/consolidado', requireAdmin, async (req, res) => {
 
     res.json({
       periodo,
-      loja: { id: loja, nome: LOJAS[loja] },
+      loja: { id: loja, storeId, nome: (loja && LOJAS[loja]) || (await nomeDaStoreDoContexto()) },
       resultado,
       indicadores: {
         // MER e Blended CAC usam o total REAL da loja: nenhum dos dois depende de custo de

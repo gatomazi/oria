@@ -193,14 +193,18 @@ test('Fase 6 · cenário A: 3 Organizations, 3 Stores, 3 cadeias de ownership �
   });
 
   await t.test('controle negativo · linha de uma loja reassociada a outra Organization → verify FAIL', async () => {
-    const { rows: [linha] } = await sup.query(`SELECT id FROM despesas_operacionais WHERE loja = 'centro' ORDER BY id LIMIT 1`);
+    const { rows: [linha] } = await sup.query(`SELECT id, store_id FROM despesas_operacionais WHERE loja = 'centro' ORDER BY id LIMIT 1`);
     await sup.query('ALTER TABLE despesas_operacionais DISABLE TRIGGER USER');
     try {
-      await sup.query('UPDATE despesas_operacionais SET organization_id = $1 WHERE id = $2', [A.sul, linha.id]);
+      // Desde a 0025 a linha carrega `store_id` (FK composta com a Organization): reassociar só o
+      // `organization_id` já é recusado pelo banco. O defeito que o verify precisa flagrar é o do
+      // dado ANTIGO — só `loja`, sem Store — apontando para a Organization errada; por isso a linha
+      // simulada volta a ser desse tipo, e a restauração devolve o `store_id` que ela tinha.
+      await sup.query('UPDATE despesas_operacionais SET organization_id = $1, store_id = NULL WHERE id = $2', [A.sul, linha.id]);
       const ruim = await e.executar('verify', r.base, r.env);
       assert.equal(ruim.codigo, 1);
       assert.deepEqual(statusDe(ruim, 'tenancy.dono-da-loja'), ['FAIL']);
-      await sup.query('UPDATE despesas_operacionais SET organization_id = $1 WHERE id = $2', [A.centro, linha.id]);
+      await sup.query('UPDATE despesas_operacionais SET organization_id = $1, store_id = $3 WHERE id = $2', [A.centro, linha.id, linha.store_id]);
     } finally {
       await sup.query('ALTER TABLE despesas_operacionais ENABLE TRIGGER USER');
     }

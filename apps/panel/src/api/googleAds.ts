@@ -15,6 +15,8 @@ export interface GoogleAdsConta {
   teste: boolean;
   selecionada: boolean;
   lojaAtribuida: string | null;
+  // A conta é da Store da sessão? (canônico por store_id; o texto legado só vale com chave legada.)
+  atribuidaAEstaStore: boolean;
   ultimoSync: string | null;
 }
 
@@ -57,7 +59,7 @@ export interface GoogleAdsCampanha extends GoogleAdsTotais {
 
 export interface GoogleAdsOverview {
   conectado: boolean;
-  conta: { customerId: string; customerIdFormatado: string | null; nome: string | null; moeda: string | null; lojaAtribuida: string | null } | null;
+  conta: { customerId: string; customerIdFormatado: string | null; nome: string | null; moeda: string | null; lojaAtribuida: string | null; atribuidaAEstaStore: boolean } | null;
   dias?: number;
   /** Primeiro dia do recorte (AAAA-MM-DD). Sem ele não há comparação possível com o Google. */
   de?: string;
