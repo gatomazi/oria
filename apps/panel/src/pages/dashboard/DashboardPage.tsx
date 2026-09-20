@@ -4,6 +4,7 @@ import { Button, Callout, Card, DataTable, EmptyState, ErrorState, Icon, InfoToo
 import { copiar, formatValor, plural, tempoDesde, waLink } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { mesmaLoja, porEscopo } from './escopoLoja';
+import { avisoDeMidiaFora, estadoDaMidia, type MidiaFonte } from './estadoMidia';
 import { adminStores } from '../../state/adminStores';
 import {
   getDashboardAbandonedCarts,
@@ -188,12 +189,14 @@ function formatPercentual(parte: number, todo: number): string | null {
 function ResultadoPeriodo({
   linhas,
   midia,
+  midiaFontes,
   erro,
   periodo,
   dias,
 }: {
   linhas: FinanceiroDia[] | null;
   midia: MidiaDia[];
+  midiaFontes: MidiaFonte[] | null;
   erro: string;
   periodo: PeriodoId;
   dias: number;
@@ -226,7 +229,12 @@ function ResultadoPeriodo({
   // Margem sobre o FATURAMENTO, não sobre o lucro bruto: "margem de 51%" lida contra a receita é o
   // número que as pessoas comparam entre si, e é assim que a DRE do Meta Ads também calcula.
   const margem = formatPercentual(atual.lucroAposMidia, atual.faturamento);
-  const temMidia = atual.midia > 0;
+  // Conta de anúncios da loja conectada = a mídia entra na conta, MESMO com gasto zero no período
+  // (isso é "gasto zero" de verdade). Sem conta da loja o painel não sabe quanto foi gasto: não
+  // mostra "Mídia R$ 0,00" como se soubesse, e o lucro diz por que não desconta mídia.
+  const estadoMidia = estadoDaMidia(midiaFontes);
+  const temMidia = estadoMidia === 'conectada' || (estadoMidia === 'desconhecido' && atual.midia > 0);
+  const avisoMidia = avisoDeMidiaFora(estadoMidia);
   const pesoCusto = formatPercentual(atual.custoProducao, atual.lucroBruto);
 
   return (
@@ -265,7 +273,7 @@ function ResultadoPeriodo({
           <KpiCard
             title="Mídia"
             value={formatValor(atual.midia) || 'R$ 0,00'}
-            helper="Gasto real nas plataformas"
+            helper={atual.midia > 0 ? 'Gasto real nas plataformas' : 'Sem gasto registrado no período'}
           />
         )}
         <KpiCard
@@ -276,7 +284,7 @@ function ResultadoPeriodo({
           helper={
             temMidia
               ? (margem ? `Margem de ${margem} sobre o faturamento` : 'Lucro do produto − mídia')
-              : 'Venda menos custo de produção'
+              : avisoMidia ? `Venda menos custo de produção · ${avisoMidia}` : 'Venda menos custo de produção'
           }
           sparkline={sparkline.slice(-7)}
         />
@@ -612,7 +620,7 @@ export function DashboardPage() {
             sparklineReceita={sparklineReceita}
           />
 
-          <ResultadoPeriodo linhas={linhasFinanceiro} midia={midiaFinanceiro} erro={financeiro.erro} periodo={periodo} dias={dias} />
+          <ResultadoPeriodo linhas={linhasFinanceiro} midia={midiaFinanceiro} midiaFontes={financeiro.data?.midiaFontes ?? null} erro={financeiro.erro} periodo={periodo} dias={dias} />
 
           <div className="ad-analytic-grid">
             <Card

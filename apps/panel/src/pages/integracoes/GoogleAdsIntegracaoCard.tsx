@@ -111,9 +111,8 @@ export function GoogleAdsIntegracaoCard() {
       }
     >
       {!dados.oauthConfigurado && (
-        <Callout tone="warning" title="OAuth do Google não configurado neste ambiente">
-          Faltam as variáveis <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code> e{' '}
-          <code>GOOGLE_OAUTH_REDIRECT_URI</code>.
+        <Callout tone="warning" title="Configuração da plataforma indisponível">
+          A conexão com o Google Ads ainda não está habilitada na plataforma. Assim que estiver, o botão Conectar fica disponível aqui.
         </Callout>
       )}
 
@@ -158,7 +157,7 @@ export function GoogleAdsIntegracaoCard() {
                 <strong>{contaAtiva.nome || contaAtiva.customerIdFormatado}</strong>
                 <span className="pc-nota"> · {descricaoConta(contaAtiva)}</span>
               </p>
-              {!contaAtiva.lojaAtribuida && (
+              {!contaAtiva.atribuidaAEstaStore && (
                 <Callout tone="warning" title="Sem loja atribuída">
                   Enquanto esta conta não estiver ligada a uma loja, o gasto dela fica de fora do
                   resultado consolidado — comparar com a receita de uma loja que ela não atende

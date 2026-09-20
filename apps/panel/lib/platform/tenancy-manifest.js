@@ -60,7 +60,11 @@ const TABELAS_TENANT = Object.freeze([
     fks: [{ coluna: 'segmento_id', pai: 'segments', onDelete: 'SET NULL' }],
   }),
   t('controle_estoque_observacoes', 'loja'),
-  t('despesas_operacionais', 'loja'),
+  t('despesas_operacionais', 'loja', {
+    nota: 'A 0025 acrescentou `store_id` (FK composta com organization_id → stores) e liberou `loja`, '
+      + 'que virou compatibilidade histórica (nula na Store nativa). CHECK NOT VALID: toda linha nova '
+      + 'identifica a Store por `store_id` OU `loja`.',
+  }),
   t('estoque_observacoes', 'loja'),
   t('ga4_performance_cache', 'loja', {
     uniques: [{ nome: 'uq_ga4_performance_cache_org', colunas: ['organization_id', 'loja', 'periodo'] }],
@@ -103,7 +107,11 @@ const TABELAS_TENANT = Object.freeze([
     nota: 'A 0021 trocou a PK por substituta (organization_id, id) e acrescentou `store_id`; a marca '
       + 'de sincronização de Store nativa é identificada por `uq_sync_estado_store`.',
   }),
-  t('utm_campaigns', 'loja'),
+  t('utm_campaigns', 'loja', {
+    nota: 'A 0025 acrescentou `store_id` (FK composta com organization_id → stores) e liberou `loja`, '
+      + 'que virou compatibilidade histórica (nula na Store nativa). CHECK NOT VALID: toda linha nova '
+      + 'identifica a Store por `store_id` OU `loja`.',
+  }),
   t('origens_migration_city_uf_map', 'loja', {
     legado: true,
     uniques: [{ nome: 'uq_origens_city_uf_map_org', colunas: ['organization_id', 'loja', 'cidade_normalizada'] }],
@@ -193,6 +201,9 @@ const TABELAS_TENANT = Object.freeze([
     uniques: [{ nome: 'uq_meta_connections_org', colunas: ['organization_id'] }],
   }),
   t('meta_ad_accounts', 'meta', {
+    nota: 'A 0025 acrescentou `store_id` (FK composta com organization_id → stores): a Store a que a conta '
+      + 'atribui o tráfego. `loja_atribuida` é só compatibilidade histórica (texto; nula na Store nativa). '
+      + '`store_id` nulo é estado legítimo (conta ainda sem loja): o gasto fica fora do resultado, sinalizado.',
     uniques: [
       { nome: 'uq_meta_ad_accounts_org', colunas: ['organization_id', 'meta_account_id'] },
       { nome: 'uq_meta_ad_accounts_selecionada_org', colunas: ['organization_id'], where: 'selecionada' },
@@ -224,6 +235,9 @@ const TABELAS_TENANT = Object.freeze([
     uniques: [{ nome: 'uq_google_ads_connections_org', colunas: ['organization_id'] }],
   }),
   t('google_ads_customers', 'google_ads', {
+    nota: 'A 0025 acrescentou `store_id` (FK composta com organization_id → stores): a Store a que a conta '
+      + 'atribui o tráfego. `loja_atribuida` é só compatibilidade histórica (texto; nula na Store nativa). '
+      + '`store_id` nulo é estado legítimo (conta ainda sem loja): o gasto fica fora do resultado, sinalizado.',
     uniques: [
       { nome: 'uq_google_ads_customers_org', colunas: ['organization_id', 'customer_id'] },
       { nome: 'uq_google_ads_customers_selecionada_org', colunas: ['organization_id'], where: 'selecionada' },

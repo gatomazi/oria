@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Callout, Card, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge,  } from '../../components/ds';
 import { formatData, formatDiaISO, idadeDoCache, plural } from '../../lib/format';
-import { adminStores } from '../../state/adminStores';
 import {
   contaEstaAtiva, definirLojaDaContaMeta, desconectarMeta, getMetaStatus, listarMetaContas, mascararContaMeta, mensagemErroMeta,
   META_ACCOUNT_STATUS, selecionarMetaConta, sincronizarMetaAgora, urlConectarMeta,
@@ -205,8 +204,8 @@ export function MetaAdsIntegracaoCard() {
                 Sem o vínculo o consolidado se recusa a calcular MER. */}
             {contaSelecionada && (
               <div className="ga-linha__form">
-                {contaSelecionada.lojaAtribuida ? (
-                  <span className="pc-nota">Tráfego desta conta leva para {adminStores.name(contaSelecionada.lojaAtribuida)}.</span>
+                {contaSelecionada.atribuidaAEstaStore ? (
+                  <span className="pc-nota">Tráfego desta conta leva para a sua loja.</span>
                 ) : (
                   <>
                     <Button
