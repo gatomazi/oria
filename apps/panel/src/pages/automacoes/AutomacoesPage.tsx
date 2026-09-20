@@ -6,6 +6,7 @@ import { PreviewMensagemWeb } from '../../components/PreviewMensagemWeb';
 import { listarMensagensWeb, salvarVinculoWeb, type MensagemWeb } from '../../api/whatsappWeb';
 import { definirCamposCustomizados, extrairTextosComponentes } from '../../lib/templateVariables';
 import { eventoLabel } from '../../lib/eventLabels';
+import { ApiError } from '../../api/client';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { adminStores } from '../../state/adminStores';
 import {
@@ -573,6 +574,17 @@ function FluxoEventosCard() {
   );
 }
 
+// Sem número de WhatsApp cadastrado não há templates para listar — é o estado de quem ainda não
+// configurou o canal, e a tela abre normalmente com a lista vazia (o cadastro é em Integrações).
+async function templatesOuVazioSemNumero(): Promise<{ templates: WhatsappTemplate[] }> {
+  try {
+    return await getWhatsappTemplates();
+  } catch (err) {
+    if (err instanceof ApiError && err.codigo === 'WHATSAPP_SENDER_NOT_CONFIGURED') return { templates: [] };
+    throw err;
+  }
+}
+
 export function AutomacoesPage() {
   const escopo = useLojaAtiva() ?? '';
   const [dados, setDados] = useState<{
@@ -594,7 +606,7 @@ export function AutomacoesPage() {
         const modoWeb = settings.provider === 'whatsapp_web';
         return Promise.all([
           settings,
-          modoWeb ? Promise.resolve({ templates: [] as WhatsappTemplate[] }) : getWhatsappTemplates(),
+          modoWeb ? Promise.resolve({ templates: [] as WhatsappTemplate[] }) : templatesOuVazioSemNumero(),
           modoWeb ? listarMensagensWeb() : Promise.resolve({ mensagens: [] as MensagemWeb[] }),
           getAutomacaoEventos(),
           getWebhookLogAutomacoes(),

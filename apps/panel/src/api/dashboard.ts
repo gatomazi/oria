@@ -3,7 +3,7 @@ import { api } from './client';
 export type PaymentBucket = 'aguardando' | 'pago' | 'problema' | 'desconhecido';
 
 export interface DashboardPedido {
-  loja: string;
+  loja: string | null;
   cliente: string | null;
   valor: number | string | null;
   paymentStatus: string | null;
@@ -33,7 +33,7 @@ export interface DashboardResumo {
 }
 
 export interface DashboardErro {
-  loja: string;
+  loja: string | null;
   error: string;
 }
 
@@ -47,7 +47,7 @@ export interface DashboardOrdersData {
 }
 
 export interface DashboardCarrinho {
-  loja: string;
+  loja: string | null;
   contactable: boolean;
   buyerName: string | null;
   buyerPhone: string | null;
@@ -64,7 +64,7 @@ export interface DashboardCartsData {
 // Resultado financeiro agregado por loja e dia (cache Postgres; só pedido pago e que não é troca).
 // `semFinanceiro`: pedidos pagos do dia ainda sem custo calculado — ficam fora das somas.
 export interface FinanceiroDia {
-  loja: string;
+  loja: string | null;
   dia: string;
   pedidos: number;
   semFinanceiro: number;
@@ -82,7 +82,7 @@ export interface DashboardFinanceiroData {
   linhas: FinanceiroDia[];
   // Gasto de mídia por loja × dia, vindo das contas de anúncio conectadas. Vazio quando nenhuma
   // conta tem loja atribuída — o painel não inventa zero pra quem não conectou.
-  midia: { loja: string; dia: string; spend: number }[];
+  midia: { loja: string | null; dia: string; spend: number }[];
 }
 
 export function getDashboardFinanceiro(dias = 180) {

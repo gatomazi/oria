@@ -25,6 +25,12 @@ function responder(url, metodo, corpo) {
   const p = url.pathname;
   switch (url.hostname) {
     case 'api.reserva.ink':
+      // Financeiro (somente leitura): valores fixos e reconhecíveis, para o teste provar que a
+      // resposta veio da Ink consultada com a credencial da Organization certa.
+      if (p === '/v1/stores/balance') return json({ balance: { available: 1234.56, pending: 78.9 } });
+      if (p === '/v1/stores/balance_extract') return json({ balance_extract: [{ id: 1, description: 'venda', value: 10 }], page: 1, total_pages: 1, has_more: false });
+      if (p === '/v1/stores/prepayments') return json({ prepayments: [{ id: 7, value: 5 }] });
+      if (p === '/v1/stores/withdraws') return json({ withdraws: [{ id: 9, value: 3 }] });
       return json(p.startsWith('/v1/stores/orders') ? { orders: [], meta: { total_pages: 1 } } : {});
     case 'graph.facebook.com':
       if (p.endsWith('/me/permissions')) return json({ success: true });

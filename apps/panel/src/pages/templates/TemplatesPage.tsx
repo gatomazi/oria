@@ -3,6 +3,7 @@ import { Callout, ConfirmDialog, DataTable, EmptyState, ErrorState, PageHeader, 
 import { eventoLabel, idiomaLabel, templateCategoriaLabel } from '../../lib/eventLabels';
 import { adminStores } from '../../state/adminStores';
 import { lookup, TEMPLATE_META_STATUS_MAP } from '../../lib/statusMap';
+import { ApiError } from '../../api/client';
 import { deleteTemplate, listTemplates, type WhatsappTemplate } from '../../api/templates';
 import { useEffect, useState } from 'react';
 import { useWhatsappProvider } from '../../state/whatsappProvider';
@@ -27,14 +28,21 @@ export function TemplatesPage() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<WhatsappTemplate[] | null>(null);
   const [erro, setErro] = useState('');
+  // WhatsApp sem número cadastrado é um estado normal de quem ainda não configurou o canal, não uma
+  // falha: a tela mostra o caminho (Integrações) em vez de "Não foi possível carregar".
+  const [semNumero, setSemNumero] = useState(false);
   const [excluindo, setExcluindo] = useState<WhatsappTemplate | null>(null);
   const provider = useWhatsappProvider();
 
   function carregar() {
     setErro('');
+    setSemNumero(false);
     listTemplates()
       .then((data) => setTemplates(data.templates || []))
-      .catch((err: Error) => setErro(err.message));
+      .catch((err: Error) => {
+        if (err instanceof ApiError && err.codigo === 'WHATSAPP_SENDER_NOT_CONFIGURED') setSemNumero(true);
+        else setErro(err.message);
+      });
   }
 
   useEffect(carregar, []);
@@ -66,8 +74,15 @@ export function TemplatesPage() {
         </Callout>
       )}
 
+      {semNumero && (
+        <EmptyState
+          title="WhatsApp sem número cadastrado"
+          description="Cadastre o número do WhatsApp em Integrações pra criar e acompanhar os templates aprovados pela Meta."
+          action={<Link to="/admin/integracoes" className="ds-btn ds-btn--secondary">Ir para Integrações</Link>}
+        />
+      )}
       {erro && <ErrorState description={erro} onRetry={carregar} />}
-      {!erro && !templates && <Skeleton variant="table" rows={6} />}
+      {!erro && !semNumero && !templates && <Skeleton variant="table" rows={6} />}
       {!erro && templates && templates.length === 0 && (
         <EmptyState title="Nenhum template ainda" description="Crie o primeiro template pra começar a automatizar mensagens." action={<Link to="/admin/templates/novo" className="ds-btn ds-btn--secondary">Criar template</Link>} />
       )}
