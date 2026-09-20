@@ -57,7 +57,7 @@ painel, `getEnv` no Go, `Procfile` e `gunicorn.conf.py` no Gerador).
 |---|---|---|---|
 | `META_ADS_APP_ID`, `META_ADS_APP_SECRET`, `META_ADS_OAUTH_REDIRECT_URI` | só `oria-panel` | **Oria Ads** (Facebook Login clássico, `ads_read`) | as três são obrigatórias para o botão Conectar do Meta Ads |
 | `META_APP_ID`, `META_APP_SECRET` | `oria-panel` **e** `oria-whatsapp` | **Oria WhatsApp** | mesmo valor nos dois serviços |
-| `META_ES_CONFIG_ID` | só `oria-panel` | **Oria WhatsApp** | `config_id` da configuração do Facebook Login for Business (Embedded Signup); sem ele o botão "Conectar com a Meta" do WhatsApp fica indisponível |
+| `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID` | só `oria-panel` | **Oria WhatsApp** | `config_id` da configuração do Facebook Login for Business (Embedded Signup); sem ele o botão "Conectar com a Meta" do WhatsApp fica indisponível |
 | `META_VERIFY_TOKEN` | só `oria-whatsapp` | **Oria WhatsApp** | token de verificação (GET do webhook), inventado por nós e cadastrado igual no Meta for Developers |
 | `META_API_VERSION` | `oria-panel`, `oria-whatsapp` | ambos | recomendado `v25.0` explícito nos dois (o padrão do Go, `v21.0`, envelhece) |
 

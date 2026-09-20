@@ -69,7 +69,7 @@ Sem `loja_legada`. `store_id` vem do contexto da sessão, nunca do navegador (a 
 
 ## 4. Lacunas (não implementadas — dependem de decisão ou de configuração manual)
 
-1. **Meta App "Oria WhatsApp"** não existe/configurado: ver §6. Sem `META_ES_CONFIG_ID` o botão fica "indisponível".
+1. **Meta App "Oria WhatsApp"** não existe/configurado: ver §6. Sem `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID` o botão fica "indisponível".
 2. **Webhook `account_update`** e demais campos: o Go só age em `messages`. `account_update` é pré-requisito
    do Embedded Signup (a Meta o dispara ao concluir); hoje seria ack e descartado. `message_template_status_update`,
    `phone_number_quality_update` e `phone_number_name_update` também não têm efeito (tela consulta a Meta ao abrir).
@@ -107,7 +107,7 @@ vigente e se o fluxo do Embedded Signup já coleta o meio de pagamento.
 | Item | Valor |
 |---|---|
 | Produtos | WhatsApp; Facebook Login for Business |
-| Embedded Signup | Versão 4 (a v2 sai em out/2026 — datas divergentes na documentação: 8 e 15/10). Criar a configuração no Login for Business com a variação **WhatsApp Embedded Signup**; copiar o **Configuration ID** → `META_ES_CONFIG_ID` |
+| Embedded Signup | Versão 4 (a v2 sai em out/2026 — datas divergentes na documentação: 8 e 15/10). Criar a configuração no Login for Business com a variação **WhatsApp Embedded Signup**; copiar o **Configuration ID** → `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID` |
 | Permissões | `whatsapp_business_management`, `whatsapp_business_messaging` — **Advanced Access** via App Review (vídeos: enviar/receber mensagem e criar template) |
 | Allowed Domains for the JavaScript SDK | `https://oria-panel-production.up.railway.app` |
 | Valid OAuth Redirect URIs | `https://oria-panel-production.up.railway.app/` e `https://oria-panel-production.up.railway.app/admin/integracoes` |
@@ -128,7 +128,7 @@ Valid OAuth Redirect URI `https://oria-panel-production.up.railway.app/api/admin
 |---|---|---|---|
 | `META_APP_ID` | sim | sim | App **Oria WhatsApp**; mesmo valor |
 | `META_APP_SECRET` | sim | sim | App **Oria WhatsApp**; referência `${{oria-whatsapp.META_APP_SECRET}}` no painel |
-| `META_ES_CONFIG_ID` | sim | — | Configuration ID do Embedded Signup |
+| `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID` | sim | — | Configuration ID do Embedded Signup |
 | `META_VERIFY_TOKEN` | — | sim | igual ao cadastrado no webhook da Meta |
 | `META_API_VERSION` | sim | sim | `v25.0` |
 | `META_ADS_APP_ID`, `META_ADS_APP_SECRET`, `META_ADS_OAUTH_REDIRECT_URI` | sim | — | App **Oria Ads** |

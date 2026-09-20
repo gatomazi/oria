@@ -143,7 +143,7 @@ test.before(async () => {
       ADMIN_SESSION_SECRET: crypto.randomBytes(32).toString('base64url'),
       PROVIDER_MOCK_LOG: path.join(dirTmp, 'chamadas.jsonl'),
       // App do WhatsApp (plataforma) e app de Ads: DOIS apps, variáveis diferentes.
-      META_APP_ID: APP_ID, META_APP_SECRET: APP_SECRET, META_ES_CONFIG_ID: CONFIG_ID,
+      META_APP_ID: APP_ID, META_APP_SECRET: APP_SECRET, WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: CONFIG_ID,
       META_ADS_APP_ID: '123', META_ADS_APP_SECRET: 'segredo-do-app-de-ads', META_ADS_OAUTH_REDIRECT_URI: 'https://oria.test/meta',
       WHATSAPP_SENDER_REF_SECRET: SEGREDO_REF, WHATSAPP_SENDER_RESOLVER_KEY: CHAVE_RESOLVER,
     },

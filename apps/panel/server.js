@@ -12816,14 +12816,14 @@ app.delete('/api/admin/whatsapp/remetente', requireAdmin, (req, res, next) => TE
 });
 
 // ── Embedded Signup (Tech Provider) ───────────────────────────────────────────────────────
-// O app da Meta e o `config_id` são da PLATAFORMA (META_APP_ID, META_APP_SECRET, META_ES_CONFIG_ID —
+// O app da Meta e o `config_id` são da PLATAFORMA (META_APP_ID, META_APP_SECRET, WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID —
 // o app do WhatsApp; o de Ads é outro, META_ADS_*). O tenant não vê nome de variável. O navegador
 // abre o fluxo da Meta e devolve WABA, número, business e um `code` de 30 s; a identidade só é
 // aceita depois que a Meta confirma que o token trocado enxerga essa WABA e esse número.
 const ES_ID_RE = /^[0-9]{5,32}$/;
 
 function embeddedSignupConfigurado() {
-  return ES_ID_RE.test(process.env.META_APP_ID || '') && !!process.env.META_APP_SECRET && ES_ID_RE.test(process.env.META_ES_CONFIG_ID || '');
+  return ES_ID_RE.test(process.env.META_APP_ID || '') && !!process.env.META_APP_SECRET && ES_ID_RE.test(process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || '');
 }
 
 function apiVersionEmbeddedSignup() {
@@ -12844,7 +12844,7 @@ app.get('/api/admin/whatsapp/embedded-signup/config', requireAdmin, (req, res, n
     exigirEmbeddedSignup();
     // A Store que conecta vai no state (uso único, amarrado à pessoa, à sessão, à Organization).
     const state = await criarStateOAuth(req, 'whatsapp', { storeId: storeDoContexto() });
-    res.json({ appId: process.env.META_APP_ID, configId: process.env.META_ES_CONFIG_ID, apiVersion: apiVersionEmbeddedSignup(), state });
+    res.json({ appId: process.env.META_APP_ID, configId: process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID, apiVersion: apiVersionEmbeddedSignup(), state });
   } catch (err) {
     responderErroIntegracao(res, err, 'preparar Embedded Signup');
   }
