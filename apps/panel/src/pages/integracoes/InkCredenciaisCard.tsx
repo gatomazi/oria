@@ -3,6 +3,7 @@ import { Button, Callout, Card, ConfirmDialog, ErrorState, Field, FormActions, F
 import { copiar } from '../../lib/format';
 import { toast } from '../../lib/toast';
 import { useAuth } from '../../auth/AuthContext';
+import { InkWebhookGuia } from './InkWebhookGuia';
 import {
   gerarUrlWebhookInk,
   getInkCredenciais,
@@ -40,6 +41,7 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
 
   const tokenInfo = dados?.segredos.find((s) => s.tipo === 'api_token');
   const feedInfo = dados?.segredos.find((s) => s.tipo === 'feed_url');
+  const segredoWebhookInfo = dados?.segredos.find((s) => s.tipo === 'webhook_secret');
   const viaEnv = dados?.viaEnvLegado || [];
 
   function salvar(ev: FormEvent) {
@@ -107,10 +109,17 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
               tone={dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado ? 'success' : 'warning'}
               label={dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado ? 'Webhook configurado' : 'Webhook pendente'}
             />
+            {segredoWebhookInfo && (
+              <StatusBadge tone="success" label={`Segredo do webhook cadastrado${segredoWebhookInfo.last4 ? ` · final ${segredoWebhookInfo.last4}` : ''}`} />
+            )}
           </div>
+          <InkWebhookGuia
+            pendente={!(dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado)}
+            segredoFinal={segredoWebhookInfo?.last4 || null}
+          />
           {urlGerada && (
             <Callout tone="success" title="URL do webhook desta loja">
-              <p className="pc-nota">Cole no cadastro de webhook da Reserva Ink. Por segurança, ela não aparece de novo.</p>
+              <p className="pc-nota">Cole no cadastro de webhook da Reserva Ink (passo 2 do guia acima). Por segurança, ela não aparece de novo.</p>
               <code className="wa-token">{urlGerada}</code>
               <Button variant="secondary" onClick={() => copiar(urlGerada, () => setUrlCopiada(true))}>
                 {urlCopiada ? 'Copiada!' : 'Copiar URL'}
