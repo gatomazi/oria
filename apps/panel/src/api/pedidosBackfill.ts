@@ -2,7 +2,9 @@ import { api } from './client';
 
 export interface PedidosBackfillJob {
   id: number;
-  loja: string;
+  // Chave histórica da loja — nula na Store nativa (a identidade canônica é `store_id`).
+  store_id?: string | null;
+  loja: string | null;
   desde: string;
   status: 'processando' | 'concluido' | 'falhou';
   paginas_processadas: number;

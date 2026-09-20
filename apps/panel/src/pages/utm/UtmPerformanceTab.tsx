@@ -30,8 +30,8 @@ function Chip({ valor, tipo }: { valor: string; tipo?: 'source' | 'medium' }) {
 // são perguntas diferentes: "como foram as campanhas que EU cadastrei" e "o que mais trouxe tráfego
 // pro site". Na prática quase tudo cai na segunda — o Meta preenche utm_campaign com o ID numérico
 // do anúncio, então a lista crua vira um paredão de 18 dígitos se não for tratada.
-export function UtmPerformanceTab({ lojaAtual }: { lojaAtual: string }) {
-  const escopo = useGa4Escopo(lojaAtual);
+export function UtmPerformanceTab() {
+  const escopo = useGa4Escopo();
   const [dados, setDados] = useState<GaPerformanceResposta | null>(null);
   const [erro, setErro] = useState('');
   const [atualizando, setAtualizando] = useState(false);

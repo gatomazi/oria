@@ -3,7 +3,10 @@ import { api } from './client';
 export type GaConnectionStatus = 'connected' | 'expired' | 'error' | 'disconnected';
 
 export interface GaConnection {
-  loja: string;
+  // Identidade canônica da Store; `loja` é só a chave histórica (nula na Store nativa).
+  storeId: string;
+  storeNome: string | null;
+  loja: string | null;
   propertyId: string | null;
   propertyName: string | null;
   googleAccountEmail: string | null;

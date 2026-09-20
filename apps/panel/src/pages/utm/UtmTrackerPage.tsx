@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Callout, PageHeader, PageStack, TabList } from '../../components/ds';
-import { useLojaAtiva } from '../../auth/AuthContext';
 import { criarUtmCampaign, listUtmPresets, type UtmCampaignInput, type UtmPreset } from '../../api/utm';
 import { UtmBuilderForm } from './UtmBuilderForm';
 import { UtmCampanhasTab } from './UtmCampanhasTab';
@@ -19,7 +18,6 @@ import '../../utm.css';
 type Aba = 'visao-geral' | 'campanhas' | 'construtor' | 'performance' | 'presets';
 
 export function UtmTrackerPage() {
-  const escopo = useLojaAtiva() ?? '';
   const [aba, setAba] = useState<Aba>('visao-geral');
   const [presets, setPresets] = useState<UtmPreset[]>([]);
   const [presetsErro, setPresetsErro] = useState('');
@@ -34,7 +32,6 @@ export function UtmTrackerPage() {
 
   useEffect(recarregarPresets, []);
 
-  const lojaAtual = escopo;
 
   function salvarDoConstrutor(input: UtmCampaignInput) {
     setSalvandoConstrutor(true);
@@ -85,7 +82,7 @@ export function UtmTrackerPage() {
         </div>
       )}
 
-      {aba === 'performance' && <UtmPerformanceTab lojaAtual={lojaAtual} />}
+      {aba === 'performance' && <UtmPerformanceTab />}
 
       {aba === 'presets' && <UtmPresetsTab presets={presets} recarregar={recarregarPresets} />}
     </PageStack>

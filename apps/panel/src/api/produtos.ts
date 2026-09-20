@@ -71,7 +71,9 @@ export function listProdutos(query: ListProdutosQuery) {
 }
 
 export interface CatalogoCacheStatusLoja {
-  loja: string;
+  // Identidade canônica da Store; `loja` é só a chave histórica (nula na Store nativa).
+  storeId: string;
+  loja: string | null;
   configurado: boolean;
   total: number;
   sincronizadoEm: string | null;
@@ -103,7 +105,7 @@ export function salvarCatalogoCacheConfig(config: { pausado?: boolean; intervalo
 // A varredura são centenas de requests à Ink e leva minutos: a resposta só confirma quais lojas
 // entraram no crawl — o progresso vem do polling de getCatalogoCacheStatus.
 export function sincronizarCatalogoCache() {
-  return api<{ ok: true; lojas: string[]; jaRodando: string[] }>('/api/admin/produtos/catalogo/sync', {
+  return api<{ ok: true; storeIds: string[]; lojas: (string | null)[]; jaRodando: string[] }>('/api/admin/produtos/catalogo/sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),

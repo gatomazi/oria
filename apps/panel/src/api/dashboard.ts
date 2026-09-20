@@ -85,7 +85,7 @@ export interface DashboardFinanceiroData {
   midia: { loja: string | null; dia: string; spend: number }[];
   // Estado de cada fonte de mídia (Meta, Google Ads). `null` = o servidor não conseguiu ler — a tela
   // não afirma nem "sem mídia" nem "gasto zero".
-  midiaFontes: { provider: string; conectado: boolean; relevante: boolean; motivo: string | null }[] | null;
+  midiaFontes: { provider: string; conectado: boolean; relevante: boolean; motivo: string | null; comProblema?: boolean }[] | null;
   midiaSinalizada: { provider: string; recurso: string; motivo: string }[];
 }
 

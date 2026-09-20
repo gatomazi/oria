@@ -27,9 +27,9 @@ function carregar(arquivo) {
   return modulo.exports;
 }
 
-const { estadoDaMidia, avisoDeMidiaFora } = carregar('estadoMidia.ts');
+const { estadoDaMidia, avisoDeMidiaFora, avisoDeMidiaComProblema } = carregar('estadoMidia.ts');
 
-const fonte = (provider, conectado, motivo = null) => ({ provider, conectado, relevante: true, motivo });
+const fonte = (provider, conectado, motivo = null, comProblema = false) => ({ provider, conectado, relevante: true, motivo, comProblema });
 
 test('sem nenhuma conta (nem uma fonte conectada, nem uma conta fora do total): "não conectada", nunca "gasto zero"', () => {
   assert.equal(estadoDaMidia([fonte('meta', false), fonte('google_ads', false)]), 'nao_conectada');
@@ -62,4 +62,15 @@ test('o Dashboard decide pelo estado e não voltou a tratar `gasto > 0` como "m�
   assert.match(pagina, /from '\.\/estadoMidia'/);
   assert.match(pagina, /estadoDaMidia\(midiaFontes\)/);
   assert.doesNotMatch(pagina, /const temMidia = atual\.midia > 0;/);
+});
+
+test('conta da loja com a conexão em erro/expirada é "com_problema" — não "gasto zero" nem "tudo bem"', () => {
+  assert.equal(estadoDaMidia([fonte('meta', true, null, true), fonte('google_ads', false)]), 'com_problema');
+  assert.equal(estadoDaMidia([fonte('meta', true, null, true), fonte('google_ads', true, null, true)]), 'com_problema');
+  assert.match(avisoDeMidiaComProblema('com_problema'), /reconecte em Integrações/);
+  assert.equal(avisoDeMidiaComProblema('conectada'), null);
+});
+
+test('uma plataforma saudável mantém a mídia "conectada" mesmo que a outra esteja com problema', () => {
+  assert.equal(estadoDaMidia([fonte('meta', true, null, true), fonte('google_ads', true, null, false)]), 'conectada');
 });

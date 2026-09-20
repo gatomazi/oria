@@ -6,6 +6,7 @@ import { getIntegrations, type IntegrationsData } from '../../api/integracoes';
 import { hasEntitlement, loadEntitlements } from '../../state/entitlements';
 import { BackfillPedidosCard } from './BackfillPedidosCard';
 import { CatalogoCacheCard } from './CatalogoCacheCard';
+import { lojasComTokenInk } from './lojaOpcao';
 import { InkCredenciaisCard } from './InkCredenciaisCard';
 import { GoogleAnalyticsIntegracaoCard } from './GoogleAnalyticsIntegracaoCard';
 import { GoogleAdsIntegracaoCard } from './GoogleAdsIntegracaoCard';
@@ -97,9 +98,9 @@ export function IntegracoesPage() {
 
           <WhatsappRemetenteCard />
 
-          <BackfillPedidosCard lojas={data.reservaInk.filter((item) => item.tokenConfigurado && item.loja).map((item) => item.loja as string)} />
+          <BackfillPedidosCard stores={lojasComTokenInk(data.reservaInk)} />
 
-          <CatalogoCacheCard lojas={data.reservaInk.filter((item) => item.tokenConfigurado && item.loja).map((item) => item.loja as string)} />
+          <CatalogoCacheCard stores={lojasComTokenInk(data.reservaInk)} />
 
           <GoogleAnalyticsIntegracaoCard />
 

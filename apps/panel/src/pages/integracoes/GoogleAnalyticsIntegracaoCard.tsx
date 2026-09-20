@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Callout, Card, ConfirmDialog, ErrorState, Select, Skeleton, StatusBadge } from '../../components/ds';
 import { formatData } from '../../lib/format';
-import { adminStores } from '../../state/adminStores';
 import {
   desconectarGa, getGaStatus, listGaProperties, salvarGaProperty, urlConectarGa, type GaConnection, type GaProperty,
 } from '../../api/googleAnalytics';
@@ -66,7 +65,7 @@ function LinhaLoja({ conexao, oauthConfigurado, recarregar }: { conexao: GaConne
   return (
     <div className="ga-linha">
       <div className="ga-linha__topo">
-        <span className="ga-linha__loja">{adminStores.name(conexao.loja)}</span>
+        <span className="ga-linha__loja">{conexao.storeNome || 'Sua loja'}</span>
         <StatusBadge tone={tone} label={label} />
         {conexao.propertyName && <span className="ga-linha__meta">{conexao.propertyName}</span>}
         {conexao.googleAccountEmail && <span className="ga-linha__meta">{conexao.googleAccountEmail}</span>}
@@ -124,7 +123,7 @@ function LinhaLoja({ conexao, oauthConfigurado, recarregar }: { conexao: GaConne
       <ConfirmDialog
         open={confirmandoDesconexao}
         onClose={() => setConfirmandoDesconexao(false)}
-        title={`Desconectar o Google Analytics de ${adminStores.name(conexao.loja)}?`}
+        title={`Desconectar o Google Analytics de ${conexao.storeNome || 'Sua loja'}?`}
         description="As campanhas UTM salvas continuam normalmente — só a performance real por GA4 deixa de aparecer."
         onConfirm={confirmarDesconexao}
       />
@@ -158,7 +157,7 @@ export function GoogleAnalyticsIntegracaoCard() {
           )}
           <div>
             {dados.conexoes.map((c) => (
-              <LinhaLoja key={c.loja} conexao={c} oauthConfigurado={dados.oauthConfigurado} recarregar={carregar} />
+              <LinhaLoja key={c.storeId} conexao={c} oauthConfigurado={dados.oauthConfigurado} recarregar={carregar} />
             ))}
           </div>
         </div>

@@ -347,7 +347,8 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
   assert.deepEqual(
     [...pdD.saida.matchAll(/^### MIGRATION (\S+) \(UP\) ###$/gm)].map((m) => m[1]),
     ['1790000400000_platform-admin', '1790000500000_convite-aceite', '1790000600000_store-id-connector-ink',
-      '1790000800000_entitlement-canonico', '1790000900000_composicao-do-internal', '1790001000000_midia-store-id'],
+      '1790000800000_entitlement-canonico', '1790000900000_composicao-do-internal', '1790001000000_midia-store-id',
+      '1790001100000_catalogo-ink-store-id', '1790001200000_ga4-store-id'],
     'o pre-deploy da D\' aplicou um conjunto de migrations diferente do declarado'
   );
   semSegredo(pdD.saida, 'pre-deploy D\'');

@@ -1,10 +1,10 @@
 import { Button, Field, Input, Select, Toolbar } from '../../components/ds';
-import { adminStores } from '../../state/adminStores';
+import type { LojaConectada } from './useGa4Escopo';
 import { PERIODOS_GA4, type PeriodoGa4 } from '../../lib/ga4';
 
 interface Ga4ToolbarProps {
   label: string;
-  lojasConectadas: string[];
+  lojasConectadas: LojaConectada[];
   loja: string;
   onLoja: (loja: string) => void;
   periodo: PeriodoGa4;
@@ -37,12 +37,12 @@ export function Ga4Toolbar({
           texto, que informa qual loja está sendo lida sem fingir que há escolha. */}
       {lojasConectadas.length > 1 ? (
         <Select aria-label="Loja" value={loja} onChange={(e) => onLoja(e.target.value)}>
-          {lojasConectadas.map((id) => (
-            <option key={id} value={id}>{adminStores.name(id)}</option>
+          {lojasConectadas.map((l) => (
+            <option key={l.id} value={l.id}>{l.nome}</option>
           ))}
         </Select>
       ) : (
-        <span className="ds-status-linha__meta">{adminStores.name(loja)}</span>
+        <span className="ds-status-linha__meta">{lojasConectadas.find((l) => l.id === loja)?.nome ?? ''}</span>
       )}
       <Select aria-label="Período" value={periodo} onChange={(e) => onPeriodo(e.target.value as PeriodoGa4)}>
         {PERIODOS_GA4.map((p) => (

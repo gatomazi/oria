@@ -4,7 +4,7 @@ import { Button, Callout, Card, DataTable, EmptyState, ErrorState, Icon, InfoToo
 import { copiar, formatValor, plural, tempoDesde, waLink } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { mesmaLoja, porEscopo } from './escopoLoja';
-import { avisoDeMidiaFora, estadoDaMidia, type MidiaFonte } from './estadoMidia';
+import { avisoDeMidiaComProblema, avisoDeMidiaFora, estadoDaMidia, type MidiaFonte } from './estadoMidia';
 import { adminStores } from '../../state/adminStores';
 import {
   getDashboardAbandonedCarts,
@@ -233,8 +233,9 @@ function ResultadoPeriodo({
   // (isso é "gasto zero" de verdade). Sem conta da loja o painel não sabe quanto foi gasto: não
   // mostra "Mídia R$ 0,00" como se soubesse, e o lucro diz por que não desconta mídia.
   const estadoMidia = estadoDaMidia(midiaFontes);
-  const temMidia = estadoMidia === 'conectada' || (estadoMidia === 'desconhecido' && atual.midia > 0);
+  const temMidia = estadoMidia === 'conectada' || estadoMidia === 'com_problema' || (estadoMidia === 'desconhecido' && atual.midia > 0);
   const avisoMidia = avisoDeMidiaFora(estadoMidia);
+  const avisoConexao = avisoDeMidiaComProblema(estadoMidia);
   const pesoCusto = formatPercentual(atual.custoProducao, atual.lucroBruto);
 
   return (
@@ -273,7 +274,7 @@ function ResultadoPeriodo({
           <KpiCard
             title="Mídia"
             value={formatValor(atual.midia) || 'R$ 0,00'}
-            helper={atual.midia > 0 ? 'Gasto real nas plataformas' : 'Sem gasto registrado no período'}
+            helper={avisoConexao || (atual.midia > 0 ? 'Gasto real nas plataformas' : 'Sem gasto registrado no período')}
           />
         )}
         <KpiCard
