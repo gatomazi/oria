@@ -20,6 +20,7 @@ const { resolverMidiaDaOrganizacao } = require('./lib/financeiro/midia');
 const custosPrecos = require('./lib/custos/precos');
 const { MetaClient, MetaApiError, ERROS: META_ERROS, VERSAO_PADRAO: META_VERSAO_PADRAO, mascararToken } = require('./lib/meta/client');
 const { financeiroPedidoInk, financeiroItensPedidoInk } = require('./lib/ink/financeiro');
+const { comRetryDeLeitura } = require('./lib/ink/retry');
 const { variantesTelefone, acharCompraDoCarrinho } = require('./lib/recuperacao/compra');
 const atribuicaoCampanha = require('./lib/campanhas/atribuicao');
 const app     = express();
@@ -485,7 +486,12 @@ async function inkConectada() {
 // Núcleo da chamada à Ink: recebe COMO obter o token (`obterToken`), para a mesma lógica servir o
 // caminho canônico (credencial da Organization/Store do contexto) e o de compatibilidade (que ainda
 // confere a chave legada). Nenhum dos dois deixa o request escolher a credencial.
-async function inkRequisitar(obterToken, metodo, pathAndQuery, { body, extraHeaders, timeoutMs } = {}) {
+async function inkRequisitar(obterToken, metodo, pathAndQuery, opcoes = {}) {
+  // Leitura interativa repete de forma curta em 429/5xx transitório (ver lib/ink/retry.js).
+  return comRetryDeLeitura(metodo, () => inkRequisitarUma(obterToken, metodo, pathAndQuery, opcoes));
+}
+
+async function inkRequisitarUma(obterToken, metodo, pathAndQuery, { body, extraHeaders, timeoutMs } = {}) {
   const res = await obterToken((token) => fetch(INK_API_BASE + pathAndQuery, {
     method: metodo,
     headers: {
