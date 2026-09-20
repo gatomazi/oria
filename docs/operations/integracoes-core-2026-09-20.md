@@ -90,3 +90,22 @@ de webhook de outra Organization não gravam nada, e nenhum token/segredo aparec
   `trocas`, `reembolsos`, `simular frete` seguem no caminho legado.
 - Login externo: o fluxo OAuth real (Google/Meta com senha/2FA/consentimento) só é exercitável com a sessão do
   navegador; a infraestrutura e os testes estão prontos, o passo final depende de uma conta autenticada.
+
+## 8. Validação em produção (2026-09-20, deploy `0d7dd9b`)
+
+- Full Verification de `0d7dd9b`: **success**. Migrations 0026/0027 aplicadas; logs sem `UNHANDLED_REJECTION` e sem
+  "não tem loja legada".
+- Ink (Use Sul, `loja_legada = NULL`): teste de conexão OK; catálogo sincronizado por Store (105.857 produtos em cache);
+  Produtos, Categorias, Agrupamentos e `/produtos/catalogo/status` com dados reais; Integrações sem "Nenhuma loja conectada".
+- Categorias tomou 429 esporádico da Reserva Ink durante a varredura do catálogo → `lib/ink/retry.js` repete só GET
+  (429/502/503/504; 400 ms e 1,2 s) e devolve mensagem clara (`INK_RATE_LIMITED`) se esgotar.
+- Webhook Ink: rota `POST /api/webhooks/ink/:token` (token de 43 caracteres, guardado só como SHA-256); assinatura
+  `x-webhook-signature` = base64(hex(HMAC-SHA256(segredo, corpo))); status `conectada` só com URL emitida + segredo.
+  O guia de cadastro agora está na tela (`InkWebhookGuia`); o segredo salvo nunca reaparece além dos 4 últimos caracteres.
+- **Bloqueio de plataforma (GA4):** em produção `GOOGLE_OAUTH_REDIRECT_URI` aponta para
+  `https://orgulhoregional.com.br/api/admin/integrations/google-analytics/callback` (domínio legado). O connect chega na
+  tela de contas do Google, mas o retorno não voltaria ao painel Railway. Correção fora do código: ajustar a variável
+  para o host do painel e cadastrar a mesma URI em "URIs de redirecionamento autorizados" no Google Cloud Console.
+  O consentimento não foi concedido para não enviar o `code` a outro host.
+- **Bloqueio de plataforma (Meta):** app da Meta não configurado no ambiente; a tela já explica ("Conexão com a Meta
+  indisponível no momento") em vez de expor nomes de variáveis.
