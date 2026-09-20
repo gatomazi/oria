@@ -55,7 +55,10 @@ const t = (tabela, regra, extra = {}) => Object.freeze({
 
 const TABELAS_TENANT = Object.freeze([
   // ── loja NOT NULL ─────────────────────────────────────────────────────────────────────────
-  t('bulk_category_jobs', 'loja'),
+  t('bulk_category_jobs', 'loja', {
+    nota: 'A 0026 acrescentou `store_id` (FK composta com organization_id → stores) e liberou `loja`, que '
+      + 'virou compatibilidade histórica (nula na Store nativa). CHECK NOT VALID: toda linha nova identifica a Store.',
+  }),
   t('campaigns', 'loja', {
     fks: [{ coluna: 'segmento_id', pai: 'segments', onDelete: 'SET NULL' }],
   }),
@@ -72,7 +75,10 @@ const TABELAS_TENANT = Object.freeze([
   t('google_analytics_connections', 'loja', {
     uniques: [{ nome: 'uq_google_analytics_connections_org', colunas: ['organization_id', 'loja'] }],
   }),
-  t('pedidos_backfill_jobs', 'loja'),
+  t('pedidos_backfill_jobs', 'loja', {
+    nota: 'A 0026 acrescentou `store_id` (FK composta com organization_id → stores) e liberou `loja`, que '
+      + 'virou compatibilidade histórica (nula na Store nativa). CHECK NOT VALID: toda linha nova identifica a Store.',
+  }),
   t('pedidos_ink', 'loja', {
     uniques: [{ nome: 'uq_pedidos_ink_org', colunas: ['organization_id', 'loja', 'ink_order_id'] }],
     nota: 'A 0021 acrescentou `store_id` (FK composta com organization_id → stores) e a unicidade '
@@ -94,10 +100,16 @@ const TABELAS_TENANT = Object.freeze([
     uniques: [{ nome: 'uq_produtos_feed_sync_org', colunas: ['organization_id', 'loja'] }],
   }),
   t('produtos_ink', 'loja', {
+    nota: 'A 0026 acrescentou `store_id` (FK composta com organization_id → stores), trocou a PK por substituta '
+      + '(organization_id, id) e liberou `loja` (compatibilidade histórica, nula na Store nativa). A unicidade '
+      + 'canônica é `uq_produtos_ink_store`, parcial em store_id; o índice legado por `loja` continua com o mesmo nome.',
     pk: { colunas: ['loja', 'produto_id'], promover: 'uq_produtos_ink_org' },
     uniques: [{ nome: 'uq_produtos_ink_org', colunas: ['organization_id', 'loja', 'produto_id'] }],
   }),
   t('produtos_ink_sync', 'loja', {
+    nota: 'A 0026 acrescentou `store_id` (FK composta com organization_id → stores), trocou a PK por substituta '
+      + '(organization_id, id) e liberou `loja` (compatibilidade histórica, nula na Store nativa). A unicidade '
+      + 'canônica é `uq_produtos_ink_sync_store`, parcial em store_id; o índice legado por `loja` continua com o mesmo nome.',
     pk: { colunas: ['loja'], promover: 'uq_produtos_ink_sync_org' },
     uniques: [{ nome: 'uq_produtos_ink_sync_org', colunas: ['organization_id', 'loja'] }],
   }),

@@ -96,6 +96,7 @@ test('migrations · do zero, num banco vazio, aplicam todas na ordem', async (t)
       '1790000800000_entitlement-canonico',
       '1790000900000_composicao-do-internal',
       '1790001000000_midia-store-id',
+      '1790001100000_catalogo-ink-store-id',
     ]);
     assert.ok((await tabelas(pool)).includes('integration_secrets'));
   } finally { await pool.end(); }

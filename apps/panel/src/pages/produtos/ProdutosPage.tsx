@@ -6,6 +6,7 @@ import {
 import { formatData, formatValor, idadeDoCache, plural } from '../../lib/format';
 import { lookup, PRODUCT_APPROVAL_STATUS_MAP, PRODUCT_STATUS_MAP } from '../../lib/statusMap';
 import { useLojaAtiva } from '../../auth/AuthContext';
+import { mesmaLoja } from '../dashboard/escopoLoja';
 import {
   listProdutos, sincronizarFeedProdutos, getFeedProdutosStatus,
   sincronizarCatalogoCache, getCatalogoCacheStatus,
@@ -108,7 +109,7 @@ export function ProdutosPage() {
       .catch((err: Error) => setAvisoCache(err.message));
   }
 
-  const catalogoRelevante = (catalogoStatus || []).filter((s) => loja === 'all' || s.loja === loja);
+  const catalogoRelevante = (catalogoStatus || []).filter((s) => loja === 'all' || mesmaLoja(s.loja, loja));
   const totalNoCatalogo = catalogoRelevante.reduce((soma, s) => soma + s.total, 0);
   const catalogoSincronizadoMaisAntigo = catalogoRelevante
     .map((s) => s.sincronizadoEm)
@@ -117,7 +118,7 @@ export function ProdutosPage() {
   const catalogoSincronizando = catalogoRelevante.some((s) => s.sincronizando);
   const catalogoComErro = catalogoRelevante.find((s) => s.erro && !s.sincronizando);
 
-  const statusRelevante = (feedStatus || []).filter((s) => loja === 'all' || s.loja === loja);
+  const statusRelevante = (feedStatus || []).filter((s) => loja === 'all' || mesmaLoja(s.loja, loja));
   const totalEmCache = statusRelevante.reduce((soma, s) => soma + s.total, 0);
   const sincronizadoMaisAntigo = statusRelevante
     .map((s) => s.sincronizadoEm)

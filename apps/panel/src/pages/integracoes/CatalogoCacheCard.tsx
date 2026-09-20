@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, ConfirmDialog, Field, ProgressBar, Select, StatusBadge, Switch } from '../../components/ds';
 import { formatData, plural } from '../../lib/format';
-import { adminStores } from '../../state/adminStores';
+import type { LojaOpcao } from './lojaOpcao';
 import {
   getCatalogoCacheStatus,
   salvarCatalogoCacheConfig,
@@ -14,8 +14,10 @@ import {
 // páginas. Este card dispara a varredura UMA vez e persiste o catálogo em Postgres; depois disso a
 // tela de Produtos responde do cache, com qualquer combinação de filtro. A renovação automática
 // roda sozinha no intervalo escolhido (padrão 6h, pode ser pausada) — isto aqui é pro caso de precisar do catálogo atualizado na hora.
-export function CatalogoCacheCard({ lojas }: { lojas: string[] }) {
-  const [loja, setLoja] = useState(lojas[0] || '');
+export function CatalogoCacheCard({ stores }: { stores: LojaOpcao[] }) {
+  // `loja` guarda o storeId (identidade canônica); o nome é só rótulo.
+  const [loja, setLoja] = useState(stores[0]?.id || '');
+  const nomeDe = (id: string) => stores.find((st) => st.id === id)?.nome || 'sua loja';
   const [status, setStatus] = useState<CatalogoCacheStatusLoja[] | null>(null);
   const [intervalos, setIntervalos] = useState<number[]>([6, 12, 24, 48, 72, 168]);
   const [salvandoConfig, setSalvandoConfig] = useState(false);
@@ -34,7 +36,7 @@ export function CatalogoCacheCard({ lojas }: { lojas: string[] }) {
 
   useEffect(carregar, []);
 
-  const daLoja = (status || []).find((s) => s.loja === loja) || null;
+  const daLoja = (status || []).find((s) => s.storeId === loja) || null;
   const rodando = !!daLoja?.sincronizando;
 
   // Polling só enquanto há varredura em andamento — o crawl leva minutos e o progresso por página
@@ -58,7 +60,7 @@ export function CatalogoCacheCard({ lojas }: { lojas: string[] }) {
     try {
       const r = await salvarCatalogoCacheConfig(config);
       setStatus((atual) => (atual || []).map((s) => (
-        s.loja === loja ? { ...s, autoPausado: r.autoPausado, intervaloHoras: r.intervaloHoras } : s
+        s.storeId === loja ? { ...s, autoPausado: r.autoPausado, intervaloHoras: r.intervaloHoras } : s
       )));
     } catch (err) {
       setErro((err as Error).message);
@@ -81,10 +83,10 @@ export function CatalogoCacheCard({ lojas }: { lojas: string[] }) {
 
       <div className="ds-form-row">
         <Field label="Loja">
-          <Select value={loja} onChange={(e) => setLoja(e.target.value)} disabled={rodando || !lojas.length}>
-            {!lojas.length && <option value="">Nenhuma loja conectada</option>}
-            {lojas.map((id) => (
-              <option key={id} value={id}>{adminStores.name(id)}</option>
+          <Select value={loja} onChange={(e) => setLoja(e.target.value)} disabled={rodando || !stores.length}>
+            {!stores.length && <option value="">Conecte a Reserva Ink pra sincronizar o catálogo</option>}
+            {stores.map((st) => (
+              <option key={st.id} value={st.id}>{st.nome}</option>
             ))}
           </Select>
         </Field>
@@ -101,8 +103,8 @@ export function CatalogoCacheCard({ lojas }: { lojas: string[] }) {
             disabled={salvandoConfig}
             label="Renovação automática"
             description={daLoja.autoPausado
-              ? `Pausada em ${adminStores.name(loja)} — o cache só muda com "Sincronizar catálogo agora".`
-              : `Varre o catálogo de ${adminStores.name(loja)} sozinho a cada ${rotuloIntervalo(daLoja.intervaloHoras)}.`}
+              ? `Pausada em ${nomeDe(loja)} — o cache só muda com "Sincronizar catálogo agora".`
+              : `Varre o catálogo de ${nomeDe(loja)} sozinho a cada ${rotuloIntervalo(daLoja.intervaloHoras)}.`}
           />
           <Field label="Intervalo de renovação">
             <Select
@@ -123,9 +125,9 @@ export function CatalogoCacheCard({ lojas }: { lojas: string[] }) {
       {status && (
         <div className="ds-stack ds-bloco-seguinte">
           {status.map((s) => (
-            <div key={s.loja} className="ds-stack">
+            <div key={s.storeId} className="ds-stack">
               <div className="ds-status-linha">
-                <strong>{adminStores.name(s.loja)}</strong>
+                <strong>{nomeDe(s.storeId)}</strong>
                 <StatusBadge
                   tone={s.sincronizando ? 'info' : s.erro ? 'danger' : s.total > 0 ? 'success' : 'neutral'}
                   label={s.sincronizando ? 'Sincronizando' : s.erro ? 'Falhou' : s.total > 0 ? 'Em cache' : 'Nunca sincronizado'}
@@ -157,7 +159,7 @@ export function CatalogoCacheCard({ lojas }: { lojas: string[] }) {
         open={confirmando}
         onClose={() => setConfirmando(false)}
         title="Sincronizar catálogo completo"
-        description={`Isso varre TODAS as páginas de produtos da Ink em ${adminStores.name(loja)} (centenas de chamadas) e pode levar alguns minutos. A busca de produtos continua funcionando com o cache atual enquanto a varredura roda.`}
+        description={`Isso varre TODAS as páginas de produtos da Ink em ${nomeDe(loja)} (centenas de chamadas) e pode levar alguns minutos. A busca de produtos continua funcionando com o cache atual enquanto a varredura roda.`}
         confirmLabel="Sincronizar"
         confirmVariant="primary"
         onConfirm={async () => {

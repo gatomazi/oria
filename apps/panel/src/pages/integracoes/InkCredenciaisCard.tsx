@@ -88,7 +88,7 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
   }
 
   return (
-    <Card title="Credencial da Reserva Ink" description="Token da API e URL do feed desta loja. Ficam cifrados no servidor e nunca são exibidos de novo.">
+    <Card title="Credencial da Reserva Ink" description="Token da API desta loja. Fica cifrado no servidor e nunca é exibido de novo.">
       {erro && <ErrorState description={erro} onRetry={carregar} />}
       {!erro && !dados && <Skeleton rows={2} />}
       {dados && (
@@ -101,7 +101,8 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
             ) : (
               <StatusBadge tone="warning" label="Token não cadastrado" />
             )}
-            <StatusBadge tone={feedInfo ? 'success' : 'neutral'} label={feedInfo ? 'Feed cadastrado' : 'Feed não cadastrado'} />
+            {/* O feed CSV é caminho legado descontinuado: não é requisito de conexão. Só aparece para quem já tem um cadastrado. */}
+            {feedInfo && <StatusBadge tone="neutral" label="Feed legado cadastrado" />}
             <StatusBadge
               tone={dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado ? 'success' : 'warning'}
               label={dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado ? 'Webhook configurado' : 'Webhook pendente'}
@@ -122,9 +123,11 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
               <Field label={tokenInfo ? 'Substituir token da API' : 'Token da API'} hint="Gerado no painel da Reserva Ink. Não é salvo no navegador.">
                 <Input type="password" autoComplete="off" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} />
               </Field>
-              <Field label={feedInfo ? 'Substituir URL do feed' : 'URL do feed de produtos'} hint="Endereço https da Reserva Ink.">
-                <Input type="url" autoComplete="off" spellCheck={false} value={feed} onChange={(e) => setFeed(e.target.value)} placeholder="https://" />
-              </Field>
+              {feedInfo && (
+                <Field label="Substituir URL do feed legado" hint="Descontinuado: o catálogo é sincronizado direto pela API da Reserva Ink.">
+                  <Input type="url" autoComplete="off" spellCheck={false} value={feed} onChange={(e) => setFeed(e.target.value)} placeholder="https://" />
+                </Field>
+              )}
               <Field
                 label={dados.webhook?.segredoCadastrado ? 'Substituir segredo do webhook' : 'Segredo do webhook'}
                 optional

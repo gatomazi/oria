@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, ConfirmDialog, Field, Input, ProgressBar, Select, StatusBadge } from '../../components/ds';
 import { formatData, plural } from '../../lib/format';
-import { adminStores } from '../../state/adminStores';
+import type { LojaOpcao } from './lojaOpcao';
 import {
   getBackfillPedidosJob,
   iniciarBackfillPedidos,
@@ -14,8 +14,10 @@ import {
 // o que sub-contava clientes em segmentos de campanha (achado real, 2026-09-10: 712 clientes
 // contra 4000+ pedidos históricos). Este card dispara um backfill sob demanda, reexecutável a
 // qualquer momento (ex.: loja nova, gap depois de instabilidade).
-export function BackfillPedidosCard({ lojas }: { lojas: string[] }) {
-  const [loja, setLoja] = useState(lojas[0] || '');
+export function BackfillPedidosCard({ stores }: { stores: LojaOpcao[] }) {
+  // `loja` guarda o storeId (identidade canônica); o nome é só rótulo.
+  const [loja, setLoja] = useState(stores[0]?.id || '');
+  const nomeDe = (id: string) => stores.find((st) => st.id === id)?.nome || 'sua loja';
   const [desde, setDesde] = useState('');
   const [confirmando, setConfirmando] = useState(false);
   const [jobAtivo, setJobAtivo] = useState<PedidosBackfillJob | null>(null);
@@ -82,10 +84,10 @@ export function BackfillPedidosCard({ lojas }: { lojas: string[] }) {
 
       <div className="ds-form-row">
         <Field label="Loja">
-          <Select value={loja} onChange={(e) => setLoja(e.target.value)} disabled={rodando || !lojas.length}>
-            {!lojas.length && <option value="">Nenhuma loja conectada</option>}
-            {lojas.map((id) => (
-              <option key={id} value={id}>{adminStores.name(id)}</option>
+          <Select value={loja} onChange={(e) => setLoja(e.target.value)} disabled={rodando || !stores.length}>
+            {!stores.length && <option value="">Conecte a Reserva Ink pra sincronizar o histórico</option>}
+            {stores.map((st) => (
+              <option key={st.id} value={st.id}>{st.nome}</option>
             ))}
           </Select>
         </Field>
@@ -136,7 +138,7 @@ export function BackfillPedidosCard({ lojas }: { lojas: string[] }) {
         open={confirmando}
         onClose={() => setConfirmando(false)}
         title="Sincronizar histórico completo de pedidos"
-        description={`Isso vai buscar TODOS os pedidos da Ink de ${adminStores.name(loja)} desde ${desde || '2015-01-01'} e pode demorar. O sync incremental normal não é afetado.`}
+        description={`Isso vai buscar TODOS os pedidos da Ink de ${nomeDe(loja)} desde ${desde || '2015-01-01'} e pode demorar. O sync incremental normal não é afetado.`}
         confirmLabel="Sincronizar"
         confirmVariant="primary"
         onConfirm={async () => {

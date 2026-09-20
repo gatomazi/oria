@@ -482,8 +482,11 @@ async function inkConectada() {
   return INTEGRACOES.temSegredo('ink', 'api_token');
 }
 
-async function inkFetch(loja, metodo, pathAndQuery, { body, extraHeaders, timeoutMs } = {}) {
-  const res = await comTokenInk(loja, (token) => fetch(INK_API_BASE + pathAndQuery, {
+// Núcleo da chamada à Ink: recebe COMO obter o token (`obterToken`), para a mesma lógica servir o
+// caminho canônico (credencial da Organization/Store do contexto) e o de compatibilidade (que ainda
+// confere a chave legada). Nenhum dos dois deixa o request escolher a credencial.
+async function inkRequisitar(obterToken, metodo, pathAndQuery, { body, extraHeaders, timeoutMs } = {}) {
+  const res = await obterToken((token) => fetch(INK_API_BASE + pathAndQuery, {
     method: metodo,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -504,24 +507,22 @@ async function inkFetch(loja, metodo, pathAndQuery, { body, extraHeaders, timeou
   return data;
 }
 
+// Compatibilidade: quem ainda carrega a chave `sul`/`centro`/`norte`. Confere que é a do contexto.
+const inkFetch = (loja, metodo, pathAndQuery, opcoes) => inkRequisitar((usar) => comTokenInk(loja, usar), metodo, pathAndQuery, opcoes);
+// Canônico: a credencial Ink da Organization do contexto, sem identificador de loja nenhum.
+const inkFetchDaStore = (metodo, pathAndQuery, opcoes) => inkRequisitar(comTokenInkDaStore, metodo, pathAndQuery, opcoes);
+
 const inkApiRequest = (loja, pathAndQuery) => inkFetch(loja, 'GET', pathAndQuery);
 // Versão canônica do GET: sem chave legada, credencial da Organization do contexto.
-const inkApiRequestDaStore = (pathAndQuery) => comTokenInkDaStore((token) => fetch(INK_API_BASE + pathAndQuery, {
-  headers: { Authorization: `Bearer ${token}` },
-  signal: AbortSignal.timeout(15000),
-}).then(async (res) => {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error((data.errors && data.errors.join('; ')) || data.error || `INK API respondeu ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
-  return data;
-}));
+const inkApiRequestDaStore = (pathAndQuery) => inkFetchDaStore('GET', pathAndQuery);
 const inkApiPost = (loja, pathAndQuery, body, extraHeaders, timeoutMs) => inkFetch(loja, 'POST', pathAndQuery, { body, extraHeaders, timeoutMs });
 const inkApiPatch = (loja, pathAndQuery, body, extraHeaders) => inkFetch(loja, 'PATCH', pathAndQuery, { body, extraHeaders });
 const inkApiPut = (loja, pathAndQuery, body, extraHeaders) => inkFetch(loja, 'PUT', pathAndQuery, { body, extraHeaders });
 const inkApiDelete = (loja, pathAndQuery, extraHeaders) => inkFetch(loja, 'DELETE', pathAndQuery, { extraHeaders });
+const inkApiPostDaStore = (pathAndQuery, body, extraHeaders, timeoutMs) => inkFetchDaStore('POST', pathAndQuery, { body, extraHeaders, timeoutMs });
+const inkApiPatchDaStore = (pathAndQuery, body, extraHeaders) => inkFetchDaStore('PATCH', pathAndQuery, { body, extraHeaders });
+const inkApiPutDaStore = (pathAndQuery, body, extraHeaders) => inkFetchDaStore('PUT', pathAndQuery, { body, extraHeaders });
+const inkApiDeleteDaStore = (pathAndQuery, extraHeaders) => inkFetchDaStore('DELETE', pathAndQuery, { extraHeaders });
 
 // Aplica o estado de um pedido da Reserva Ink (resposta de GET /v1/stores/orders/{id}) sobre o
 // registro local — QR não é gerado aqui, é sempre na hora que a hotpage pede (`/assets/pedidos`),
@@ -571,18 +572,23 @@ async function syncPedidoFromInk(loja, inkOrderId) {
 // Chamado a partir de um webhook verificado: atualiza a hotpage local (se existir uma pra esse
 // pedido) e dispara mensagem automática (se houver template configurado pra esse evento) — as
 // duas coisas usam o mesmo pedido buscado uma única vez na API.
+// `loja` é a chave legada da Store do contexto, NULA na Store nativa. A ingestão do pedido é
+// canônica (credencial da Store + `store_id`) e roda para as duas; as automações de WhatsApp/PIX e a
+// observação de estoque ainda são indexadas por chave legada, então só rodam para Store que tem uma.
 async function processarEventoWebhook(loja, inkOrderId, eventName) {
-  const data = await inkApiRequest(loja, `/v1/stores/orders/${inkOrderId}`);
+  const data = await inkApiRequestDaStore(`/v1/stores/orders/${inkOrderId}`);
   if (!data.order) return;
 
-  const pedidos = await readPedidos();
-  const match = Object.entries(pedidos).find(
-    ([, p]) => p.origem === 'ink' && p.loja === loja && p.inkOrderId === inkOrderId
-  );
-  if (match) {
-    const [id, pedido] = match;
-    await aplicarPedidoInk(pedidos, id, pedido, data.order);
-    await writePedidos(pedidos);
+  if (loja) {
+    const pedidos = await readPedidos();
+    const match = Object.entries(pedidos).find(
+      ([, p]) => p.origem === 'ink' && p.loja === loja && p.inkOrderId === inkOrderId
+    );
+    if (match) {
+      const [id, pedido] = match;
+      await aplicarPedidoInk(pedidos, id, pedido, data.order);
+      await writePedidos(pedidos);
+    }
   }
 
   // Atualiza o cache Postgres em tempo real — sem isso, o anti-spam de carrinho só veria essa
@@ -593,6 +599,7 @@ async function processarEventoWebhook(loja, inkOrderId, eventName) {
     });
   }
 
+  if (!loja) return; // Store nativa: automações de WhatsApp/PIX e estoque ainda são por chave legada.
   await registrarObservacoesEstoque(loja, data.order);
   await registrarPixPendenteSeAplicavel(loja, eventName, data.order);
   await encerrarPixPendenteSeTerminal(loja, eventName, data.order);
@@ -2250,7 +2257,7 @@ async function fetchTodosProdutosLojaComInfo(loja, baseParams) {
     const query = new URLSearchParams(baseParams);
     query.set('page', String(page));
     query.set('per_page', '100');
-    const data = await inkApiRequest(loja, `/v1/stores/products?${query.toString()}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/products?${query.toString()}`);
     produtos.push(...(data.products || []));
     truncado = (data.total_pages || 1) > PRODUTOS_BUSCA_MAX_PAGINAS;
     totalPages = Math.min(data.total_pages || 1, PRODUTOS_BUSCA_MAX_PAGINAS);
@@ -2275,7 +2282,7 @@ function montarFiltroLocalProdutos(fonte) {
 }
 
 app.get('/api/admin/produtos', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
 
   const baseParams = new URLSearchParams();
   PRODUTOS_QUERY_PARAMS.forEach((key) => { if (req.query[key] !== undefined) baseParams.set(key, req.query[key]); });
@@ -2297,7 +2304,8 @@ app.get('/api/admin/produtos', requireAdmin, async (req, res) => {
     } catch (err) {
       console.error(`[PRODUTOS_CACHE] busca no cache do catálogo falhou, tentando as outras fontes: ${err.message}`);
     }
-    if (filtroLocal && podeUsarCacheDeProdutos(req.query)) {
+    // O feed CSV é caminho legado descontinuado: só existe para Store com chave legada.
+    if (loja && filtroLocal && podeUsarCacheDeProdutos(req.query)) {
       try {
         const doCache = await buscarProdutosNoCache(loja, req.query);
         if (doCache) return res.json(doCache);
@@ -2328,7 +2336,7 @@ app.get('/api/admin/produtos', requireAdmin, async (req, res) => {
   query.set('page', String(page));
   query.set('per_page', String(perPage));
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/products?${query.toString()}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/products?${query.toString()}`);
     const produtos = (data.products || []).map((p) => mapProdutoSummary(loja, p));
     res.json({
       produtos, erros: [], approximated: false,
@@ -2575,8 +2583,13 @@ function numeroOuNull(valor) {
   return Number.isFinite(n) ? n : null;
 }
 
-async function gravarLoteCatalogo(loja, produtos, sincronizadoEm) {
+// Escreve o cache do catálogo da Store do contexto. Identidade canônica: `store_id` (a unicidade é
+// `uq_produtos_ink_store`, parcial em store_id); `loja` só espelha a chave histórica (NULA na Store
+// nativa) e o índice legado por `loja` continua para as releases já publicadas.
+async function gravarLoteCatalogo(produtos, sincronizadoEm) {
   if (!produtos.length) return;
+  const storeId = storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   const linhas = produtos.map((p) => ({
     id: p.id,
     name: p.name ?? null,
@@ -2594,10 +2607,10 @@ async function gravarLoteCatalogo(loja, produtos, sincronizadoEm) {
   }));
   const col = (campo) => linhas.map((r) => r[campo]);
   await pgPool.query(
-    `INSERT INTO produtos_ink (loja, produto_id, name, main_image_url, price, promotional_price,
+    `INSERT INTO produtos_ink (store_id, loja, produto_id, name, main_image_url, price, promotional_price,
        visible_in_store, approval_status, status, product_type_id, product_type_name,
        variants_count, product_cluster_id, updated_at, sincronizado_em)
-     SELECT $1, x.produto_id, x.name, x.main_image_url, x.price, x.promotional_price,
+     SELECT $16::uuid, $1, x.produto_id, x.name, x.main_image_url, x.price, x.promotional_price,
        x.visible_in_store, x.approval_status, x.status, x.product_type_id, x.product_type_name,
        x.variants_count, x.product_cluster_id, x.updated_at, $2
      FROM unnest($3::bigint[], $4::text[], $5::text[], $6::numeric[], $7::numeric[], $8::boolean[],
@@ -2606,8 +2619,8 @@ async function gravarLoteCatalogo(loja, produtos, sincronizadoEm) {
        AS x(produto_id, name, main_image_url, price, promotional_price, visible_in_store,
             approval_status, status, product_type_id, product_type_name, variants_count,
             product_cluster_id, updated_at)
-     ON CONFLICT (organization_id, loja, produto_id) DO UPDATE SET
-       name = EXCLUDED.name, main_image_url = EXCLUDED.main_image_url, price = EXCLUDED.price,
+     ON CONFLICT (organization_id, store_id, produto_id) WHERE store_id IS NOT NULL DO UPDATE SET
+       loja = EXCLUDED.loja, name = EXCLUDED.name, main_image_url = EXCLUDED.main_image_url, price = EXCLUDED.price,
        promotional_price = EXCLUDED.promotional_price, visible_in_store = EXCLUDED.visible_in_store,
        approval_status = EXCLUDED.approval_status, status = EXCLUDED.status,
        product_type_id = EXCLUDED.product_type_id, product_type_name = EXCLUDED.product_type_name,
@@ -2616,24 +2629,33 @@ async function gravarLoteCatalogo(loja, produtos, sincronizadoEm) {
     [loja, sincronizadoEm, col('id'), col('name'), col('mainImageUrl'), col('price'),
       col('promotionalPrice'), col('visibleInStore'), col('approvalStatus'), col('status'),
       col('productTypeId'), col('productTypeName'), col('variantsCount'), col('productClusterId'),
-      col('updatedAt')]
+      col('updatedAt'), storeId]
   );
 }
 
-async function sincronizarCatalogoInk(loja) {
+// Sincroniza o cache do catálogo da Store do contexto. A identidade é `store_id`; nada aqui exige a
+// chave legada. Linha ÓRFÃ de uma Store com chave legada (sem `store_id`) é reivindicada por
+// mapeamento explícito antes de escrever — o mesmo que o backfill da 0026 faz.
+async function sincronizarCatalogoInk() {
   if (!pgPool) return { pulado: 'sem Postgres configurado' };
-  if (lojaLegadaDoContexto() !== loja || !(await inkConectada())) return { pulado: 'loja sem token INK configurado' };
-  if (catalogoEmSincronizacao.has(loja)) return { pulado: 'sincronização já em andamento' };
-  catalogoEmSincronizacao.add(loja);
+  if (!(await inkConectada())) return { pulado: 'esta organization não tem token INK configurado' };
+  const storeId = storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
+  if (catalogoEmSincronizacao.has(storeId)) return { pulado: 'sincronização já em andamento' };
+  catalogoEmSincronizacao.add(storeId);
 
   const inicio = new Date();
   try {
+    if (loja) {
+      await pgPool.query('UPDATE produtos_ink SET store_id = $2 WHERE organization_id = $1 AND store_id IS NULL AND loja = $3', [orgDoContexto(), storeId, loja]);
+      await pgPool.query('UPDATE produtos_ink_sync SET store_id = $2 WHERE organization_id = $1 AND store_id IS NULL AND loja = $3', [orgDoContexto(), storeId, loja]);
+    }
     await pgPool.query(
-      `INSERT INTO produtos_ink_sync (loja, iniciado_em, concluido_em, processados, paginas, truncado, erro)
-       VALUES ($1, $2, NULL, 0, 0, false, NULL)
-       ON CONFLICT (organization_id, loja) DO UPDATE SET iniciado_em = EXCLUDED.iniciado_em, concluido_em = NULL,
+      `INSERT INTO produtos_ink_sync (store_id, loja, iniciado_em, concluido_em, processados, paginas, truncado, erro)
+       VALUES ($1, $3, $2, NULL, 0, 0, false, NULL)
+       ON CONFLICT (organization_id, store_id) WHERE store_id IS NOT NULL DO UPDATE SET iniciado_em = EXCLUDED.iniciado_em, concluido_em = NULL,
          processados = 0, paginas = 0, truncado = false, erro = NULL`,
-      [loja, inicio]
+      [storeId, inicio, loja]
     );
 
     let page = 1;
@@ -2646,9 +2668,9 @@ async function sincronizarCatalogoInk(loja) {
       // Retry só nos transitórios (429/5xx/rede): uma varredura de centenas de páginas quase
       // sempre esbarra em um soluço, e abortar o crawl inteiro por causa disso desperdiçaria todo
       // o trabalho já feito.
-      const data = await comRetryInk(() => inkApiRequest(loja, `/v1/stores/products?${query.toString()}`));
+      const data = await comRetryInk(() => inkApiRequestDaStore(`/v1/stores/products?${query.toString()}`));
       const produtosPagina = data.products || [];
-      await gravarLoteCatalogo(loja, produtosPagina, inicio);
+      await gravarLoteCatalogo(produtosPagina, inicio);
       processados += produtosPagina.length;
 
       const paginasReais = data.total_pages || 1;
@@ -2656,8 +2678,8 @@ async function sincronizarCatalogoInk(loja) {
       totalPages = Math.min(paginasReais, PRODUTOS_CACHE_MAX_PAGINAS);
 
       await pgPool.query(
-        `UPDATE produtos_ink_sync SET processados = $2, paginas = $3, total_estimado = $4, truncado = $5 WHERE loja = $1`,
-        [loja, processados, page, data.total_count || null, truncado]
+        `UPDATE produtos_ink_sync SET processados = $2, paginas = $3, total_estimado = $4, truncado = $5 WHERE organization_id = $6 AND store_id = $1`,
+        [storeId, processados, page, data.total_count || null, truncado, orgDoContexto()]
       );
       page += 1;
     } while (page <= totalPages);
@@ -2667,39 +2689,37 @@ async function sincronizarCatalogoInk(loja) {
     // sumiu do catálogo entre uma varredura e outra).
     if (processados === 0) throw new Error('a Ink devolveu o catálogo vazio');
     const { rowCount: removidos } = await pgPool.query(
-      'DELETE FROM produtos_ink WHERE loja = $1 AND sincronizado_em < $2',
-      [loja, inicio]
+      'DELETE FROM produtos_ink WHERE organization_id = $1 AND store_id = $2 AND sincronizado_em < $3',
+      [orgDoContexto(), storeId, inicio]
     );
 
     await pgPool.query(
-      `UPDATE produtos_ink_sync SET concluido_em = now(), total = $2, erro = NULL WHERE loja = $1`,
-      [loja, processados]
+      `UPDATE produtos_ink_sync SET concluido_em = now(), total = $2, erro = NULL WHERE organization_id = $3 AND store_id = $1`,
+      [storeId, processados, orgDoContexto()]
     );
-    console.log(`[PRODUTOS_CACHE] ${loja}: ${processados} produto(s) no cache do catálogo, ${removidos} removido(s)${truncado ? ' (TRUNCADO: catálogo maior que o teto de páginas)' : ''}`);
+    console.log(`[PRODUTOS_CACHE] store ${storeId}: ${processados} produto(s) no cache do catálogo, ${removidos} removido(s)${truncado ? ' (TRUNCADO: catálogo maior que o teto de páginas)' : ''}`);
     return { total: processados, removidos, truncado };
   } catch (err) {
-    console.error(`[PRODUTOS_CACHE] falha ao sincronizar o catálogo da loja ${loja}: ${err.message}`);
+    console.error(`[PRODUTOS_CACHE] falha ao sincronizar o catálogo da store ${storeId}: ${err.message}`);
     await pgPool.query(
-      `INSERT INTO produtos_ink_sync (loja, iniciado_em, erro) VALUES ($1, $2, $3)
-       ON CONFLICT (organization_id, loja) DO UPDATE SET erro = EXCLUDED.erro`,
-      [loja, inicio, String(err.message).slice(0, 500)]
+      `INSERT INTO produtos_ink_sync (store_id, loja, iniciado_em, erro) VALUES ($1, $4, $2, $3)
+       ON CONFLICT (organization_id, store_id) WHERE store_id IS NOT NULL DO UPDATE SET erro = EXCLUDED.erro`,
+      [storeId, inicio, String(err.message).slice(0, 500), loja]
     ).catch(() => {});
     throw err;
   } finally {
-    catalogoEmSincronizacao.delete(loja);
+    catalogoEmSincronizacao.delete(storeId);
   }
 }
 
 async function sincronizarCatalogoInkDaOrganizacao({ apenasVencidos = false } = {}) {
   if (!pgPool) return;
-  // Compatibilidade: o catálogo grava em tabelas cuja coluna `loja` ainda é obrigatória
-  // (produtos_ink, produtos_feed, produtos_ink_sync). Enquanto elas não tiverem `store_id`,
-  // este caminho só roda para Store com chave legada — Store nativa fica de fora, de propósito.
-  for (const loja of await lojasLegadasInkDoContexto()) {
+  // A Store do contexto (canônica, com ou sem chave legada), se a Organization tem token Ink.
+  for (const { storeId } of await storesInkDoContexto()) {
     if (apenasVencidos) {
       const { rows } = await pgPool.query(
-        'SELECT concluido_em, auto_pausado, intervalo_horas FROM produtos_ink_sync WHERE loja = $1',
-        [loja]
+        'SELECT concluido_em, auto_pausado, intervalo_horas FROM produtos_ink_sync WHERE organization_id = $1 AND store_id = $2',
+        [orgDoContexto(), storeId]
       );
       const cfg = rows[0];
       if (cfg && cfg.auto_pausado) continue;
@@ -2708,22 +2728,23 @@ async function sincronizarCatalogoInkDaOrganizacao({ apenasVencidos = false } = 
       if (ultimo && Date.now() - new Date(ultimo).getTime() < intervaloMs) continue;
     }
     try {
-      await sincronizarCatalogoInk(loja);
+      await sincronizarCatalogoInk();
     } catch { /* já logado e gravado em produtos_ink_sync */ }
   }
 }
 
 // Tipo de produto é por loja e o feed só traz o NOME do tipo — pra honrar o filtro por
 // product_type_id no cache, resolve id -> nome pela API (1 request, cacheado em memória).
-const tiposPorLojaCache = new Map(); // loja -> { em: timestamp, tipos: Map<id, nome> }
+const tiposPorLojaCache = new Map(); // store_id -> { em: timestamp, tipos: Map<id, nome> }
 const TIPOS_CACHE_TTL_MS = 10 * 60 * 1000;
 
 async function nomeDoTipoDeProduto(loja, tipoId) {
-  const cacheado = tiposPorLojaCache.get(loja);
+  const chave = storeDoContexto();
+  const cacheado = tiposPorLojaCache.get(chave);
   if (!cacheado || Date.now() - cacheado.em > TIPOS_CACHE_TTL_MS) {
-    const data = await inkApiRequest(loja, '/v1/stores/product_types?per_page=100');
+    const data = await inkApiRequestDaStore('/v1/stores/product_types?per_page=100');
     const tipos = new Map((data.product_types || []).map((t) => [t.id, t.name]));
-    tiposPorLojaCache.set(loja, { em: Date.now(), tipos });
+    tiposPorLojaCache.set(chave, { em: Date.now(), tipos });
     return tipos.get(tipoId) || null;
   }
   return cacheado.tipos.get(tipoId) || null;
@@ -2756,22 +2777,21 @@ const PRODUTOS_CACHE_SORT = {
 
 async function buscarProdutosNoCatalogo(loja, query) {
   if (!pgPool) return null;
-  const lojas = [loja];
-  if (!lojas.length) return null;
+  // Escopo canônico da Store do contexto (`organization_id + store_id`); o cache histórico, sem
+  // `store_id`, só entra quando a Store tem chave legada.
+  const escopo = escopoDaStore(2);
+  const escopoBase = ['organization_id = $1', escopo.sql];
+  const paramsBase = [orgDoContexto(), ...escopo.params];
 
   const { rows: totalRows } = await pgPool.query(
-    `SELECT COUNT(*) AS total, COUNT(DISTINCT loja) AS lojas_com_dado, MAX(sincronizado_em) AS sincronizado_em
-     FROM produtos_ink WHERE loja = ANY($1)`,
-    [lojas]
+    `SELECT COUNT(*) AS total, MAX(sincronizado_em) AS sincronizado_em
+     FROM produtos_ink WHERE ${escopoBase.join(' AND ')}`,
+    paramsBase
   );
   if (Number(totalRows[0].total) === 0) return null;
-  // Em "todas as lojas", cache parcial é pior que cache nenhum: responder só com as lojas já
-  // varridas passaria por catálogo completo e esconderia as outras sem nenhum aviso. Enquanto
-  // faltar loja, o modo "todas" continua indo na Ink.
-  if (Number(totalRows[0].lojas_com_dado) < lojas.length) return null;
 
-  const where = ['loja = ANY($1)'];
-  const params = [lojas];
+  const where = [...escopoBase];
+  const params = [...paramsBase];
 
   const nome = String(query.name || '').trim();
   if (nome) {
@@ -2923,37 +2943,40 @@ app.get('/api/admin/produtos/catalogo/status', requireAdmin, async (req, res) =>
   if (!pgPool) return res.status(503).json({ error: 'cache do catálogo exige Postgres configurado' });
   try {
     const inkConfigurada = await inkConectada();
-    const { rows: totais } = await pgPool.query(
-      'SELECT loja, COUNT(*) AS total, MAX(sincronizado_em) AS sincronizado_em FROM produtos_ink WHERE organization_id = $1 GROUP BY loja',
-      [orgDoContexto()]
+    // Store canônica (`organization_id + store_id`); a linha histórica, sem `store_id`, só entra quando
+    // a Store tem chave legada. Antes o status exigia a chave: 500 na Store nativa, e o card de
+    // Integrações dizia "Nenhuma loja conectada" mesmo com token Ink.
+    const storeId = storeDoContexto();
+    const loja = lojaLegadaDoContextoOuNula();
+    const escopo = escopoDaStore(2);
+    const { rows: [t] } = await pgPool.query(
+      `SELECT COUNT(*) AS total, MAX(sincronizado_em) AS sincronizado_em FROM produtos_ink WHERE organization_id = $1 AND ${escopo.sql}`,
+      [orgDoContexto(), ...escopo.params]
     );
-    const { rows: syncs } = await pgPool.query(
-      'SELECT loja, iniciado_em, concluido_em, processados, total_estimado, paginas, truncado, erro, auto_pausado, intervalo_horas FROM produtos_ink_sync WHERE organization_id = $1',
-      [orgDoContexto()]
+    const { rows: [sRow] } = await pgPool.query(
+      `SELECT iniciado_em, concluido_em, processados, total_estimado, paginas, truncado, erro, auto_pausado, intervalo_horas
+         FROM produtos_ink_sync WHERE organization_id = $1 AND ${escopo.sql} ORDER BY (store_id IS NOT NULL) DESC LIMIT 1`,
+      [orgDoContexto(), ...escopo.params]
     );
-    const porLoja = new Map(totais.map((t) => [t.loja, t]));
-    const porSync = new Map(syncs.map((s) => [s.loja, s]));
+    const s = sRow || null;
     res.json({
-      lojas: [lojaLegadaDoContexto()].map((loja) => {
-        const t = porLoja.get(loja);
-        const s = porSync.get(loja);
-        return {
-          loja,
-          configurado: inkConfigurada,
-          total: t ? Number(t.total) : 0,
-          sincronizadoEm: t ? t.sincronizado_em : null,
-          iniciadoEm: s ? s.iniciado_em : null,
-          concluidoEm: s ? s.concluido_em : null,
-          processados: s ? Number(s.processados || 0) : 0,
-          totalEstimado: s && s.total_estimado !== null ? Number(s.total_estimado) : null,
-          paginas: s ? Number(s.paginas || 0) : 0,
-          truncado: s ? !!s.truncado : false,
-          erro: s ? s.erro : null,
-          sincronizando: catalogoEmSincronizacao.has(loja),
-          autoPausado: s ? !!s.auto_pausado : false,
-          intervaloHoras: s && s.intervalo_horas ? Number(s.intervalo_horas) : PRODUTOS_CACHE_INTERVALO_PADRAO_HORAS,
-        };
-      }),
+      lojas: [{
+        storeId,
+        loja,
+        configurado: inkConfigurada,
+        total: Number(t.total),
+        sincronizadoEm: t.sincronizado_em,
+        iniciadoEm: s ? s.iniciado_em : null,
+        concluidoEm: s ? s.concluido_em : null,
+        processados: s ? Number(s.processados || 0) : 0,
+        totalEstimado: s && s.total_estimado !== null ? Number(s.total_estimado) : null,
+        paginas: s ? Number(s.paginas || 0) : 0,
+        truncado: s ? !!s.truncado : false,
+        erro: s ? s.erro : null,
+        sincronizando: catalogoEmSincronizacao.has(storeId),
+        autoPausado: s ? !!s.auto_pausado : false,
+        intervaloHoras: s && s.intervalo_horas ? Number(s.intervalo_horas) : PRODUTOS_CACHE_INTERVALO_PADRAO_HORAS,
+      }],
       intervalosHoras: PRODUTOS_CACHE_INTERVALOS_HORAS,
     });
   } catch (err) {
@@ -2966,13 +2989,19 @@ app.get('/api/admin/produtos/catalogo/status', requireAdmin, async (req, res) =>
 // acompanha é o polling de /catalogo/status, igual ao backfill de pedidos.
 app.post('/api/admin/produtos/catalogo/sync', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'cache do catálogo exige Postgres configurado' });
-  const lojas = await lojasLegadasInkDoContexto();
-  if (!lojas.length) return res.status(503).json({ error: 'esta loja não tem token INK configurado' });
-  const iniciadas = lojas.filter((l) => !catalogoEmSincronizacao.has(l));
-  for (const loja of iniciadas) {
-    sincronizarCatalogoInk(loja).catch(() => {});
+  // A Store do contexto, se a Organization tem token Ink — com ou sem chave legada.
+  const stores = await storesInkDoContexto();
+  if (!stores.length) return res.status(503).json({ error: 'esta loja não tem token INK configurado' });
+  const iniciadas = stores.filter((st) => !catalogoEmSincronizacao.has(st.storeId));
+  for (let i = 0; i < iniciadas.length; i += 1) {
+    sincronizarCatalogoInk().catch(() => {});
   }
-  res.json({ ok: true, lojas: iniciadas, jaRodando: lojas.filter((l) => !iniciadas.includes(l)) });
+  res.json({
+    ok: true,
+    storeIds: iniciadas.map((st) => st.storeId),
+    lojas: iniciadas.map((st) => st.loja),
+    jaRodando: stores.filter((st) => !iniciadas.includes(st)).map((st) => st.storeId),
+  });
 });
 
 // Pausa/retoma a renovação automática e ajusta o intervalo, por loja. Só mexe no agendamento —
@@ -2980,7 +3009,8 @@ app.post('/api/admin/produtos/catalogo/sync', requireAdmin, async (req, res) => 
 app.put('/api/admin/produtos/catalogo/config', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'cache do catálogo exige Postgres configurado' });
   const body = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   const temPausado = body.pausado !== undefined;
   const temIntervalo = body.intervaloHoras !== undefined;
   if (!temPausado && !temIntervalo) return res.status(400).json({ error: 'nada para atualizar' });
@@ -2989,16 +3019,17 @@ app.put('/api/admin/produtos/catalogo/config', requireAdmin, async (req, res) =>
     return res.status(400).json({ error: 'intervalo inválido' });
   }
   try {
+    if (loja) await pgPool.query('UPDATE produtos_ink_sync SET store_id = $2 WHERE organization_id = $1 AND store_id IS NULL AND loja = $3', [orgDoContexto(), storeId, loja]);
     const { rows } = await pgPool.query(
-      `INSERT INTO produtos_ink_sync (loja, auto_pausado, intervalo_horas)
-       VALUES ($1, COALESCE($2::boolean, false), COALESCE($3::integer, $4::integer))
-       ON CONFLICT (organization_id, loja) DO UPDATE SET
+      `INSERT INTO produtos_ink_sync (store_id, loja, auto_pausado, intervalo_horas)
+       VALUES ($1, $5, COALESCE($2::boolean, false), COALESCE($3::integer, $4::integer))
+       ON CONFLICT (organization_id, store_id) WHERE store_id IS NOT NULL DO UPDATE SET
          auto_pausado = COALESCE($2::boolean, produtos_ink_sync.auto_pausado),
          intervalo_horas = COALESCE($3::integer, produtos_ink_sync.intervalo_horas)
        RETURNING auto_pausado, intervalo_horas`,
-      [loja, temPausado ? body.pausado : null, temIntervalo ? body.intervaloHoras : null, PRODUTOS_CACHE_INTERVALO_PADRAO_HORAS]
+      [storeId, temPausado ? body.pausado : null, temIntervalo ? body.intervaloHoras : null, PRODUTOS_CACHE_INTERVALO_PADRAO_HORAS, loja]
     );
-    console.log(`[PRODUTOS_CACHE] ${loja}: renovação automática ${rows[0].auto_pausado ? 'pausada' : 'ativa'}, a cada ${rows[0].intervalo_horas}h`);
+    console.log(`[PRODUTOS_CACHE] store ${storeId}: renovação automática ${rows[0].auto_pausado ? 'pausada' : 'ativa'}, a cada ${rows[0].intervalo_horas}h`);
     res.json({ ok: true, autoPausado: rows[0].auto_pausado, intervaloHoras: rows[0].intervalo_horas });
   } catch (err) {
     console.error(`[PRODUTOS_CACHE] falha ao salvar config: ${err.message}`);
@@ -3007,6 +3038,9 @@ app.put('/api/admin/produtos/catalogo/config', requireAdmin, async (req, res) =>
 });
 app.get('/api/admin/produtos/feed/status', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'cache de produtos exige Postgres configurado' });
+  // O feed CSV é caminho legado descontinuado: só existe para Store com chave legada. Para a Store
+  // nativa ele NÃO é requisito — a resposta é "sem feed", nunca um erro de integração.
+  if (!lojaLegadaDoContextoOuNula()) return res.json({ lojas: [], descontinuado: true });
   try {
     const feedConfigurado = await feedInkConfigurado();
     const { rows: totais } = await pgPool.query(
@@ -3043,7 +3077,10 @@ app.get('/api/admin/produtos/feed/status', requireAdmin, async (req, res) => {
 // request do admin (mesmo motivo dos outros jobs deste arquivo).
 app.post('/api/admin/produtos/feed/sync', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'cache de produtos exige Postgres configurado' });
-  const lojas = (await feedInkConfigurado()) ? [lojaLegadaDoContexto()] : [];
+  // Feed CSV: caminho legado descontinuado, só para Store com chave legada.
+  const lojaDoFeed = lojaLegadaDoContextoOuNula();
+  if (!lojaDoFeed) return res.status(410).json({ error: 'o feed de produtos foi descontinuado: o catálogo é sincronizado direto pela Reserva Ink', codigo: 'FEED_DEPRECATED' });
+  const lojas = (await feedInkConfigurado()) ? [lojaDoFeed] : [];
   if (!lojas.length) return res.status(503).json({ error: 'esta loja não tem a URL do feed configurada' });
   for (const loja of lojas) {
     sincronizarProdutosFeed(loja).catch(() => {});
@@ -3053,9 +3090,9 @@ app.post('/api/admin/produtos/feed/sync', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/products/${id}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/products/${id}`);
     res.json({ loja, produto: data.product });
   } catch (err) {
     console.error(`[PRODUTOS] falha ao buscar produto ${loja}/${id}: ${err.message}`);
@@ -3064,9 +3101,9 @@ app.get('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
 });
 
 app.get('/api/admin/produto-tipos', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequest(loja, '/v1/stores/product_types?per_page=100');
+    const data = await inkApiRequestDaStore('/v1/stores/product_types?per_page=100');
     res.json({ tipos: data.product_types || [] });
   } catch (err) {
     console.error(`[PRODUTOS] falha ao listar tipos de produto (${loja}): ${err.message}`);
@@ -3119,7 +3156,7 @@ app.post('/api/admin/produtos', requireAdmin, async (req, res) => {
   try {
     // Timeout maior que o padrão de inkApiPost (20s): produto com várias cores pode levar bem
     // mais que isso pra Ink processar todas as artes (image_attachment de até 20MB cada).
-    const data = await inkApiPost(loja, '/v1/stores/products', body, { 'Idempotency-Key': crypto.randomUUID() }, 120000);
+    const data = await inkApiPostDaStore('/v1/stores/products', body, { 'Idempotency-Key': crypto.randomUUID() }, 120000);
     res.status(201).json({ loja, produto: data.product });
   } catch (err) {
     console.error(`[PRODUTOS] falha ao criar produto (${loja}): ${err.message}`);
@@ -3131,7 +3168,7 @@ app.post('/api/admin/produtos', requireAdmin, async (req, res) => {
 // por uma futura edição completa. Nunca oferecer DELETE — a API não documenta esse método.
 app.patch('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
 
   const { name, description, price, visibleInStore, tags, collections, newCollections, removeVariants, arts } = req.body || {};
   const body = {};
@@ -3147,7 +3184,7 @@ app.patch('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
   if (!Object.keys(body).length) return res.status(400).json({ error: 'nenhum campo para atualizar' });
 
   try {
-    const data = await inkApiPatch(loja, `/v1/stores/products/${id}`, body, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPatchDaStore(`/v1/stores/products/${id}`, body, { 'Idempotency-Key': crypto.randomUUID() });
     res.json({ loja, produto: data.product });
   } catch (err) {
     console.error(`[PRODUTOS] falha ao atualizar produto ${loja}/${id}: ${err.message}`);
@@ -3157,7 +3194,7 @@ app.patch('/api/admin/produtos/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const { productTypeId, price, includeCategories } = req.body || {};
   if (!Number.isInteger(productTypeId)) return res.status(400).json({ error: 'productTypeId (tipo de destino) inválido' });
 
@@ -3165,7 +3202,7 @@ app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
   if (price) body.price = price;
 
   try {
-    const data = await inkApiPost(loja, `/v1/stores/products/${id}/copy`, body, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPostDaStore(`/v1/stores/products/${id}/copy`, body, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(201).json({ loja, produto: data.product });
   } catch (err) {
     console.error(`[PRODUTOS] falha ao duplicar produto ${loja}/${id}: ${err.message}`);
@@ -3180,9 +3217,9 @@ app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
 // por isso "adicionar 1 produto" sempre lê a categoria atual antes de gravar (ver
 // /adicionar-produto abaixo), nunca assume o estado local.
 app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequest(loja, '/v1/stores/collections?per_page=100');
+    const data = await inkApiRequestDaStore('/v1/stores/collections?per_page=100');
     res.json({ categorias: data.collections || [] });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao listar (${loja}): ${err.message}`);
@@ -3192,9 +3229,9 @@ app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/collections/${id}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/collections/${id}`);
     res.json({ loja, categoria: data.collection });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao buscar categoria ${loja}/${id}: ${err.message}`);
@@ -3208,9 +3245,9 @@ app.get('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
 // pequenos — mesmo padrão já usado em falhas-por-tipo. Só leitura, não altera nada.
 app.get('/api/admin/categorias/:id/produtos-nomes', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const dataCategoria = await inkApiRequest(loja, `/v1/stores/collections/${id}`);
+    const dataCategoria = await inkApiRequestDaStore(`/v1/stores/collections/${id}`);
     const categoria = dataCategoria.collection;
     if (!categoria) return res.status(404).json({ error: 'categoria não encontrada' });
     const productIds = categoria.product_ids || [];
@@ -3221,7 +3258,7 @@ app.get('/api/admin/categorias/:id/produtos-nomes', requireAdmin, async (req, re
       const lote = productIds.slice(i, i + LOTE);
       const resultados = await Promise.all(lote.map(async (pid) => {
         try {
-          const data = await inkApiRequest(loja, `/v1/stores/products/${pid}`);
+          const data = await inkApiRequestDaStore(`/v1/stores/products/${pid}`);
           return (data.product && data.product.name) || null;
         } catch {
           return null;
@@ -3245,7 +3282,7 @@ app.get('/api/admin/categorias/:id/produtos-nomes', requireAdmin, async (req, re
 
 app.post('/api/admin/categorias', requireAdmin, async (req, res) => {
   const { name, description, isAvailable, position } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   if (typeof name !== 'string' || !name.trim() || name.length > 20) return res.status(400).json({ error: 'nome é obrigatório (máx. 20 caracteres — limite da Ink)' });
 
   const body = { name: name.trim() };
@@ -3254,7 +3291,7 @@ app.post('/api/admin/categorias', requireAdmin, async (req, res) => {
   if (position !== undefined) body.position = position;
 
   try {
-    const data = await inkApiPost(loja, '/v1/stores/collections', body, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPostDaStore('/v1/stores/collections', body, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(201).json({ loja, categoria: data.collection });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao criar categoria (${loja}): ${err.message}`);
@@ -3264,7 +3301,7 @@ app.post('/api/admin/categorias', requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const { name, description, isAvailable, position, productIds, kitIds } = req.body || {};
   const body = {};
   if (name !== undefined) body.name = name;
@@ -3276,7 +3313,7 @@ app.patch('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
   if (!Object.keys(body).length) return res.status(400).json({ error: 'nenhum campo para atualizar' });
 
   try {
-    const data = await inkApiPatch(loja, `/v1/stores/collections/${id}`, body, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPatchDaStore(`/v1/stores/collections/${id}`, body, { 'Idempotency-Key': crypto.randomUUID() });
     res.json({ loja, categoria: data.collection });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao atualizar categoria ${loja}/${id}: ${err.message}`);
@@ -3286,9 +3323,9 @@ app.patch('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    await inkApiDelete(loja, `/v1/stores/collections/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
+    await inkApiDeleteDaStore(`/v1/stores/collections/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(204).end();
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao excluir categoria ${loja}/${id}: ${err.message}`);
@@ -3300,15 +3337,15 @@ app.delete('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
 // só aceita substituição total de `product_ids`, nunca "adicionar 1".
 app.post('/api/admin/categorias/:id/adicionar-produto', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const { productId } = req.body || {};
   if (!Number.isInteger(productId)) return res.status(400).json({ error: 'productId inválido' });
 
   try {
-    const atual = await inkApiRequest(loja, `/v1/stores/collections/${id}`);
+    const atual = await inkApiRequestDaStore(`/v1/stores/collections/${id}`);
     const productIds = Array.from(new Set([...(atual.collection.product_ids || []), productId]));
     if (productIds.length > 100) return res.status(400).json({ error: 'categoria já está no limite de 100 produtos (limite da Ink)' });
-    const data = await inkApiPatch(loja, `/v1/stores/collections/${id}`, { product_ids: productIds }, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPatchDaStore(`/v1/stores/collections/${id}`, { product_ids: productIds }, { 'Idempotency-Key': crypto.randomUUID() });
     res.json({ loja, categoria: data.collection });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao adicionar produto ${productId} à categoria ${loja}/${id}: ${err.message}`);
@@ -3318,9 +3355,9 @@ app.post('/api/admin/categorias/:id/adicionar-produto', requireAdmin, async (req
 
 app.get('/api/admin/categorias/:id/vitrine', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/collections/${id}/custom_showcase`);
+    const data = await inkApiRequestDaStore(`/v1/stores/collections/${id}/custom_showcase`);
     res.json({ loja, vitrine: data.custom_showcase });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao buscar vitrine ${loja}/${id}: ${err.message}`);
@@ -3330,7 +3367,7 @@ app.get('/api/admin/categorias/:id/vitrine', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/categorias/:id/vitrine', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const { productItems, kitItems } = req.body || {};
   if (!Array.isArray(productItems)) return res.status(400).json({ error: 'productItems é obrigatório' });
 
@@ -3340,7 +3377,7 @@ app.put('/api/admin/categorias/:id/vitrine', requireAdmin, async (req, res) => {
     kit_items: (kitItems || []).map((k) => ({ kit_id: k.kitId, position: k.position })),
   };
   try {
-    const data = await inkApiPut(loja, `/v1/stores/collections/${id}/custom_showcase`, body, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPutDaStore(`/v1/stores/collections/${id}/custom_showcase`, body, { 'Idempotency-Key': crypto.randomUUID() });
     res.json({ loja, vitrine: data.custom_showcase });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao reordenar vitrine ${loja}/${id}: ${err.message}`);
@@ -3356,12 +3393,12 @@ function normalizarNomeCategoria(nome) {
 }
 
 app.post('/api/admin/categorias/bulk-preview', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const { nomes } = req.body || {};
   if (!Array.isArray(nomes)) return res.status(400).json({ error: 'nomes é obrigatório (array)' });
 
   try {
-    const existentesData = await inkApiRequest(loja, '/v1/stores/collections?per_page=100');
+    const existentesData = await inkApiRequestDaStore('/v1/stores/collections?per_page=100');
     const nomesExistentes = new Set((existentesData.collections || []).map((c) => normalizarNomeCategoria(c.name)));
     const vistosNaLista = new Set();
 
@@ -3399,7 +3436,7 @@ app.post('/api/admin/categorias/bulk-preview', requireAdmin, async (req, res) =>
 // assíncrono; a Fase 2, associação de produtos, é que precisa de job de verdade). Sempre sem
 // `product_ids` neste momento — associação de produtos é etapa separada (Parte 2 do plano).
 app.post('/api/admin/categorias/bulk-create', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const { nomes, isAvailable, descricaoPadrao } = req.body || {};
   if (!Array.isArray(nomes) || !nomes.length) return res.status(400).json({ error: 'nomes é obrigatório (array não vazio)' });
   if (nomes.some((n) => typeof n !== 'string' || !n.trim() || n.length > 20)) {
@@ -3413,7 +3450,7 @@ app.post('/api/admin/categorias/bulk-create', requireAdmin, async (req, res) => 
     const body = { name: nome, is_available: !!isAvailable };
     if (descricaoPadrao) body.description = descricaoPadrao;
     try {
-      const data = await inkApiPost(loja, '/v1/stores/collections', body, { 'Idempotency-Key': crypto.randomUUID() });
+      const data = await inkApiPostDaStore('/v1/stores/collections', body, { 'Idempotency-Key': crypto.randomUUID() });
       const categoria = data.collection;
       resultados.push({ nome, status: 'criada', id: categoria && categoria.id });
       if (categoria && categoria.id != null) mapaIds[nome] = categoria.id;
@@ -3444,7 +3481,7 @@ app.post('/api/admin/categorias/bulk-create', requireAdmin, async (req, res) => 
 // (422) associar um produto a uma categoria desativada — daí toda a execução da migração falhando
 // com a mesma mensagem genérica. O painel nativo da Ink só ativa/desativa 1 categoria por vez.
 app.post('/api/admin/categorias/bulk-ativar', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const ids = Array.isArray(req.body && req.body.ids) ? Array.from(new Set(req.body.ids)) : null;
   const disponivel = req.body && req.body.isAvailable === false ? false : true;
   const rotulo = disponivel ? 'ativada' : 'desativada';
@@ -3455,7 +3492,7 @@ app.post('/api/admin/categorias/bulk-ativar', requireAdmin, async (req, res) => 
   const resultados = [];
   for (const id of ids) {
     try {
-      await inkApiPatch(loja, `/v1/stores/collections/${id}`, { is_available: disponivel }, { 'Idempotency-Key': crypto.randomUUID() });
+      await inkApiPatchDaStore(`/v1/stores/collections/${id}`, { is_available: disponivel }, { 'Idempotency-Key': crypto.randomUUID() });
       resultados.push({ id, status: rotulo });
     } catch (err) {
       console.error(`[CATEGORIAS_LOTE] falha ao ${disponivel ? 'ativar' : 'desativar'} categoria ${id} (${loja}): ${err.message}`);
@@ -3479,7 +3516,7 @@ async function excluirCategoriasEmLote(loja, ids) {
   const resultados = [];
   for (const id of ids) {
     try {
-      await inkApiDelete(loja, `/v1/stores/collections/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
+      await inkApiDeleteDaStore(`/v1/stores/collections/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
       resultados.push({ id, status: 'excluida' });
     } catch (err) {
       console.error(`[CATEGORIAS_LOTE] falha ao excluir categoria ${id} (${loja}): ${err.message}`);
@@ -3490,7 +3527,7 @@ async function excluirCategoriasEmLote(loja, ids) {
 }
 
 app.post('/api/admin/categorias/bulk-excluir', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const ids = Array.isArray(req.body && req.body.ids) ? Array.from(new Set(req.body.ids)) : null;
   if (!ids || !ids.length || !ids.every((n) => Number.isInteger(n))) {
     return res.status(400).json({ error: 'ids é obrigatório (array de inteiros não vazio)' });
@@ -3532,7 +3569,7 @@ async function fetchTodasCategoriasLoja(loja) {
   let page = 1;
   let totalPages = 1;
   do {
-    const data = await inkApiRequest(loja, `/v1/stores/collections?page=${page}&per_page=100`);
+    const data = await inkApiRequestDaStore(`/v1/stores/collections?page=${page}&per_page=100`);
     categorias.push(...(data.collections || []));
     totalPages = Math.min(data.total_pages || 1, 20);
     page += 1;
@@ -3606,7 +3643,7 @@ function normalizarRemoveCategoryIds(mode, raw) {
 
 app.post('/api/admin/category-assignments/preview', requireAdmin, async (req, res) => {
   const { mode, filtros, selecaoManual } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const categoryIds = Array.isArray(req.body && req.body.categoryIds) ? Array.from(new Set(req.body.categoryIds)) : req.body && req.body.categoryIds;
   if (mode !== 'add' && mode !== 'replace') return res.status(400).json({ error: 'mode deve ser "add" ou "replace"' });
   const erroCategorias = validarCategoryIds(categoryIds, mode);
@@ -3644,7 +3681,7 @@ app.post('/api/admin/category-assignments/preview', requireAdmin, async (req, re
 app.post('/api/admin/category-assignments', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'associação em massa exige Postgres configurado' });
   const { mode, filtros, selecaoManual } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   const categoryIds = Array.isArray(req.body && req.body.categoryIds) ? Array.from(new Set(req.body.categoryIds)) : req.body && req.body.categoryIds;
   if (mode !== 'add' && mode !== 'replace') return res.status(400).json({ error: 'mode deve ser "add" ou "replace"' });
   const erroCategorias = validarCategoryIds(categoryIds, mode);
@@ -3661,12 +3698,13 @@ app.post('/api/admin/category-assignments', requireAdmin, async (req, res) => {
     }
 
     const jobRows = await pgPool.query(
-      `INSERT INTO bulk_category_jobs (loja, mode, category_ids, category_ids_remover, filtro_produtos, total, status)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, 'queued') RETURNING id`,
+      `INSERT INTO bulk_category_jobs (store_id, loja, mode, category_ids, category_ids_remover, filtro_produtos, total, status)
+       VALUES ($7, $1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, 'queued') RETURNING id`,
       [
         loja, mode, JSON.stringify(categoryIds), removeCategoryIds.length ? JSON.stringify(removeCategoryIds) : null,
         JSON.stringify({ filtros: filtros || null, selecaoManual: !!(selecaoManual && selecaoManual.productIds && selecaoManual.productIds.length) }),
         produtos.length,
+        storeDoContexto(),
       ]
     );
     const jobId = jobRows.rows[0].id;
@@ -3737,7 +3775,7 @@ app.get('/api/admin/category-jobs/:id/falhas-por-tipo', requireAdmin, exigirRecu
     const lote = falhas.slice(i, i + LOTE);
     const resultados = await Promise.all(lote.map(async (f) => {
       try {
-        const data = await inkApiRequest(loja, `/v1/stores/products/${f.product_id}`);
+        const data = await inkApiRequestDaStore(`/v1/stores/products/${f.product_id}`);
         return data.product && data.product.product_type ? data.product.product_type : null;
       } catch {
         return null;
@@ -7067,16 +7105,16 @@ function migracaoChaveDoProdutoOrigem(nome) {
 // pertence a um grupo) e remover produto individual. Remover o penúltimo produto dissolve o
 // grupo (a Ink devolve product_cluster: null) — a UI precisa avisar disso antes de confirmar.
 app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequest(loja, '/v1/stores/product_clusters?per_page=100');
+    const data = await inkApiRequestDaStore('/v1/stores/product_clusters?per_page=100');
     const clusters = data.product_clusters || [];
     // Resolve nome/imagem só do produto de vitrine (não de todos os `product_ids`, que pode ser
     // bem maior) — sem isso a listagem só mostrava o id cru do agrupamento e do produto de
     // vitrine, achado do refinamento visual (nunca inventar dado que a API não dá, mas o nome
     // real está a 1 chamada de distância, então busca).
     const agrupamentos = await Promise.all(clusters.map(async (c) => {
-      const produto = await inkApiRequest(loja, `/v1/stores/products/${c.default_product_id}`).then((d) => d.product).catch(() => null);
+      const produto = await inkApiRequestDaStore(`/v1/stores/products/${c.default_product_id}`).then((d) => d.product).catch(() => null);
       return {
         ...c,
         defaultProductName: produto ? produto.name : null,
@@ -7092,12 +7130,12 @@ app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/agrupamentos/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const cluster = await inkApiRequest(loja, `/v1/stores/product_clusters/${id}`);
+    const cluster = await inkApiRequestDaStore(`/v1/stores/product_clusters/${id}`);
     const produtos = await Promise.all(
       (cluster.product_cluster.product_ids || []).map((pid) =>
-        inkApiRequest(loja, `/v1/stores/products/${pid}`).then((d) => d.product).catch(() => null)
+        inkApiRequestDaStore(`/v1/stores/products/${pid}`).then((d) => d.product).catch(() => null)
       )
     );
     res.json({ loja, agrupamento: cluster.product_cluster, produtos: produtos.filter(Boolean) });
@@ -7109,11 +7147,11 @@ app.get('/api/admin/agrupamentos/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
   const { productIds } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   if (!Array.isArray(productIds) || productIds.length < 2) return res.status(400).json({ error: 'informe ao menos 2 produtos (ou 1 novo + 1 já agrupado)' });
 
   try {
-    const data = await inkApiPost(loja, '/v1/stores/product_clusters', { product_ids: productIds }, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPostDaStore('/v1/stores/product_clusters', { product_ids: productIds }, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(201).json({ loja, agrupamento: data.product_cluster });
   } catch (err) {
     console.error(`[AGRUPAMENTOS] falha ao criar agrupamento (${loja}): ${err.message}`);
@@ -7123,9 +7161,9 @@ app.post('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/agrupamentos/:clusterId/produtos/:produtoId', requireAdmin, async (req, res) => {
   const { clusterId, produtoId } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiDelete(loja, `/v1/stores/product_clusters/${clusterId}/products/${produtoId}`, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiDeleteDaStore(`/v1/stores/product_clusters/${clusterId}/products/${produtoId}`, { 'Idempotency-Key': crypto.randomUUID() });
     res.json({ loja, agrupamento: data.product_cluster || null, dissolvido: !data.product_cluster });
   } catch (err) {
     console.error(`[AGRUPAMENTOS] falha ao remover produto ${produtoId} do agrupamento ${loja}/${clusterId}: ${err.message}`);
@@ -14021,15 +14059,18 @@ JOBS.agendar('sync-pedidos-ink', SYNC_PEDIDOS_INTERVAL_MS, () => syncPedidosInkP
 // disponibilidade ATUAL da variação, o que não faz sentido associado a um pedido antigo — só é
 // útil "de carona" no sync de pedidos recentes. Também nunca toca em sync_estado.ultimo_sync_em,
 // que é o cursor do sync incremental — os dois processos são independentes de propósito.
-const lojasComBackfillPedidosRodando = new Set();
+const lojasComBackfillPedidosRodando = new Set(); // por store_id
 
-async function processarBackfillHistoricoPedidos(jobId, loja, desde) {
+async function processarBackfillHistoricoPedidos(jobId, storeId, desde) {
+  // Roda sob o contexto da request que o iniciou (Organization + Store). Identidade canônica:
+  // a credencial Ink é a da Store; `loja` (chave legada, nula na Store nativa) só espelha o histórico.
+  const loja = lojaLegadaDoContextoOuNula();
   let pedidosProcessados = 0;
   try {
     let page = 1;
     let totalPages = 1;
     do {
-      const data = await inkApiRequest(loja, `/v1/stores/orders?begin_date=${desde}&page=${page}&per_page=100`);
+      const data = await inkApiRequestDaStore(`/v1/stores/orders?begin_date=${desde}&page=${page}&per_page=100`);
       for (const o of data.orders || []) {
         await upsertPedidoInkPostgres(loja, o);
       }
@@ -14054,7 +14095,7 @@ async function processarBackfillHistoricoPedidos(jobId, loja, desde) {
       [String(err.message || 'erro desconhecido').slice(0, 500), jobId]
     ).catch(() => {});
   } finally {
-    lojasComBackfillPedidosRodando.delete(loja);
+    lojasComBackfillPedidosRodando.delete(storeId);
   }
 }
 
@@ -14062,9 +14103,10 @@ async function processarBackfillHistoricoPedidos(jobId, loja, desde) {
 // histórico pode levar bem mais que a duração de uma request HTTP pra paginar tudo na Ink.
 app.post('/api/admin/pedidos/backfill-historico', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'backfill exige Postgres configurado' });
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   if (!(await inkConectada())) return res.status(409).json({ error: 'esta loja não tem a integração com a Reserva Ink configurada' });
-  if (lojasComBackfillPedidosRodando.has(loja)) {
+  if (lojasComBackfillPedidosRodando.has(storeId)) {
     return res.status(409).json({ error: 'já existe um backfill em andamento para esta loja — aguarde terminar' });
   }
 
@@ -14073,17 +14115,17 @@ app.post('/api/admin/pedidos/backfill-historico', requireAdmin, async (req, res)
 
   try {
     const jobRows = await pgPool.query(
-      `INSERT INTO pedidos_backfill_jobs (loja, desde, status) VALUES ($1, $2, 'processando') RETURNING id`,
-      [loja, desde]
+      `INSERT INTO pedidos_backfill_jobs (store_id, loja, desde, status) VALUES ($1, $2, $3, 'processando') RETURNING id`,
+      [storeId, loja, desde]
     );
     const jobId = jobRows.rows[0].id;
-    lojasComBackfillPedidosRodando.add(loja);
-    processarBackfillHistoricoPedidos(jobId, loja, desde).catch((err) => {
+    lojasComBackfillPedidosRodando.add(storeId);
+    processarBackfillHistoricoPedidos(jobId, storeId, desde).catch((err) => {
       console.error(`[BACKFILL_PEDIDOS] falha não tratada no job ${jobId}: ${err.message}`);
     });
     res.status(202).json({ jobId });
   } catch (err) {
-    console.error(`[BACKFILL_PEDIDOS] falha ao iniciar backfill (${loja}): ${err.message}`);
+    console.error(`[BACKFILL_PEDIDOS] falha ao iniciar backfill (store ${storeId}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível iniciar o backfill' });
   }
 });
@@ -14091,10 +14133,10 @@ app.post('/api/admin/pedidos/backfill-historico', requireAdmin, async (req, res)
 app.get('/api/admin/pedidos/backfill-historico/:jobId', requireAdmin, exigirRecurso('pedidos_backfill_jobs', { param: 'jobId' }), async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'backfill exige Postgres configurado' });
   const { jobId } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const escopo = escopoDaStore(3);
   const { rows } = await pgPool.query(
-    `SELECT * FROM pedidos_backfill_jobs WHERE id = $1 AND loja = $2`,
-    [jobId, loja]
+    `SELECT * FROM pedidos_backfill_jobs WHERE id = $1 AND organization_id = $2 AND ${escopo.sql}`,
+    [jobId, orgDoContexto(), ...escopo.params]
   );
   if (!rows[0]) return res.status(404).json({ error: 'job não encontrado' });
   res.json({ job: rows[0] });
@@ -14102,10 +14144,10 @@ app.get('/api/admin/pedidos/backfill-historico/:jobId', requireAdmin, exigirRecu
 
 app.get('/api/admin/pedidos/backfill-historico', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'backfill exige Postgres configurado' });
-  const loja = lojaLegadaDoContexto();
+  const escopo = escopoDaStore(2);
   const { rows } = await pgPool.query(
-    `SELECT * FROM pedidos_backfill_jobs WHERE loja = $1 ORDER BY criado_em DESC LIMIT 10`,
-    [loja]
+    `SELECT * FROM pedidos_backfill_jobs WHERE organization_id = $1 AND ${escopo.sql} ORDER BY criado_em DESC LIMIT 10`,
+    [orgDoContexto(), ...escopo.params]
   );
   res.json({ jobs: rows });
 });
@@ -14674,8 +14716,8 @@ async function processarItemBulkCategoryJob(job, item, indiceCollections) {
 
     // Chave inclui `attempts` — cada tentativa nova (via retry-failed) ganha uma chave diferente
     // de verdade, nunca reenvia a mesma pra Ink (bug real corrigido numa sessão anterior).
-    await comRetryInk(() => inkApiPatch(
-      job.loja, `/v1/stores/products/${item.product_id}`, { collections: after },
+    await comRetryInk(() => inkApiPatchDaStore(
+      `/v1/stores/products/${item.product_id}`, { collections: after },
       { 'Idempotency-Key': `bulkcat:${job.id}:${item.product_id}:${item.attempts}` }
     ));
     await pgPool.query(
@@ -15810,10 +15852,14 @@ app.post('/api/webhooks/ink/:token', async (req, res) => {
 
   const body = req.body;
   comOrganizacaoResolvida(organizationId, 'webhook:ink', async () => {
-    const loja = lojaLegadaDoContexto();
+    // A entrega é associada pela URL/segredo da Organization (nunca por chave legada): a Store é a
+    // do contexto, e a chave legada só acompanha quando ela existe (nula na Store nativa).
+    const storeId = storeDoContexto();
+    const loja = lojaLegadaDoContextoOuNula();
     await logInkWebhook({
       recebidoEm: new Date().toISOString(),
       verificado: true,
+      storeId,
       loja,
       metodoAuth: 'url-opaca+hmac-sha256-base64-of-hex',
       eventName,
@@ -15822,17 +15868,20 @@ app.post('/api/webhooks/ink/:token', async (req, res) => {
       body,
     });
     if (eventoEhDeCarrinho(eventName)) {
+      // Carrinho abandonado → automação de WhatsApp, ainda por chave legada: a Store nativa só
+      // registra o evento (acima).
+      if (!loja) return;
       await dispararMensagemAutomaticaCarrinho(loja, eventName, body).catch((err) => {
         console.error(`[INK_WEBHOOK] falha ao processar carrinho abandonado (${loja}, evento ${eventName || '?'}): ${err.message}`);
       });
       return;
     }
     if (inkOrderId == null) {
-      console.warn(`[INK_WEBHOOK] loja=${loja} evento=${eventName || '?'} sem id de pedido identificável`);
+      console.warn(`[INK_WEBHOOK] store=${storeId} evento=${eventName || '?'} sem id de pedido identificável`);
       return;
     }
     await processarEventoWebhook(loja, inkOrderId, eventName).catch((err) => {
-      console.error(`[INK_WEBHOOK] falha ao processar pedido ${inkOrderId} (${loja}, evento ${eventName || '?'}): ${err.message}`);
+      console.error(`[INK_WEBHOOK] falha ao processar pedido ${inkOrderId} (store ${storeId}, evento ${eventName || '?'}): ${err.message}`);
     });
   }).catch((err) => console.error(`[INK_WEBHOOK] falha ao processar entrega (org ${organizationId}): ${err.message}`));
 });
