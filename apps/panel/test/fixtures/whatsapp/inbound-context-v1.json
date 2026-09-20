@@ -24,7 +24,7 @@
       "required_fields": ["ref"]
     }
   },
-  "response_fields": ["integration_id", "organization_id", "phone_number_id", "reply", "sender_ref", "waba_id"],
+  "response_fields": ["business_id", "integration_id", "organization_id", "phone_number_id", "reply", "sender_ref", "store_id", "waba_id"],
   "reply_fields": ["notify_number", "redirect_message"],
   "forbidden_response_fields": ["access_token", "token"],
   "statuses": {
@@ -52,6 +52,8 @@
     "ref_request": { "ref": "v1.eyJ2IjoxLCJvIjoiY29udHJhY3QifQ.ccccccccccccccccccccccccccccccccccccccccccc" },
     "response": {
       "organization_id": "a1000000-0000-4000-8000-000000000001",
+      "store_id": "b2000000-0000-4000-8000-000000000002",
+      "business_id": "3330000001",
       "integration_id": "7",
       "phone_number_id": "1110000001",
       "waba_id": "2220000001",

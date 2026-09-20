@@ -98,6 +98,33 @@ function responder(url, metodo, corpo, auth) {
       // conta de anúncio e o gasto — prova de qual credencial (e, portanto, de qual Store) foi usada.
       const longo = String(auth || '').startsWith('Bearer EAAG-long-');
       const tag = String(auth || '').slice(-1);
+      // ── WhatsApp · Embedded Signup (app da Meta do WhatsApp, distinto do de Ads) ──────────────
+      // code `wa-<WABA>-<NUMERO>[-flag]` vira o token `WAT-<WABA>-<NUMERO>[-flag]`. O token só "enxerga"
+      // a WABA e o número que carrega — prova do que a Meta confirma, independente do que o navegador
+      // afirmou. Flags: `foreign` = token de OUTRO app; `subfail` = assinar webhooks falha;
+      // `regfail` = registrar o número falha.
+      const codigoWa = url.searchParams.get('code') || '';
+      if (p.endsWith('/oauth/access_token') && codigoWa.startsWith('wa-')) {
+        if (codigoWa.includes('-expired')) return json({ error: { message: 'code expirado', code: 100 } }, 400);
+        return json({ access_token: `WAT-${codigoWa.slice(3)}` });
+      }
+      const entrada = url.searchParams.get('input_token') || '';
+      if (p.endsWith('/debug_token') && entrada.startsWith('WAT-')) {
+        const [waba] = entrada.slice(4).split('-');
+        const appDaChamada = String(url.searchParams.get('access_token') || '').split('|')[0];
+        return json({ data: {
+          is_valid: true, app_id: entrada.includes('-foreign') ? '999' : appDaChamada,
+          scopes: ['whatsapp_business_management', 'whatsapp_business_messaging'],
+          granular_scopes: [{ scope: 'whatsapp_business_management', target_ids: [waba] }, { scope: 'whatsapp_business_messaging', target_ids: [waba] }],
+        } });
+      }
+      if (String(auth || '').startsWith('Bearer WAT-')) {
+        const [waba, numero] = String(auth).slice('Bearer WAT-'.length).split('-');
+        if (p.endsWith('/phone_numbers')) return json({ data: [{ id: numero, display_phone_number: '+55 48 99999-0000', verified_name: 'Loja de Teste' }] });
+        if (p.endsWith('/subscribed_apps')) return String(auth).includes('-subfail') ? json({ error: { code: 100 } }, 400) : json({ success: true });
+        if (p.endsWith('/register')) return String(auth).includes('-regfail') ? json({ error: { code: 100 } }, 400) : json({ success: true });
+        void waba;
+      }
       if (p.endsWith('/me/permissions')) return json({ success: true });
       if (p.endsWith('/debug_token')) {
         return json({ data: { is_valid: true, user_id: '1', scopes: ['ads_read'], expires_at: Math.floor(Date.now() / 1000) + 5_000_000 } });

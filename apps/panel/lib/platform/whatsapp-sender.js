@@ -62,8 +62,8 @@ const idMetaValido = (v) => typeof v === 'string' && META_ID_RE.test(v);
 
 // O token não é enumerável nem entra em JSON: `console.log(remetente)`, `JSON.stringify` e o spread
 // não o levam para lugar nenhum. Só `remetente.accessToken`, explícito, o lê.
-function criarRemetente({ organizationId, integrationId, phoneNumberId, wabaId, accessToken, ref, comportamento }) {
-  const publico = { organizationId, integrationId, phoneNumberId, wabaId, comportamento };
+function criarRemetente({ organizationId, storeId = null, businessId = null, integrationId, phoneNumberId, wabaId, accessToken, ref, comportamento }) {
+  const publico = { organizationId, storeId, businessId, integrationId, phoneNumberId, wabaId, comportamento };
   const remetente = { ...publico, ref };
   Object.defineProperty(remetente, 'accessToken', { value: accessToken, enumerable: false });
   Object.defineProperty(remetente, 'toJSON', { value: () => ({ ...publico }), enumerable: false });
@@ -113,6 +113,8 @@ function comportamentoDaConfig(config) {
 function contextoParaServico(remetente) {
   return {
     organization_id: remetente.organizationId,
+    store_id: remetente.storeId,
+    business_id: remetente.businessId,
     integration_id: remetente.integrationId,
     phone_number_id: remetente.phoneNumberId,
     waba_id: remetente.wabaId,
@@ -187,8 +189,13 @@ function createWhatsappSender({ integracoes, segredoRef }) {
       await integracoes.reivindicarRecurso(PROVIDER, 'phone_number', phoneNumberId);
       await integracoes.reivindicarRecurso(PROVIDER, 'waba', wabaId);
       const integrationId = String(meta.integracaoId);
+      // Identidade canônica gravada pelo Embedded Signup. Config antiga (cadastro manual) não tem: vai nulo.
+      const storeId = UUID_RE.test(String(config.store_id || '')) ? String(config.store_id).toLowerCase() : null;
+      const businessId = idMetaValido(String(config.business_id || '')) ? String(config.business_id) : null;
       return usar(criarRemetente({
         organizationId: ctx.organizationId,
+        storeId,
+        businessId,
         integrationId,
         phoneNumberId,
         wabaId,

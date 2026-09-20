@@ -174,7 +174,7 @@ test.before(async () => {
       ADMIN_SESSION_SECRET: crypto.randomBytes(32).toString('base64url'),
       PROVIDER_MOCK_LOG: mockLog,
       GOOGLE_CLIENT_ID: 'cliente-google', GOOGLE_CLIENT_SECRET: 'segredo-plataforma-google', GOOGLE_OAUTH_REDIRECT_URI: 'https://oria.test/cb',
-      META_APP_ID: '123', META_APP_SECRET: 'segredo-plataforma-meta', META_OAUTH_REDIRECT_URI: 'https://oria.test/meta',
+      META_ADS_APP_ID: '123', META_ADS_APP_SECRET: 'segredo-plataforma-meta', META_ADS_OAUTH_REDIRECT_URI: 'https://oria.test/meta',
     },
   }), {
     aoLer: (pedaco, { reiniciando }) => { saida = reiniciando ? '' : saida + pedaco; },

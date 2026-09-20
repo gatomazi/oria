@@ -93,6 +93,15 @@ export interface WhatsappRemetente {
   status: string;
   phoneNumberId: string | null;
   wabaId: string | null;
+  // Identidade canônica do Embedded Signup; nulos no cadastro manual.
+  businessId: string | null;
+  storeId: string | null;
+  conectadoVia: 'embedded_signup' | 'manual' | null;
+  numeroExibido: string | null;
+  nomeVerificado: string | null;
+  webhookAssinado: boolean;
+  numeroRegistrado: boolean;
+  conectadoEm: string | null;
   // Fase 5c: comportamento por loja (antes eram variáveis do serviço de envio). Vazio desliga.
   replyRedirectMessage: string;
   notifyNumber: string;
@@ -112,6 +121,30 @@ export function salvarWhatsappRemetente(dados: {
 }) {
   return api<WhatsappRemetente>('/api/admin/whatsapp/remetente', {
     method: 'PUT',
+    body: JSON.stringify(dados),
+  });
+}
+
+export interface EmbeddedSignupConfig {
+  appId: string;
+  configId: string;
+  apiVersion: string;
+  state: string;
+}
+
+export function getEmbeddedSignupConfig() {
+  return api<EmbeddedSignupConfig>('/api/admin/whatsapp/embedded-signup/config');
+}
+
+export function concluirEmbeddedSignup(dados: {
+  state: string;
+  code: string;
+  wabaId: string;
+  phoneNumberId: string;
+  businessId: string | null;
+}) {
+  return api<WhatsappRemetente>('/api/admin/whatsapp/embedded-signup/complete', {
+    method: 'POST',
     body: JSON.stringify(dados),
   });
 }

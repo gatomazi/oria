@@ -18,7 +18,7 @@ const crypto = require('crypto');
 
 const TTL_PADRAO_MS = 10 * 60 * 1000;
 const STATE_RE = /^[A-Za-z0-9_-]{43}$/;
-const PROVIDERS = new Set(['meta', 'google_ads', 'ga4']);
+const PROVIDERS = new Set(['meta', 'google_ads', 'ga4', 'whatsapp']);
 
 class OAuthStateError extends Error {
   constructor(motivo) {
