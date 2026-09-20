@@ -110,8 +110,23 @@ function responder(url, metodo, corpo, auth) {
     }
     case 'googleads.googleapis.com':
       return json(p.includes('listAccessibleCustomers') ? { resourceNames: [] } : { results: [] });
-    case 'analyticsadmin.googleapis.com':
-      return json({ accountSummaries: [] });
+    case 'analyticsadmin.googleapis.com': {
+      // A quantidade de propriedades vem do token (`ya29.code-<code>`): `single…` = uma (seleção
+      // automática), `multi…` = duas (o tenant escolhe); qualquer outro = nenhuma. O id da propriedade
+      // carrega a última letra do token, então cada "loja de teste" tem a sua.
+      const token = String(auth || '').replace(/^Bearer /, '');
+      const id = (i) => `${5550000 + token.charCodeAt(token.length - 1) * 10 + i}`;
+      const props = token.includes('single') ? [1] : token.includes('multi') ? [1, 2] : [];
+      return json({ accountSummaries: props.length ? [{ displayName: 'Conta GA', propertySummaries: props.map((i) => ({ property: `properties/${id(i)}`, displayName: `Site ${i}` })) }] : [] });
+    }
+    case 'analyticsdata.googleapis.com': {
+      // runReport: UMA combinação de UTM, com números proporcionais ao id da propriedade — prova de
+      // qual propriedade foi consultada (e, portanto, de qual Store).
+      const m = p.match(/properties\/(\d+):runReport/);
+      const escala = m ? Number(m[1].slice(-3)) : 1;
+      const linha = { dimensionValues: ['instagram', 'paid_social', 'bf26', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala, escala - 1, 5, escala * 10].map((value) => ({ value: String(value) })) };
+      return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
+    }
     case 'api.openai.com':
       return json({ data: [] });
     default:

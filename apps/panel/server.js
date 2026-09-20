@@ -8869,7 +8869,7 @@ const TESTES_DE_CONEXAO = {
     return { contas: contas.length };
   },
   ga4: async () => {
-    const token = await obterAccessTokenValidoGA4(lojaLegadaDoContexto());
+    const token = await obterAccessTokenValidoGA4();
     return { propriedades: (await listarPropriedadesGA4(token)).length };
   },
   // WhatsApp: a Meta confere se o token da integração enxerga o número da MESMA integração.
@@ -9078,62 +9078,78 @@ function mapGaConnectionRow(r, loja) {
   };
 }
 
-async function obterConexaoGA4(loja) {
+// GA4 por Store do contexto (`organization_id + store_id`). A linha histórica, sem `store_id`, só
+// entra quando a Store tem chave legada — e é reivindicada por mapeamento explícito ao escrever.
+async function obterConexaoGA4() {
   if (!pgPool) return null;
+  const escopo = escopoDaStore(2);
   const { rows } = await pgPool.query(
-    'SELECT * FROM google_analytics_connections WHERE organization_id = $1 AND loja = $2', [orgDoContexto(), loja]
+    `SELECT * FROM google_analytics_connections WHERE organization_id = $1 AND ${escopo.sql} ORDER BY (store_id IS NOT NULL) DESC LIMIT 1`,
+    [orgDoContexto(), ...escopo.params]
   );
   return rows[0] || null;
+}
+
+// Uma Store com chave legada pode ter linha ANTIGA (sem `store_id`): passa a ser dela, por mapeamento
+// explícito (o mesmo do backfill da 0027), antes de qualquer escrita — nunca duplica.
+async function reivindicarLinhaLegadaGA4() {
+  const loja = lojaLegadaDoContextoOuNula();
+  if (!loja) return;
+  await pgPool.query('UPDATE google_analytics_connections SET store_id = $2 WHERE organization_id = $1 AND store_id IS NULL AND loja = $3', [orgDoContexto(), storeDoContexto(), loja]);
 }
 
 // prompt=consent força o Google a reemitir refresh_token toda vez que a loja conecta — sem isso,
 // reconectar uma loja que já autorizou antes não devolve refresh_token nenhum (só sai na 1ª vez).
 // Fase 4: os tokens vão para integration_secrets (integração 'ga4' da Organization); a linha da
 // conexão guarda só status, e-mail e propriedade.
-async function salvarTokensGA4(loja, { refreshToken, accessToken, expiresAt, email }) {
+async function salvarTokensGA4({ refreshToken, accessToken, expiresAt, email }) {
   const integracoes = exigirIntegracoes();
   if (!refreshToken) throw new Error('o Google não devolveu refresh token — reconecte');
   await integracoes.gravarSegredo('ga4', 'refresh_token', refreshToken);
   if (accessToken) await integracoes.gravarSegredo('ga4', 'access_token', accessToken, { expiresAt });
+  await reivindicarLinhaLegadaGA4();
   await pgPool.query(
-    `INSERT INTO google_analytics_connections (loja, token_expires_at, google_account_email, status, connected_at, last_error, atualizado_em)
-     VALUES ($1,$2,$3,'connected', now(), NULL, now())
-     ON CONFLICT (organization_id, loja) DO UPDATE SET
+    `INSERT INTO google_analytics_connections (store_id, loja, token_expires_at, google_account_email, status, connected_at, last_error, atualizado_em)
+     VALUES ($1,$4,$2,$3,'connected', now(), NULL, now())
+     ON CONFLICT (organization_id, store_id) WHERE store_id IS NOT NULL DO UPDATE SET
        token_expires_at = $2, google_account_email = $3,
        status = 'connected', connected_at = now(), last_error = NULL, atualizado_em = now()`,
-    [loja, expiresAt, email || null]
+    [storeDoContexto(), expiresAt, email || null, lojaLegadaDoContextoOuNula()]
   );
 }
 
-async function marcarErroGA4(loja, mensagem) {
+async function marcarErroGA4(mensagem) {
+  await reivindicarLinhaLegadaGA4();
   await pgPool.query(
-    `INSERT INTO google_analytics_connections (loja, status, last_error, atualizado_em) VALUES ($1,'error',$2, now())
-     ON CONFLICT (organization_id, loja) DO UPDATE SET status = 'error', last_error = $2, atualizado_em = now()`,
-    [loja, String(mensagem).slice(0, 500)]
+    `INSERT INTO google_analytics_connections (store_id, loja, status, last_error, atualizado_em) VALUES ($1,$3,'error',$2, now())
+     ON CONFLICT (organization_id, store_id) WHERE store_id IS NOT NULL DO UPDATE SET status = 'error', last_error = $2, atualizado_em = now()`,
+    [storeDoContexto(), String(mensagem).slice(0, 500), lojaLegadaDoContextoOuNula()]
   );
 }
 
 // PD-016: a propriedade passa a pertencer a esta Organization; outra que já a tenha → 409.
-async function salvarPropriedadeGA4(loja, propertyId, propertyName) {
+async function salvarPropriedadeGA4(propertyId, propertyName) {
   const integracoes = exigirIntegracoes();
-  const atual = await obterConexaoGA4(loja);
+  const atual = await obterConexaoGA4();
   await integracoes.reivindicarRecurso('ga4', 'property', propertyId);
   if (atual && atual.property_id && atual.property_id !== propertyId) {
     await integracoes.liberarRecursos('ga4', 'property', atual.property_id);
   }
+  await reivindicarLinhaLegadaGA4();
   await pgPool.query(
-    'UPDATE google_analytics_connections SET property_id = $2, property_name = $3, atualizado_em = now() WHERE organization_id = $4 AND loja = $1',
-    [loja, propertyId, propertyName, orgDoContexto()]
+    'UPDATE google_analytics_connections SET property_id = $2, property_name = $3, atualizado_em = now() WHERE organization_id = $4 AND store_id = $1',
+    [storeDoContexto(), propertyId, propertyName, orgDoContexto()]
   );
 }
 
-async function desconectarGA4(loja) {
+async function desconectarGA4() {
   await exigirIntegracoes().desconectar('ga4');
+  await reivindicarLinhaLegadaGA4();
   await pgPool.query(
     `UPDATE google_analytics_connections SET token_expires_at = NULL,
        property_id = NULL, property_name = NULL, status = 'disconnected', last_error = NULL, atualizado_em = now()
-      WHERE organization_id = $2 AND loja = $1`,
-    [loja, orgDoContexto()]
+      WHERE organization_id = $2 AND store_id = $1`,
+    [storeDoContexto(), orgDoContexto()]
   );
 }
 
@@ -9204,15 +9220,16 @@ async function accessTokenGoogle(provider, aoFalhar) {
   return { token: tokens.access_token, expiraEm: novaExpiracao };
 }
 
-async function obterAccessTokenValidoGA4(loja) {
-  const row = await obterConexaoGA4(loja);
+async function obterAccessTokenValidoGA4() {
+  const row = await obterConexaoGA4();
   if (!row || row.status === 'disconnected') throw new Error('loja sem conexão com o Google Analytics');
-  const r = await accessTokenGoogle('ga4', (mensagem) => marcarErroGA4(loja, mensagem));
+  const r = await accessTokenGoogle('ga4', (mensagem) => marcarErroGA4(mensagem));
   if (typeof r === 'string') return r;
+  await reivindicarLinhaLegadaGA4();
   await pgPool.query(
     `UPDATE google_analytics_connections SET token_expires_at = $2, status = 'connected', last_error = NULL, atualizado_em = now()
-      WHERE organization_id = $3 AND loja = $1`,
-    [loja, r.expiraEm, orgDoContexto()]
+      WHERE organization_id = $3 AND store_id = $1`,
+    [storeDoContexto(), r.expiraEm, orgDoContexto()]
   );
   return r.token;
 }
@@ -9237,14 +9254,10 @@ async function listarPropriedadesGA4(accessToken) {
 app.get('/api/admin/integrations/google-analytics/status', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
-    // Leitura de status: a Store nativa (sem chave legada) simplesmente não tem conexão GA4 — a
-    // tabela ainda é indexada por `loja`. É "desconectado", não erro; conectar segue exigindo a
-    // chave até a tabela ganhar `store_id` (dívida registrada, fora desta rodada).
-    const loja = lojaLegadaDoContextoOuNula();
-    const { rows } = loja
-      ? await pgPool.query('SELECT * FROM google_analytics_connections WHERE organization_id = $1 AND loja = $2', [orgDoContexto(), loja])
-      : { rows: [] };
-    const conexoes = [mapGaConnectionRow(rows[0] || null, loja)];
+    // Identidade canônica: a Store do contexto. A linha histórica só entra quando a Store tem chave
+    // legada. Sem conexão é "desconectado" (estado normal), nunca erro.
+    const row = await obterConexaoGA4();
+    const conexoes = [{ storeId: storeDoContexto(), storeNome: await nomeDaStoreDoContexto(), ...mapGaConnectionRow(row, lojaLegadaDoContextoOuNula()) }];
     res.json({ conexoes, oauthConfigurado: googleOAuthConfigurado() });
   } catch (err) {
     console.error(`[GA4] falha ao ler status: ${err.message}`);
@@ -9253,10 +9266,14 @@ app.get('/api/admin/integrations/google-analytics/status', requireAdmin, async (
 });
 
 app.get('/api/admin/integrations/google-analytics/connect', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
-  if (!googleOAuthConfigurado()) return res.status(503).json({ error: 'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/GOOGLE_OAUTH_REDIRECT_URI não configurados neste ambiente' });
+  // A Store do contexto é quem conecta; ela vai no `state` (anti-CSRF, uso único, amarrado à pessoa,
+  // à sessão e à Organization). O callback confere que a Store do contexto é a mesma — nunca aceita
+  // Organization/Store vinda do navegador.
+  const storeId = storeDoContexto();
+  // Configuração da PLATAFORMA (credencial do app OAuth): o tenant vê o conceito, não as variáveis.
+  if (!googleOAuthConfigurado()) return res.status(503).json({ error: 'a conexão com o Google ainda não está habilitada na plataforma', codigo: 'PLATFORM_UNAVAILABLE' });
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
-  const state = await criarStateOAuth(req, 'ga4', { loja });
+  const state = await criarStateOAuth(req, 'ga4', { storeId });
   const url = new URL(GOOGLE_AUTH_URL);
   url.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID);
   url.searchParams.set('redirect_uri', process.env.GOOGLE_OAUTH_REDIRECT_URI);
@@ -9290,24 +9307,34 @@ app.get('/api/admin/integrations/google-analytics/callback', async (req, res) =>
       await comOrganizacaoResolvida(salvo.organizationId, 'oauth:google-ads', () => concluirCallbackGoogleAds(code, erroGoogle));
       return res.redirect(destino);
     }
-    const { loja } = salvo.dados;
+    // A Store do state precisa ser a da Organization resolvida pelo state: state forjado ou de outra
+    // Store é recusado (e o callback só redireciona, sem gravar nada).
+    const { storeId } = salvo.dados;
     await comOrganizacaoResolvida(salvo.organizationId, 'oauth:ga4', async () => {
-      if (lojaLegadaDoContexto() !== loja) throw new Error('state de outra store');
+      if (!storeId || storeDoContexto() !== storeId) throw new Error('state de outra store');
       if (erroGoogle) {
-        await marcarErroGA4(loja, `Google recusou: ${erroGoogle}`).catch(() => {});
+        await marcarErroGA4(`Google recusou: ${erroGoogle}`).catch(() => {});
         return;
       }
       if (!code) {
-        await marcarErroGA4(loja, 'callback sem código de autorização').catch(() => {});
+        await marcarErroGA4('callback sem código de autorização').catch(() => {});
         return;
       }
       try {
         const tokens = await trocarCodePorTokensGA4(String(code));
         const email = tokens.id_token ? decodificarEmailDoIdTokenGA4(tokens.id_token) : null;
-        await salvarTokensGA4(loja, { refreshToken: tokens.refresh_token, accessToken: tokens.access_token, expiresAt: new Date(Date.now() + tokens.expires_in * 1000), email });
+        await salvarTokensGA4({ refreshToken: tokens.refresh_token, accessToken: tokens.access_token, expiresAt: new Date(Date.now() + tokens.expires_in * 1000), email });
+        // Uma única propriedade inequívoca é selecionada sozinha; com várias, a tela pede a escolha.
+        // Persistimos o ID externo real (`propertyId`), nunca o nome. Falha aqui não desfaz a conexão.
+        try {
+          const propriedades = await listarPropriedadesGA4(tokens.access_token);
+          if (propriedades.length === 1) await salvarPropriedadeGA4(propriedades[0].propertyId, propriedades[0].propertyName);
+        } catch (err) {
+          console.warn(`[GA4] conectado, mas não foi possível selecionar a propriedade automaticamente: ${err.message}`);
+        }
       } catch (err) {
-        console.error(`[GA4] falha no callback OAuth (${loja}): ${err.message}`);
-        await marcarErroGA4(loja, err.message).catch(() => {});
+        console.error(`[GA4] falha no callback OAuth (store ${storeId}): ${err.message}`);
+        await marcarErroGA4(err.message).catch(() => {});
       }
     });
   } catch (err) {
@@ -9317,42 +9344,39 @@ app.get('/api/admin/integrations/google-analytics/callback', async (req, res) =>
 });
 
 app.get('/api/admin/integrations/google-analytics/properties', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
-    const accessToken = await obterAccessTokenValidoGA4(String(loja));
+    const accessToken = await obterAccessTokenValidoGA4();
     res.json({ propriedades: await listarPropriedadesGA4(accessToken) });
   } catch (err) {
-    console.error(`[GA4] falha ao listar propriedades (${loja}): ${err.message}`);
+    console.error(`[GA4] falha ao listar propriedades (store ${storeDoContexto()}): ${err.message}`);
     res.status(500).json({ error: err.message || 'não foi possível listar as propriedades' });
   }
 });
 
 app.post('/api/admin/integrations/google-analytics/property', requireAdmin, async (req, res) => {
   const { propertyId, propertyName } = req.body || {};
-  const loja = lojaLegadaDoContexto();
   if (!propertyId) return res.status(400).json({ error: 'propertyId é obrigatório' });
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
-    await salvarPropriedadeGA4(loja, String(propertyId), propertyName ? String(propertyName) : String(propertyId));
-    res.json({ conexao: mapGaConnectionRow(await obterConexaoGA4(loja), loja) });
+    await salvarPropriedadeGA4(String(propertyId), propertyName ? String(propertyName) : String(propertyId));
+    res.json({ conexao: { storeId: storeDoContexto(), storeNome: await nomeDaStoreDoContexto(), ...mapGaConnectionRow(await obterConexaoGA4(), lojaLegadaDoContextoOuNula()) } });
   } catch (err) {
     if (err instanceof IntegracaoError) return res.status(err.status).json({ error: err.message, codigo: err.codigo });
-    console.error(`[GA4] falha ao salvar propriedade (${loja}): ${err.message}`);
+    console.error(`[GA4] falha ao salvar propriedade (store ${storeDoContexto()}): ${err.message}`);
     res.status(500).json({ error: 'não foi possível salvar a propriedade' });
   }
 });
 
 app.post('/api/admin/integrations/google-analytics/disconnect', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
     // Revoga no Google também — best-effort, não impede a desconexão local se a revogação falhar.
     await exigirIntegracoes().usarSegredo('ga4', 'refresh_token', (refresh) => revogarTokenGoogle(refresh)).catch(() => {});
-    await desconectarGA4(loja);
+    await desconectarGA4();
     res.json({ ok: true });
   } catch (err) {
-    console.error(`[GA4] falha ao desconectar (${loja}): ${err.message}`);
+    console.error(`[GA4] falha ao desconectar (store ${storeDoContexto()}): ${err.message}`);
     res.status(500).json({ error: 'não foi possível desconectar' });
   }
 });
@@ -9422,11 +9446,19 @@ async function buscarPerformanceGA4Bruto(accessToken, propertyId, periodo) {
 // diferentes que reusam o mesmo nome de campanha. Usa a mesma normalização do Builder, então uma
 // campanha salva como "verao_2026" bate com o link do GA4 mesmo se ele vier "Verão 2026".
 function chaveComboUtm({ source, medium, campaign, content, term }) {
-  return [source, medium, campaign, content, term].map(normalizarUtmValor).join('|');
+  // O GA4 devolve o literal "(not set)" para content/term que o link não tinha; a campanha salva sem
+  // content/term guarda vazio. Sem tratar os dois como a MESMA coisa, a normalização (que tira os
+  // parênteses) fazia "(not set)" virar "notset" e a campanha salva nunca reconhecia a linha do GA4.
+  const vazioSeNaoDefinido = (v) => (String(v ?? '').trim().toLowerCase() === '(not set)' ? '' : v);
+  return [source, medium, campaign, content, term].map((v) => normalizarUtmValor(vazioSeNaoDefinido(v))).join('|');
 }
 
-async function listarUtmCampanhasParaMatch(loja) {
-  const { rows } = await pgPool.query(`SELECT ${UTM_SELECT_COLS} FROM utm_campaigns WHERE loja = $1`, [loja]);
+async function listarUtmCampanhasParaMatch() {
+  // Mesmo escopo canônico da lista de campanhas: `organization_id + store_id`.
+  const escopo = escopoDaStore(2);
+  const { rows } = await pgPool.query(
+    `SELECT ${UTM_SELECT_COLS} FROM utm_campaigns WHERE organization_id = $1 AND ${escopo.sql}`, [orgDoContexto(), ...escopo.params]
+  );
   return rows.map(mapUtmCampanhaRow);
 }
 
@@ -9452,45 +9484,50 @@ function montarPerformanceGA4(bruto, campanhasSalvas) {
 }
 
 // TTL de 20min (dentro dos "15 a 30min" sugeridos pela spec) — evita bater na Data API a cada render.
-async function obterCachePerformanceGA4(loja, periodoChave) {
+async function obterCachePerformanceGA4(periodoChave) {
+  const escopo = escopoDaStore(3);
   const { rows } = await pgPool.query(
-    `SELECT dados, buscado_em FROM ga4_performance_cache WHERE loja = $1 AND periodo = $2 AND buscado_em > now() - interval '20 minutes'`,
-    [loja, periodoChave]
+    `SELECT dados, buscado_em FROM ga4_performance_cache WHERE organization_id = $1 AND periodo = $2 AND ${escopo.sql} AND buscado_em > now() - interval '20 minutes'
+      ORDER BY (store_id IS NOT NULL) DESC LIMIT 1`,
+    [orgDoContexto(), periodoChave, ...escopo.params]
   );
   if (!rows.length) return null;
   return { dados: rows[0].dados, buscadoEm: rows[0].buscado_em };
 }
 
-async function salvarCachePerformanceGA4(loja, periodoChave, dados) {
+async function salvarCachePerformanceGA4(periodoChave, dados) {
+  // Linha antiga de uma Store com chave legada passa a ser dela (mapeamento explícito) antes de escrever.
+  const loja = lojaLegadaDoContextoOuNula();
+  if (loja) await pgPool.query('UPDATE ga4_performance_cache SET store_id = $2 WHERE organization_id = $1 AND store_id IS NULL AND loja = $3', [orgDoContexto(), storeDoContexto(), loja]);
   await pgPool.query(
-    `INSERT INTO ga4_performance_cache (loja, periodo, dados, buscado_em) VALUES ($1,$2,$3, now())
-     ON CONFLICT (organization_id, loja, periodo) DO UPDATE SET dados = $3, buscado_em = now()`,
-    [loja, periodoChave, JSON.stringify(dados)]
+    `INSERT INTO ga4_performance_cache (store_id, loja, periodo, dados, buscado_em) VALUES ($1,$4,$2,$3, now())
+     ON CONFLICT (organization_id, store_id, periodo) WHERE store_id IS NOT NULL DO UPDATE SET dados = $3, buscado_em = now()`,
+    [storeDoContexto(), periodoChave, JSON.stringify(dados), loja]
   );
 }
 
 app.get('/api/admin/integrations/google-analytics/performance', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'GA4 exige Postgres configurado' });
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
   let periodo;
   try { periodo = resolverPeriodoGA4(req.query.periodo); } catch (err) { return res.status(400).json({ error: err.message }); }
   try {
     if (req.query.atualizar !== '1') {
-      const cache = await obterCachePerformanceGA4(loja, periodo.chave);
+      const cache = await obterCachePerformanceGA4(periodo.chave);
       if (cache) return res.json({ ...cache.dados, atualizadoEm: cache.buscadoEm, doCache: true });
     }
-    const conexao = await obterConexaoGA4(loja);
+    const conexao = await obterConexaoGA4();
     if (!conexao || conexao.status !== 'connected' || !conexao.property_id) {
       return res.status(409).json({ error: 'conecte o Google Analytics e escolha uma propriedade em Integrações primeiro' });
     }
-    const accessToken = await obterAccessTokenValidoGA4(loja);
+    const accessToken = await obterAccessTokenValidoGA4();
     const bruto = await buscarPerformanceGA4Bruto(accessToken, conexao.property_id, periodo);
-    const campanhasSalvas = await listarUtmCampanhasParaMatch(loja);
+    const campanhasSalvas = await listarUtmCampanhasParaMatch();
     const dados = montarPerformanceGA4(bruto, campanhasSalvas);
-    await salvarCachePerformanceGA4(loja, periodo.chave, dados);
+    await salvarCachePerformanceGA4(periodo.chave, dados);
     res.json({ ...dados, atualizadoEm: new Date().toISOString(), doCache: false });
   } catch (err) {
-    console.error(`[GA4] falha ao buscar performance (${loja}): ${err.message}`);
+    console.error(`[GA4] falha ao buscar performance (store ${storeId}): ${err.message}`);
     res.status(502).json({ error: err.message || 'não foi possível buscar dados do Google Analytics' });
   }
 });
@@ -9532,7 +9569,7 @@ async function buscarSerieDiariaGA4(accessToken, propertyId, periodo, combo) {
 }
 
 app.get('/api/admin/integrations/google-analytics/performance/series', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
   let periodo;
   try { periodo = resolverPeriodoGA4(req.query.periodo); } catch (err) { return res.status(400).json({ error: err.message }); }
   const combo = {
@@ -9544,15 +9581,15 @@ app.get('/api/admin/integrations/google-analytics/performance/series', requireAd
   };
   if (!combo.source) return res.status(400).json({ error: 'source é obrigatório' });
   try {
-    const conexao = await obterConexaoGA4(loja);
+    const conexao = await obterConexaoGA4();
     if (!conexao || conexao.status !== 'connected' || !conexao.property_id) {
       return res.status(409).json({ error: 'conecte o Google Analytics e escolha uma propriedade em Integrações primeiro' });
     }
-    const accessToken = await obterAccessTokenValidoGA4(loja);
+    const accessToken = await obterAccessTokenValidoGA4();
     const serie = await buscarSerieDiariaGA4(accessToken, conexao.property_id, periodo, combo);
     res.json({ serie });
   } catch (err) {
-    console.error(`[GA4] falha ao buscar série diária (${loja}): ${err.message}`);
+    console.error(`[GA4] falha ao buscar série diária (store ${storeId}): ${err.message}`);
     res.status(502).json({ error: err.message || 'não foi possível buscar a série diária do Google Analytics' });
   }
 });
@@ -9635,25 +9672,25 @@ async function buscarOverviewGA4(accessToken, propertyId, periodo) {
 
 app.get('/api/admin/integrations/google-analytics/overview', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'GA4 exige Postgres configurado' });
-  const loja = lojaLegadaDoContexto();
+  const storeId = storeDoContexto();
   let periodo;
   try { periodo = resolverPeriodoGA4(req.query.periodo); } catch (err) { return res.status(400).json({ error: err.message }); }
   const chaveCache = `overview:${periodo.chave}`;
   try {
     if (req.query.atualizar !== '1') {
-      const cache = await obterCachePerformanceGA4(loja, chaveCache);
+      const cache = await obterCachePerformanceGA4(chaveCache);
       if (cache) return res.json({ ...cache.dados, atualizadoEm: cache.buscadoEm, doCache: true });
     }
-    const conexao = await obterConexaoGA4(loja);
+    const conexao = await obterConexaoGA4();
     if (!conexao || conexao.status !== 'connected' || !conexao.property_id) {
       return res.status(409).json({ error: 'conecte o Google Analytics e escolha uma propriedade em Integrações primeiro' });
     }
-    const accessToken = await obterAccessTokenValidoGA4(loja);
+    const accessToken = await obterAccessTokenValidoGA4();
     const dados = await buscarOverviewGA4(accessToken, conexao.property_id, periodo);
-    await salvarCachePerformanceGA4(loja, chaveCache, dados);
+    await salvarCachePerformanceGA4(chaveCache, dados);
     res.json({ ...dados, atualizadoEm: new Date().toISOString(), doCache: false });
   } catch (err) {
-    console.error(`[GA4] falha ao buscar panorama (${loja}): ${err.message}`);
+    console.error(`[GA4] falha ao buscar panorama (store ${storeId}): ${err.message}`);
     res.status(502).json({ error: err.message || 'não foi possível buscar o panorama do Google Analytics' });
   }
 });
@@ -11484,9 +11521,9 @@ async function atribuicaoMeta(from, to, fontes) {
 // GA4 da loja atribuída. Só lê o CACHE já existente (mesmo do Analytics GA4) — esta tela não
 // dispara chamada à Data API: se o cache estiver frio, a linha do GA4 aparece como indisponível em
 // vez de fazer o consolidado esperar por uma API externa.
-async function atribuicaoGA4(loja, from, to) {
+async function atribuicaoGA4(from, to) {
   const chave = `overview:custom:${from}:${to}`;
-  const cache = await obterCachePerformanceGA4(loja, chave);
+  const cache = await obterCachePerformanceGA4(chave);
   if (!cache || !cache.dados || !cache.dados.totais) return null;
   const t = cache.dados.totais;
   return { sessions: t.sessions, purchases: t.purchases, revenue: t.revenue, doCache: true, atualizadoEm: cache.buscadoEm };
@@ -11773,8 +11810,7 @@ app.get('/api/admin/analytics/consolidado', requireAdmin, async (req, res) => {
     const [dadosLoja, meta, ga4, conexaoMeta, despesasCadastradas] = await Promise.all([
       financeiroDaLoja(periodo.from, periodo.to),
       atribuicaoMeta(periodo.from, periodo.to, fontes),
-      // GA4 ainda é por chave legada (conexão e cache indexados por `loja`): sem chave, não há GA4.
-      loja ? atribuicaoGA4(loja, periodo.from, periodo.to) : Promise.resolve(null),
+      atribuicaoGA4(periodo.from, periodo.to),
       obterConexaoMeta(),
       listarDespesas(),
     ]);

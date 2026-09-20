@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Callout, Card, EmptyState, ErrorState, KpiCard, KpiStrip, PageHeader, PageStack, Skeleton } from '../../components/ds';
 import { idadeDoCache } from '../../lib/format';
 import { formatDuracao, formatNumero, formatPercentual, formatReais } from '../../lib/ga4';
-import { useLojaAtiva } from '../../auth/AuthContext';
 import { getGaOverview, type GaOverviewResposta } from '../../api/googleAnalytics';
 import { FunilConversao } from './FunilConversao';
 import { Ga4Toolbar } from './Ga4Toolbar';
@@ -19,8 +18,7 @@ import '../../analytics.css';
 // aqui vem da Data API — nada é estimado, e métrica que a loja não mede aparece como não medida em
 // vez de zero. A leitura por campanha/UTM fica no UTM Tracker; esta tela é o retrato da loja.
 export function AnalyticsGa4Page() {
-  const escopoGlobal = useLojaAtiva() ?? '';
-  const escopo = useGa4Escopo(escopoGlobal);
+  const escopo = useGa4Escopo();
   const [dados, setDados] = useState<GaOverviewResposta | null>(null);
   const [erro, setErro] = useState('');
   const [atualizando, setAtualizando] = useState(false);

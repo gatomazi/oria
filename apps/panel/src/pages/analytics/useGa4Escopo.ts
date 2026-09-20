@@ -6,7 +6,11 @@ import { chavePeriodoGa4, type PeriodoGa4 } from '../../lib/ga4';
 // está de fato conectada com propriedade escolhida, e qual período está selecionado. As duas telas
 // precisam exatamente da mesma regra — inclusive a de cair pra primeira loja conectada quando a
 // loja do seletor global não tem GA4.
-export function useGa4Escopo(lojaPreferida: string) {
+// A identidade de cada conexão é o `storeId` (canônico): a chave legada é nula na Store nativa e nunca
+// pode ser o que separa uma conexão da outra. `nome` é só rótulo.
+export interface LojaConectada { id: string; nome: string }
+
+export function useGa4Escopo() {
   const [conexoes, setConexoes] = useState<GaConnection[] | null>(null);
   const [loja, setLoja] = useState('');
   const [periodo, setPeriodo] = useState<PeriodoGa4>('30d');
@@ -19,14 +23,14 @@ export function useGa4Escopo(lojaPreferida: string) {
       .catch(() => setConexoes([]));
   }, []);
 
-  const lojasConectadas = (conexoes || [])
+  const lojasConectadas: LojaConectada[] = (conexoes || [])
     .filter((c) => c.status === 'connected' && c.propertyId)
-    .map((c) => c.loja);
+    .map((c) => ({ id: c.storeId, nome: c.storeNome || 'Sua loja' }));
 
   useEffect(() => {
     if (!conexoes) return;
-    if (loja && lojasConectadas.includes(loja)) return;
-    setLoja(lojasConectadas.includes(lojaPreferida) ? lojaPreferida : lojasConectadas[0] || '');
+    if (loja && lojasConectadas.some((l) => l.id === loja)) return;
+    setLoja(lojasConectadas[0]?.id || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conexoes]);
 

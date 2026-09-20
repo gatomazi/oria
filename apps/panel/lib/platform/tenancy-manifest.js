@@ -70,9 +70,13 @@ const TABELAS_TENANT = Object.freeze([
   }),
   t('estoque_observacoes', 'loja'),
   t('ga4_performance_cache', 'loja', {
+    nota: 'A 0027 acrescentou `store_id` (FK composta com organization_id → stores) e liberou `loja`. A unicidade '
+      + 'canônica é `uq_ga4_performance_cache_store`, parcial em store_id; o índice legado por `loja` continua.',
     uniques: [{ nome: 'uq_ga4_performance_cache_org', colunas: ['organization_id', 'loja', 'periodo'] }],
   }),
   t('google_analytics_connections', 'loja', {
+    nota: 'A 0027 acrescentou `store_id` (FK composta com organization_id → stores) e liberou `loja`. Uma conexão por '
+      + 'Store: `uq_google_analytics_connections_store`, parcial em store_id; o índice legado por `loja` continua.',
     uniques: [{ nome: 'uq_google_analytics_connections_org', colunas: ['organization_id', 'loja'] }],
   }),
   t('pedidos_backfill_jobs', 'loja', {
