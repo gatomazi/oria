@@ -22,8 +22,8 @@ painel, `getEnv` no Go, `Procfile` e `gunicorn.conf.py` no Gerador).
 | variável | usada por | observação |
 |---|---|---|
 | `NODE_ENV` / `APP_ENV` | painel / Go | `production` em produção. O painel muda de comportamento (fail-fast) por causa dela. No Go, `RAILWAY_ENVIRONMENT_NAME` (injetada pela plataforma) cumpre o mesmo papel se `APP_ENV` faltar |
-| `META_APP_ID` | painel, Go | id público do App da plataforma |
-| `META_APP_SECRET` | Go (verificação HMAC), painel (OAuth Meta) | segredo **da plataforma / do App Meta**, nunca credencial de tenant. **OPS-27 VERIFIED (17/09/2026)**: pertence ao mesmo App do `META_APP_ID`; o HMAC continua obrigatório. Nenhum valor aqui |
+| `META_APP_ID` | painel (Embedded Signup), Go | id público do **App da Meta do WhatsApp** (Oria WhatsApp) — o app de Ads é outro (`META_ADS_APP_ID`, só no painel) |
+| `META_APP_SECRET` | Go (verificação HMAC do webhook), painel (troca do `code` do Embedded Signup) | segredo **do App Meta do WhatsApp**, da plataforma, nunca credencial de tenant. Precisa ser do MESMO app do `META_APP_ID`. Compartilhar entre os dois serviços por referência do Railway (`${{oria-whatsapp.META_APP_SECRET}}`), nunca colando o valor duas vezes. Nenhum valor aqui |
 | `META_API_VERSION` | painel, Go | versão da Graph API |
 
 ## PANEL ONLY
@@ -49,8 +49,17 @@ painel, `getEnv` no Go, `Procfile` e `gunicorn.conf.py` no Gerador).
 
 **OAuth e APIs externas:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`,
 `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`, `GOOGLE_ADS_API_VERSION`,
-`GOOGLE_ADS_SYNC_INTERVALO_MIN`, `GOOGLE_ADS_BACKFILL_DIAS`, `META_OAUTH_REDIRECT_URI`,
-`META_SYNC_INTERVALO_MIN`, `META_BACKFILL_DIAS`.
+`GOOGLE_ADS_SYNC_INTERVALO_MIN`, `GOOGLE_ADS_BACKFILL_DIAS`, `META_SYNC_INTERVALO_MIN`, `META_BACKFILL_DIAS`.
+
+**Meta — dois apps, dois conjuntos de variáveis (nunca misturar):**
+
+| variável | serviço | app da Meta | observação |
+|---|---|---|---|
+| `META_ADS_APP_ID`, `META_ADS_APP_SECRET`, `META_ADS_OAUTH_REDIRECT_URI` | só `oria-panel` | **Oria Ads** (Facebook Login clássico, `ads_read`) | as três são obrigatórias para o botão Conectar do Meta Ads |
+| `META_APP_ID`, `META_APP_SECRET` | `oria-panel` **e** `oria-whatsapp` | **Oria WhatsApp** | mesmo valor nos dois serviços |
+| `META_ES_CONFIG_ID` | só `oria-panel` | **Oria WhatsApp** | `config_id` da configuração do Facebook Login for Business (Embedded Signup); sem ele o botão "Conectar com a Meta" do WhatsApp fica indisponível |
+| `META_VERIFY_TOKEN` | só `oria-whatsapp` | **Oria WhatsApp** | token de verificação (GET do webhook), inventado por nós e cadastrado igual no Meta for Developers |
+| `META_API_VERSION` | `oria-panel`, `oria-whatsapp` | ambos | recomendado `v25.0` explícito nos dois (o padrão do Go, `v21.0`, envelhece) |
 
 **Fase 7 (travada):** `SECOND_TENANT_ENABLED` (ausente/`0` em produção; o preflight bloqueia ligada),
 `ONBOARDING_STEP_REQUIREMENTS`.

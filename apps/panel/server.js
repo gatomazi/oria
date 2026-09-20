@@ -8732,7 +8732,7 @@ function urlDeFeedInkValida(valor) {
 }
 
 function responderErroIntegracao(res, err, rotulo) {
-  if (err instanceof IntegracaoError || err instanceof RemetenteError) return res.status(err.status).json({ error: err.message, codigo: err.codigo });
+  if (err instanceof IntegracaoError || err instanceof RemetenteError || err instanceof EmbeddedSignupError) return res.status(err.status).json({ error: err.message, codigo: err.codigo });
   console.error(`[INTEGRACOES] ${rotulo}: ${mascararToken(String(err && err.message))}`);
   return res.status(500).json({ error: 'não foi possível concluir a operação da integração' });
 }
@@ -8977,10 +8977,11 @@ if (CHAVEIRO.legacyAtivo) {
 // ── Integrações por Organization (Fase 4 · INV-12) ──────────────────────────────────────────
 // Credencial do cliente (tokens Ink/Meta/Google, chave OpenAI) mora em integration_secrets, uma
 // integração por (Organization, provider), e só é lida com a Organization do contexto. Credencial
-// da PLATAFORMA (META_APP_*, GOOGLE_CLIENT_*, tokens de serviço) continua no ambiente.
+// da PLATAFORMA (META_ADS_APP_*, META_APP_* do WhatsApp, GOOGLE_CLIENT_*, tokens de serviço) continua no ambiente.
 const { createSecretStore } = require('./lib/secrets/store');
 const { createIntegrationResolver, IntegracaoError } = require('./lib/platform/integrations');
 const { createOAuthStates, OAuthStateError } = require('./lib/platform/oauth-state');
+const { EmbeddedSignupError, criarClienteEmbeddedSignup, validarEntrada: validarEntradaEmbeddedSignup, gerarPin, VERSAO_PADRAO: ES_VERSAO_PADRAO } = require('./lib/whatsapp/embedded-signup');
 const {
   resolveWebhookConnection,
   gerarRouteToken: gerarRouteTokenWebhook,
@@ -10281,15 +10282,15 @@ const META_DIAS_BACKFILL = Number(process.env.META_BACKFILL_DIAS || 28);
 const META_INTERVALO_SYNC_MIN = Number(process.env.META_SYNC_INTERVALO_MIN || 45);
 
 function metaOAuthConfigurado() {
-  return !!(process.env.META_APP_ID && process.env.META_APP_SECRET && process.env.META_OAUTH_REDIRECT_URI);
+  return !!(process.env.META_ADS_APP_ID && process.env.META_ADS_APP_SECRET && process.env.META_ADS_OAUTH_REDIRECT_URI);
 }
 
 // A Meta recomenda (e exige, se o app tiver "Require App Secret" ligado) que toda chamada
 // server-side leve o HMAC do token com o app secret. Sem isso a API responde 190 — que parece
 // "token expirado" e manda o usuário reconectar pra sempre, sem nunca resolver.
 function metaAppsecretProof(accessToken) {
-  if (!process.env.META_APP_SECRET) return null;
-  return crypto.createHmac('sha256', process.env.META_APP_SECRET).update(accessToken).digest('hex');
+  if (!process.env.META_ADS_APP_SECRET) return null;
+  return crypto.createHmac('sha256', process.env.META_ADS_APP_SECRET).update(accessToken).digest('hex');
 }
 
 // ── MetaCredentialsService (spec §6) ────────────────────────────────────────────────────────
@@ -10395,9 +10396,9 @@ async function desconectarMeta() {
 
 async function metaTrocarCodePorToken(code) {
   const url = new URL(`${META_GRAPH}/${META_GRAPH_VERSION}/oauth/access_token`);
-  url.searchParams.set('client_id', process.env.META_APP_ID);
-  url.searchParams.set('client_secret', process.env.META_APP_SECRET);
-  url.searchParams.set('redirect_uri', process.env.META_OAUTH_REDIRECT_URI);
+  url.searchParams.set('client_id', process.env.META_ADS_APP_ID);
+  url.searchParams.set('client_secret', process.env.META_ADS_APP_SECRET);
+  url.searchParams.set('redirect_uri', process.env.META_ADS_OAUTH_REDIRECT_URI);
   url.searchParams.set('code', code);
   const res = await fetch(url);
   const data = await res.json().catch(() => ({}));
@@ -10411,8 +10412,8 @@ async function metaTrocarCodePorToken(code) {
 async function metaTokenLongaDuracao(tokenCurto) {
   const url = new URL(`${META_GRAPH}/${META_GRAPH_VERSION}/oauth/access_token`);
   url.searchParams.set('grant_type', 'fb_exchange_token');
-  url.searchParams.set('client_id', process.env.META_APP_ID);
-  url.searchParams.set('client_secret', process.env.META_APP_SECRET);
+  url.searchParams.set('client_id', process.env.META_ADS_APP_ID);
+  url.searchParams.set('client_secret', process.env.META_ADS_APP_SECRET);
   url.searchParams.set('fb_exchange_token', tokenCurto);
   const res = await fetch(url);
   const data = await res.json().catch(() => ({}));
@@ -10426,7 +10427,7 @@ async function metaTokenLongaDuracao(tokenCurto) {
 async function metaInspecionarToken(accessToken) {
   const url = new URL(`${META_GRAPH}/${META_GRAPH_VERSION}/debug_token`);
   url.searchParams.set('input_token', accessToken);
-  url.searchParams.set('access_token', `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`);
+  url.searchParams.set('access_token', `${process.env.META_ADS_APP_ID}|${process.env.META_ADS_APP_SECRET}`);
   const res = await fetch(url);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(mascararToken(data.error?.message || 'falha ao validar o token com a Meta'));
@@ -10863,8 +10864,8 @@ app.get('/api/admin/integrations/meta/connect', requireAdmin, async (req, res) =
   // Organization). O callback confere que é a mesma — nunca aceita Organization/Store do navegador.
   const state = await criarStateOAuth(req, 'meta', { storeId: storeDoContexto() });
   const url = new URL(`${META_OAUTH_DIALOG}/${META_GRAPH_VERSION}/dialog/oauth`);
-  url.searchParams.set('client_id', process.env.META_APP_ID);
-  url.searchParams.set('redirect_uri', process.env.META_OAUTH_REDIRECT_URI);
+  url.searchParams.set('client_id', process.env.META_ADS_APP_ID);
+  url.searchParams.set('redirect_uri', process.env.META_ADS_OAUTH_REDIRECT_URI);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('scope', META_OAUTH_SCOPE);
   url.searchParams.set('state', state);
@@ -12723,6 +12724,14 @@ async function remetenteWhatsappParaTela() {
     status: token ? m.status : 'disconnected',
     phoneNumberId: typeof m.config.phone_number_id === 'string' ? m.config.phone_number_id : null,
     wabaId: typeof m.config.waba_id === 'string' ? m.config.waba_id : null,
+    businessId: typeof m.config.business_id === 'string' ? m.config.business_id : null,
+    storeId: typeof m.config.store_id === 'string' ? m.config.store_id : null,
+    conectadoVia: m.config.connected_via === 'embedded_signup' ? 'embedded_signup' : (token ? 'manual' : null),
+    numeroExibido: typeof m.config.display_phone_number === 'string' ? m.config.display_phone_number : null,
+    nomeVerificado: typeof m.config.verified_name === 'string' ? m.config.verified_name : null,
+    webhookAssinado: m.config.webhook_subscribed === true,
+    numeroRegistrado: m.config.phone_registered === true,
+    conectadoEm: typeof m.config.connected_at === 'string' ? m.config.connected_at : null,
     replyRedirectMessage: comportamento.replyRedirectMessage,
     notifyNumber: comportamento.notifyNumber,
     token,
@@ -12763,7 +12772,16 @@ app.put('/api/admin/whatsapp/remetente', requireAdmin, (req, res, next) => TENAN
     await integracoes.reivindicarRecurso('whatsapp', 'waba', wabaId);
     if (trocouNumero) await integracoes.liberarRecursos('whatsapp', 'phone_number', antes.phoneNumberId);
     if (antes.wabaId && antes.wabaId !== wabaId) await integracoes.liberarRecursos('whatsapp', 'waba', antes.wabaId);
+    // Salvar só o comportamento (resposta automática, aviso) numa conexão do Embedded Signup não pode
+    // apagar a identidade que a Meta confirmou: com o mesmo número e a mesma WABA, ela é mantida.
+    const mesmaConexaoMeta = antes.conectadoVia === 'embedded_signup' && antes.phoneNumberId === phoneNumberId && antes.wabaId === wabaId && accessToken === undefined;
+    const identidadeMeta = mesmaConexaoMeta ? {
+      business_id: antes.businessId, store_id: antes.storeId, connected_via: 'embedded_signup',
+      display_phone_number: antes.numeroExibido, verified_name: antes.nomeVerificado,
+      webhook_subscribed: antes.webhookAssinado, phone_registered: antes.numeroRegistrado, connected_at: antes.conectadoEm,
+    } : {};
     await integracoes.gravarConfig('whatsapp', {
+      ...identidadeMeta,
       phone_number_id: phoneNumberId,
       waba_id: wabaId,
       reply_redirect_message: replyRedirectMessage !== undefined ? replyRedirectMessage : antes.replyRedirectMessage,
@@ -12794,6 +12812,116 @@ app.delete('/api/admin/whatsapp/remetente', requireAdmin, (req, res, next) => TE
     res.json({ ok: true, apagados });
   } catch (err) {
     responderErroIntegracao(res, err, 'desconectar remetente WhatsApp');
+  }
+});
+
+// ── Embedded Signup (Tech Provider) ───────────────────────────────────────────────────────
+// O app da Meta e o `config_id` são da PLATAFORMA (META_APP_ID, META_APP_SECRET, META_ES_CONFIG_ID —
+// o app do WhatsApp; o de Ads é outro, META_ADS_*). O tenant não vê nome de variável. O navegador
+// abre o fluxo da Meta e devolve WABA, número, business e um `code` de 30 s; a identidade só é
+// aceita depois que a Meta confirma que o token trocado enxerga essa WABA e esse número.
+const ES_ID_RE = /^[0-9]{5,32}$/;
+
+function embeddedSignupConfigurado() {
+  return ES_ID_RE.test(process.env.META_APP_ID || '') && !!process.env.META_APP_SECRET && ES_ID_RE.test(process.env.META_ES_CONFIG_ID || '');
+}
+
+function apiVersionEmbeddedSignup() {
+  return /^v\d{2}\.\d$/.test(process.env.META_API_VERSION || '') ? process.env.META_API_VERSION : ES_VERSAO_PADRAO;
+}
+
+function exigirEmbeddedSignup() {
+  if (!embeddedSignupConfigurado()) {
+    throw new EmbeddedSignupError('a conexão com o WhatsApp ainda não está habilitada na plataforma', { codigo: 'PLATFORM_UNAVAILABLE', status: 503 });
+  }
+  return criarClienteEmbeddedSignup({ appId: process.env.META_APP_ID, appSecret: process.env.META_APP_SECRET, apiVersion: apiVersionEmbeddedSignup() });
+}
+
+// Só o que o navegador precisa para abrir o fluxo. App Secret nunca sai daqui.
+app.get('/api/admin/whatsapp/embedded-signup/config', requireAdmin, (req, res, next) => TENANT.requireOwner(req, res, next), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    exigirEmbeddedSignup();
+    // A Store que conecta vai no state (uso único, amarrado à pessoa, à sessão, à Organization).
+    const state = await criarStateOAuth(req, 'whatsapp', { storeId: storeDoContexto() });
+    res.json({ appId: process.env.META_APP_ID, configId: process.env.META_ES_CONFIG_ID, apiVersion: apiVersionEmbeddedSignup(), state });
+  } catch (err) {
+    responderErroIntegracao(res, err, 'preparar Embedded Signup');
+  }
+});
+
+app.post('/api/admin/whatsapp/embedded-signup/complete', requireAdmin, (req, res, next) => TENANT.requireOwner(req, res, next), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const corpo = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  const extras = Object.keys(corpo).filter((k) => !['state', 'code', 'wabaId', 'phoneNumberId', 'businessId'].includes(k));
+  if (extras.length) return res.status(400).json({ error: `campos não aceitos: ${extras.join(', ')}` });
+  const claimsNovos = [];
+  let integracoes = null;
+  try {
+    const cliente = exigirEmbeddedSignup();
+    integracoes = exigirIntegracoes();
+    if (!OAUTH_STATES) throw new EmbeddedSignupError('conexão indisponível', { codigo: 'PLATFORM_UNAVAILABLE', status: 503 });
+    // state de uso único: consumido antes de qualquer chamada à Meta, então repetir o pedido não repete o efeito.
+    let salvo;
+    try {
+      salvo = await OAUTH_STATES.consumir(String(corpo.state || ''), ['whatsapp']);
+    } catch (err) {
+      if (!(err instanceof OAuthStateError)) throw err;
+      throw new EmbeddedSignupError('a autorização expirou — tente conectar de novo', { codigo: 'ES_STATE_INVALID', status: 400 });
+    }
+    // O state precisa ser DESTA pessoa, desta Organization e desta Store: state emitido para outra
+    // sessão, outra Organization ou outra Store não conclui nada aqui.
+    if (salvo.userId !== req.auth.userId || salvo.organizationId !== orgDoContexto() || !salvo.dados || salvo.dados.storeId !== storeDoContexto()) {
+      throw new EmbeddedSignupError('a autorização não pertence a esta loja', { codigo: 'ES_STATE_MISMATCH', status: 403 });
+    }
+    const businessId = corpo.businessId === undefined || corpo.businessId === null || corpo.businessId === '' ? null : corpo.businessId;
+    const entrada = { code: corpo.code, wabaId: corpo.wabaId, phoneNumberId: corpo.phoneNumberId, businessId };
+    validarEntradaEmbeddedSignup(entrada);
+
+    const prova = await cliente.provar(entrada);
+    const antes = await remetenteWhatsappParaTela();
+    // Posse do recurso (PD-016): a WABA e o número têm UMA Organization dona. Recusa antes de mexer na Meta.
+    for (const [tipo, id] of [['phone_number', entrada.phoneNumberId], ['waba', entrada.wabaId]]) {
+      const jaEra = tipo === 'waba' ? antes.wabaId === id : antes.phoneNumberId === id;
+      await integracoes.reivindicarRecurso('whatsapp', tipo, id);
+      if (!jaEra) claimsNovos.push([tipo, id]);
+    }
+    const pin = gerarPin();
+    await cliente.assinarWebhooks(entrada.wabaId, prova.accessToken);
+    await cliente.registrarNumero(entrada.phoneNumberId, prova.accessToken, pin);
+
+    await integracoes.gravarConfig('whatsapp', {
+      phone_number_id: entrada.phoneNumberId,
+      waba_id: entrada.wabaId,
+      business_id: businessId,
+      store_id: storeDoContexto(),
+      connected_via: 'embedded_signup',
+      display_phone_number: prova.numero.numeroExibido,
+      verified_name: prova.numero.nomeVerificado,
+      webhook_subscribed: true,
+      phone_registered: true,
+      connected_at: new Date().toISOString(),
+      reply_redirect_message: antes.replyRedirectMessage,
+      notify_number: antes.notifyNumber,
+    });
+    await integracoes.gravarSegredo('whatsapp', 'access_token', prova.accessToken, { expiresAt: prova.expiraEm });
+    await integracoes.gravarSegredo('whatsapp', 'two_step_pin', pin);
+    // Número/WABA anteriores deixam de ser desta Organization só depois que os novos estão gravados.
+    if (antes.phoneNumberId && antes.phoneNumberId !== entrada.phoneNumberId) await integracoes.liberarRecursos('whatsapp', 'phone_number', antes.phoneNumberId);
+    if (antes.wabaId && antes.wabaId !== entrada.wabaId) await integracoes.liberarRecursos('whatsapp', 'waba', antes.wabaId);
+    await registrarAuditLog({
+      actorUserId: req.auth.userId, action: 'integration.whatsapp.embedded_signup', entityType: 'integration', entityId: 'whatsapp',
+      before: { phoneNumberId: antes.phoneNumberId, wabaId: antes.wabaId },
+      after: { phoneNumberId: entrada.phoneNumberId, wabaId: entrada.wabaId, businessId, storeId: storeDoContexto(), token: 'substituido' },
+    });
+    res.json(await remetenteWhatsappParaTela());
+  } catch (err) {
+    // Falhou depois de reivindicar: devolve só o que ESTE pedido reivindicou (o que já era da Organization fica).
+    for (const [tipo, id] of claimsNovos) {
+      await integracoes.liberarRecursos('whatsapp', tipo, id).catch(() => {});
+    }
+    if (err instanceof EmbeddedSignupError) console.warn(`[WHATSAPP_ES] recusado: ${err.codigo}`);
+    responderErroIntegracao(res, err, 'concluir Embedded Signup');
   }
 });
 

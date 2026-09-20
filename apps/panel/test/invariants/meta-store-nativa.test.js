@@ -137,7 +137,7 @@ test.before(async () => {
       ENCRYPTION_MASTER_KEY: MESTRA,
       ADMIN_SESSION_SECRET: crypto.randomBytes(32).toString('base64url'),
       PROVIDER_MOCK_LOG: path.join(dir, 'chamadas.jsonl'),
-      META_APP_ID: '123', META_APP_SECRET: SEGREDO_PLATAFORMA, META_OAUTH_REDIRECT_URI: 'https://oria.test/meta',
+      META_ADS_APP_ID: '123', META_ADS_APP_SECRET: SEGREDO_PLATAFORMA, META_ADS_OAUTH_REDIRECT_URI: 'https://oria.test/meta',
     },
   }), {
     aoLer: (pedaco, { reiniciando }) => { saida = reiniciando ? '' : saida + pedaco; },

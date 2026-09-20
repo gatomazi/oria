@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Button, Card, ConfirmDialog, ErrorState, Field, FormActions, FormGrid, FormSection, FormStack, Input, Skeleton, StatusBadge, Textarea } from '../../components/ds';
+import { Button, Card, ConfirmDialog, Disclosure, ErrorState, Field, FormActions, FormGrid, FormSection, FormStack, Input, Skeleton, StatusBadge, Textarea } from '../../components/ds';
 import { toast } from '../../lib/toast';
+import { WhatsappConectarMeta } from './WhatsappConectarMeta';
 import { useAuth } from '../../auth/AuthContext';
 import {
   getWhatsappRemetente,
@@ -113,6 +114,14 @@ export function WhatsappRemetenteCard() {
               label={conectado ? `Token cadastrado${dados.token?.last4 ? ` · final ${dados.token.last4}` : ''}` : 'Número não configurado'}
             />
           </div>
+          {conectado && dados.conectadoVia === 'embedded_signup' && (
+            <dl className="pc-nota" aria-label="Conexão com a Meta">
+              <div>{dados.nomeVerificado || 'Número conectado'}{dados.numeroExibido ? ` · ${dados.numeroExibido}` : ''}</div>
+              <div>Conta do WhatsApp {dados.wabaId}{dados.businessId ? ` · business ${dados.businessId}` : ''}</div>
+              <div>{dados.webhookAssinado ? 'Recebendo mensagens' : 'Sem webhook'} · {dados.numeroRegistrado ? 'número registrado' : 'número não registrado'}</div>
+            </dl>
+          )}
+          {ehOwner && <WhatsappConectarMeta conectado={conectado} onConectado={aplicar} />}
           {!ehOwner && (
             <p className="pc-nota">
               {dados.phoneNumberId ? `Número ${dados.phoneNumberId} · conta ${dados.wabaId}. ` : ''}
@@ -120,6 +129,7 @@ export function WhatsappRemetenteCard() {
             </p>
           )}
           {ehOwner ? (
+            <Disclosure summary="Cadastro manual (avançado)" defaultOpen={false}>
             <FormStack onSubmit={salvar}>
               <FormGrid>
                 <Field label="ID do número" hint="WhatsApp Manager › Números de telefone.">
@@ -157,6 +167,7 @@ export function WhatsappRemetenteCard() {
                 </Button>
               </FormActions>
             </FormStack>
+            </Disclosure>
           ) : (
             conectado && (
               <FormActions start={teste ? <span role="status">{teste}</span> : undefined}>

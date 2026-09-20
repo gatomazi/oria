@@ -339,6 +339,9 @@ test('§16 · o painel não lê identidade do /health do serviço (estático)', 
     // gravação da config pela tela (valores validados do corpo do owner)
     /^\s*phone_number_id: phoneNumberId,$/,
     /^\s*waba_id: wabaId,$/,
+    // gravação pelo Embedded Signup: WABA e número que a Meta confirmou para o token trocado pelo `code`
+    /^\s*phone_number_id: entrada\.phoneNumberId,$/,
+    /^\s*waba_id: entrada\.wabaId,$/,
     /return \{ phone_number_id: r\.phoneNumberId, waba_id: r\.wabaId, access_token: r\.accessToken \};/,
     // entrada da 5c: o pedido do serviço Go traz os identificadores do evento, conferidos contra a posse
     /rotaDeContextoInterno\('inbound', \['waba_id', 'phone_number_id'\]/,

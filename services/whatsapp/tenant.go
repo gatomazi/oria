@@ -45,11 +45,14 @@ type replyConfig struct {
 
 type tenantContext struct {
 	OrganizationID string
-	IntegrationID  string
-	PhoneNumberID  string
-	WabaID         string
-	SenderRef      string
-	Reply          replyConfig
+	// StoreID e BusinessID vêm do Embedded Signup; vazios em cadastro manual (contrato v1, opcionais).
+	StoreID       string
+	BusinessID    string
+	IntegrationID string
+	PhoneNumberID string
+	WabaID        string
+	SenderRef     string
+	Reply         replyConfig
 }
 
 func (c tenantContext) reference() senderRef {
@@ -60,6 +63,10 @@ func (c tenantContext) validate() error {
 	switch {
 	case !organizationIDPattern.MatchString(c.OrganizationID):
 		return errors.New("organization_id")
+	case c.StoreID != "" && !organizationIDPattern.MatchString(c.StoreID):
+		return errors.New("store_id")
+	case c.BusinessID != "" && !metaIDPattern.MatchString(c.BusinessID):
+		return errors.New("business_id")
 	case !integrationIDPattern.MatchString(c.IntegrationID):
 		return errors.New("integration_id")
 	case !metaIDPattern.MatchString(c.PhoneNumberID):
@@ -100,6 +107,8 @@ func (disabledResolver) RefContext(context.Context, senderRef) (tenantContext, e
 
 type contextResponse struct {
 	OrganizationID string `json:"organization_id"`
+	StoreID        string `json:"store_id"`
+	BusinessID     string `json:"business_id"`
 	IntegrationID  string `json:"integration_id"`
 	PhoneNumberID  string `json:"phone_number_id"`
 	WabaID         string `json:"waba_id"`
@@ -157,6 +166,8 @@ func (p panelResolver) postContext(ctx context.Context, name string, body map[st
 	}
 	tc := tenantContext{
 		OrganizationID: decoded.OrganizationID,
+		StoreID:        decoded.StoreID,
+		BusinessID:     decoded.BusinessID,
 		IntegrationID:  decoded.IntegrationID,
 		PhoneNumberID:  decoded.PhoneNumberID,
 		WabaID:         decoded.WabaID,

@@ -968,6 +968,70 @@ const VIOLACOES = [
     de: "        comProblema: f.conectado && comProblema(f.provider === 'meta' ? cm : cg),",
     para: '        comProblema: false, // VIOLAÇÃO DELIBERADA (negative control)',
   },
+  // ── WhatsApp · Embedded Signup ─────────────────────────────────────────────────────────────
+  {
+    classe: 'whatsapp/es-confia-no-navegador',
+    invariant: 'WAES-01',
+    teste: 'whatsapp-embedded-signup.test.js',
+    arquivo: 'lib/whatsapp/embedded-signup.js',
+    descricao: 'a WABA que o navegador afirma passa sem a Meta confirmar que o token a enxerga',
+    de: "    if (!concedeuWaba) throw erro('ES_WABA_NOT_GRANTED', 403, 'a Meta não concedeu acesso a esta conta do WhatsApp');",
+    para: '    // VIOLAÇÃO DELIBERADA (negative control) — "o navegador já disse qual é a WABA"',
+  },
+  {
+    classe: 'whatsapp/es-aceita-token-de-outro-app',
+    invariant: 'WAES-02',
+    teste: 'whatsapp-embedded-signup.test.js',
+    arquivo: 'lib/whatsapp/embedded-signup.js',
+    descricao: 'um token de outro app da Meta é aceito como se fosse do app do Oria',
+    de: "    if (info.appId !== String(appId)) throw erro('ES_TOKEN_OTHER_APP', 403, 'o token não pertence ao app do Oria');",
+    para: '    // VIOLAÇÃO DELIBERADA (negative control) — "token válido é token válido"',
+  },
+  {
+    classe: 'whatsapp/es-state-nao-amarrado',
+    invariant: 'WAES-03',
+    teste: 'whatsapp-embedded-signup.test.js',
+    arquivo: 'server.js',
+    descricao: 'o complete deixa de conferir que o state é desta pessoa, Organization e Store',
+    de: "    if (salvo.userId !== req.auth.userId || salvo.organizationId !== orgDoContexto() || !salvo.dados || salvo.dados.storeId !== storeDoContexto()) {",
+    para: '    if (false) { // VIOLAÇÃO DELIBERADA (negative control) — "state válido basta"',
+  },
+  {
+    classe: 'whatsapp/es-sem-posse-do-recurso',
+    invariant: 'WAES-04',
+    teste: 'whatsapp-embedded-signup.test.js',
+    arquivo: 'server.js',
+    descricao: 'a WABA e o número deixam de ter uma Organization dona: outra Organization os conecta por cima',
+    de: "      await integracoes.reivindicarRecurso('whatsapp', tipo, id);",
+    para: '      // VIOLAÇÃO DELIBERADA (negative control) — sem reivindicar o recurso',
+  },
+  {
+    classe: 'whatsapp/es-deixa-claim-orfao',
+    invariant: 'WAES-05',
+    teste: 'whatsapp-embedded-signup.test.js',
+    arquivo: 'server.js',
+    descricao: 'uma falha no meio do onboarding deixa a WABA/número reivindicados, sem conexão gravada',
+    de: "      await integracoes.liberarRecursos('whatsapp', tipo, id).catch(() => {});",
+    para: '      // VIOLAÇÃO DELIBERADA (negative control) — não devolve o que reivindicou',
+  },
+  {
+    classe: 'whatsapp/contexto-sem-store',
+    invariant: 'WAES-06',
+    teste: 'whatsapp-embedded-signup.test.js',
+    arquivo: 'lib/platform/whatsapp-sender.js',
+    descricao: 'o contexto que o serviço do webhook recebe perde o store_id (o evento não sabe a qual Store pertence)',
+    de: '    store_id: remetente.storeId,',
+    para: '    store_id: null, // VIOLAÇÃO DELIBERADA (negative control)',
+  },
+  {
+    classe: 'whatsapp/es-origem-frouxa',
+    invariant: 'WAES-07',
+    teste: 'whatsapp-es-mensagem.test.js',
+    arquivo: 'src/pages/integracoes/embeddedSignup.ts',
+    descricao: 'a mensagem do Embedded Signup passa a valer para qualquer host que TERMINE em facebook.com',
+    de: "    return new URL(origem).protocol === 'https:' && (host === 'facebook.com' || host.endsWith('.facebook.com'));",
+    para: "    return host.endsWith('facebook.com'); // VIOLAÇÃO DELIBERADA (negative control)",
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────
@@ -979,6 +1043,8 @@ function copiarLib(destino) {
   fs.copyFileSync(path.join(RAIZ_REPO, 'server.js'), path.join(destino, 'server.js'));
   // Rodada de dogfooding: o controle do Dashboard viola o front (escopoLoja.ts) e roda o teste dele.
   fs.cpSync(path.join(RAIZ_REPO, 'src', 'pages', 'dashboard'), path.join(destino, 'src', 'pages', 'dashboard'), { recursive: true });
+  // WhatsApp · Embedded Signup: o controle da origem da mensagem viola o helper do front.
+  fs.cpSync(path.join(RAIZ_REPO, 'src', 'pages', 'integracoes'), path.join(destino, 'src', 'pages', 'integracoes'), { recursive: true });
   // A cópia precisa resolver as mesmas dependências (express, pg) que o lib/ real.
   fs.symlinkSync(path.join(RAIZ_REPO, 'node_modules'), path.join(destino, 'node_modules'), 'dir');
 }

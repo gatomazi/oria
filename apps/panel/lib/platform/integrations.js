@@ -28,7 +28,10 @@ const SEGREDOS = Object.freeze({
   openai: Object.freeze({ api_key: 'openai-api-key-creative-v1' }),
   // Fase 5b: o token do número de WhatsApp da Organization. Número e WABA ficam em
   // integrations.config (não são segredo); o par é resolvido junto em whatsapp-sender.js.
-  whatsapp: Object.freeze({ access_token: 'whatsapp-access-token-v1' }),
+  whatsapp: Object.freeze({
+    access_token: 'whatsapp-access-token-v1',
+    two_step_pin: 'whatsapp-two-step-pin-v1',
+  }),
   ink: Object.freeze({
     api_token: 'ink-api-token-v1',
     webhook_secret: 'ink-webhook-secret-v1',
