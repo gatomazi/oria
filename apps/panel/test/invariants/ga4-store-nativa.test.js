@@ -214,6 +214,16 @@ test('callback · state inválido, reutilizado ou forjado não grava nada', asyn
   const depoisDoReplay = (await sup.query('SELECT max(atualizado_em) AS ultima FROM google_analytics_connections')).rows[0];
   assert.deepEqual(depoisDoReplay.ultima, depoisDoPrimeiro.ultima, 'o replay do state não alterou nada');
   assert.equal((await sup.query('SELECT count(*)::int AS n FROM google_analytics_connections')).rows[0].n, antes.n);
+
+  // State válido, mas SEM a Store (antigo) ou com a Store de OUTRA Organization (forjado): fail-closed.
+  for (const dados of [{}, { storeId: store.D }]) {
+    const { state: s2 } = await iniciar(c);
+    await sup.query("UPDATE oauth_states SET dados = $1::jsonb WHERE id = (SELECT id FROM oauth_states WHERE provider = 'ga4' ORDER BY criado_em DESC LIMIT 1)", [JSON.stringify(dados)]);
+    const ultimaAntes = (await sup.query('SELECT max(atualizado_em) AS ultima FROM google_analytics_connections')).rows[0].ultima;
+    assert.equal((await callback(anonimo, { code: 'single-C', state: s2 })).status, 302);
+    const ultimaDepois = (await sup.query('SELECT max(atualizado_em) AS ultima FROM google_analytics_connections')).rows[0].ultima;
+    assert.deepEqual(ultimaDepois, ultimaAntes, `state com ${JSON.stringify(dados)} não pode gravar nada`);
+  }
 });
 
 test('callback · cross-tenant: o state de D só conecta a Store de D; C não é tocada', async () => {

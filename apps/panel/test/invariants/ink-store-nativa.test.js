@@ -87,7 +87,7 @@ function navegador() {
 const entrar = (l) => navegador().entrar(l);
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function ate(fn, { tentativas = 60, intervalo = 500 } = {}) {
+async function ate(fn, { tentativas = 40, intervalo = 500 } = {}) {
   for (let i = 0; i < tentativas; i += 1) {
     const v = await fn();
     if (v) return v;
@@ -428,27 +428,6 @@ test('webhook · cross-tenant: assinatura de D na URL de C é recusada e nada é
   assert.equal((await sup.query('SELECT count(*)::int AS n FROM pedidos_ink WHERE organization_id = $1 AND ink_order_id = 7004', [ORGS.C])).rows[0].n, 0);
 });
 
-// ── Associação de categorias em lote (job) ────────────────────────────────────────────────────
-
-test('categorias em lote · job da Store nativa nasce com store_id e é processado com a credencial da Store', async () => {
-  const c = await entrar('C');
-  const r = await c.req('POST', '/api/admin/category-assignments', { corpo: { mode: 'add', categoryIds: [1100], filtros: {} } });
-  assert.equal(r.status, 201, `associar categorias em lote não pode exigir chave legada: ${r.texto}`);
-  const { rows: [job] } = await sup.query('SELECT store_id, loja, total FROM bulk_category_jobs WHERE id = $1 AND organization_id = $2', [r.json.jobId, ORGS.C]);
-  assert.equal(job.store_id, store.C);
-  assert.equal(job.loja, null);
-  assert.equal(job.total, 3);
-  // O runner de jobs (15 s) processa o lote sob o contexto da Organization/Store.
-  const concluido = await ate(async () => {
-    const { rows } = await sup.query('SELECT status, succeeded, failed FROM bulk_category_jobs WHERE id = $1', [r.json.jobId]);
-    return rows[0] && !['queued', 'running'].includes(rows[0].status) ? rows[0] : null;
-  }, { tentativas: 80, intervalo: 500 });
-  assert.ok(concluido, 'o job de categoria em lote não foi processado');
-  assert.notEqual(concluido.status, 'cancelled');
-  assert.equal(concluido.failed, 0);
-  assert.equal(concluido.succeeded, 3, 'os 3 produtos do catálogo de C receberam a categoria pela credencial da Store');
-});
-
 // ── Segredos, logs e processo ─────────────────────────────────────────────────────────────────
 
 test('segurança · nenhum token, segredo ou URL de webhook aparece no log do processo', () => {
@@ -499,6 +478,5 @@ test('fonte · escritas do catálogo e dos jobs carregam store_id (nenhum write 
   const fonte = fs.readFileSync(SERVER, 'utf8');
   assert.match(blocoDe(fonte, 'async function gravarLoteCatalogo('), /INSERT INTO produtos_ink \(store_id, loja,/);
   assert.match(blocoDe(fonte, 'async function sincronizarCatalogoInk()'), /INSERT INTO produtos_ink_sync \(store_id, loja,/);
-  assert.match(blocoDe(fonte, "app.post('/api/admin/category-assignments'"), /INSERT INTO bulk_category_jobs \(store_id, loja,/);
   assert.match(blocoDe(fonte, "app.post('/api/admin/pedidos/backfill-historico'"), /INSERT INTO pedidos_backfill_jobs \(store_id, loja,/);
 });

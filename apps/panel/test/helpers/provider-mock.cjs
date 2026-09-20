@@ -92,14 +92,32 @@ function responder(url, metodo, corpo, auth) {
   switch (url.hostname) {
     case 'api.reserva.ink':
       return respostaDaInk(p, metodo, corpo, auth, url);
-    case 'graph.facebook.com':
+    case 'graph.facebook.com': {
+      // Tokens do fluxo OAuth simulado: o code `meta<X>` vira `EAAG-oauth-meta<X>` (curto) e, na troca
+      // por longa duração, `EAAG-long-<X>`. A ÚLTIMA letra do token é a "loja de teste": ela escolhe a
+      // conta de anúncio e o gasto — prova de qual credencial (e, portanto, de qual Store) foi usada.
+      const longo = String(auth || '').startsWith('Bearer EAAG-long-');
+      const tag = String(auth || '').slice(-1);
       if (p.endsWith('/me/permissions')) return json({ success: true });
       if (p.endsWith('/debug_token')) {
         return json({ data: { is_valid: true, user_id: '1', scopes: ['ads_read'], expires_at: Math.floor(Date.now() / 1000) + 5_000_000 } });
       }
-      if (p.endsWith('/oauth/access_token')) return json({ access_token: `EAAG-oauth-${url.searchParams.get('code') || 'longo'}`, expires_in: 5_000_000 });
+      if (p.endsWith('/oauth/access_token')) {
+        const troca = url.searchParams.get('fb_exchange_token');
+        if (troca) return json({ access_token: `EAAG-long-${troca.slice(-1)}`, expires_in: 5_000_000 });
+        return json({ access_token: `EAAG-oauth-${url.searchParams.get('code') || 'longo'}`, expires_in: 3600 });
+      }
       if (p.endsWith('/me')) return json({ id: '1', name: 'Pessoa' });
+      if (longo && p.endsWith('/me/adaccounts')) {
+        return json({ data: [{ id: `act_${tag}001`, name: `Conta ${tag}`, currency: 'BRL', timezone_name: 'America/Sao_Paulo', timezone_offset_hours_utc: -3, account_status: 1, amount_spent: '100000', spend_cap: '0' }], paging: {} });
+      }
+      // Insights só no nível da conta: UMA linha de hoje, com gasto derivado da "loja de teste".
+      if (longo && p.endsWith('/insights') && url.searchParams.get('level') === 'account') {
+        const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+        return json({ data: [{ date_start: hoje, date_stop: hoje, account_id: `${tag}001`, spend: String(100 + (tag.charCodeAt(0) % 50)), impressions: '1000', clicks: '50', reach: '900' }], paging: {} });
+      }
       return json({ data: [], paging: {} });
+    }
     case 'oauth2.googleapis.com': {
       if (p === '/revoke') return json({});
       const form = new URLSearchParams(String(corpo || ''));

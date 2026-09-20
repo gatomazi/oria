@@ -1760,7 +1760,15 @@ app.get('/api/admin/dashboard/financeiro', requireAdmin, async (req, res) => {
       // outra loja, fica fora — não é somado na loja errada.
       const r = await midiaDaOrganizacao(diaISOBrasil(dias - 1), diaISOBrasil(0));
       midia = r.porDia;
-      midiaFontes = r.fontes.map((f) => ({ provider: f.provider, conectado: f.conectado, relevante: f.relevante !== false, motivo: f.motivo || null }));
+      // Saúde da CONEXÃO (token/API), à parte de "tem conta atribuída": conta da loja com a conexão em
+      // erro ou expirada é "com problema", não "gasto zero" nem "tudo bem".
+      const { rows: [cm] } = await pgPool.query('SELECT status FROM meta_connections WHERE organization_id = $1', [orgDoContexto()]);
+      const { rows: [cg] } = await pgPool.query('SELECT status FROM google_ads_connections WHERE organization_id = $1', [orgDoContexto()]);
+      const comProblema = (linha) => !!linha && ['error', 'expired'].includes(linha.status);
+      midiaFontes = r.fontes.map((f) => ({
+        provider: f.provider, conectado: f.conectado, relevante: f.relevante !== false, motivo: f.motivo || null,
+        comProblema: f.conectado && comProblema(f.provider === 'meta' ? cm : cg),
+      }));
       midiaSinalizada = r.sinalizados;
     } catch (err) {
       console.error(`[DASHBOARD_FINANCEIRO] gasto de mídia indisponível: ${err.message}`);
@@ -10847,10 +10855,13 @@ app.get('/api/admin/integrations/meta/status', requireAdmin, async (req, res) =>
 });
 
 app.get('/api/admin/integrations/meta/connect', requireAdmin, async (req, res) => {
+  // Configuração da PLATAFORMA (app Meta global): o tenant vê o conceito, não o nome das variáveis.
   if (!metaOAuthConfigurado()) {
-    return res.status(503).json({ error: 'META_APP_ID/META_APP_SECRET/META_OAUTH_REDIRECT_URI não configurados neste ambiente' });
+    return res.status(503).json({ error: 'a conexão com a Meta ainda não está habilitada na plataforma', codigo: 'PLATFORM_UNAVAILABLE' });
   }
-  const state = await criarStateOAuth(req, 'meta');
+  // A Store que conecta vai no `state` (anti-CSRF, uso único, amarrado à pessoa, à sessão e à
+  // Organization). O callback confere que é a mesma — nunca aceita Organization/Store do navegador.
+  const state = await criarStateOAuth(req, 'meta', { storeId: storeDoContexto() });
   const url = new URL(`${META_OAUTH_DIALOG}/${META_GRAPH_VERSION}/dialog/oauth`);
   url.searchParams.set('client_id', process.env.META_APP_ID);
   url.searchParams.set('redirect_uri', process.env.META_OAUTH_REDIRECT_URI);
@@ -10875,6 +10886,10 @@ app.get('/api/admin/integrations/meta/callback', async (req, res) => {
   // Tenant do callback = Organization gravada no state (membership revalidado), nunca do request.
   try {
     await comOrganizacaoResolvida(salvo.organizationId, 'oauth:meta', async () => {
+      // A Store do state precisa ser a da Organization do state: state forjado, antigo (sem Store) ou
+      // de outra Store é recusado e o callback só redireciona, sem gravar nada.
+      const storeDoState = salvo.dados && salvo.dados.storeId;
+      if (!storeDoState || storeDoContexto() !== storeDoState) throw new Error('state de outra store');
       if (erroMeta) {
         await marcarErroMeta(META_ERROS.PERMISSION_DENIED, `a Meta recusou a autorização: ${erroMeta}`).catch(() => {});
         return;
