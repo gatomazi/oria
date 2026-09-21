@@ -23,4 +23,11 @@ function promptVersionFor(env, tenantId) {
   return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase()) ? 2 : undefined;
 }
 
-module.exports = { promptVersionFor, orgsComPromptV2 };
+// Fase B — mesmo mecanismo para o CreativePlan v2 (compiler novo). CREATIVE_PLAN_V2_ORGS = ids de Organization ou `*`.
+// Independente do prompt v2: uma coisa é a estrutura do plano/compiler, outra é a redação da cena.
+function planSchemaVersionFor(env, tenantId) {
+  const orgs = orgsComPromptV2(env && env.CREATIVE_PLAN_V2_ORGS);
+  return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase()) ? 2 : undefined;
+}
+
+module.exports = { promptVersionFor, planSchemaVersionFor, orgsComPromptV2 };

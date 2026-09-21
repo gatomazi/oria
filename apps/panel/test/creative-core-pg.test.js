@@ -87,6 +87,12 @@ test('pgStore cumpre o contrato do store (schema, perfis, produtos, lotes, fila,
     assert.deepEqual(comTrace.generationTrace, { 1: { attempt: 1, model_served: 'gpt-image-2', duration_ms: 1234 } });
     assert.deepEqual([comTrace.modelServed, comTrace.durationMs, comTrace.providerRequestId], ['gpt-image-2', 1234, 'req_abc']);
     assert.equal((await store.getItem(tenant, primeiro.creativeId)).status, 'completed', 'trace não mexe no status');
+    // Fase B: versão do plano e do compiler (migration 0032).
+    await store.updateItem(tenant, primeiro.creativeId, { planSchemaVersion: 2, compilerVersion: 1 });
+    const comVersao = await store.getItem(tenant, primeiro.creativeId);
+    assert.deepEqual([comVersao.planSchemaVersion, comVersao.compilerVersion], [2, 1]);
+    await store.updateItem(tenant, primeiro.creativeId, { compilerVersion: null });
+    assert.equal((await store.getItem(tenant, primeiro.creativeId)).compilerVersion, null, 'plano v1 não tem compiler v2');
     const assetId = crypto.randomUUID();
     await store.insertAsset(tenant, { id: assetId, creativeId: primeiro.creativeId, storageKey: 'creatives/a/image.png', mime: 'image/png', byteSize: 10, sha256: 'x' });
     assert.equal((await store.getAssetByCreative(tenant, primeiro.creativeId)).id, assetId);

@@ -95,6 +95,8 @@ function createWorker({ store, core, byokDe, storageDe, paraCadaTenant, flagsPro
           brandKitVersion: plan.brand_kit.version,
           nicheKitVersion: plan.niche_kit.version,
           promptVersion: plan.prompt.prompt_version,
+          planSchemaVersion: plan.schema_version || 1,
+          compilerVersion: plan.compiler ? plan.compiler.version : null,
           funnelStage: plan.funnel_stage,
           remarketingIntent: plan.remarketing_intent,
         });
@@ -143,6 +145,8 @@ function createWorker({ store, core, byokDe, storageDe, paraCadaTenant, flagsPro
           brand_kit_version: plan.brand_kit.version,
           niche_kit_version: plan.niche_kit.version,
           prompt_version: plan.prompt.prompt_version,
+          plan_schema_version: plan.schema_version || 1,
+          compiler_version: plan.compiler ? plan.compiler.version : null,
           quality: plan.model.quality,
           asset: salvo.storageKey,
           generation_attempt: item.generationAttempt,

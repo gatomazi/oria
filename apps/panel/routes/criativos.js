@@ -23,7 +23,7 @@ const { createPgStore } = require('../lib/creative-core/pgStore');
 const { normalizeJobInput, buildRequests, planSummary, planPrompt, InputError } = require('../lib/creative-core/requests');
 const { createWorker } = require('../lib/creative-core/worker');
 const { progress } = require('../lib/creative-core/status');
-const { promptVersionFor } = require('../lib/creative-core/rollout');
+const { promptVersionFor, planSchemaVersionFor } = require('../lib/creative-core/rollout');
 
 const PROFILE_CONTRACT = { brand: 'BrandKit', niche: 'NicheKit', context: 'ContextProfile', persona: 'Persona' };
 const PROFILE_PATH = { brand: 'brand-kits', niche: 'niche-kits', context: 'context-profiles', persona: 'personas' };
@@ -71,6 +71,8 @@ function resumoItem(item) {
     brandKitVersion: item.brandKitVersion,
     nicheKitVersion: item.nicheKitVersion,
     promptVersion: item.promptVersion,
+    planSchemaVersion: item.planSchemaVersion,
+    compilerVersion: item.compilerVersion,
     summary: item.planSummary,
     error: item.error,
     // Trace da tentativa mais recente (sem prompt e sem chave): modelo pedido x servido, referências, duração.
@@ -304,7 +306,7 @@ function criarRouterCriativos(deps) {
       throw e;
     }
     const hints = await store.recentHints(req.creativeTenant);
-    const items = await buildRequests(input, { store, tenantId: req.creativeTenant, hints, promptVersion: promptVersionFor(env, req.creativeTenant) });
+    const items = await buildRequests(input, { store, tenantId: req.creativeTenant, hints, promptVersion: promptVersionFor(env, req.creativeTenant), planSchemaVersion: planSchemaVersionFor(env, req.creativeTenant) });
     return { input, items };
   }
 

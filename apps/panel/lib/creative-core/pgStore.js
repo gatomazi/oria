@@ -45,6 +45,8 @@ const ITEM_PATCH_COLUMNS = Object.freeze({
   modelServed: 'model_served',
   durationMs: 'duration_ms',
   providerRequestId: 'provider_request_id',
+  planSchemaVersion: 'plan_schema_version',
+  compilerVersion: 'compiler_version',
 });
 const JSON_COLUMNS = new Set(['plan', 'plan_summary', 'record', 'error', 'generation_trace']);
 
@@ -86,6 +88,7 @@ function mapItem(r) {
     tokensEntradaTexto: r.tokens_entrada_texto, tokensEntradaImagem: r.tokens_entrada_imagem,
     generationTrace: r.generation_trace, modelServed: r.model_served, durationMs: r.duration_ms,
     providerRequestId: r.provider_request_id,
+    planSchemaVersion: r.plan_schema_version, compilerVersion: r.compiler_version,
   };
 }
 

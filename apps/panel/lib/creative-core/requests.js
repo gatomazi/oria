@@ -138,7 +138,8 @@ function produtoDoRegistro(p) {
 
 // Carrega do banco tudo que o request referencia (sempre filtrado pelo tenant) e monta os CreativeRequest.
 // `promptVersion` (Fase A3): 2 liga o prompt V2 dos ângulos com pessoa para este lote; ausente = padrão do serviço.
-async function buildRequests(input, { store, tenantId, hints, promptVersion, randomInt = crypto.randomInt, uuid = crypto.randomUUID }) {
+// `planSchemaVersion` (Fase B): 2 pede o CreativePlan v2 (compiler novo) para este lote; ausente = padrão do serviço (plano v1).
+async function buildRequests(input, { store, tenantId, hints, promptVersion, planSchemaVersion, randomInt = crypto.randomInt, uuid = crypto.randomUUID }) {
   const produtos = [];
   for (const id of input.product_ids) {
     const p = await store.getProduct(tenantId, id);
@@ -191,6 +192,7 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, ran
   }
 
   if (promptVersion === 2) base.prompt_version = 2;
+  if (planSchemaVersion === 2) base.plan_schema_version = 2;
   if (input.funnel_stage) base.funnel_stage = input.funnel_stage;
   if (input.funnel) base.funnel = input.funnel;
   if (input.remarketing) base.remarketing = input.remarketing;
@@ -249,6 +251,13 @@ function planSummary(plan) {
     prompt_version: plan.prompt && plan.prompt.prompt_version,
     versions: plan.versions,
     warnings: plan.warnings,
+    // Plano v2 (Fase B): fatos do plano, nunca o texto do prompt. Ausentes em plano v1.
+    plan_schema_version: plan.schema_version,
+    compiler_version: plan.compiler ? plan.compiler.version : null,
+    gaze: plan.scene && plan.scene.gaze ? { mode: plan.scene.gaze.mode, source: plan.scene.gaze.source } : null,
+    people_count: plan.composition ? plan.composition.people_count : null,
+    pose_risk: plan.composition ? plan.composition.pose_risk : null,
+    minor_safety_applied: plan.minor_safety ? plan.minor_safety.applies : null,
   };
 }
 

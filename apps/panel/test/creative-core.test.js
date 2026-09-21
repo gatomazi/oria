@@ -66,7 +66,13 @@ function fakeCore(overrides = {}) {
         references: request.products.flatMap((p) => p.referenceImages.map((ref, i) => ({ ref, product_id: p.id, role: 'product_art', order: i + 1 }))),
         prompt: { text: 'PROMPT INTERNO SECRETO', sections: [], sha256: 'abc', prompt_version: 1 },
         model: { model: 'gpt-image-2', quality: request.quality, size: '1088x1360' },
-        versions: { core_version: '1.1.0' }, validations: [], warnings: [],
+        versions: { core_version: '1.1.0' }, validations: [], warnings: [], schema_version: 1,
+        // Fase B: o core de verdade só devolve estes campos quando o request pede plan_schema_version 2.
+        ...(request.plan_schema_version === 2 ? {
+          schema_version: 2, compiler: { version: 1, sections: [] },
+          scene: { gaze: { mode: 'camera', source: 'angle', requested: 'auto', reason: 'x' }, picks: {}, prompt_version: 1 },
+          composition: { people_count: 1, pose_risk: 'low', risk_reasons: [] }, minor_safety: { applies: true },
+        } : {}),
       };
     },
     async generate({ plan, references, apiKey, attempt }) {
@@ -600,6 +606,80 @@ test('prévia e lote mandam prompt_version=2 ao core só para a Organization hab
       server.close();
     }
   }
+});
+
+test('rollout do plano v2: env própria por Organization, independente do prompt v2', () => {
+  const { planSchemaVersionFor } = require('../lib/creative-core/rollout');
+  const org = 'a1000000-0000-4000-8000-000000000001';
+  assert.equal(planSchemaVersionFor({}, org), undefined);
+  assert.equal(planSchemaVersionFor({ CREATIVE_PLAN_V2_ORGS: `x,${org}` }, org), 2);
+  assert.equal(planSchemaVersionFor({ CREATIVE_PLAN_V2_ORGS: '*' }, org), 2);
+  assert.equal(planSchemaVersionFor({ CREATIVE_PROMPT_V2_ORGS: org }, org), undefined, 'o rollout do prompt não liga o plano');
+  assert.equal(planSchemaVersionFor({ CREATIVE_PLAN_V2_ORGS: '../etc' }, org), undefined);
+});
+
+test('lote manda plan_schema_version=2 só para a Organization habilitada; o worker grava versão do plano e do compiler', async () => {
+  for (const [envExtra, esperado] of [[{}, undefined], [{ CREATIVE_PLAN_V2_ORGS: 'outra' }, undefined], [{ CREATIVE_PLAN_V2_ORGS: TENANT }, 2]]) {
+    const store = createMemoryStore();
+    const { server, call, core, modulo } = await subirApp({ envExtra, store });
+    try {
+      await call('PUT', '/settings/openai-key', { apiKey: API_KEY });
+      const brand = await call('POST', '/brand-kits', { data: { name: 'Marca' } });
+      const prod = await call('POST', '/products', { name: 'Caneca', type: 'caneca', images: [{ data_base64: PNG.toString('base64') }] });
+      const input = jobInput({ productId: prod.body.id, brandId: brand.body.id });
+      const preview = await call('POST', '/preview', input);
+      assert.equal(preview.status, 200);
+      assert.ok(core.calls.plan.length > 0 && core.calls.plan.every((r) => r.plan_schema_version === esperado), JSON.stringify(envExtra));
+      assert.equal(preview.body.first.plan_schema_version, esperado === 2 ? 2 : 1);
+      assert.equal(preview.body.first.compiler_version, esperado === 2 ? 1 : null);
+      assert.ok(!JSON.stringify(preview.body.first).includes('PROMPT INTERNO SECRETO'), 'o resumo nunca leva o texto do prompt');
+      const job = await call('POST', '/jobs', input);
+      assert.equal(job.status, 201);
+      const salvo = await store.getJob(TENANT, job.body.id);
+      assert.ok(salvo.items.every((i) => i.request.plan_schema_version === esperado));
+      modulo.worker.kick();
+      for (let i = 0; i < 50 && (await store.getJob(TENANT, job.body.id)).items.some((it) => !['completed', 'failed'].includes(it.status)); i += 1) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      const final = await store.getJob(TENANT, job.body.id);
+      assert.ok(final.items.every((it) => it.status === 'completed'));
+      assert.ok(final.items.every((it) => it.planSchemaVersion === (esperado === 2 ? 2 : 1)));
+      assert.ok(final.items.every((it) => it.compilerVersion === (esperado === 2 ? 1 : null)));
+      assert.ok(final.items.every((it) => it.record.plan_schema_version === (esperado === 2 ? 2 : 1) && it.record.compiler_version === (esperado === 2 ? 1 : null)));
+      const api = await call('GET', `/jobs/${job.body.id}`);
+      assert.ok(api.body.items.every((it) => it.planSchemaVersion === (esperado === 2 ? 2 : 1)));
+    } finally {
+      server.close();
+    }
+  }
+});
+
+test('planSummary do plano v2 traz gaze, pessoas, risco e menores — e nunca o prompt', () => {
+  const { planSummary } = require('../lib/creative-core/requests');
+  const plan = {
+    plan_id: 'p', strategy: 'CLEAN_ANGLES', product_mode: 'single_product', angle: { id: 'CAIMENTO', label: 'Caimento' }, placement: { id: 'FEED_4X5' },
+    persona: { label: 'menina 6 anos' }, context: { scene: 's', context_id: 'c', provider: 'custom' }, prompt: { text: 'SEGREDO', sha256: 'h', prompt_version: 2 },
+    versions: {}, warnings: [], schema_version: 2, compiler: { version: 1 }, scene: { gaze: { mode: 'camera', source: 'angle' } },
+    composition: { people_count: 1, pose_risk: 'low' }, minor_safety: { applies: true },
+  };
+  const resumo = planSummary(plan);
+  assert.deepEqual([resumo.plan_schema_version, resumo.compiler_version, resumo.people_count, resumo.pose_risk, resumo.minor_safety_applied], [2, 1, 1, 'low', true]);
+  assert.deepEqual(resumo.gaze, { mode: 'camera', source: 'angle' });
+  assert.ok(!JSON.stringify(resumo).includes('SEGREDO'));
+  const v1 = planSummary({ ...plan, schema_version: 1, compiler: undefined, scene: undefined, composition: undefined, minor_safety: undefined });
+  assert.deepEqual([v1.compiler_version, v1.gaze, v1.people_count, v1.pose_risk, v1.minor_safety_applied], [null, null, null, null, null]);
+});
+
+test('migration 0032 (plano/compiler) só acrescenta colunas em creative_generations e copia o que o plano já diz', () => {
+  const up = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0032-creative-plan-v2.up.sql'), 'utf8')
+    .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  assert.doesNotMatch(up, /\b(DROP|DELETE|TRUNCATE|RENAME)\b/i);
+  const alters = [...up.matchAll(/ALTER TABLE (\w+)\s+ADD COLUMN IF NOT EXISTS (\w+) (\w+);/g)];
+  assert.deepEqual(alters.map((m) => m[2]), ['plan_schema_version', 'compiler_version']);
+  assert.ok(alters.every((m) => m[1] === 'creative_generations'));
+  const updates = [...up.matchAll(/UPDATE (\w+)/g)].map((m) => m[1]);
+  assert.deepEqual(updates, ['creative_generations'], 'o único UPDATE é o backfill da própria tabela');
+  assert.match(up, /WHERE plan IS NOT NULL AND plan_schema_version IS NULL/, 'idempotente e só onde há plano');
 });
 
 test('lote sem key cadastrada é recusado antes de enfileirar', async () => {
