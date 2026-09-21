@@ -1,0 +1,450 @@
+{
+ "name": "fixture-remarketing-single-pv1",
+ "request": {
+  "creative_id": "33333333-3333-4333-8333-333333333333",
+  "strategy": "REMARKETING",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "prod-chapeco",
+    "name": "Camiseta Chapecó",
+    "type": "Camiseta (Algodão Peruano Premium)",
+    "referenceImages": [
+     "tenant-demo/products/prod-chapeco/front.png"
+    ],
+    "metadata": {
+     "city": "Chapecó",
+     "state": "SC"
+    }
+   }
+  ],
+  "brand_kit_id": "use_origens",
+  "niche_kit_id": "fashion",
+  "angle_id": "CABIDE",
+  "placement_id": "FEED_4X5",
+  "context": {
+   "mode": "geographic",
+   "subject": {
+    "name": "Chapecó",
+    "metadata": {
+     "city": "Chapecó",
+     "state": "SC"
+    }
+   },
+   "context_id": "oeste_meio_oeste"
+  },
+  "remarketing": {
+   "intent": "product_view",
+   "headline": "Ainda pensando nela?",
+   "cta": "Ver a sua →",
+   "benefits": [
+    "Algodão peruano",
+    "Troca fácil"
+   ]
+  },
+  "seed": 5,
+  "plan_schema_version": 2,
+  "prompt_version": 1
+ },
+ "plan": {
+  "plan_id": "plan_19db2a99df30ff3262d14544",
+  "creative_id": "33333333-3333-4333-8333-333333333333",
+  "schema_version": 2,
+  "strategy": "REMARKETING",
+  "internal_strategy_id": "REMARKETING",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "prod-chapeco",
+    "name": "Camiseta Chapecó",
+    "type": "Camiseta (Algodão Peruano Premium)",
+    "referenceImages": [
+     "tenant-demo/products/prod-chapeco/front.png"
+    ],
+    "metadata": {
+     "city": "Chapecó",
+     "state": "SC"
+    }
+   }
+  ],
+  "angle": {
+   "id": "CABIDE",
+   "label": "Cabide",
+   "description": "Peça pendurada, sem pessoa — foco total no produto.",
+   "uses_person": false,
+   "apparel_only": true,
+   "multi_product_limit": 6
+  },
+  "placement": {
+   "id": "FEED_4X5",
+   "label": "Feed (4:5 — 1080×1350)",
+   "width": 1080,
+   "height": 1350,
+   "api_size": "1088x1360"
+  },
+  "persona": null,
+  "context": {
+   "context_id": "geo:SC:oeste_meio_oeste",
+   "context_type": "geographic",
+   "provider": "geographic",
+   "scene": "paisagem agrícola ondulada",
+   "supporting_element": "#d6ba8d",
+   "avoid": [
+    "praia",
+    "cenário açoriano",
+    "enxaimel como regra",
+    "usar com cuidado: elementos rurais excessivos",
+    "usar com cuidado: chapéu ou estética country",
+    "caricatura regional",
+    "excesso de símbolos",
+    "souvenir turístico",
+    "excesso de texto",
+    "mapas ou silhuetas geográficas como ornamento",
+    "campanha turística de estado",
+    "peça deformada ou com proporção irreal",
+    "tecido liso como vetor, sem trama",
+    "produto parecendo adesivo colado na foto"
+   ],
+   "status": "approved",
+   "profile_version": 1
+  },
+  "brand_kit": {
+   "id": "use_origens",
+   "version": 1
+  },
+  "niche_kit": {
+   "id": "fashion",
+   "version": 1
+  },
+  "funnel_stage": "BOFU",
+  "remarketing_intent": "product_view",
+  "layout": "single_hanger",
+  "overlay": {
+   "allowed": true,
+   "headline": "Ainda pensando nela?",
+   "subheadline": "O produto que você viu continua disponível",
+   "cta": "Ver a sua →",
+   "badges": [],
+   "benefits": [
+    "Algodão peruano",
+    "Troca fácil"
+   ],
+   "search_bar_text": null,
+   "chips": [],
+   "text_density": "commercial",
+   "cta_emphasis": "strong",
+   "clean": false
+  },
+  "copy": {
+   "generate": false,
+   "funnel_stages": [
+    "BOFU"
+   ]
+  },
+  "references": [
+   {
+    "ref": "tenant-demo/products/prod-chapeco/front.png",
+    "product_id": "prod-chapeco",
+    "role": "product_art",
+    "order": 1
+   }
+  ],
+  "prompt": {
+   "text": "REGRAS OBRIGATÓRIAS (nunca ignore):\n- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.\n- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.\n- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.\n- Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).\n- Fotografia realista, alta qualidade, formato vertical.\n- Preserve o TIPO DE PEÇA original: camiseta de MANGA CURTA, gola redonda, tecido de algodão peruano premium. NUNCA transforme em manga longa, moletom, camisa de botão ou qualquer outra peça — mesmo que o cenário sugira frio, a peça continua sendo camiseta de manga curta (a pessoa pode usar um casaco/jaqueta POR CIMA se o clima pedir, mas a camiseta em si nunca muda de manga).\n- A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.\n- Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.\n\nTEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.\n\nPRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = \"Camiseta Chapecó\" (Camiseta (Algodão Peruano Premium)).\n\nÂNGULO CABIDE: \"Camiseta Chapecó\" (Camiseta (Algodão Peruano Premium)) pendurado(a) em cabide, sem pessoa, inteiro(a) no quadro e centralizado(a). Fundo e luz inspirados em paisagem agrícola ondulada, sem competir com a peça.\n\n- POSICIONAMENTO DA ESTAMPA NO CABIDE (regra permanente, prioridade máxima):\n  · IMPORTANTE: NÃO centralize a estampa no canvas, no cabide nem no bounding box completo da camiseta. Centralize-a EXCLUSIVAMENTE no painel frontal do tronco da própria camiseta, usando o centro da gola como eixo.\n  · Eixo de referência: a linha vertical que passa pelo centro da gola e pelo centro da barra. O centro horizontal da estampa coincide com o centro da gola.\n  · Pra achar o centro, considere SÓ o painel frontal do tronco, entre as duas costuras laterais — ignore mangas, sombras, inclinação do cabide e a área total da peça.\n  · Todos os elementos da arte (ex.: título + mapa + marcador) formam UM único grupo visual: movem-se juntos, sem nenhum deslocamento relativo entre eles.\n  · A estampa nunca fica puxada pra esquerda ou pra direita e nunca acompanha a posição aparente da manga. Não invade lateral, axila nem dobra de manga.\n  · A arte permanece frontal à camiseta, só com a deformação natural do tecido e da perspectiva.\n  · Estampa central grande: largura de aproximadamente 45–55% da largura útil do tronco (entre as costuras laterais).\n  · Altura: o conjunto fica na região do peito/torso, começando aproximadamente 12–18% do comprimento do tronco abaixo da gola, mantendo o equilíbrio vertical da peça.\n  · Com várias camisetas na cena, aplique esta regra INDIVIDUALMENTE em cada peça — mesmo parcialmente sobreposta ou em perspectiva, cada estampa fica centrada na gola da SUA camiseta.\n  · Exceção: se a arte de referência for deliberadamente fora do centro (bolso, peito esquerdo, mini print), preserve a posição mostrada na referência — esta regra é para estampa frontal central.\n  · VERIFICAÇÃO ANTES DE FINALIZAR: trace mentalmente uma linha vertical a partir do centro da gola de cada camiseta. Ela deve atravessar aproximadamente o centro da estampa. Se houver desvio lateral perceptível, a composição está errada — corrija antes de entregar a imagem.\n\nDIREÇÃO: criativo de REMARKETING para quem já conhece a marca — fotografia realista + camada tipográfica integrada, produto protagonista, sem cara de banner promocional genérico. O LAYOUT abaixo manda na composição; o ÂNGULO define o clima da cena.\n\nLAYOUT CABIDE ÚNICO: um único produto pendurado em cabide central, inteiro e centralizado, fundo limpo sem outras peças em destaque; texto acima; CTA abaixo.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"Ainda pensando nela?\"\n  · SUBHEADLINE: \"O produto que você viu continua disponível\"\n  · CTA: \"Ver a sua →\"\n  · BENEFÍCIOS (2–3 itens curtos, linha discreta com ícone de traço fino, abaixo do CTA ou entre subheadline e CTA): \"Algodão peruano\" | \"Troca fácil\"\n  · Densidade de texto: commercial — headline, subheadline, CTA e benefícios — claro e direto, mas NUNCA uma landing page dentro da imagem.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nCTA — ênfase strong: botão SÓLIDO, alto contraste, pílula de cantos arredondados, texto em caixa alta + seta, com área de respiro ao redor de pelo menos 1× a altura do botão — percebido em menos de 1 segundo.\n  · COR POR CONTRASTE com a região do fundo onde o botão pousa: fundo claro -> preto, grafite, dourado escuro ou a cor primária forte da marca; fundo escuro -> creme, dourado claro, branco ou tom claro de alta legibilidade. NUNCA vermelho nem coral.\n  · Posição: com espaço livre ao redor; nunca sobre a estampa, sobre rosto, sobre área visualmente complexa ou colado nas bordas.\n\nMARCA (Use Origens):\n  · Posicionamento: regional contemporâneo; premium acessível; não souvenir; camisetas premium de identidade regional para quem tem orgulho de onde veio.\n  · Linguagem visual: editorial, clean, natural, lifestyle, premium.\n  · Paleta da marca (guia de cor da CENA, nunca do produto): #4d543d; #d6ba8d; #1a1e14; #f4efe6.\n  · Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.\n  · Cuia de chimarrão só no Sul (RS/SC/PR).\n\nNICHO (Moda / Vestuário):\n  · Materiais e sinais de uso real: algodão, trama de tecido visível, costuras e acabamento, etiqueta discreta.\n  · Público: compra pelo caimento e pelo estilo, não só pela estampa; quer ver a peça vestida em corpo real; compara tecido, acabamento e tamanho antes de decidir.\n\nATMOSFERA (luz, paleta e materiais — não leve o set para este lugar): inspirada em \"paisagem agrícola ondulada\". Detalhe de apoio: #d6ba8d. Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.\n\nEVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): praia; cenário açoriano; enxaimel como regra; usar com cuidado: elementos rurais excessivos; usar com cuidado: chapéu ou estética country; caricatura regional; excesso de símbolos; souvenir turístico; excesso de texto; mapas ou silhuetas geográficas como ornamento; campanha turística de estado; peça deformada ou com proporção irreal; tecido liso como vetor, sem trama; produto parecendo adesivo colado na foto.\n\nFORMATO: Feed 4:5 vertical (1080×1350).",
+   "sections": [
+    {
+     "name": "fidelity_rules",
+     "length": 1365,
+     "source": "product",
+     "value": "8"
+    },
+    {
+     "name": "text_rules",
+     "length": 518,
+     "source": "user",
+     "value": "remarketing"
+    },
+    {
+     "name": "reference_roles",
+     "length": 125,
+     "source": "product",
+     "value": "refs:1"
+    },
+    {
+     "name": "scene_action",
+     "length": 2192,
+     "source": "angle",
+     "value": "CABIDE"
+    },
+    {
+     "name": "strategy_communication",
+     "length": 1740,
+     "source": "user",
+     "value": "remarketing"
+    },
+    {
+     "name": "brand",
+     "length": 499,
+     "source": "brand",
+     "value": "Use Origens"
+    },
+    {
+     "name": "niche",
+     "length": 301,
+     "source": "niche",
+     "value": "Moda / Vestuário"
+    },
+    {
+     "name": "context",
+     "length": 218,
+     "source": "user",
+     "value": "geo:SC:oeste_meio_oeste"
+    },
+    {
+     "name": "avoid",
+     "length": 486,
+     "source": "brand",
+     "value": "14"
+    },
+    {
+     "name": "output_format",
+     "length": 39,
+     "source": "user",
+     "value": "FEED_4X5"
+    }
+   ],
+   "sha256": "359fa384cf2cae243cdfdf3f5a8ae6b58b878c7802be050cb705fbbc9df69027",
+   "prompt_version": 1
+  },
+  "model": {
+   "task": "image_generation",
+   "model": "gpt-image-2",
+   "quality": "medium",
+   "size": "1088x1360"
+  },
+  "mode": "creative",
+  "objective": "remarketing",
+  "subjects": [],
+  "scene": {
+   "gaze": {
+    "mode": "none",
+    "requested": "auto",
+    "source": "angle",
+    "reason": "no_people_in_frame"
+   },
+   "picks": {},
+   "prompt_version": 1,
+   "interaction": null
+  },
+  "composition": {
+   "people_count": 0,
+   "pose_risk": "low",
+   "risk_reasons": []
+  },
+  "minor_safety": {
+   "applies": false,
+   "minor_subject_ids": [],
+   "global": {
+    "policy": "global_minor_safety_policy",
+    "version": 1,
+    "rules": [
+     "age_appropriate_clothing",
+     "nothing_revealing",
+     "not_sexualized",
+     "no_adult_aesthetic",
+     "age_appropriate_poses",
+     "normal_fit_no_body_focus",
+     "commercial_family_context"
+    ],
+    "adult_child_rule": null
+   },
+   "brand": null
+  },
+  "semantics": {
+   "products": [
+    {
+     "product_id": "prod-chapeco",
+     "semantic_context": null
+    }
+   ],
+   "supporting": null,
+   "warnings": []
+  },
+  "resolved_inputs": {
+   "brand": {
+    "name": "Use Origens",
+    "positioning": [
+     "regional contemporâneo",
+     "premium acessível",
+     "não souvenir",
+     "camisetas premium de identidade regional para quem tem orgulho de onde veio"
+    ],
+    "visualStyle": [
+     "editorial",
+     "clean",
+     "natural",
+     "lifestyle",
+     "premium"
+    ],
+    "colors": [
+     "#4d543d",
+     "#d6ba8d",
+     "#1a1e14",
+     "#f4efe6"
+    ],
+    "manualNotes": [
+     "Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.",
+     "Cuia de chimarrão só no Sul (RS/SC/PR)."
+    ]
+   },
+   "niche": {
+    "name": "Moda / Vestuário",
+    "materials": [
+     "algodão",
+     "trama de tecido visível",
+     "costuras e acabamento",
+     "etiqueta discreta"
+    ],
+    "audienceBehaviors": [
+     "compra pelo caimento e pelo estilo, não só pela estampa",
+     "quer ver a peça vestida em corpo real",
+     "compara tecido, acabamento e tamanho antes de decidir"
+    ]
+   },
+   "strategy": {
+    "text_rule": "TEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.",
+    "communication": "DIREÇÃO: criativo de REMARKETING para quem já conhece a marca — fotografia realista + camada tipográfica integrada, produto protagonista, sem cara de banner promocional genérico. O LAYOUT abaixo manda na composição; o ÂNGULO define o clima da cena.\n\nLAYOUT CABIDE ÚNICO: um único produto pendurado em cabide central, inteiro e centralizado, fundo limpo sem outras peças em destaque; texto acima; CTA abaixo.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"Ainda pensando nela?\"\n  · SUBHEADLINE: \"O produto que você viu continua disponível\"\n  · CTA: \"Ver a sua →\"\n  · BENEFÍCIOS (2–3 itens curtos, linha discreta com ícone de traço fino, abaixo do CTA ou entre subheadline e CTA): \"Algodão peruano\" | \"Troca fácil\"\n  · Densidade de texto: commercial — headline, subheadline, CTA e benefícios — claro e direto, mas NUNCA uma landing page dentro da imagem.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nCTA — ênfase strong: botão SÓLIDO, alto contraste, pílula de cantos arredondados, texto em caixa alta + seta, com área de respiro ao redor de pelo menos 1× a altura do botão — percebido em menos de 1 segundo.\n  · COR POR CONTRASTE com a região do fundo onde o botão pousa: fundo claro -> preto, grafite, dourado escuro ou a cor primária forte da marca; fundo escuro -> creme, dourado claro, branco ou tom claro de alta legibilidade. NUNCA vermelho nem coral.\n  · Posição: com espaço livre ao redor; nunca sobre a estampa, sobre rosto, sobre área visualmente complexa ou colado nas bordas."
+   }
+  },
+  "provenance": {
+   "angle": "user",
+   "brand_kit": "user",
+   "compiler": "planner_default",
+   "composition": "planner_default",
+   "context": "user",
+   "minor_safety.brand": "planner_default",
+   "minor_safety.global": "safety_policy",
+   "mode": "planner_default",
+   "model": "planner_default",
+   "niche_kit": "user",
+   "objective": "user",
+   "persona": "planner_default",
+   "placement": "user",
+   "products": "user",
+   "quality": "planner_default",
+   "references": "product",
+   "resolved_inputs": "brand",
+   "scene.gaze": "angle",
+   "scene.picks": "planner_default",
+   "scene.prompt_version": "planner_default",
+   "semantics": "planner_default",
+   "strategy": "user",
+   "subjects": "planner_default"
+  },
+  "seed": 5,
+  "compiler": {
+   "version": 1,
+   "sections": [
+    {
+     "section": "fidelity_rules",
+     "source": "product",
+     "value": "8",
+     "length": 1365
+    },
+    {
+     "section": "text_rules",
+     "source": "user",
+     "value": "remarketing",
+     "length": 518
+    },
+    {
+     "section": "reference_roles",
+     "source": "product",
+     "value": "refs:1",
+     "length": 125
+    },
+    {
+     "section": "scene_action",
+     "source": "angle",
+     "value": "CABIDE",
+     "length": 2192
+    },
+    {
+     "section": "strategy_communication",
+     "source": "user",
+     "value": "remarketing",
+     "length": 1740
+    },
+    {
+     "section": "brand",
+     "source": "brand",
+     "value": "Use Origens",
+     "length": 499
+    },
+    {
+     "section": "niche",
+     "source": "niche",
+     "value": "Moda / Vestuário",
+     "length": 301
+    },
+    {
+     "section": "context",
+     "source": "user",
+     "value": "geo:SC:oeste_meio_oeste",
+     "length": 218
+    },
+    {
+     "section": "avoid",
+     "source": "brand",
+     "value": "14",
+     "length": 486
+    },
+    {
+     "section": "output_format",
+     "source": "user",
+     "value": "FEED_4X5",
+     "length": 39
+    }
+   ]
+  },
+  "versions": {
+   "core_version": "1.1.0",
+   "schema_version": 1,
+   "prompt_version": 1,
+   "brand_kit_schema_version": 1,
+   "niche_kit_schema_version": 1,
+   "context_profile_schema_version": 1,
+   "clean_angles_version": 1,
+   "remarketing_version": 1,
+   "funnel_visual_version": 1,
+   "strategy_version": 1,
+   "compiler_version": 1,
+   "brand_kit_version": 1,
+   "niche_kit_version": 1,
+   "context_profile_version": 1
+  },
+  "validations": [
+   {
+    "rule": "product_count_within_limits",
+    "passed": true
+   },
+   {
+    "rule": "angle_available_for_brand_and_niche",
+    "passed": true
+   },
+   {
+    "rule": "context_profile_approved",
+    "passed": true
+   },
+   {
+    "rule": "references_are_product_art_only",
+    "passed": true
+   },
+   {
+    "rule": "remarketing_multi_product_allowed_for_intent",
+    "passed": true
+   }
+  ],
+  "warnings": []
+ }
+}

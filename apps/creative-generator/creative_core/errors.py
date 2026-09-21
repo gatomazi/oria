@@ -17,6 +17,7 @@ ERROR_CATALOG: dict[str, tuple[str, bool, str]] = {
     "INVALID_REFERENCE": ("Imagem de referência ausente ou em formato não suportado.", False, "validation"),
     "UNSUPPORTED_STRATEGY": ("Estratégia não disponível.", False, "validation"),
     "UNSUPPORTED_ANGLE": ("Ângulo não disponível para esta marca, nicho ou estratégia.", False, "validation"),
+    "INTERACTION_INCOMPATIBLE": ("A interação escolhida não cabe na quantidade de pessoas da cena.", False, "validation"),
     "UNSUPPORTED_PRODUCT_MODE": ("Modo de produto não suportado para esta combinação.", False, "validation"),
     "PRODUCT_COUNT_OUT_OF_RANGE": ("Quantidade de produtos fora do limite permitido.", False, "validation"),
     "INVALID_KIT": ("Brand Kit ou Niche Kit inválido.", False, "validation"),

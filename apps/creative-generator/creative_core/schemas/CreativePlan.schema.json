@@ -496,6 +496,10 @@
               "type": "null"
             }
           ]
+        },
+        "basis": {
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
@@ -674,6 +678,20 @@
             "automatic",
             "custom"
           ]
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
+            "teen",
+            "adult",
+            "senior",
+            "unknown"
+          ]
         }
       }
     },
@@ -766,6 +784,53 @@
               "type": "null"
             }
           ]
+        },
+        "interaction_source": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "user",
+                "product",
+                "product_enrichment",
+                "brand",
+                "niche",
+                "persona",
+                "angle",
+                "planner_default",
+                "safety_policy"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interaction_detail": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scene_mode": {
+          "type": "string",
+          "enum": [
+            "template",
+            "frame"
+          ]
+        },
+        "composition_source": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "recommended",
+            "legacy"
+          ]
         }
       }
     },
@@ -851,8 +916,12 @@
           "enum": [
             "baby",
             "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
             "teen",
             "adult",
+            "senior",
             "unknown"
           ]
         },
@@ -908,6 +977,27 @@
           ]
         },
         "relation_to_primary": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "mother",
+                "father",
+                "daughter",
+                "son",
+                "sibling",
+                "partner",
+                "friend",
+                "grandparent",
+                "custom"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relation_label": {
           "anyOf": [
             {
               "type": "string"

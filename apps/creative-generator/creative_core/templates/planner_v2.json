@@ -119,19 +119,43 @@
         0,
         2
       ],
-      "child": [
+      "child_3_5": [
         3,
-        11
+        5
+      ],
+      "child_6_9": [
+        6,
+        9
+      ],
+      "child_10_12": [
+        10,
+        12
       ],
       "teen": [
-        12,
+        13,
         17
       ],
       "adult": [
         18,
+        64
+      ],
+      "senior": [
+        65,
         200
       ]
-    }
+    },
+    "minor_bands": [
+      "baby",
+      "child",
+      "child_3_5",
+      "child_6_9",
+      "child_10_12",
+      "teen"
+    ],
+    "adult_bands": [
+      "adult",
+      "senior"
+    ]
   },
   "roles": {
     "_doc": "Role vocabulary read from persona labels, to match a supporting person against a product's semantic_context. Keywords are matched as whole words, accent-insensitive.",
@@ -212,7 +236,69 @@
       "grandparent": "avó ou avô",
       "partner": "parceiro ou parceira",
       "friend": "amigo ou amiga"
-    }
+    },
+    "wearer_personas": {
+      "child": {
+        "label": "criança de 6 a 9 anos",
+        "age_band": "child_6_9"
+      },
+      "baby": {
+        "label": "bebê",
+        "age_band": "baby"
+      },
+      "teen": {
+        "label": "adolescente",
+        "age_band": "teen"
+      }
+    },
+    "relation_roles": {
+      "mother": "mother",
+      "father": "father",
+      "sibling": "sibling",
+      "partner": "partner",
+      "friend": "friend",
+      "grandparent": "grandparent",
+      "daughter": "child",
+      "son": "child"
+    },
+    "relation_phrases": {
+      "mother": "mãe da {ref}",
+      "father": "pai da {ref}",
+      "daughter": "filha da {ref}",
+      "son": "filho da {ref}",
+      "sibling": "irmão ou irmã da {ref}",
+      "partner": "parceiro ou parceira da {ref}",
+      "friend": "amigo ou amiga da {ref}",
+      "grandparent": "avó ou avô da {ref}"
+    },
+    "age_phrases": {
+      "baby": "bebê",
+      "child": "criança",
+      "child_3_5": "criança de 3 a 5 anos",
+      "child_6_9": "criança de 6 a 9 anos",
+      "child_10_12": "criança de 10 a 12 anos",
+      "teen": "adolescente",
+      "adult": "adulto",
+      "senior": "pessoa idosa"
+    },
+    "person_labels": {
+      "_doc": "Labels for a supporting person the planner casts from a recommended role. Neutral on purpose: the relation to the primary is structured data (subject.relation_to_primary), so the label does not repeat it.",
+      "father": "homem adulto",
+      "mother": "mulher adulta",
+      "sibling": "criança de idade próxima à da principal",
+      "grandparent": "pessoa idosa",
+      "partner": "adulto, parceiro ou parceira",
+      "friend": "amigo ou amiga da mesma faixa etária"
+    },
+    "age_printed_for": [
+      "baby",
+      "child",
+      "child_3_5",
+      "child_6_9",
+      "child_10_12",
+      "teen",
+      "senior"
+    ]
   },
   "pose_risk": {
     "_doc": "Deterministic weights for the composition risk stored in the plan (used later to decide QA). people: 2 -> +1, 3 -> +2, 4 or more -> +4 (always high: a 4-person scene is advanced composition and is never suggested as the safe one); a held object -> +1 per object; physical contact between people -> +1. low <= 1, medium 2-3, high >= 4.",
@@ -255,6 +341,74 @@
         1,
         0
       ]
+    }
+  },
+  "angle_people": {
+    "_doc": "How many people the angle's scene supports (single-product). A composition outside it is a warning (never a block); more than 4 people is always an error. `recommend` says whether the planner may ADD a supporting person on its own for this angle (never for technical/close shots or the gift scene, which has its own template).",
+    "IDENTIDADE_ORIGEM": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "LIFESTYLE_COTIDIANO": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "ORGULHO_DISCRETO": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "PERTENCIMENTO": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "NOSTALGIA_ORIGEM": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "CAIMENTO": {
+      "min": 1,
+      "max": 1,
+      "recommend": false
+    },
+    "CLOSE_ESTAMPA": {
+      "min": 1,
+      "max": 1,
+      "recommend": false
+    },
+    "CLOSE_BOLSO": {
+      "min": 1,
+      "max": 1,
+      "recommend": false
+    },
+    "CREATOR_STYLE": {
+      "min": 1,
+      "max": 4,
+      "recommend": false
+    },
+    "PRESENTE_AFETO": {
+      "min": 2,
+      "max": 4,
+      "recommend": false
+    },
+    "CABIDE": {
+      "min": 0,
+      "max": 0,
+      "recommend": false
+    },
+    "PRODUTO_ESTAMPA": {
+      "min": 0,
+      "max": 0,
+      "recommend": false
+    },
+    "PREMIUM_ESTILO": {
+      "min": 0,
+      "max": 0,
+      "recommend": false
     }
   }
 }

@@ -15,6 +15,7 @@ from creative_core.compiler import SECTION_ORDER, compile_prompt
 from creative_core.engines import plan_creative
 from creative_core.errors import GenerationError
 from creative_core.kits import load_brand_kit
+from creative_core.versions import COMPILER_VERSION
 from creative_core.plan_sources import FIELD_SOURCES, required_user_fields, user_input_fields
 
 V2_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures_v2"
@@ -77,7 +78,7 @@ def test_given_every_fixture_when_planned_as_v2_then_plan_is_valid_and_carries_e
         for field in ("strategy", "product_mode", "products", "angle", "placement", "persona", "context", "brand_kit",
                       "niche_kit", "funnel_stage", "remarketing_intent", "layout", "overlay", "copy", "references", "model"):
             assert v2[field] == v1[field], (fixture["name"], field)
-        assert v2["versions"]["compiler_version"] == 1 and v2["versions"]["schema_version"] == v1["versions"]["schema_version"]
+        assert v2["versions"]["compiler_version"] == COMPILER_VERSION and v2["versions"]["schema_version"] == v1["versions"]["schema_version"]
 
 
 def test_given_a_v2_plan_then_recompiling_it_reproduces_the_prompt_exactly_even_after_a_json_round_trip():
@@ -227,19 +228,24 @@ def test_given_a_short_product_and_a_no_shorts_policy_then_a_warning_is_raised_a
     assert any(w.startswith("brand_wardrobe_conflicts_with_product:") for w in plan["warnings"])
 
 
-def test_given_age_evidence_then_minor_detection_follows_label_then_range_then_words_then_product():
+def test_given_age_evidence_then_minor_detection_prefers_the_declared_band_then_falls_back_to_text_and_product():
     detect = planner_v2.detect_age
-    assert detect({"label": "menina 6 anos"}) == ("child", "persona.label")
+    assert detect({"label": "Ana", "age_band": "child_3_5"}) == ("child_3_5", "persona.age_band"), "declared age first"
+    assert detect({"label": "mulher 30 anos", "age_band": "child_6_9"}) == ("child_6_9", "persona.age_band"), "even over the label"
+    assert detect({"label": "menina 6 anos"}) == ("child_6_9", "persona.label")
     assert detect({"label": "mulher 35 anos, mãe da menina"}) == ("adult", "persona.label"), "the number wins over 'menina'"
     assert detect({"label": "jovem", "age_range": "15-17"}) == ("teen", "persona.age_range")
     assert detect({"label": "Mulher 30 anos", "age_range": "3-5"}) == ("adult", "persona.label")
     assert detect({"label": "bebê sorrindo"}) == ("child", "persona.label") and detect({"label": "homem de barba"}) == ("adult", "persona.label")
     assert detect({"label": "pessoa estilosa"}) == ("unknown", None) and detect(None) == ("unknown", None)
     assert detect({"label": "criança"})[0] == "child" and detect({"label": "bebe 1 ano"})[0] == "baby"
+    assert detect({"label": "vovó 70 anos"})[0] == "senior" and detect({"label": "menino 11 anos"})[0] == "child_10_12"
+    assert detect({"label": "x", "age_band": "unknown"}) == ("unknown", None), "unknown is not evidence"
     request = _req(persona_mode="custom", persona={"label": "modelo"}, plan_schema_version=2)
     request["products"][0]["type"] = "body infantil"
     plan = plan_creative(request, router=ROUTER)
     assert plan["subjects"][0]["is_minor"] and plan["subjects"][0]["minor_source"] == "product.type"
+    assert plan["minor_safety"]["basis"] == {"explicit": [], "heuristic": ["s1"]}
 
 
 def test_given_an_adult_and_a_child_then_the_adult_child_contact_rule_is_part_of_the_plan_and_the_prompt():

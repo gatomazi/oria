@@ -1,0 +1,174 @@
+{
+  "_doc": "Catalog of person interactions (Fase C1). Everything the planner and compiler know about an interaction is here, as data: how many people it needs, which ages it does not suit, how much contact / hand work / object use it involves, the gaze it implies, its contribution to pose risk, and the two sentences the compiler writes for it. No interaction logic lives in `if` chains. A new interaction is a new entry; changing a text or number bumps COMPILER_VERSION.",
+  "version": 1,
+  "interactions": {
+    "candid": {
+      "label": "espontâneo",
+      "min_people": 1,
+      "max_people": 4,
+      "excluded_bands": [],
+      "contact": "none",
+      "hand_complexity": 0,
+      "object_use": "none",
+      "gaze_default": "off_camera",
+      "pose_risk": 0,
+      "scene": "as pessoas convivem de forma natural e espontânea, lado a lado ou levemente voltadas umas para as outras, sem posar para a câmera.",
+      "hands": "mãos relaxadas ao lado do corpo ou apoiadas numa superfície do ambiente; nenhuma mão cruza o corpo de outra pessoa."
+    },
+    "talking": {
+      "label": "conversando",
+      "min_people": 2,
+      "max_people": 3,
+      "excluded_bands": [
+        "baby"
+      ],
+      "contact": "none",
+      "hand_complexity": 1,
+      "object_use": "none",
+      "gaze_default": "interaction",
+      "pose_risk": 0,
+      "scene": "conversam de forma leve, uma voltada para a outra, em pé ou sentadas.",
+      "hands": "mãos relaxadas ou uma delas gesticulando de leve, sem tocar a outra pessoa."
+    },
+    "looking_at_each_other": {
+      "label": "olhando uma para a outra",
+      "min_people": 2,
+      "max_people": 2,
+      "excluded_bands": [],
+      "contact": "none",
+      "hand_complexity": 0,
+      "object_use": "none",
+      "gaze_default": "interaction",
+      "pose_risk": 0,
+      "scene": "olham uma para a outra com expressão calorosa, próximas mas sem se abraçar.",
+      "hands": "mãos relaxadas ao lado do corpo."
+    },
+    "walking": {
+      "label": "caminhando",
+      "min_people": 2,
+      "max_people": 4,
+      "excluded_bands": [
+        "baby"
+      ],
+      "contact": "none",
+      "hand_complexity": 0,
+      "object_use": "none",
+      "gaze_default": "off_camera",
+      "pose_risk": 1,
+      "scene": "caminham juntas lado a lado, em passo tranquilo, no mesmo sentido.",
+      "hands": "braços soltos em movimento natural, sem segurar objetos."
+    },
+    "hugging": {
+      "label": "abraçando",
+      "min_people": 2,
+      "max_people": 3,
+      "excluded_bands": [],
+      "contact": "physical",
+      "hand_complexity": 2,
+      "object_use": "none",
+      "gaze_default": "interaction",
+      "pose_risk": 2,
+      "scene": "abraço espontâneo e afetuoso, sem posar.",
+      "hands": "os braços de cada pessoa envolvem a outra de forma simples, com uma mão de cada uma visível nas costas ou no ombro; nenhuma mão cruza o rosto de ninguém."
+    },
+    "reading_together": {
+      "label": "lendo juntos",
+      "min_people": 2,
+      "max_people": 3,
+      "excluded_bands": [
+        "baby"
+      ],
+      "contact": "light",
+      "hand_complexity": 2,
+      "object_use": "light",
+      "gaze_default": "interaction",
+      "pose_risk": 1,
+      "scene": "leem um livro juntas, sentadas lado a lado, com o livro aberto apoiado no colo da pessoa mais nova.",
+      "hands": "uma pessoa segura o livro pelas laterais e a outra apoia uma mão na página; nenhuma mão cruza o corpo de outra pessoa."
+    },
+    "playing": {
+      "label": "brincando",
+      "min_people": 2,
+      "max_people": 3,
+      "excluded_bands": [
+        "baby"
+      ],
+      "contact": "light",
+      "hand_complexity": 2,
+      "object_use": "heavy",
+      "gaze_default": "interaction",
+      "pose_risk": 2,
+      "scene": "brincam juntas com um brinquedo simples e coerente com a estampa (uma pipa, uma bola, blocos), em atividade compartilhada ao ar livre ou em casa.",
+      "hands": "cada pessoa segura o brinquedo com uma ou duas mãos, de forma simples; o objeto fica entre elas e visível."
+    },
+    "cooking": {
+      "label": "cozinhando",
+      "min_people": 2,
+      "max_people": 3,
+      "excluded_bands": [
+        "baby"
+      ],
+      "contact": "light",
+      "hand_complexity": 3,
+      "object_use": "heavy",
+      "gaze_default": "interaction",
+      "pose_risk": 2,
+      "scene": "cozinham juntas na bancada, uma mexendo um ingrediente e a outra observando ou ajudando.",
+      "hands": "no máximo uma mão de cada pessoa em contato com um utensílio; a bancada esconde parte do corpo."
+    },
+    "doing_activity": {
+      "label": "fazendo uma atividade",
+      "min_people": 2,
+      "max_people": 3,
+      "excluded_bands": [
+        "baby"
+      ],
+      "contact": "light",
+      "hand_complexity": 2,
+      "object_use": "heavy",
+      "gaze_default": "interaction",
+      "pose_risk": 2,
+      "scene": "fazem juntas uma atividade cotidiana simples em casa (desenhar, montar um quebra-cabeça, regar plantas).",
+      "hands": "as mãos ocupam o mesmo objeto sem se sobrepor; cada mão fica claramente separada das outras."
+    },
+    "gifting": {
+      "label": "presenteando",
+      "min_people": 2,
+      "max_people": 3,
+      "excluded_bands": [],
+      "contact": "light",
+      "hand_complexity": 2,
+      "object_use": "light",
+      "gaze_default": "interaction",
+      "pose_risk": 1,
+      "scene": "uma pessoa entrega a peça dobrada à outra, que a recebe; a estampa fica visível.",
+      "hands": "quem entrega segura a peça dobrada com as duas mãos, por baixo, à altura do peito; quem recebe a segura com as duas mãos; nenhuma mão cruza o corpo da outra pessoa."
+    },
+    "group_photo": {
+      "label": "foto de grupo",
+      "min_people": 3,
+      "max_people": 4,
+      "excluded_bands": [],
+      "contact": "light",
+      "hand_complexity": 1,
+      "object_use": "none",
+      "gaze_default": "camera",
+      "pose_risk": 1,
+      "scene": "reúnem-se para uma foto de grupo espontânea, próximos uns dos outros, em alturas naturais (adultos em pé, crianças à frente), sem pose de estúdio.",
+      "hands": "ombros próximos, braços soltos ao lado do corpo ou em volta dos ombros de quem está ao lado; ninguém segura objetos."
+    }
+  },
+  "intent_map": {
+    "_doc": "product.semantic_context.scene_intents -> interaction. The first intent whose interaction fits the number of people wins.",
+    "play": "playing",
+    "reading": "reading_together",
+    "study": "reading_together",
+    "gift": "gifting",
+    "bond": "looking_at_each_other",
+    "family": "candid",
+    "everyday": "candid",
+    "outing": "walking",
+    "celebration": "group_photo"
+  },
+  "default_for_group": "candid"
+}

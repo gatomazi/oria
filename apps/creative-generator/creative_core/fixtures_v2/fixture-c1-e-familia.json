@@ -1,0 +1,152 @@
+{
+  "name": "fixture-c1-e-familia",
+  "description": "Case E — a family of four (child, sibling, mother, father): high pose risk, people_count_risk warning, simple group pose.",
+  "input": {
+    "creative_id": "33333333-3333-4333-8333-333333333333",
+    "strategy": "CLEAN_ANGLES",
+    "product_mode": "multi_product",
+    "products": [
+      {
+        "id": "familia-crianca1",
+        "name": "Família Entre Nós — Criança 1",
+        "type": "camiseta infantil",
+        "description": "camiseta infantil com estampa de família de ursinhos",
+        "referenceImages": [
+          "tenant-demo/products/familia-crianca1/front.webp"
+        ]
+      },
+      {
+        "id": "familia-crianca2",
+        "name": "Família Entre Nós — Criança 2",
+        "type": "camiseta infantil",
+        "description": "camiseta infantil com estampa de família de ursinhos, variação",
+        "referenceImages": [
+          "tenant-demo/products/familia-crianca2/front.webp"
+        ]
+      }
+    ],
+    "brand_kit": {
+      "id": "entre_nos_ab",
+      "name": "Entre Nós",
+      "schemaVersion": 1,
+      "version": 1,
+      "positioning": [
+        "camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa"
+      ],
+      "visualStyle": [
+        "editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo",
+        "luz natural quente e suave, hora dourada ou luz de janela",
+        "materiais tácteis e domésticos: tecidos, madeira, linho, papel"
+      ],
+      "colors": [
+        "creme e bege quente",
+        "bordô/vinho profundo",
+        "marrom terroso",
+        "navy",
+        "off-white"
+      ],
+      "manualNotes": [
+        "Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.",
+        "Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.",
+        "Crianças em cena sempre à vontade e em interação real com o adulto."
+      ],
+      "avoid": [
+        "estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans)",
+        "clima de propaganda de margarina",
+        "cenário de imobiliária sem sinal de uso"
+      ],
+      "suggestedPersonas": [
+        {
+          "label": "menina 6 anos",
+          "source": "automatic"
+        },
+        {
+          "label": "mulher 35 anos, mãe da menina",
+          "source": "automatic"
+        }
+      ],
+      "minorWardrobePolicy": {
+        "enabled": true,
+        "legs_coverage": "full",
+        "allow_short_shorts": false,
+        "allow_short_skirts": false,
+        "allow_revealing_clothing": false,
+        "style": "casual_age_appropriate"
+      }
+    },
+    "niche_kit_id": "fashion",
+    "angle_id": "LIFESTYLE_COTIDIANO",
+    "placement_id": "FEED_4X5",
+    "persona_mode": "automatic",
+    "context": {
+      "mode": "custom",
+      "profile": {
+        "contextId": "entre_nos_sala",
+        "contextType": "custom",
+        "subject": {
+          "name": "Sala de estar acolhedora"
+        },
+        "summary": "Rotina dentro de casa",
+        "sceneContexts": [
+          "sala de estar acolhedora com sofá, manta e luz natural lateral"
+        ],
+        "domainElements": [
+          "manta de tricô jogada no encosto"
+        ],
+        "avoid": [
+          "qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado"
+        ],
+        "status": "approved",
+        "schemaVersion": 1,
+        "promptVersion": 1,
+        "profileVersion": 1
+      }
+    },
+    "quality": "medium",
+    "seed": 100,
+    "plan_schema_version": 2,
+    "prompt_version": 2,
+    "subjects": [
+      {
+        "id": "crianca1",
+        "role": "primary",
+        "persona": {
+          "label": "menino 8 anos",
+          "age_band": "child_6_9"
+        },
+        "wears_product_id": "familia-crianca1"
+      },
+      {
+        "id": "crianca2",
+        "role": "supporting",
+        "persona": {
+          "label": "menina 5 anos",
+          "age_band": "child_3_5"
+        },
+        "relation_to_primary": "sibling",
+        "wears_product_id": "familia-crianca2"
+      },
+      {
+        "id": "mae",
+        "role": "supporting",
+        "persona": {
+          "label": "mulher 36 anos",
+          "age_band": "adult"
+        },
+        "relation_to_primary": "mother",
+        "wears_product_id": null
+      },
+      {
+        "id": "pai",
+        "role": "supporting",
+        "persona": {
+          "label": "homem 38 anos",
+          "age_band": "adult"
+        },
+        "relation_to_primary": "father",
+        "wears_product_id": null
+      }
+    ],
+    "interaction": "group_photo"
+  }
+}

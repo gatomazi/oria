@@ -326,16 +326,18 @@ def plan_creative(
     if plan_schema != PLAN_SCHEMA_V2 and request.get("gaze_mode") not in (None, "auto"):
         warnings.append("gaze_mode_ignored_needs_plan_schema_2")  # a v1 plan has no gaze; say so instead of dropping it silently
     v2_extra: dict = {}
+    plan_persona = persona
     if plan_schema == PLAN_SCHEMA_V2:
         planned = planner_v2.build(
             request=request, angle_id=angle_id, strategy=strategy, products=products, brand=brand, niche=niche,
             persona=persona, people=people, people_needed=people_needed, prompt_version=prompt_version, seed=seed,
             apparel=apparel, pool=persona_pool(brand, niche), engine=engine)
         warnings.extend(planned["warnings"])
+        plan_persona = planned["persona"]
         view = {
             "schema_version": PLAN_SCHEMA_V2, "strategy": strategy, "funnel_stage": None if strategy == "CLEAN_ANGLES" else stage,
             "products": products, "references": roles, "angle": angle, "context": context,
-            "placement": placement_descriptor(request["placement_id"]), "persona": persona, **planned["fields"],
+            "placement": placement_descriptor(request["placement_id"]), "persona": plan_persona, **planned["fields"],
         }
         view["provenance"], view["provenance_sources"] = planner_v2.build_provenance(
             request=request, plan=view, brand=brand, niche=niche, semantics_source=planned["semantics_source"])
@@ -402,7 +404,7 @@ def plan_creative(
         "products": products,
         "angle": angle,
         "placement": placement_descriptor(request["placement_id"]),
-        "persona": persona,
+        "persona": plan_persona,
         "context": context,
         "brand_kit": kit_ref(brand),
         "niche_kit": kit_ref(niche),

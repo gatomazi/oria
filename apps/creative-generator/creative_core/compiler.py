@@ -7,6 +7,11 @@ thousands of characters:
 
     {"section": "gaze", "source": "angle", "value": "camera", "length": 74}
 
+Compiler versions: 1 (Fase B) is frozen and stays compilable, so a stored Fase B plan recompiles byte for byte; 2
+(Fase C1) writes the subjects contract with ages and relations, adds the `interaction` section and, for scenes that are
+not the angle's own template, an angle `frame`. `compile_prompt` reads the version from the plan (`plan["compiler"]`)
+and uses the current one for a plan that has not been compiled yet.
+
 Section order (justified, not the audit's first draft): the absolute rules stay first, as in v1 — fidelity_rules,
 text_rules, minor_safety — because they are the ones the model must not lose; then what is in the frame (references,
 product meaning, people, gaze, scene, wardrobe), then brand/niche/context, and avoid + output_format last, as in v1.
@@ -34,10 +39,11 @@ from .blocks import (
     _product_block,
     _product_label,
 )
+from .composition import fold
 from .personas import describe_identity
 from .planner_v2 import DATA as PLANNER, MINOR
 from .products import garment_for_type
-from .versions import COMPILER_VERSION
+from .versions import COMPILER_VERSION, SUPPORTED_COMPILER_VERSIONS
 
 _TEMPLATES = Path(__file__).parent / "templates"
 with open(_TEMPLATES / "compiler_v2.json", encoding="utf-8") as _f:
@@ -47,6 +53,12 @@ SECTION_ORDER = (
     "fidelity_rules", "text_rules", "minor_safety", "reference_roles", "product_semantic_context",
     "people_composition_contract", "gaze", "scene_action", "minor_wardrobe_policy", "strategy_communication",
     "brand", "niche", "context", "avoid", "output_format",
+)
+# Version 2 adds the interaction, right after the gaze it may imply.
+SECTION_ORDER_V2 = (
+    "fidelity_rules", "text_rules", "minor_safety", "reference_roles", "product_semantic_context",
+    "people_composition_contract", "gaze", "interaction", "scene_action", "minor_wardrobe_policy",
+    "strategy_communication", "brand", "niche", "context", "avoid", "output_format",
 )
 
 
@@ -176,10 +188,78 @@ def _wardrobe(plan: dict) -> tuple[str, str, str]:
     return cfg["header"] + " " + "; ".join(parts) + ".", "brand", effective["legs_coverage"]
 
 
-def compile_prompt(plan: dict) -> dict:
-    """CompiledPrompt for a schema_version 2 plan. Raises ValueError for anything else: v1 plans keep the v1 builder."""
-    if plan.get("schema_version") != 2:
-        raise ValueError("compile_prompt needs a CreativePlan with schema_version 2")
+# ------------------------------------------------------------------ compiler version 2 (Fase C1)
+def _name(plan: dict, index: int, count: int) -> str:
+    gift = plan["angle"]["id"] == prompt_v2.GIFT_ANGLE and plan["scene"]["prompt_version"] == 2 and count == 2 \
+        and plan["scene"]["scene_mode"] == "template"
+    return ("Pessoa A", "Pessoa B")[index] if gift else f"Pessoa {index + 1}"
+
+
+def _people_v2(plan: dict) -> tuple[str, str, str, list | None]:
+    """The subjects contract: how many people, and for each one its role, age, relation to the primary and what it
+    wears — then, only where a persona says more than its label, a details block. Nothing here is inferred from text."""
+    subjects = plan["subjects"]
+    if not subjects:
+        return "", "planner_default", "0", None
+    cfg = TEXT["people"]
+    sub = TEXT["subjects"]
+    products = {p["id"]: p for p in plan["products"]}
+    count = cfg["count_one"] if len(subjects) == 1 else cfg["count_many"].format(n=len(subjects))
+    names = [_name(plan, i, len(subjects)) for i in range(len(subjects))]
+    lines = []
+    for i, subject in enumerate(subjects):
+        band = subject["age_band"]
+        # The age is printed where it adds something (minors, seniors) and when the label does not already say it;
+        # an adult is the default and needs no phrase.
+        phrase_age = PLANNER["roles"]["age_phrases"].get(band, "")
+        redundant = not phrase_age or band not in PLANNER["roles"]["age_printed_for"] \
+            or fold(phrase_age.split(" ")[0]) in fold(subject["label"])
+        age = "" if redundant else sub["age"].format(value=phrase_age)
+        relation = subject.get("relation_to_primary")
+        phrase = ""
+        if relation == "custom":
+            phrase = sub["relation"].format(value=subject.get("relation_label") or "")
+        elif relation:
+            phrase = sub["relation"].format(value=PLANNER["roles"]["relation_phrases"][relation].format(ref=names[0]))
+        use = cfg["uses"][subject["product_use"]].format(product=_product_label(products[subject["product_id"]]) if subject["product_id"] else "")
+        lines.append(sub["line"].format(name=names[i], role=cfg["roles"][subject["role"]], label=subject["label"],
+                                        age=age, relation=phrase, use=use))
+    contract = sub["header"].format(count=count) + "\n" + "\n".join(lines)
+    angle_id = plan["angle"]["id"]
+    detail_lines = []
+    for i, subject in enumerate(subjects):
+        person = subject["persona"] or {}
+        identity = "; ".join(person[k] for k in ("appearance", "style", "notes") if person.get(k))
+        behavior = prompt_v2.compatible_behavior(angle_id, person.get("behavior") or "") if angle_id in prompt_v2.PROMPT_V2_ANGLES else (person.get("behavior") or "")
+        if identity or behavior:
+            detail_lines.append(sub["details_line"].format(
+                name=names[i], identity=identity or subject["label"],
+                behavior=sub["details_behavior"].format(value=behavior) if behavior else ""))
+    text = contract + ("\n\n" + sub["details_header"] + "\n" + "\n".join(detail_lines) if detail_lines else "")
+    return text, plan["provenance"].get("subjects", "planner_default"), str(len(subjects)), (plan.get("provenance_sources") or {}).get("subjects")
+
+
+def _interaction(plan: dict) -> tuple[str, str, str, list | None]:
+    detail = plan["scene"].get("interaction_detail")
+    if not detail:
+        return "", "planner_default", "", None
+    text = TEXT["interaction"]["line"].format(label=detail["label"], scene=detail["scene"], hands=detail["hands"])
+    return text, plan["scene"]["interaction_source"] or "planner_default", detail["id"]
+
+
+def _scene_v2(plan: dict) -> tuple[str, str, str, list | None]:
+    """The angle's own person scene (`template`, Fase B behavior) or an angle frame — the angle's description and the
+    setting — leaving the people to the subjects contract and the interaction section."""
+    if plan["scene"].get("scene_mode", "template") == "template":
+        return _scene(plan)
+    angle = plan["angle"]
+    frame = TEXT["frames"].get(angle["id"])
+    text = frame.format(scene=plan["context"]["scene"]) if frame else TEXT["frame"]["line"].format(
+        label=angle["label"].upper(), description=angle["description"], scene=plan["context"]["scene"])
+    return text, "angle", angle["id"]
+
+
+def _builders(plan: dict, version: int) -> dict:
     resolved = plan["resolved_inputs"]
     uses_person = bool(plan["subjects"])
     strategy_text = resolved["strategy"]
@@ -201,8 +281,27 @@ def compile_prompt(plan: dict) -> dict:
         "avoid": lambda: (_avoid_block(plan["context"]["avoid"]), "brand", str(len(plan["context"]["avoid"]))),
         "output_format": lambda: (COMMUNICATION["placements"][plan["placement"]["id"]], "user", plan["placement"]["id"]),
     }
+    if version >= 2:
+        builders["people_composition_contract"] = lambda: _people_v2(plan)
+        builders["interaction"] = lambda: _interaction(plan)
+        builders["scene_action"] = lambda: _scene_v2(plan)
+    return builders
+
+
+def compile_prompt(plan: dict, version: int | None = None) -> dict:
+    """CompiledPrompt for a schema_version 2 plan. Raises ValueError for anything else: v1 plans keep the v1 builder.
+
+    The compiler version is the plan's own (`plan["compiler"]["version"]`), so a persisted plan recompiles with the
+    compiler that produced it; a plan not compiled yet gets the current version (or the one asked for)."""
+    if plan.get("schema_version") != 2:
+        raise ValueError("compile_prompt needs a CreativePlan with schema_version 2")
+    version = version or (plan.get("compiler") or {}).get("version") or COMPILER_VERSION
+    if version not in SUPPORTED_COMPILER_VERSIONS:
+        raise ValueError(f"unknown compiler version {version}")
+    builders = _builders(plan, version)
+    order = SECTION_ORDER_V2 if version >= 2 else SECTION_ORDER
     sections, texts = [], []
-    for name in SECTION_ORDER:
+    for name in order:
         text, source, value, *parts = builders[name]()
         if not text:
             continue
@@ -214,7 +313,7 @@ def compile_prompt(plan: dict) -> dict:
     text = "\n\n".join(texts)
     return {
         "text": text, "sections": sections, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        "compiler_version": COMPILER_VERSION, "prompt_version": plan["scene"]["prompt_version"],
+        "compiler_version": version, "prompt_version": plan["scene"]["prompt_version"],
     }
 
 

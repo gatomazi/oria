@@ -59,7 +59,14 @@ GAZE_RESOLVED = ("camera", "interaction", "off_camera", "product", "none")
 VALUE_ORIGINS = ("user", "product", "product_enrichment", "brand", "niche", "persona", "angle", "planner_default", "safety_policy")
 # Aggregate marker for a composed section whose parts come from different origins (never a leaf origin).
 MIXED_ORIGIN = "mixed"
-AGE_BANDS = ("baby", "child", "teen", "adult", "unknown")
+# Fase C: finer bands. `child` (no range) stays valid: it is what Fase B plans stored and what word-only evidence yields.
+AGE_BANDS = ("baby", "child", "child_3_5", "child_6_9", "child_10_12", "teen", "adult", "senior", "unknown")
+MINOR_BANDS = ("baby", "child", "child_3_5", "child_6_9", "child_10_12", "teen")
+# How a supporting person relates to the PRIMARY subject ("mother" = this subject is the primary's mother).
+RELATION_TYPES = ("mother", "father", "daughter", "son", "sibling", "partner", "friend", "grandparent", "custom")
+MAX_SUBJECTS = 4
+COMPOSITION_SOURCES = ("explicit", "recommended", "legacy")
+SCENE_MODES = ("template", "frame")
 LEGS_COVERAGES = ("full", "knee", "default")
 POSE_RISKS = ("low", "medium", "high")
 PRODUCT_USES = ("wears", "uses", "none")
@@ -136,6 +143,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "behavior": S(max_length=1000),
         "notes": S(max_length=1000),
         "source": S(enum=PERSONA_SOURCES),
+        "age_band": S(enum=AGE_BANDS),  # structured age; preferred over guessing from the label (Fase C)
     },
     # The brand's wardrobe preference for minors. It can only ADD restrictions to the global minor policy:
     # `allow_revealing_clothing` is accepted for the shape but has no effect (the global layer forbids it).
@@ -290,6 +298,19 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "recent_scenes": A(S(max_length=500), max_items=50),
         "recent_personas": A(S(max_length=200), max_items=50),
     },
+    # One person of the scene as the caller states it (Fase C). Optional: without `subjects` the planner recommends a
+    # composition (from the product's semantics) or falls back to the persona alone. Nothing here is required.
+    "RequestSubject": {
+        "id": S(min_length=1, max_length=20),
+        "role": S(enum=SUBJECT_ROLES),
+        "persona": R("Persona", required=True),
+        "age_band": S(enum=AGE_BANDS),
+        "relation_to_primary": S(enum=RELATION_TYPES),
+        "relation_label": S(max_length=60),  # the free text of a `custom` relation
+        # absent = the planner assigns; null = explicitly wears nothing; an id = wears/uses that product
+        "wears_product_id": S(nullable=True, max_length=120),
+        "prominence": S(enum=SUBJECT_PROMINENCE),
+    },
     "CreativeRequest": {
         "creative_id": S(max_length=120),
         "strategy": S(required=True, enum=PUBLIC_STRATEGIES),
@@ -315,6 +336,11 @@ CONTRACTS: dict[str, dict[str, F]] = {
         # Fase B: 2 builds a CreativePlan v2 and compiles it with the v2 compiler; default 1 = the v1 builder.
         "plan_schema_version": I(minimum=1, maximum=2),
         "gaze_mode": S(enum=GAZE_MODES),
+        # Fase C: explicit composition. `interaction` is an id of templates/interactions.json (validated by the planner,
+        # so the catalog can grow without a schema change); `scene_picks` replays the exact pool entries of an earlier plan.
+        "subjects": A(R("RequestSubject"), max_items=MAX_SUBJECTS),
+        "interaction": S(min_length=1, max_length=40),
+        "scene_picks": O(),
     },
     "KitRef": {
         "id": S(required=True),
@@ -384,7 +410,8 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "product_use": S(required=True, enum=PRODUCT_USES),
         "product_id": S(nullable=True),
         "role_hint": S(nullable=True),
-        "relation_to_primary": S(nullable=True),  # slot for Fase C (Subjects/Relations); always null in Fase B
+        "relation_to_primary": S(nullable=True, enum=RELATION_TYPES),  # to the primary; null for the primary itself
+        "relation_label": S(nullable=True),
         "prominence": S(required=True, enum=SUBJECT_PROMINENCE),
         "source": S(required=True, enum=VALUE_ORIGINS),
     },
@@ -398,7 +425,11 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "gaze": R("GazeResolution", required=True),
         "picks": O(required=True),  # pool -> {"index", "text"}: the choices the image model used to make on its own
         "prompt_version": I(required=True),  # wording version of the scene text (1 generic, 2 person scenes)
-        "interaction": S(nullable=True),  # slot for Fase C; null in Fase B
+        "interaction": S(nullable=True),  # id in templates/interactions.json; null when there is none
+        "interaction_source": S(nullable=True, enum=VALUE_ORIGINS),
+        "interaction_detail": O(nullable=True),  # the catalog entry as resolved, so the plan recompiles on its own
+        "scene_mode": S(enum=SCENE_MODES),  # template = the angle's own person scene; frame = angle frame + subjects + interaction
+        "composition_source": S(enum=COMPOSITION_SOURCES),  # who decided the cast: the request, the planner from the product, or the legacy persona
     },
     "PlanComposition": {
         "people_count": I(required=True, minimum=0),
@@ -410,6 +441,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "minor_subject_ids": A(S(), required=True),
         "global": O(required=True),  # {policy, version, rules[], adult_child_rule|null}
         "brand": O(nullable=True),  # {policy, source, requested, effective, ignored[]} — null when the brand set none
+        "basis": O(),  # {"explicit": [subject ids whose age was declared], "heuristic": [ids inferred from text/product]}
     },
     "PlanSemantics": {
         "products": A(O(), required=True),  # [{product_id, semantic_context|null}]

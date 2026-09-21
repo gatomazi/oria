@@ -1,0 +1,515 @@
+{
+ "name": "fixture-remarketing-multi-pv1",
+ "request": {
+  "creative_id": "44444444-4444-4444-8444-444444444444",
+  "strategy": "REMARKETING",
+  "product_mode": "multi_product",
+  "products": [
+   {
+    "id": "top-azul",
+    "name": "Top Azul",
+    "type": "top fitness",
+    "referenceImages": [
+     "fit/p/top-azul.png"
+    ]
+   },
+   {
+    "id": "top-verde",
+    "name": "Top Verde",
+    "type": "top fitness",
+    "referenceImages": [
+     "fit/p/top-verde.png"
+    ]
+   },
+   {
+    "id": "legging-preta",
+    "name": "Legging Preta",
+    "type": "legging",
+    "referenceImages": [
+     "fit/p/legging-preta.png"
+    ]
+   },
+   {
+    "id": "shorts-cinza",
+    "name": "Shorts Cinza",
+    "type": "shorts",
+    "referenceImages": [
+     "fit/p/shorts-cinza.png"
+    ]
+   }
+  ],
+  "brand_kit": {
+   "id": "fitness_brand_x",
+   "name": "Fitness Brand X",
+   "positioning": [
+    "roupa de treino que acompanha a rotina"
+   ],
+   "visualStyle": [
+    "energia",
+    "luz dura de manhã",
+    "contraste"
+   ],
+   "defaultContextProvider": "custom",
+   "schemaVersion": 1,
+   "version": 1
+  },
+  "niche_kit_id": "fashion",
+  "angle_id": "PRODUTO_ESTAMPA",
+  "placement_id": "FEED_4X5",
+  "context": {
+   "mode": "custom",
+   "profile": {
+    "contextId": "ctx-studio-treino",
+    "contextType": "custom",
+    "subject": {
+     "name": "Estúdio de treino"
+    },
+    "summary": "estúdio funcional com piso emborrachado",
+    "sceneContexts": [
+     "piso emborrachado cinza de estúdio funcional com luz lateral"
+    ],
+    "materials": [
+     "borracha",
+     "metal escovado"
+    ],
+    "avoid": [
+     "academia lotada"
+    ],
+    "status": "approved",
+    "schemaVersion": 1,
+    "promptVersion": 1,
+    "profileVersion": 2
+   }
+  },
+  "remarketing": {
+   "intent": "collection_discovery",
+   "products_source": "catalog"
+  },
+  "seed": 8,
+  "plan_schema_version": 2,
+  "prompt_version": 1
+ },
+ "plan": {
+  "plan_id": "plan_f07c661724075368669d1f84",
+  "creative_id": "44444444-4444-4444-8444-444444444444",
+  "schema_version": 2,
+  "strategy": "REMARKETING",
+  "internal_strategy_id": "REMARKETING",
+  "product_mode": "multi_product",
+  "products": [
+   {
+    "id": "top-azul",
+    "name": "Top Azul",
+    "type": "top fitness",
+    "referenceImages": [
+     "fit/p/top-azul.png"
+    ]
+   },
+   {
+    "id": "top-verde",
+    "name": "Top Verde",
+    "type": "top fitness",
+    "referenceImages": [
+     "fit/p/top-verde.png"
+    ]
+   },
+   {
+    "id": "legging-preta",
+    "name": "Legging Preta",
+    "type": "legging",
+    "referenceImages": [
+     "fit/p/legging-preta.png"
+    ]
+   },
+   {
+    "id": "shorts-cinza",
+    "name": "Shorts Cinza",
+    "type": "shorts",
+    "referenceImages": [
+     "fit/p/shorts-cinza.png"
+    ]
+   }
+  ],
+  "angle": {
+   "id": "PRODUTO_ESTAMPA",
+   "label": "Flatlay",
+   "description": "Produto fotografado de cima, sem pessoa — melhor leitura de detalhe e material.",
+   "uses_person": false,
+   "apparel_only": false,
+   "multi_product_limit": 6
+  },
+  "placement": {
+   "id": "FEED_4X5",
+   "label": "Feed (4:5 — 1080×1350)",
+   "width": 1080,
+   "height": 1350,
+   "api_size": "1088x1360"
+  },
+  "persona": null,
+  "context": {
+   "context_id": "ctx-studio-treino",
+   "context_type": "custom",
+   "provider": "custom",
+   "scene": "piso emborrachado cinza de estúdio funcional com luz lateral",
+   "supporting_element": null,
+   "avoid": [
+    "academia lotada",
+    "peça deformada ou com proporção irreal",
+    "tecido liso como vetor, sem trama",
+    "produto parecendo adesivo colado na foto"
+   ],
+   "status": "approved",
+   "profile_version": 2
+  },
+  "brand_kit": {
+   "id": "fitness_brand_x",
+   "version": 1
+  },
+  "niche_kit": {
+   "id": "fashion",
+   "version": 1
+  },
+  "funnel_stage": "MOFU",
+  "remarketing_intent": "collection_discovery",
+  "layout": "flatlay_grid",
+  "overlay": {
+   "allowed": true,
+   "headline": "Não achou o seu ainda?",
+   "subheadline": "Várias opções disponíveis",
+   "cta": "Ver todas →",
+   "badges": [],
+   "benefits": [],
+   "search_bar_text": null,
+   "chips": [],
+   "text_density": "balanced",
+   "cta_emphasis": "medium",
+   "clean": false
+  },
+  "copy": {
+   "generate": false,
+   "funnel_stages": [
+    "MOFU"
+   ]
+  },
+  "references": [
+   {
+    "ref": "fit/p/top-azul.png",
+    "product_id": "top-azul",
+    "role": "product_art",
+    "order": 1
+   },
+   {
+    "ref": "fit/p/top-verde.png",
+    "product_id": "top-verde",
+    "role": "product_art",
+    "order": 2
+   },
+   {
+    "ref": "fit/p/legging-preta.png",
+    "product_id": "legging-preta",
+    "role": "product_art",
+    "order": 3
+   },
+   {
+    "ref": "fit/p/shorts-cinza.png",
+    "product_id": "shorts-cinza",
+    "role": "product_art",
+    "order": 4
+   }
+  ],
+  "prompt": {
+   "text": "REGRAS OBRIGATÓRIAS (nunca ignore):\n- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.\n- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.\n- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.\n- Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).\n- Fotografia realista, alta qualidade, formato vertical.\n\nTEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.\n\nPRODUTOS (autoridade absoluta), 4 produtos DIFERENTES nesta ordem:\n  · Produto 1 (imagem 1): \"Top Azul\" (top fitness)\n  · Produto 2 (imagem 2): \"Top Verde\" (top fitness)\n  · Produto 3 (imagem 3): \"Legging Preta\" (legging)\n  · Produto 4 (imagem 4): \"Shorts Cinza\" (shorts)\n  · Cada produto aparece exatamente uma vez; nunca troque, funda ou duplique produtos.\n\nÂNGULO FLATLAY (VÁRIOS PRODUTOS): 4 produtos fotografados de cima em composição organizada — \"Top Azul\" (top fitness); \"Top Verde\" (top fitness); \"Legging Preta\" (legging); \"Shorts Cinza\" (shorts). Sem pessoa, todos legíveis, espaçamento equilibrado, superfície coerente com piso emborrachado cinza de estúdio funcional com luz lateral.\n\nDIREÇÃO: criativo de REMARKETING para quem já conhece a marca — fotografia realista + camada tipográfica integrada, produto protagonista, sem cara de banner promocional genérico. O LAYOUT abaixo manda na composição; o ÂNGULO define o clima da cena.\n\nLAYOUT FLATLAY GRADE: 4 produtos vistos diretamente de cima em grade solta, pouquíssimo overlap, cada produto inteiro legível; headline e subheadline no topo; CTA centralizado abaixo dos produtos.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"Não achou o seu ainda?\"\n  · SUBHEADLINE: \"Várias opções disponíveis\"\n  · CTA: \"Ver todas →\"\n  · Densidade de texto: balanced — headline, subheadline curta e CTA; ainda editorial.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nCTA — ênfase medium: botão discreto mas visível: contorno fino (outline) ou pílula de preenchimento sóbrio, cantos arredondados, texto em caixa alta espaçada + seta.\n  · COR POR CONTRASTE com a região do fundo onde o botão pousa: fundo claro -> preto, grafite, dourado escuro ou a cor primária forte da marca; fundo escuro -> creme, dourado claro, branco ou tom claro de alta legibilidade. NUNCA vermelho nem coral.\n  · Posição: com espaço livre ao redor; nunca sobre a estampa, sobre rosto, sobre área visualmente complexa ou colado nas bordas.\n\nMARCA (Fitness Brand X):\n  · Posicionamento: roupa de treino que acompanha a rotina.\n  · Linguagem visual: energia, luz dura de manhã, contraste.\n\nNICHO (Moda / Vestuário):\n  · Materiais e sinais de uso real: algodão, trama de tecido visível, costuras e acabamento, etiqueta discreta.\n  · Público: compra pelo caimento e pelo estilo, não só pela estampa; quer ver a peça vestida em corpo real; compara tecido, acabamento e tamanho antes de decidir.\n\nATMOSFERA (luz, paleta e materiais — não leve o set para este lugar): inspirada em \"piso emborrachado cinza de estúdio funcional com luz lateral\". Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.\n\nEVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): academia lotada; peça deformada ou com proporção irreal; tecido liso como vetor, sem trama; produto parecendo adesivo colado na foto.\n\nFORMATO: Feed 4:5 vertical (1080×1350).",
+   "sections": [
+    {
+     "name": "fidelity_rules",
+     "length": 685,
+     "source": "product",
+     "value": "5"
+    },
+    {
+     "name": "text_rules",
+     "length": 518,
+     "source": "user",
+     "value": "remarketing"
+    },
+    {
+     "name": "reference_roles",
+     "length": 358,
+     "source": "product",
+     "value": "refs:4"
+    },
+    {
+     "name": "scene_action",
+     "length": 336,
+     "source": "angle",
+     "value": "PRODUTO_ESTAMPA"
+    },
+    {
+     "name": "strategy_communication",
+     "length": 1517,
+     "source": "user",
+     "value": "remarketing"
+    },
+    {
+     "name": "brand",
+     "length": 145,
+     "source": "brand",
+     "value": "Fitness Brand X"
+    },
+    {
+     "name": "niche",
+     "length": 301,
+     "source": "niche",
+     "value": "Moda / Vestuário"
+    },
+    {
+     "name": "context",
+     "length": 225,
+     "source": "user",
+     "value": "ctx-studio-treino"
+    },
+    {
+     "name": "avoid",
+     "length": 207,
+     "source": "brand",
+     "value": "4"
+    },
+    {
+     "name": "output_format",
+     "length": 39,
+     "source": "user",
+     "value": "FEED_4X5"
+    }
+   ],
+   "sha256": "56c8e753ed448d4657bfdbd5f75820563450b42f9ee45c08b12768c80beaa827",
+   "prompt_version": 1
+  },
+  "model": {
+   "task": "image_generation",
+   "model": "gpt-image-2",
+   "quality": "medium",
+   "size": "1088x1360"
+  },
+  "mode": "creative",
+  "objective": "remarketing",
+  "subjects": [],
+  "scene": {
+   "gaze": {
+    "mode": "none",
+    "requested": "auto",
+    "source": "angle",
+    "reason": "no_people_in_frame"
+   },
+   "picks": {},
+   "prompt_version": 1,
+   "interaction": null
+  },
+  "composition": {
+   "people_count": 0,
+   "pose_risk": "low",
+   "risk_reasons": []
+  },
+  "minor_safety": {
+   "applies": false,
+   "minor_subject_ids": [],
+   "global": {
+    "policy": "global_minor_safety_policy",
+    "version": 1,
+    "rules": [
+     "age_appropriate_clothing",
+     "nothing_revealing",
+     "not_sexualized",
+     "no_adult_aesthetic",
+     "age_appropriate_poses",
+     "normal_fit_no_body_focus",
+     "commercial_family_context"
+    ],
+    "adult_child_rule": null
+   },
+   "brand": null
+  },
+  "semantics": {
+   "products": [
+    {
+     "product_id": "top-azul",
+     "semantic_context": null
+    },
+    {
+     "product_id": "top-verde",
+     "semantic_context": null
+    },
+    {
+     "product_id": "legging-preta",
+     "semantic_context": null
+    },
+    {
+     "product_id": "shorts-cinza",
+     "semantic_context": null
+    }
+   ],
+   "supporting": null,
+   "warnings": []
+  },
+  "resolved_inputs": {
+   "brand": {
+    "name": "Fitness Brand X",
+    "positioning": [
+     "roupa de treino que acompanha a rotina"
+    ],
+    "visualStyle": [
+     "energia",
+     "luz dura de manhã",
+     "contraste"
+    ]
+   },
+   "niche": {
+    "name": "Moda / Vestuário",
+    "materials": [
+     "algodão",
+     "trama de tecido visível",
+     "costuras e acabamento",
+     "etiqueta discreta"
+    ],
+    "audienceBehaviors": [
+     "compra pelo caimento e pelo estilo, não só pela estampa",
+     "quer ver a peça vestida em corpo real",
+     "compara tecido, acabamento e tamanho antes de decidir"
+    ]
+   },
+   "strategy": {
+    "text_rule": "TEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.",
+    "communication": "DIREÇÃO: criativo de REMARKETING para quem já conhece a marca — fotografia realista + camada tipográfica integrada, produto protagonista, sem cara de banner promocional genérico. O LAYOUT abaixo manda na composição; o ÂNGULO define o clima da cena.\n\nLAYOUT FLATLAY GRADE: 4 produtos vistos diretamente de cima em grade solta, pouquíssimo overlap, cada produto inteiro legível; headline e subheadline no topo; CTA centralizado abaixo dos produtos.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"Não achou o seu ainda?\"\n  · SUBHEADLINE: \"Várias opções disponíveis\"\n  · CTA: \"Ver todas →\"\n  · Densidade de texto: balanced — headline, subheadline curta e CTA; ainda editorial.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nCTA — ênfase medium: botão discreto mas visível: contorno fino (outline) ou pílula de preenchimento sóbrio, cantos arredondados, texto em caixa alta espaçada + seta.\n  · COR POR CONTRASTE com a região do fundo onde o botão pousa: fundo claro -> preto, grafite, dourado escuro ou a cor primária forte da marca; fundo escuro -> creme, dourado claro, branco ou tom claro de alta legibilidade. NUNCA vermelho nem coral.\n  · Posição: com espaço livre ao redor; nunca sobre a estampa, sobre rosto, sobre área visualmente complexa ou colado nas bordas."
+   }
+  },
+  "provenance": {
+   "angle": "user",
+   "brand_kit": "user",
+   "compiler": "planner_default",
+   "composition": "planner_default",
+   "context": "user",
+   "minor_safety.brand": "planner_default",
+   "minor_safety.global": "safety_policy",
+   "mode": "planner_default",
+   "model": "planner_default",
+   "niche_kit": "user",
+   "objective": "user",
+   "persona": "planner_default",
+   "placement": "user",
+   "products": "user",
+   "quality": "planner_default",
+   "references": "product",
+   "resolved_inputs": "brand",
+   "scene.gaze": "angle",
+   "scene.picks": "planner_default",
+   "scene.prompt_version": "planner_default",
+   "semantics": "planner_default",
+   "strategy": "user",
+   "subjects": "planner_default"
+  },
+  "seed": 8,
+  "compiler": {
+   "version": 1,
+   "sections": [
+    {
+     "section": "fidelity_rules",
+     "source": "product",
+     "value": "5",
+     "length": 685
+    },
+    {
+     "section": "text_rules",
+     "source": "user",
+     "value": "remarketing",
+     "length": 518
+    },
+    {
+     "section": "reference_roles",
+     "source": "product",
+     "value": "refs:4",
+     "length": 358
+    },
+    {
+     "section": "scene_action",
+     "source": "angle",
+     "value": "PRODUTO_ESTAMPA",
+     "length": 336
+    },
+    {
+     "section": "strategy_communication",
+     "source": "user",
+     "value": "remarketing",
+     "length": 1517
+    },
+    {
+     "section": "brand",
+     "source": "brand",
+     "value": "Fitness Brand X",
+     "length": 145
+    },
+    {
+     "section": "niche",
+     "source": "niche",
+     "value": "Moda / Vestuário",
+     "length": 301
+    },
+    {
+     "section": "context",
+     "source": "user",
+     "value": "ctx-studio-treino",
+     "length": 225
+    },
+    {
+     "section": "avoid",
+     "source": "brand",
+     "value": "4",
+     "length": 207
+    },
+    {
+     "section": "output_format",
+     "source": "user",
+     "value": "FEED_4X5",
+     "length": 39
+    }
+   ]
+  },
+  "versions": {
+   "core_version": "1.1.0",
+   "schema_version": 1,
+   "prompt_version": 1,
+   "brand_kit_schema_version": 1,
+   "niche_kit_schema_version": 1,
+   "context_profile_schema_version": 1,
+   "clean_angles_version": 1,
+   "remarketing_version": 1,
+   "funnel_visual_version": 1,
+   "strategy_version": 1,
+   "compiler_version": 1,
+   "brand_kit_version": 1,
+   "niche_kit_version": 1,
+   "context_profile_version": 2
+  },
+  "validations": [
+   {
+    "rule": "product_count_within_limits",
+    "passed": true
+   },
+   {
+    "rule": "angle_available_for_brand_and_niche",
+    "passed": true
+   },
+   {
+    "rule": "context_profile_approved",
+    "passed": true
+   },
+   {
+    "rule": "references_are_product_art_only",
+    "passed": true
+   },
+   {
+    "rule": "remarketing_multi_product_allowed_for_intent",
+    "passed": true
+   }
+  ],
+  "warnings": []
+ }
+}

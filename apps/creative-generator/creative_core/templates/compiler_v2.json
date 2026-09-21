@@ -1,5 +1,5 @@
 {
-  "_doc": "Fixed wording of the sections the v2 prompt compiler owns (the others reuse the v1 blocks in blocks.py and the person scenes of angles_v2.json). Changing any text here changes the compiler output: bump COMPILER_VERSION in versions.py.",
+  "_doc": "Fixed wording of the sections the v2 prompt compiler owns (the others reuse the v1 blocks in blocks.py and the person scenes of angles_v2.json). Changing any text here changes the compiler output: bump COMPILER_VERSION in versions.py. Compiler version 2 (Fase C1) adds the `subjects` contract with relations/ages, the `interaction` section and the angle `frame` scene; version 1 (Fase B) stays compilable, frozen, so stored plans recompile byte for byte.",
   "gaze": {
     "camera": "OLHAR: a pessoa olha diretamente para a câmera, com expressão natural.",
     "camera_group": "OLHAR: as pessoas olham diretamente para a câmera, com expressão natural.",
@@ -30,5 +30,33 @@
     "intent": "a cena pode remeter a: {value}",
     "supporting": "pessoa de apoio recomendada: {value}",
     "visible_text": "texto visível na peça: {value}"
+  },
+  "subjects": {
+    "header": "COMPOSIÇÃO DE PESSOAS (contrato): {count}.",
+    "line": "  · {name} ({role}): {label}{age}{relation} — {use}.",
+    "age": ", {value}",
+    "relation": ", {value}",
+    "details_header": "DETALHES DAS PESSOAS (refinam quem é cada uma; pose, ação, enquadramento e interação definidos acima sempre vencem):",
+    "details_line": "  · {name}: {identity}.{behavior}",
+    "details_behavior": " Jeito natural: {value}."
+  },
+  "interaction": {
+    "line": "INTERAÇÃO ({label}): {scene} Mãos: {hands}"
+  },
+  "frame": {
+    "line": "ÂNGULO {label}: {description} Cenário: {scene}."
+  },
+  "frames": {
+    "_doc": "Angle frames for scenes that are not the angle's own person template: the angle's idea and the setting, written so it holds for one person or several (the people themselves come from the subjects contract and the interaction). Angles without an entry fall back to their catalog description.",
+    "LIFESTYLE_COTIDIANO": "ÂNGULO LIFESTYLE COTIDIANO: as pessoas em ação natural no dia a dia, vivendo um momento real — nunca posadas nem paradas olhando para o nada. Cenário: {scene}.",
+    "IDENTIDADE_ORIGEM": "ÂNGULO IDENTIDADE DE MARCA: as pessoas, com o produto, integradas ao lugar que representa a identidade da marca — comunica 'isso é meu', sem pose. Cenário: {scene}.",
+    "ORGULHO_DISCRETO": "ÂNGULO RETRATO CONFIANTE: retrato de postura segura, cenário simples e desfocado — o foco são as pessoas com o produto. Cenário: {scene}.",
+    "PERTENCIMENTO": "ÂNGULO PERTENCIMENTO: as pessoas, com o produto, interagindo entre si — conexão genuína, não pose de grupo. Cenário: {scene}.",
+    "NOSTALGIA_ORIGEM": "ÂNGULO MEMÓRIA AFETIVA: momento contemplativo e emocional com o produto, sempre com pessoas em quadro. Cenário: {scene}.",
+    "CAIMENTO": "ÂNGULO CAIMENTO: registro técnico de vestibilidade — silhueta, largura e comprimento da peça visíveis em cada pessoa que a veste. Cenário: {scene}.",
+    "CLOSE_ESTAMPA": "ÂNGULO CLOSE NO DETALHE: plano fechado, com o detalhe principal do produto grande e legível. Cenário: {scene}.",
+    "CLOSE_BOLSO": "ÂNGULO CLOSE NO DETALHE PEQUENO: plano próximo com foco num detalhe pequeno do produto (bolso, peito, etiqueta). Cenário: {scene}.",
+    "CREATOR_STYLE": "ÂNGULO CREATOR-STYLE: linguagem de rede social (selfie, foto de amigo), sem fingir depoimento. Cenário: {scene}.",
+    "PRESENTE_AFETO": "ÂNGULO PRESENTE: valor emocional da peça como presente — momento de presentear ou de uso compartilhado entre as pessoas. Cenário: {scene}."
   }
 }

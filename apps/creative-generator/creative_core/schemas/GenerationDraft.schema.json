@@ -272,8 +272,12 @@
           "enum": [
             "baby",
             "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
             "teen",
             "adult",
+            "senior",
             "unknown"
           ]
         },
@@ -329,6 +333,27 @@
           ]
         },
         "relation_to_primary": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "mother",
+                "father",
+                "daughter",
+                "son",
+                "sibling",
+                "partner",
+                "friend",
+                "grandparent",
+                "custom"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relation_label": {
           "anyOf": [
             {
               "type": "string"

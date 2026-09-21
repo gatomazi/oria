@@ -143,6 +143,22 @@
         "product",
         "auto"
       ]
+    },
+    "subjects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RequestSubject"
+      },
+      "maxItems": 4
+    },
+    "interaction": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "scene_picks": {
+      "type": "object",
+      "additionalProperties": true
     }
   },
   "$defs": {
@@ -866,6 +882,20 @@
             "automatic",
             "custom"
           ]
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
+            "teen",
+            "adult",
+            "senior",
+            "unknown"
+          ]
         }
       }
     },
@@ -1027,6 +1057,81 @@
             "maxLength": 200
           },
           "maxItems": 5
+        }
+      }
+    },
+    "RequestSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "persona"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "primary",
+            "supporting"
+          ]
+        },
+        "persona": {
+          "$ref": "#/$defs/Persona"
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
+            "teen",
+            "adult",
+            "senior",
+            "unknown"
+          ]
+        },
+        "relation_to_primary": {
+          "type": "string",
+          "enum": [
+            "mother",
+            "father",
+            "daughter",
+            "son",
+            "sibling",
+            "partner",
+            "friend",
+            "grandparent",
+            "custom"
+          ]
+        },
+        "relation_label": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "wears_product_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prominence": {
+          "type": "string",
+          "enum": [
+            "hero",
+            "secondary",
+            "background"
+          ]
         }
       }
     }

@@ -14,6 +14,7 @@ export interface Persona {
   behavior?: string;
   notes?: string;
   source?: "automatic" | "custom";
+  age_band?: "baby" | "child" | "child_3_5" | "child_6_9" | "child_10_12" | "teen" | "adult" | "senior" | "unknown";
 }
 
 export interface MinorWardrobePolicy {
@@ -179,6 +180,17 @@ export interface HistoryHints {
   recent_personas?: Array<string>;
 }
 
+export interface RequestSubject {
+  id?: string;
+  role?: "primary" | "supporting";
+  persona: Persona;
+  age_band?: "baby" | "child" | "child_3_5" | "child_6_9" | "child_10_12" | "teen" | "adult" | "senior" | "unknown";
+  relation_to_primary?: "mother" | "father" | "daughter" | "son" | "sibling" | "partner" | "friend" | "grandparent" | "custom";
+  relation_label?: string;
+  wears_product_id?: string | null;
+  prominence?: "hero" | "secondary" | "background";
+}
+
 export interface CreativeRequest {
   creative_id?: string;
   strategy: "CLEAN_ANGLES" | "REMARKETING" | "FUNNEL_VISUAL";
@@ -203,6 +215,9 @@ export interface CreativeRequest {
   prompt_version?: number;
   plan_schema_version?: number;
   gaze_mode?: "camera" | "interaction" | "off_camera" | "product" | "auto";
+  subjects?: Array<RequestSubject>;
+  interaction?: string;
+  scene_picks?: Record<string, unknown>;
 }
 
 export interface KitRef {
@@ -273,14 +288,15 @@ export interface PlanSubject {
   role: "primary" | "supporting";
   label: string;
   persona?: Record<string, unknown> | null;
-  age_band: "baby" | "child" | "teen" | "adult" | "unknown";
+  age_band: "baby" | "child" | "child_3_5" | "child_6_9" | "child_10_12" | "teen" | "adult" | "senior" | "unknown";
   is_minor: boolean;
   minor_source?: string | null;
   age_source?: string | null;
   product_use: "wears" | "uses" | "none";
   product_id?: string | null;
   role_hint?: string | null;
-  relation_to_primary?: string | null;
+  relation_to_primary?: "mother" | "father" | "daughter" | "son" | "sibling" | "partner" | "friend" | "grandparent" | "custom" | null;
+  relation_label?: string | null;
   prominence: "hero" | "secondary" | "background";
   source: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy";
 }
@@ -297,6 +313,10 @@ export interface PlanScene {
   picks: Record<string, unknown>;
   prompt_version: number;
   interaction?: string | null;
+  interaction_source?: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy" | null;
+  interaction_detail?: Record<string, unknown> | null;
+  scene_mode?: "template" | "frame";
+  composition_source?: "explicit" | "recommended" | "legacy";
 }
 
 export interface PlanComposition {
@@ -310,6 +330,7 @@ export interface MinorSafety {
   minor_subject_ids: Array<string>;
   global: Record<string, unknown>;
   brand?: Record<string, unknown> | null;
+  basis?: Record<string, unknown>;
 }
 
 export interface PlanSemantics {

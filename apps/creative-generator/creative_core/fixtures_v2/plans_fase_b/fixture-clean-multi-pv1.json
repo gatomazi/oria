@@ -1,0 +1,478 @@
+{
+ "name": "fixture-clean-multi-pv1",
+ "request": {
+  "creative_id": "22222222-2222-4222-8222-222222222222",
+  "strategy": "CLEAN_ANGLES",
+  "product_mode": "multi_product",
+  "products": [
+   {
+    "id": "vela-lavanda",
+    "name": "Vela Lavanda",
+    "type": "vela aromática",
+    "referenceImages": [
+     "tenant-aroma/p/vela-lavanda.png"
+    ]
+   },
+   {
+    "id": "vela-cedro",
+    "name": "Vela Cedro",
+    "type": "vela aromática",
+    "referenceImages": [
+     "tenant-aroma/p/vela-cedro.png"
+    ]
+   },
+   {
+    "id": "vela-alecrim",
+    "name": "Vela Alecrim",
+    "type": "vela aromática",
+    "referenceImages": [
+     "tenant-aroma/p/vela-alecrim.png"
+    ]
+   }
+  ],
+  "brand_kit": {
+   "id": "casa_aroma",
+   "name": "Casa Aroma",
+   "positioning": [
+    "velas artesanais para rotina calma"
+   ],
+   "tone": [
+    "acolhedor",
+    "simples"
+   ],
+   "visualStyle": [
+    "minimalista",
+    "luz natural",
+    "tons claros"
+   ],
+   "colors": [
+    "areia",
+    "verde sálvia"
+   ],
+   "avoid": [
+    "excesso de props",
+    "chamas exageradas"
+   ],
+   "angleLabels": {
+    "PRODUTO_ESTAMPA": "Mesa posta de cima"
+   },
+   "defaultContextProvider": "niche",
+   "schemaVersion": 1,
+   "version": 3
+  },
+  "niche_kit_id": "generic_commerce",
+  "angle_id": "PRODUTO_ESTAMPA",
+  "placement_id": "STORY_9X16",
+  "context": {
+   "mode": "automatic"
+  },
+  "copy": {
+   "generate": true
+  },
+  "quality": "low",
+  "seed": 11,
+  "plan_schema_version": 2,
+  "prompt_version": 1
+ },
+ "plan": {
+  "plan_id": "plan_7c52e47b58f18ae293874cab",
+  "creative_id": "22222222-2222-4222-8222-222222222222",
+  "schema_version": 2,
+  "strategy": "CLEAN_ANGLES",
+  "internal_strategy_id": "ANGULOS_LIMPOS",
+  "product_mode": "multi_product",
+  "products": [
+   {
+    "id": "vela-lavanda",
+    "name": "Vela Lavanda",
+    "type": "vela aromática",
+    "referenceImages": [
+     "tenant-aroma/p/vela-lavanda.png"
+    ]
+   },
+   {
+    "id": "vela-cedro",
+    "name": "Vela Cedro",
+    "type": "vela aromática",
+    "referenceImages": [
+     "tenant-aroma/p/vela-cedro.png"
+    ]
+   },
+   {
+    "id": "vela-alecrim",
+    "name": "Vela Alecrim",
+    "type": "vela aromática",
+    "referenceImages": [
+     "tenant-aroma/p/vela-alecrim.png"
+    ]
+   }
+  ],
+  "angle": {
+   "id": "PRODUTO_ESTAMPA",
+   "label": "Mesa posta de cima",
+   "description": "Produto fotografado de cima, sem pessoa — melhor leitura de detalhe e material.",
+   "uses_person": false,
+   "apparel_only": false,
+   "multi_product_limit": 6
+  },
+  "placement": {
+   "id": "STORY_9X16",
+   "label": "Stories (9:16 — 1080×1920)",
+   "width": 1080,
+   "height": 1920,
+   "api_size": "1024x1824"
+  },
+  "persona": null,
+  "context": {
+   "context_id": "niche:generic_commerce",
+   "context_type": "niche",
+   "provider": "niche",
+   "scene": "superfície neutra de estúdio com sombra suave",
+   "supporting_element": "embalagem discreta",
+   "avoid": [
+    "produto distorcido ou com proporção irreal",
+    "logotipos de terceiros visíveis",
+    "texto inventado no produto ou no cenário",
+    "fundo branco chapado sem sombra",
+    "mão genérica segurando produto flutuando",
+    "excesso de props",
+    "chamas exageradas"
+   ],
+   "status": "approved",
+   "profile_version": 1
+  },
+  "brand_kit": {
+   "id": "casa_aroma",
+   "version": 3
+  },
+  "niche_kit": {
+   "id": "generic_commerce",
+   "version": 1
+  },
+  "funnel_stage": null,
+  "remarketing_intent": null,
+  "layout": null,
+  "overlay": {
+   "allowed": false,
+   "headline": null,
+   "subheadline": null,
+   "cta": null,
+   "badges": [],
+   "benefits": [],
+   "search_bar_text": null,
+   "chips": [],
+   "text_density": null,
+   "cta_emphasis": null,
+   "clean": true
+  },
+  "copy": {
+   "generate": true,
+   "funnel_stages": [
+    "TOFU",
+    "MOFU",
+    "BOFU"
+   ]
+  },
+  "references": [
+   {
+    "ref": "tenant-aroma/p/vela-lavanda.png",
+    "product_id": "vela-lavanda",
+    "role": "product_art",
+    "order": 1
+   },
+   {
+    "ref": "tenant-aroma/p/vela-cedro.png",
+    "product_id": "vela-cedro",
+    "role": "product_art",
+    "order": 2
+   },
+   {
+    "ref": "tenant-aroma/p/vela-alecrim.png",
+    "product_id": "vela-alecrim",
+    "role": "product_art",
+    "order": 3
+   }
+  ],
+  "prompt": {
+   "text": "REGRAS OBRIGATÓRIAS (nunca ignore):\n- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.\n- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.\n- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.\n- Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).\n- Fotografia realista, alta qualidade, formato vertical.\n\nMODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.\n\nPRODUTOS (autoridade absoluta), 3 produtos DIFERENTES nesta ordem:\n  · Produto 1 (imagem 1): \"Vela Lavanda\" (vela aromática)\n  · Produto 2 (imagem 2): \"Vela Cedro\" (vela aromática)\n  · Produto 3 (imagem 3): \"Vela Alecrim\" (vela aromática)\n  · Cada produto aparece exatamente uma vez; nunca troque, funda ou duplique produtos.\n\nÂNGULO FLATLAY (VÁRIOS PRODUTOS): 3 produtos fotografados de cima em composição organizada — \"Vela Lavanda\" (vela aromática); \"Vela Cedro\" (vela aromática); \"Vela Alecrim\" (vela aromática). Sem pessoa, todos legíveis, espaçamento equilibrado, superfície coerente com superfície neutra de estúdio com sombra suave.\n\nMARCA (Casa Aroma):\n  · Posicionamento: velas artesanais para rotina calma.\n  · Linguagem visual: minimalista, luz natural, tons claros.\n  · Paleta da marca (guia de cor da CENA, nunca do produto): areia; verde sálvia.\n\nNICHO (Comércio genérico):\n  · Materiais e sinais de uso real: textura real do material do produto, embalagem discreta, superfície de apoio neutra.\n  · Público: quer entender rapidamente o que é o produto e para que serve; confia em imagem nítida e realista do produto; responde a benefício concreto mais do que a promessa vaga.\n\nATMOSFERA (luz, paleta e materiais — não leve o set para este lugar): inspirada em \"superfície neutra de estúdio com sombra suave\". Detalhe de apoio: embalagem discreta. Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.\n\nEVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): produto distorcido ou com proporção irreal; logotipos de terceiros visíveis; texto inventado no produto ou no cenário; fundo branco chapado sem sombra; mão genérica segurando produto flutuando; excesso de props; chamas exageradas.\n\nFORMATO: Stories 9:16 vertical (1080×1920). ÁREA SEGURA: os 14% superiores e os 20% inferiores do quadro ficam livres de texto, CTA e elementos importantes.",
+   "sections": [
+    {
+     "name": "fidelity_rules",
+     "length": 685,
+     "source": "product",
+     "value": "5"
+    },
+    {
+     "name": "text_rules",
+     "length": 509,
+     "source": "user",
+     "value": "clean_creative"
+    },
+    {
+     "name": "reference_roles",
+     "length": 325,
+     "source": "product",
+     "value": "refs:3"
+    },
+    {
+     "name": "scene_action",
+     "length": 313,
+     "source": "angle",
+     "value": "PRODUTO_ESTAMPA"
+    },
+    {
+     "name": "brand",
+     "length": 218,
+     "source": "brand",
+     "value": "Casa Aroma"
+    },
+    {
+     "name": "niche",
+     "length": 328,
+     "source": "niche",
+     "value": "Comércio genérico"
+    },
+    {
+     "name": "context",
+     "length": 248,
+     "source": "niche",
+     "value": "niche:generic_commerce"
+    },
+    {
+     "name": "avoid",
+     "length": 304,
+     "source": "brand",
+     "value": "7"
+    },
+    {
+     "name": "output_format",
+     "length": 156,
+     "source": "user",
+     "value": "STORY_9X16"
+    }
+   ],
+   "sha256": "ddb37e71c90079f0cb055ce31c91c0a08097197e349f079142c792f81c059e3d",
+   "prompt_version": 1
+  },
+  "model": {
+   "task": "image_generation",
+   "model": "gpt-image-2",
+   "quality": "low",
+   "size": "1024x1824"
+  },
+  "mode": "creative",
+  "objective": "clean_creative",
+  "subjects": [],
+  "scene": {
+   "gaze": {
+    "mode": "none",
+    "requested": "auto",
+    "source": "angle",
+    "reason": "no_people_in_frame"
+   },
+   "picks": {},
+   "prompt_version": 1,
+   "interaction": null
+  },
+  "composition": {
+   "people_count": 0,
+   "pose_risk": "low",
+   "risk_reasons": []
+  },
+  "minor_safety": {
+   "applies": false,
+   "minor_subject_ids": [],
+   "global": {
+    "policy": "global_minor_safety_policy",
+    "version": 1,
+    "rules": [
+     "age_appropriate_clothing",
+     "nothing_revealing",
+     "not_sexualized",
+     "no_adult_aesthetic",
+     "age_appropriate_poses",
+     "normal_fit_no_body_focus",
+     "commercial_family_context"
+    ],
+    "adult_child_rule": null
+   },
+   "brand": null
+  },
+  "semantics": {
+   "products": [
+    {
+     "product_id": "vela-lavanda",
+     "semantic_context": null
+    },
+    {
+     "product_id": "vela-cedro",
+     "semantic_context": null
+    },
+    {
+     "product_id": "vela-alecrim",
+     "semantic_context": null
+    }
+   ],
+   "supporting": null,
+   "warnings": []
+  },
+  "resolved_inputs": {
+   "brand": {
+    "name": "Casa Aroma",
+    "positioning": [
+     "velas artesanais para rotina calma"
+    ],
+    "visualStyle": [
+     "minimalista",
+     "luz natural",
+     "tons claros"
+    ],
+    "colors": [
+     "areia",
+     "verde sálvia"
+    ]
+   },
+   "niche": {
+    "name": "Comércio genérico",
+    "materials": [
+     "textura real do material do produto",
+     "embalagem discreta",
+     "superfície de apoio neutra"
+    ],
+    "audienceBehaviors": [
+     "quer entender rapidamente o que é o produto e para que serve",
+     "confia em imagem nítida e realista do produto",
+     "responde a benefício concreto mais do que a promessa vaga"
+    ]
+   },
+   "strategy": {
+    "text_rule": "MODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.",
+    "communication": ""
+   }
+  },
+  "provenance": {
+   "angle": "user",
+   "brand_kit": "user",
+   "compiler": "planner_default",
+   "composition": "planner_default",
+   "context": "niche",
+   "minor_safety.brand": "planner_default",
+   "minor_safety.global": "safety_policy",
+   "mode": "planner_default",
+   "model": "planner_default",
+   "niche_kit": "user",
+   "objective": "user",
+   "persona": "planner_default",
+   "placement": "user",
+   "products": "user",
+   "quality": "user",
+   "references": "product",
+   "resolved_inputs": "brand",
+   "scene.gaze": "angle",
+   "scene.picks": "planner_default",
+   "scene.prompt_version": "planner_default",
+   "semantics": "planner_default",
+   "strategy": "user",
+   "subjects": "planner_default"
+  },
+  "seed": 11,
+  "compiler": {
+   "version": 1,
+   "sections": [
+    {
+     "section": "fidelity_rules",
+     "source": "product",
+     "value": "5",
+     "length": 685
+    },
+    {
+     "section": "text_rules",
+     "source": "user",
+     "value": "clean_creative",
+     "length": 509
+    },
+    {
+     "section": "reference_roles",
+     "source": "product",
+     "value": "refs:3",
+     "length": 325
+    },
+    {
+     "section": "scene_action",
+     "source": "angle",
+     "value": "PRODUTO_ESTAMPA",
+     "length": 313
+    },
+    {
+     "section": "brand",
+     "source": "brand",
+     "value": "Casa Aroma",
+     "length": 218
+    },
+    {
+     "section": "niche",
+     "source": "niche",
+     "value": "Comércio genérico",
+     "length": 328
+    },
+    {
+     "section": "context",
+     "source": "niche",
+     "value": "niche:generic_commerce",
+     "length": 248
+    },
+    {
+     "section": "avoid",
+     "source": "brand",
+     "value": "7",
+     "length": 304
+    },
+    {
+     "section": "output_format",
+     "source": "user",
+     "value": "STORY_9X16",
+     "length": 156
+    }
+   ]
+  },
+  "versions": {
+   "core_version": "1.1.0",
+   "schema_version": 1,
+   "prompt_version": 1,
+   "brand_kit_schema_version": 1,
+   "niche_kit_schema_version": 1,
+   "context_profile_schema_version": 1,
+   "clean_angles_version": 1,
+   "remarketing_version": 1,
+   "funnel_visual_version": 1,
+   "strategy_version": 1,
+   "compiler_version": 1,
+   "brand_kit_version": 3,
+   "niche_kit_version": 1,
+   "context_profile_version": 1
+  },
+  "validations": [
+   {
+    "rule": "product_count_within_limits",
+    "passed": true
+   },
+   {
+    "rule": "angle_available_for_brand_and_niche",
+    "passed": true
+   },
+   {
+    "rule": "context_profile_approved",
+    "passed": true
+   },
+   {
+    "rule": "references_are_product_art_only",
+    "passed": true
+   },
+   {
+    "rule": "clean_angles_has_no_overlay",
+    "passed": true
+   }
+  ],
+  "warnings": []
+ }
+}

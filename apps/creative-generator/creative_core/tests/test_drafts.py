@@ -11,6 +11,7 @@ from test_plan_v2 import POLICY_FULL, SEMANTIC_FATHER, _child_request
 from creative_core import contracts
 from creative_core.drafts import feedback_snapshot, generation_draft_from_plan
 from creative_core.engines import plan_creative
+from creative_core.versions import COMPILER_VERSION
 
 EXECUTION_KEYS = {"job_id", "attempt", "generation_attempt", "asset", "asset_id", "usage", "trace", "organization_id", "user_id"}
 
@@ -49,7 +50,7 @@ def test_given_a_v2_plan_then_the_draft_carries_generation_inputs_and_no_executi
     assert draft["persona_mode"] == "custom" and draft["persona"]["label"] == "menina 6 anos"
     assert [s["role_hint"] for s in draft["subjects"]] == [None, "father"], "the recast supporting person comes along"
     assert draft["gaze_mode"] == "interaction" and draft["seed"] == 100 and draft["plan_schema_version"] == 2 and draft["prompt_version"] == 2
-    assert draft["source"] == {"creative_id": plan["creative_id"], "plan_id": plan["plan_id"], "plan_schema_version": 2, "compiler_version": 1}
+    assert draft["source"] == {"creative_id": plan["creative_id"], "plan_id": plan["plan_id"], "plan_schema_version": 2, "compiler_version": COMPILER_VERSION}
     assert {"subjects", "gaze_mode", "seed", "angle_id"} <= set(draft["carried"])
     assert not (EXECUTION_KEYS & set(draft)) and "trace" not in json.dumps(draft) and "gpt-image" not in json.dumps(draft)
 
@@ -104,7 +105,7 @@ def test_given_a_plan_and_a_result_then_the_feedback_snapshot_has_what_history_n
     metadata = {"trace": {"model_requested": "gpt-image-2", "model_served": "gpt-image-2", "references": {"normalized": True}}}
     snap = feedback_snapshot(plan, metadata, asset_sha256="ab" * 32)
     assert contracts.validate("FeedbackSnapshot", snap) == []
-    assert (snap["plan_schema_version"], snap["compiler_version"], snap["prompt_version"]) == (2, 1, 2)
+    assert (snap["plan_schema_version"], snap["compiler_version"], snap["prompt_version"]) == (2, COMPILER_VERSION, 2)
     assert snap["angle"] == "PRESENTE_AFETO" and snap["mode"] == "creative" and snap["objective"] == "clean_creative"
     assert snap["people_count"] == 2 and snap["minor_safety_applied"] is True and snap["gaze_mode"] == "interaction"
     assert snap["subjects"][1] == {"role": "supporting", "label": "homem adulto, pai da criança", "age_band": "adult",
