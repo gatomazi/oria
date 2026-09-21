@@ -30,7 +30,7 @@ const FASE1 = 8;
 // (platform-admin), o aceite do convite (0020), o `store_id` do Connector Ink (0021), a
 // reclassificação de features (0022) e o entitlement canônico (0023) vêm depois; o rollback da
 // Fase 1 desce todas.
-const DEPOIS_DA_FASE1 = 20; // +2: 0031 (trace de geração) e 0032 (versão do plano/compiler) do Gerador de Criativos
+const DEPOIS_DA_FASE1 = 21; // +3: 0031 (trace de geração), 0032 (versão do plano/compiler) e 0033 (feedback) do Gerador de Criativos
 
 const lerJson = (arquivo) => JSON.parse(fs.readFileSync(arquivo, 'utf8'));
 

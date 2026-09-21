@@ -158,6 +158,11 @@
       "hands": "ombros próximos, braços soltos ao lado do corpo ou em volta dos ombros de quem está ao lado; ninguém segura objetos."
     }
   },
+  "relation_labels": {
+    "_doc": "Short names of the relation types for a store's screens (the catalog serves them; the panel does not hardcode them). The prompt uses its own phrases in compiler_v2.json.",
+    "mother": "mãe", "father": "pai", "daughter": "filha", "son": "filho", "sibling": "irmã ou irmão",
+    "partner": "parceiro ou parceira", "friend": "amigo ou amiga", "grandparent": "avó ou avô", "custom": "outra relação"
+  },
   "intent_map": {
     "_doc": "product.semantic_context.scene_intents -> interaction. The first intent whose interaction fits the number of people wins.",
     "play": "playing",

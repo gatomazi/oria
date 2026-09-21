@@ -35,6 +35,7 @@ from typing import Callable, Iterable
 
 from . import contracts
 from .angles import ANGLE_IDS, CORE_ANGLES
+from . import composition
 from .compiler import compile_prompt
 from .drafts import feedback_snapshot, generation_draft_from_plan
 from .engines import generate_copy_with_usage, generate_creative, plan_creative
@@ -224,6 +225,10 @@ class CreativeCoreService:
             "cta_emphases": list(contracts.CTA_EMPHASES),
             "clean_modes": list(contracts.CLEAN_MODES),
             "context_modes": list(contracts.CONTEXT_MODES),
+            # Scene composition (Fase C): what a screen needs to name and offer people and interactions.
+            "interactions": [{"id": k, "label": v["label"], "min_people": v["min_people"], "max_people": v["max_people"]}
+                             for k, v in composition.INTERACTIONS.items()],
+            "relations": [{"id": k, "label": v} for k, v in composition.CATALOG["relation_labels"].items() if k != "_doc"],
             "builtin_kits": {
                 "brand": [load_brand_kit(k) for k in builtin["brand"]],
                 "niche": [load_niche_kit(k) for k in builtin["niche"]],

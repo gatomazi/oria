@@ -6,6 +6,11 @@
 const { aggregateJobStatus } = require('./status');
 
 const PROFILE_KINDS = ['brand', 'niche', 'context', 'persona'];
+// Mesmas dimensões do pgStore (coluna do snapshot que cada uma agrupa).
+const FEEDBACK_DIMENSIONS = Object.freeze({
+  angle: (s) => s.angle, objective: (s) => s.objective, context: (s) => s.context && s.context.context_id,
+  interaction: (s) => s.interaction, composition: (s) => s.composition_key,
+});
 
 function clone(v) {
   return v === undefined ? undefined : JSON.parse(JSON.stringify(v));
@@ -18,6 +23,7 @@ function createMemoryStore() {
   const jobs = new Map();
   const items = new Map();
   const assets = new Map();
+  const feedback = new Map();
   const now = () => new Date().toISOString();
 
   function own(map, tenantId, id) {
@@ -167,6 +173,46 @@ function createMemoryStore() {
     },
     async getAssetByCreative(tenantId, creativeId) {
       return clone([...assets.values()].find((a) => a.tenantId === tenantId && a.creativeId === creativeId)) || null;
+    },
+
+    async upsertFeedback(tenantId, { userId, storeId = null, creativeId, jobId, verdict, snapshot }) {
+      const key = `${tenantId}|${creativeId}|${userId}`;
+      const previous = feedback.get(key);
+      const row = {
+        id: previous ? previous.id : `${feedback.size + 1}`, tenantId, storeId, creativeId, jobId, userId, verdict,
+        snapshot: clone(snapshot), createdAt: previous ? previous.createdAt : now(), updatedAt: now(),
+      };
+      feedback.set(key, row);
+      return clone(row);
+    },
+    async deleteFeedback(tenantId, userId, creativeId) {
+      return feedback.delete(`${tenantId}|${creativeId}|${userId}`);
+    },
+    async getFeedback(tenantId, userId, creativeId) {
+      return clone(feedback.get(`${tenantId}|${creativeId}|${userId}`)) || null;
+    },
+    async feedbackByCreative(tenantId, userId, creativeIds) {
+      const out = new Map();
+      for (const id of creativeIds) {
+        const row = feedback.get(`${tenantId}|${id}|${userId}`);
+        if (row) out.set(id, { verdict: row.verdict, updatedAt: row.updatedAt });
+      }
+      return out;
+    },
+    async feedbackSummary(tenantId, { by, storeId = null }) {
+      if (by !== 'product' && !FEEDBACK_DIMENSIONS[by]) throw new Error('dimensão de feedback desconhecida');
+      const grupos = new Map();
+      for (const row of feedback.values()) {
+        if (row.tenantId !== tenantId || (storeId && row.storeId && row.storeId !== storeId)) continue;
+        const chaves = by === 'product' ? (row.snapshot.product_ids || []) : [FEEDBACK_DIMENSIONS[by](row.snapshot)].filter(Boolean);
+        for (const key of chaves) {
+          const g = grupos.get(key) || { key, liked: 0, disliked: 0, total: 0 };
+          g[row.verdict] += 1;
+          g.total += 1;
+          grupos.set(key, g);
+        }
+      }
+      return [...grupos.values()].sort((a, b) => b.total - a.total || (a.key < b.key ? -1 : 1));
     },
 
     async listHistory(tenantId, limit = 50) {

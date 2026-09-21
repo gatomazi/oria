@@ -44,6 +44,9 @@ export interface Catalog {
     cta_emphases: string[];
     clean_modes: string[];
     builtin_kits: { brand: KitData[]; niche: KitData[] };
+    // Fase C: nomes para telas. Ausentes em core mais antigo.
+    interactions?: { id: string; label: string; min_people: number; max_people: number }[];
+    relations?: { id: string; label: string }[];
   };
   versions: Record<string, unknown>;
 }
@@ -111,6 +114,14 @@ export interface JobItem {
   assetUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  // Veredito da pessoa logada sobre este criativo (nunca o de outra pessoa).
+  feedback?: Avaliacao | null;
+}
+
+export type Veredito = 'liked' | 'disliked';
+export interface Avaliacao {
+  verdict: Veredito;
+  updatedAt: string;
 }
 
 export interface Job {
@@ -143,6 +154,49 @@ export interface JobInput {
   funnel?: Record<string, unknown>;
   remarketing?: Record<string, unknown>;
   copy?: { generate: boolean };
+  // Cena com pessoas (Fase C). Vêm de "Copiar dados"; o servidor valida o conteúdo. Mantidos como chegaram.
+  subjects?: CenaPessoa[];
+  interaction?: string;
+  gaze_mode?: string;
+  seed?: number;
+  scene_picks?: Record<string, number>;
+}
+
+export interface CenaPessoa {
+  id?: string;
+  role?: string;
+  persona: { label: string; [key: string]: unknown };
+  age_band?: string;
+  relation_to_primary?: string;
+  relation_label?: string;
+  wears_product_id?: string | null;
+  prominence?: string;
+  [key: string]: unknown;
+}
+
+// Remendo de "Gerar de novo" (mesma cena) ou "Gerar variação" (nova cena): campos do POST /jobs, sem nulos.
+export interface AcaoCena {
+  seed?: number;
+  scene_picks?: Record<string, number>;
+  gaze_mode?: string;
+}
+
+export interface Indisponivel {
+  field: string;
+  id: string | null;
+  reason: string;
+}
+
+// GET /items/:creativeId/draft. `draft` é o rascunho inteiro do core, guardado sem perder nada.
+export interface CopiaDados {
+  creativeId: string;
+  jobId: string;
+  form: Partial<JobInput>;
+  actions: { again: AcaoCena; variation: AcaoCena };
+  carried: string[];
+  unavailable: Indisponivel[];
+  warnings: string[];
+  draft: Record<string, unknown>;
 }
 
 const json = (method: string, body?: unknown) => ({
@@ -192,6 +246,10 @@ export const listJobs = () => api<{ items: Job[] }>(`${BASE}/jobs`);
 export const getJob = (id: string) => api<Job>(`${BASE}/jobs/${id}`);
 export const cancelJob = (id: string) => api<Job>(`${BASE}/jobs/${id}/cancel`, json('POST'));
 export const retryJobItem = (jobId: string, creativeId: string) => api<JobItem>(`${BASE}/jobs/${jobId}/items/${creativeId}/retry`, json('POST'));
+export const setFeedback = (creativeId: string, verdict: Veredito) =>
+  api<{ creativeId: string; verdict: Veredito; updatedAt: string }>(`${BASE}/items/${creativeId}/feedback`, json('PUT', { verdict }));
+export const clearFeedback = (creativeId: string) => api<{ creativeId: string; verdict: null }>(`${BASE}/items/${creativeId}/feedback`, json('DELETE'));
+export const getCopiaDados = (creativeId: string) => api<CopiaDados>(`${BASE}/items/${creativeId}/draft`);
 export const listHistory = () => api<{ items: (JobItem & { record: Record<string, unknown> | null })[] }>(`${BASE}/history`);
 export const generateCopies = (input: JobInput) =>
   api<{ variants: { funnel_stage: FunnelStage; primary_text: string; headline: string; description: string }[] }>(`${BASE}/copies`, json('POST', input));

@@ -323,6 +323,14 @@ def plan_creative(
     people = _people(people_needed, persona_pool(brand, niche), seed, persona) if people_needed > 1 else []
 
     plan_schema = request.get("plan_schema_version", default_plan_schema_version)
+    if plan_schema != PLAN_SCHEMA_V2:
+        # Who is in the scene and what they do only exists in a v2 plan. A v1 plan cannot honor these, and dropping
+        # them would silently change the creative (or its minor-safety input): refuse instead.
+        needing = [k for k in ("subjects", "interaction", "scene_picks") if request.get(k)]
+        if needing:
+            raise GenerationError("INVALID_INPUT", {"errors": [f"{k}: requires plan_schema_version 2" for k in needing]})
+    if request.get("scene_picks") and prompt_version != 2:
+        raise GenerationError("INVALID_INPUT", {"errors": ["scene_picks: requires prompt_version 2 (picks belong to the v2 scene pools)"]})
     if plan_schema != PLAN_SCHEMA_V2 and request.get("gaze_mode") not in (None, "auto"):
         warnings.append("gaze_mode_ignored_needs_plan_schema_2")  # a v1 plan has no gaze; say so instead of dropping it silently
     v2_extra: dict = {}

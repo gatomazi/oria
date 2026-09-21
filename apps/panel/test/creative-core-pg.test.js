@@ -35,7 +35,7 @@ test('pgStore cumpre o contrato do store (schema, perfis, produtos, lotes, fila,
     const { rows: tabelasCreative } = await pool.query(
       `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_name LIKE 'creative\\_%'`
     );
-    assert.equal(tabelasCreative[0].n, 9, 'as 9 tabelas creative_* precisam existir via migration');
+    assert.equal(tabelasCreative[0].n, 10, 'as 10 tabelas creative_* precisam existir via migration (9 do core + creative_feedback, da 0033)');
     // tenant_id que não é o id da Organization dona é recusado pelo banco.
     await assert.rejects(
       pool.query(

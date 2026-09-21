@@ -296,6 +296,9 @@ const TABELAS_PLATAFORMA = Object.freeze([
   // Fase 7 · estado de onboarding (lib/platform/onboarding.js). Filho depois do pai.
   Object.freeze({ tabela: 'onboarding_sessions', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'onboarding_steps', colunaTenant: 'organization_id' }),
+  // Fase C · veredito Gostei / Não gostei por pessoa e criativo (migration 0033). Filho de creative_generations e
+  // creative_jobs (tabelas tenant-owned, que vêm antes na ordem de criação); `store_id` nulo = compartilhado.
+  Object.freeze({ tabela: 'creative_feedback', colunaTenant: 'organization_id' }),
 ]);
 
 // Globais DECLARADAS. Não recebem RLS. A role da aplicação acessa só as de identidade

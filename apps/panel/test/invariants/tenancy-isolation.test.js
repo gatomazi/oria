@@ -77,6 +77,14 @@ async function valoresPara(tabela, chave) {
   if (tabela === 'organization_members') v.user_id = pessoas[chave];
   // Fase 7: passo de onboarding precisa de id e requisito do vocabulário (CHECK).
   if (tabela === 'onboarding_steps') Object.assign(v, { step_id: 'owner', requirement: 'required' });
+  // Fase C: o veredito aponta para a geração e o job da MESMA Organization (FKs compostas) e para a pessoa.
+  if (tabela === 'creative_feedback') {
+    Object.assign(v, {
+      creative_id: linhas[chave].get('creative_generations').creative_id, job_id: linhas[chave].get('creative_jobs').id,
+      user_id: pessoas[chave], verdict: 'liked', snapshot: {},
+    });
+    delete v.tenant_id;
+  }
   const decl = manifesto.porTabela(tabela);
   if (decl && decl.pai) v[decl.pai.coluna] = linhas[chave].get(decl.pai.tabela).id;
   return v;

@@ -10,6 +10,8 @@ const TIMEOUTS_MS = {
   contracts: 15_000,
   validate: 15_000,
   plans: 30_000,
+  drafts: 15_000,
+  feedbackSnapshots: 15_000,
   generations: 240_000,
   copies: 90_000,
 };
@@ -87,6 +89,13 @@ function createCoreClient({ baseUrl, token, fetchImpl = globalThis.fetch, timeou
       return call('POST', `/v1/validate/${contract}`, { payload }, 'validate');
     },
     plan: (request) => call('POST', '/v1/plans', { request }, 'plans').then((d) => d.plan),
+    // Puras (sem chave, sem provedor): a lógica de "Copiar dados" e de snapshot de feedback mora só no core.
+    draft: (plan) => call('POST', '/v1/draft', { plan }, 'drafts').then((d) => d.draft),
+    feedbackSnapshot: ({ plan, resultMetadata, assetSha256 }) => call('POST', '/v1/feedback-snapshot', {
+      plan,
+      ...(resultMetadata ? { result_metadata: resultMetadata } : {}),
+      ...(assetSha256 ? { asset_sha256: assetSha256 } : {}),
+    }, 'feedbackSnapshots').then((d) => d.snapshot),
     generate: ({ plan, references, apiKey, attempt = 1 }) =>
       call('POST', '/v1/generations', { plan, references, openai_api_key: apiKey, generation_attempt: attempt }, 'generations')
         .then((d) => d.result),

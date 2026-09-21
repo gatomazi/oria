@@ -24,6 +24,7 @@ const { normalizeJobInput, buildRequests, planSummary, planPrompt, InputError } 
 const { createWorker } = require('../lib/creative-core/worker');
 const { progress } = require('../lib/creative-core/status');
 const { promptVersionFor, planSchemaVersionFor } = require('../lib/creative-core/rollout');
+const { mapDraftToForm } = require('../lib/creative-core/draft');
 
 const PROFILE_CONTRACT = { brand: 'BrandKit', niche: 'NicheKit', context: 'ContextProfile', persona: 'Persona' };
 const PROFILE_PATH = { brand: 'brand-kits', niche: 'niche-kits', context: 'context-profiles', persona: 'personas' };
@@ -31,6 +32,8 @@ const CONTEXT_STATUS = ['draft', 'approved', 'rejected'];
 // Prévia planeja cada combinação ângulo × formato para mostrar o prompt; limita para não travar a tela.
 const PREVIEW_PROMPTS_MAX = 12;
 const PREVIEW_CONCORRENCIA = 4;
+const FEEDBACK_VERDICTS = ['liked', 'disliked'];
+const FEEDBACK_DIMENSIONS = ['angle', 'objective', 'context', 'interaction', 'composition', 'product'];
 
 function responderErro(res, err, logger) {
   if (err instanceof CoreUnavailableError) {
@@ -52,7 +55,8 @@ function ultimoTrace(item) {
   return porTentativa[String(item.generationAttempt)] || null;
 }
 
-function resumoItem(item) {
+// `feedback` = o veredito da PESSOA da sessão sobre este criativo ({ verdict, updatedAt }) ou null. Nunca o de outra pessoa.
+function resumoItem(item, feedback = null) {
   return {
     creativeId: item.creativeId,
     itemIndex: item.itemIndex,
@@ -80,17 +84,18 @@ function resumoItem(item) {
     assetUrl: item.assetId ? `/api/admin/criativos/assets/${item.creativeId}` : null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+    feedback,
   };
 }
 
-function resumoJob(job) {
+function resumoJob(job, feedbacks = new Map()) {
   const base = {
     id: job.id, engine: job.engine, productMode: job.productMode, status: job.status, total: job.total,
     createdAt: job.createdAt, updatedAt: job.updatedAt, finishedAt: job.finishedAt, cancelledAt: job.cancelledAt,
   };
   if (job.items) {
     base.progress = progress(job.items);
-    base.items = job.items.map(resumoItem);
+    base.items = job.items.map((item) => resumoItem(item, feedbacks.get(item.creativeId) || null));
   }
   return base;
 }
@@ -147,6 +152,19 @@ function criarRouterCriativos(deps) {
   });
 
   // Guardas: Postgres obrigatório e módulo habilitado (status e catálogo ficam acessíveis pra UI explicar o estado).
+  // Pessoa e Store da request. A pessoa vem da sessão (requireAdmin → req.auth), nunca do corpo. A Store é a do contexto
+  // quando há uma resolvida; sem ela o feedback nasce compartilhado (store_id nulo).
+  const usuarioDe = (req) => (req.auth && typeof req.auth.userId === 'string' ? req.auth.userId : null);
+  const storeAtual = () => {
+    try { return (typeof deps.storeAtual === 'function' && deps.storeAtual()) || null; } catch { return null; }
+  };
+  const feedbacksDe = async (req, itens) => {
+    const userId = usuarioDe(req);
+    if (!userId || typeof store.feedbackByCreative !== 'function') return new Map();
+    return store.feedbackByCreative(req.creativeTenant, userId, itens.map((i) => i.creativeId));
+  };
+  const exigirPessoa = (req, res, next) => (usuarioDe(req) ? next() : res.status(403).json({ error: 'pessoa não identificada na sessão' }));
+
   const exigirStore = (req, res, next) => (store ? next() : res.status(503).json({ error: 'o gerador de criativos exige Postgres (DATABASE_URL)' }));
   const exigirModulo = async (req, res, next) => {
     const flags = await flagsAtuais();
@@ -351,7 +369,7 @@ function criarRouterCriativos(deps) {
     if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
     const job = await store.getJob(req.creativeTenant, req.params.id);
     if (!job) return res.status(404).json({ error: 'lote não encontrado' });
-    res.json(resumoJob(job));
+    res.json(resumoJob(job, await feedbacksDe(req, job.items || [])));
   }));
   router.post('/jobs/:id/cancel', exigirStore, exigirModulo, rota(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
@@ -369,7 +387,79 @@ function criarRouterCriativos(deps) {
 
   router.get('/history', exigirStore, exigirModulo, rota(async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-    res.json({ items: (await store.listHistory(req.creativeTenant, limit)).map((i) => ({ ...resumoItem(i), record: i.record })) });
+    const itens = await store.listHistory(req.creativeTenant, limit);
+    const feedbacks = await feedbacksDe(req, itens);
+    res.json({ items: itens.map((i) => ({ ...resumoItem(i, feedbacks.get(i.creativeId) || null), record: i.record })) });
+  }));
+
+  // ── Gostei / Não gostei ────────────────────────────────────────────────────────────────────────────────────────
+  // Um veredito por pessoa e criativo (trocar = upsert; limpar = DELETE). O snapshot vem do core, calculado do plano
+  // persistido: o Node só acrescenta quem, onde, qual lote e quando. Nada disto entra no planner.
+  async function itemComPlano(req, creativeId) {
+    if (!UUID_RE.test(creativeId)) throw new InputError('id inválido');
+    const item = await store.getItem(req.creativeTenant, creativeId);
+    if (!item) return { status: 404, error: 'criativo não encontrado' };
+    if (!item.plan) return { status: 409, error: 'este criativo ainda não tem plano' };
+    return { item };
+  }
+
+  router.put('/items/:creativeId/feedback', exigirStore, exigirModulo, exigirPessoa, rota(async (req, res) => {
+    const corpo = req.body;
+    if (!corpo || typeof corpo !== 'object' || Array.isArray(corpo) || Object.keys(corpo).some((k) => k !== 'verdict')) throw new InputError('corpo inválido');
+    if (!FEEDBACK_VERDICTS.includes(corpo.verdict)) throw new InputError('veredito inválido');
+    const achado = await itemComPlano(req, req.params.creativeId);
+    if (achado.error) return res.status(achado.status).json({ error: achado.error });
+    const { item } = achado;
+    if (item.status !== 'completed') return res.status(409).json({ error: 'só dá para avaliar um criativo já gerado' });
+    const asset = await store.getAssetByCreative(req.creativeTenant, item.creativeId);
+    const trace = ultimoTrace(item);
+    const snapshot = await core.feedbackSnapshot({
+      plan: item.plan, resultMetadata: trace ? { trace } : undefined, assetSha256: asset ? asset.sha256 : undefined,
+    });
+    const salvo = await store.upsertFeedback(req.creativeTenant, {
+      userId: usuarioDe(req), storeId: storeAtual(), creativeId: item.creativeId, jobId: item.jobId, verdict: corpo.verdict, snapshot,
+    });
+    res.json({ creativeId: item.creativeId, verdict: salvo.verdict, updatedAt: salvo.updatedAt });
+  }));
+
+  router.delete('/items/:creativeId/feedback', exigirStore, exigirModulo, exigirPessoa, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.creativeId)) throw new InputError('id inválido');
+    await store.deleteFeedback(req.creativeTenant, usuarioDe(req), req.params.creativeId); // idempotente: limpar o que não existe é ok
+    res.json({ creativeId: req.params.creativeId, verdict: null });
+  }));
+
+  // Aprovação por dimensão, só leitura. Contagem por ângulo, objetivo, contexto, interação, composição ou produto — a base
+  // para consultas futuras. Não é ranking e nada aqui é lido pelo planner.
+  router.get('/feedback/summary', exigirStore, exigirModulo, rota(async (req, res) => {
+    const by = String(req.query.by || '');
+    if (!FEEDBACK_DIMENSIONS.includes(by)) throw new InputError(`by: use ${FEEDBACK_DIMENSIONS.join(', ')}`);
+    const escopo = req.query.scope === undefined ? 'store' : String(req.query.scope);
+    if (!['store', 'organization'].includes(escopo)) throw new InputError('scope: use store ou organization');
+    const storeId = escopo === 'store' ? storeAtual() : null;
+    res.json({ by, scope: storeId ? 'store' : 'organization', items: await store.feedbackSummary(req.creativeTenant, { by, storeId }) });
+  }));
+
+  // ── Copiar dados ───────────────────────────────────────────────────────────────────────────────────────────────
+  router.get('/items/:creativeId/draft', exigirStore, exigirModulo, rota(async (req, res) => {
+    const achado = await itemComPlano(req, req.params.creativeId);
+    if (achado.error) return res.status(achado.status).json({ error: achado.error });
+    const { item } = achado;
+    const draft = await core.draft(item.plan);
+    const job = await store.getJob(req.creativeTenant, item.jobId);
+    const mapeado = await mapDraftToForm(draft, { store, tenantId: req.creativeTenant, jobInput: job && job.input && job.input.context ? { context: job.input.context } : null });
+    // A cena com pessoas/interação e os sorteios só valem nos planos/prompts v2. Se a conta não os tem, avise em vez de
+    // deixar o POST /jobs falhar depois: o `draft` inteiro continua na resposta, nada é perdido.
+    const { form, actions, unavailable, warnings } = mapeado;
+    if ((form.subjects || form.interaction) && planSchemaVersionFor(env, req.creativeTenant) !== 2) {
+      unavailable.push({ field: 'subjects', id: null, reason: 'plan_v2_not_enabled' });
+      delete form.subjects;
+      delete form.interaction;
+    }
+    if ((actions.again.scene_picks) && (promptVersionFor(env, req.creativeTenant) !== 2 || planSchemaVersionFor(env, req.creativeTenant) !== 2)) {
+      unavailable.push({ field: 'scene_picks', id: null, reason: 'prompt_v2_not_enabled' });
+      delete actions.again.scene_picks;
+    }
+    res.json({ creativeId: item.creativeId, jobId: item.jobId, ...mapeado, warnings, draft });
   }));
 
   router.get('/assets/:creativeId', exigirStore, exigirModulo, rota(async (req, res) => {

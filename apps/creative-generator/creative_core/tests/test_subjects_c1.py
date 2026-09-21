@@ -269,6 +269,18 @@ def test_given_pose_risk_then_the_interaction_adds_to_it_and_four_people_are_nev
     assert "people_count_risk:4" in _plan("e-familia")["warnings"]
 
 
+def test_given_scene_composition_fields_on_a_v1_plan_then_they_are_refused_instead_of_silently_dropped():
+    for field, value in (("subjects", _fixture("b-menino-e-mae")["subjects"]), ("interaction", "playing"), ("scene_picks", {"acao": 0})):
+        request = {**_explicit(), "plan_schema_version": 1, field: value}
+        request.pop("prompt_version", None)
+        assert f"{field}: requires plan_schema_version 2" in _error(request).details["errors"], field
+    v1_prompt = {**_explicit(), "prompt_version": 1, "scene_picks": {"acao": 0}}
+    assert "scene_picks: requires prompt_version 2 (picks belong to the v2 scene pools)" in _error(v1_prompt).details["errors"]
+    default = {k: v for k, v in _explicit().items() if k != "plan_schema_version"}
+    assert "subjects: requires plan_schema_version 2" in _error(default).details["errors"], "the service default is v1"
+    assert plan_creative({**default, "plan_schema_version": 2}, router=ROUTER)["schema_version"] == 2
+
+
 # ------------------------------------------------------------------ minors: explicit age first
 def test_given_a_declared_age_then_it_wins_over_the_text_and_the_heuristic_is_only_the_fallback():
     request = _explicit(subjects=[{"persona": _person("Ana"), "age_band": "child_3_5"}, {"persona": _person("mulher 30 anos", "adult"), "relation_to_primary": "mother"}])

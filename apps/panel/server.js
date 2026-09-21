@@ -13365,6 +13365,8 @@ try {
     lerEntitlements: () => planoEfetivo(PLANO_DA_ORGANIZACAO),
     // INV-22: tenant do Creative Core = Organization autenticada; o worker percorre as Organizations.
     tenantAtual: () => orgDoContexto(),
+    // Fase C: Store do contexto, quando há uma resolvida (o feedback do Gostei/Não gostei nasce com ela; sem, fica compartilhado).
+    storeAtual: () => { try { return storeDoContexto(); } catch { return null; } },
     paraCadaTenant: (fn) => JOBS.executarPorOrganizacao('criativos', (org) => fn(org.organizationId)),
   });
 } catch (err) {

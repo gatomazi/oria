@@ -55,3 +55,13 @@
 .criativos-prompts__ref img { width: 96px; height: 96px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-2); }
 .criativos-prompts__acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
 .criativos-prompts__texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Gostei / Não gostei / Copiar dados */
+.criativos-avaliacao { display: grid; gap: var(--space-1); min-width: 0; }
+.criativos-avaliacao__acoes { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* Cena copiada: recomendação em uma linha, detalhe sob demanda */
+.criativos-copia { display: grid; gap: var(--space-3); }
+.criativos-copia__recomendado { margin: 0; font: var(--type-body); color: var(--text-primary); overflow-wrap: anywhere; }
+.criativos-copia__acoes { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.criativos-copia__lista { margin: 0 0 var(--space-3); padding-left: var(--space-5); font: var(--type-body-dense); color: var(--text-primary); }

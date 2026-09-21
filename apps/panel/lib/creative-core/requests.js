@@ -21,7 +21,15 @@ const MAX_ITEMS_PER_JOB = 40;
 const INPUT_KEYS = new Set([
   'engine', 'product_mode', 'product_ids', 'angle_ids', 'placements', 'quantity', 'brand', 'niche', 'persona',
   'context', 'funnel_stage', 'funnel', 'remarketing', 'copy', 'quality',
+  // Fase C · composição da cena e reprodução (vêm de "Copiar dados" / "Gerar assim"; o core valida o conteúdo).
+  'subjects', 'interaction', 'gaze_mode', 'seed', 'scene_picks',
 ]);
+const GAZE_MODES = ['auto', 'camera', 'off_camera', 'product', 'interaction'];
+const INTERACTION_RE = /^[a-z_]{2,40}$/;
+const PICK_NAME_RE = /^[a-z_]{1,40}$/;
+const SUBJECT_KEYS = new Set(['id', 'role', 'persona', 'age_band', 'relation_to_primary', 'relation_label', 'wears_product_id', 'prominence']);
+const MAX_SUBJECTS = 4;
+const MAX_SUBJECTS_BYTES = 8_000;
 
 class InputError extends Error {
   constructor(message) {
@@ -117,7 +125,48 @@ function normalizeJobInput(raw) {
     exigir(objetoSimples(raw.copy) && typeof raw.copy.generate === 'boolean', 'copy: formato inválido');
     input.copy = { generate: raw.copy.generate };
   }
+
+  if (raw.subjects !== undefined) input.subjects = normalizeSubjects(raw.subjects, input.product_ids);
+  if (raw.interaction !== undefined) {
+    exigir(typeof raw.interaction === 'string' && INTERACTION_RE.test(raw.interaction), 'interação inválida');
+    input.interaction = raw.interaction;
+  }
+  if (raw.gaze_mode !== undefined) {
+    exigir(GAZE_MODES.includes(raw.gaze_mode), 'olhar inválido');
+    input.gaze_mode = raw.gaze_mode;
+  }
+  // Semente e sorteios de cena só reproduzem UM criativo: com quantidade ou combinações demais, todos sairiam iguais.
+  if (raw.seed !== undefined || raw.scene_picks !== undefined) {
+    exigir(total === 1, 'reproduzir uma cena vale para um único criativo (1 ângulo, 1 formato, quantidade 1)');
+  }
+  if (raw.seed !== undefined) {
+    exigir(Number.isInteger(raw.seed) && raw.seed >= 0 && raw.seed <= 2 ** 31 - 1, 'semente inválida');
+    input.seed = raw.seed;
+  }
+  if (raw.scene_picks !== undefined) {
+    exigir(objetoSimples(raw.scene_picks) && Object.keys(raw.scene_picks).length <= 8, 'sorteios da cena: formato inválido');
+    for (const [name, index] of Object.entries(raw.scene_picks)) {
+      exigir(PICK_NAME_RE.test(name) && Number.isInteger(index) && index >= 0 && index < 1000, 'sorteios da cena: valor inválido');
+    }
+    input.scene_picks = { ...raw.scene_picks };
+  }
   return input;
+}
+
+// Estrutura de `subjects` (até 4 pessoas). O conteúdo (papéis, relações, faixas etárias, produto vestido) é do core, que
+// devolve 422 com o campo errado; aqui só o formato, o tamanho e o vínculo com os produtos DESTE lote.
+function normalizeSubjects(raw, productIds) {
+  exigir(Array.isArray(raw) && raw.length >= 1 && raw.length <= MAX_SUBJECTS, `pessoas: informe de 1 a ${MAX_SUBJECTS}`);
+  exigir(JSON.stringify(raw).length <= MAX_SUBJECTS_BYTES, 'pessoas: conteúdo grande demais');
+  return raw.map((subject) => {
+    exigir(objetoSimples(subject), 'pessoas: formato inválido');
+    for (const key of Object.keys(subject)) exigir(SUBJECT_KEYS.has(key), `pessoas: campo desconhecido: ${key}`);
+    exigir(objetoSimples(subject.persona) && typeof subject.persona.label === 'string' && subject.persona.label.trim(), 'pessoas: descreva cada pessoa');
+    if (subject.wears_product_id !== undefined && subject.wears_product_id !== null) {
+      exigir(productIds.includes(subject.wears_product_id), 'pessoas: o produto vestido precisa ser um dos produtos do lote');
+    }
+    return subject;
+  });
 }
 
 function kitDoPerfil(row) {
@@ -204,6 +253,17 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, pla
   if (input.funnel) base.funnel = input.funnel;
   if (input.remarketing) base.remarketing = input.remarketing;
   if (input.copy) base.copy = input.copy;
+  if (input.subjects) base.subjects = input.subjects;
+  if (input.interaction) base.interaction = input.interaction;
+  if (input.gaze_mode && input.gaze_mode !== 'auto') base.gaze_mode = input.gaze_mode;
+  if (input.scene_picks) base.scene_picks = input.scene_picks;
+  // Cena com pessoas/interação só existe no plano v2 (o core recusa no v1). Diga antes de enfileirar, em português.
+  if ((input.subjects || input.interaction || input.scene_picks) && planSchemaVersion !== 2) {
+    throw new InputError('a composição de cena (pessoas, interação) exige o plano v2, que ainda não está habilitado nesta conta');
+  }
+  if (input.scene_picks && promptVersion !== 2) {
+    throw new InputError('reproduzir os sorteios da cena exige o prompt v2, que ainda não está habilitado nesta conta');
+  }
   if (hints && (hints.recent_scenes?.length || hints.recent_personas?.length)) {
     base.history_hints = {
       recent_scenes: (hints.recent_scenes || []).slice(0, 50),
@@ -228,7 +288,7 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, pla
           funnelStage: input.funnel_stage || null,
           remarketingIntent: (input.remarketing && input.remarketing.intent) || null,
           quality: input.quality,
-          request: { ...base, creative_id: creativeId, angle_id: angle, placement_id: placement, seed: randomInt(0, 2 ** 31 - 1) },
+          request: { ...base, creative_id: creativeId, angle_id: angle, placement_id: placement, seed: input.seed !== undefined ? input.seed : randomInt(0, 2 ** 31 - 1) },
         });
       }
     }

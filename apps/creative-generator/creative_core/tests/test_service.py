@@ -84,6 +84,9 @@ def test_given_contracts_then_catalog_lets_panel_build_forms():
     catalog = _call(app, "GET", "/v1/contracts")[1]["catalog"]
     assert len(catalog["angles"]) == 13 and {"id", "label", "uses_person", "apparel_only"} <= set(catalog["angles"][0])
     assert [p["id"] for p in catalog["placements"]] == ["FEED_4X5", "STORY_9X16"]
+    assert {i["id"] for i in catalog["interactions"]} >= {"playing", "reading_together", "group_photo"}
+    assert all({"label", "min_people", "max_people"} <= set(i) for i in catalog["interactions"])
+    assert {r["id"]: r["label"] for r in catalog["relations"]}["father"] == "pai" and "_doc" not in [r["id"] for r in catalog["relations"]]
     assert "cart" in catalog["remarketing_intents"] and catalog["funnel_stages"] == ["TOFU", "MOFU", "BOFU"]
     assert {k["id"] for k in catalog["builtin_kits"]["niche"]} == {"fashion", "generic_commerce"}
 
