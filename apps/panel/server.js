@@ -15,6 +15,7 @@ const metaActions  = require('./lib/meta/actions');
 const metaInsights = require('./lib/meta/insights');
 const metaCriativos = require('./lib/meta/criativos');
 const financeiroConsolidado = require('./lib/financeiro/consolidado');
+const clientesLista = require('./lib/clientes/lista');
 const financeiroDespesas = require('./lib/financeiro/despesas');
 const { resolverMidiaDaOrganizacao } = require('./lib/financeiro/midia');
 const custosPrecos = require('./lib/custos/precos');
@@ -7505,6 +7506,20 @@ app.get('/api/admin/clientes', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(`[CLIENTES] falha ao listar histórico de compras: ${err.message}`);
     res.status(500).json({ error: 'não foi possível ler o histórico de compras' });
+  }
+});
+
+// Lista paginada da tela de Clientes: busca, ordenação e filtro rodam aqui, ANTES de fatiar a página, para valerem
+// para a lista inteira (lib/clientes/lista.js). A base é o histórico de pedidos da Organization/Store do contexto.
+app.get('/api/admin/clientes/lista', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });
+
+  try {
+    const clientes = await buscarClientesAgregados();
+    res.json(clientesLista.listarClientes(clientes, clientesLista.normalizarConsulta(req.query)));
+  } catch (err) {
+    console.error(`[CLIENTES] falha ao listar clientes paginados: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível ler os clientes' });
   }
 });
 

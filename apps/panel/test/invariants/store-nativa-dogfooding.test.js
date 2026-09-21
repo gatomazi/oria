@@ -423,6 +423,7 @@ test('fonte · Clientes, Financeiro e Dashboard migrados não chamam lojaLegadaD
   const fonte = fs.readFileSync(SERVER, 'utf8');
   const rotas = [
     "app.get('/api/admin/clientes'",
+    "app.get('/api/admin/clientes/lista'",
     "app.get('/api/admin/financeiro/resumo'",
     "app.get('/api/admin/financeiro/movimentacoes'",
     "app.get('/api/admin/financeiro/antecipacoes'",

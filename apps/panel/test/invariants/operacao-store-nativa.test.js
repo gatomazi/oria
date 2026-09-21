@@ -532,6 +532,25 @@ test('Clientes · o histórico de compras da Store nativa usa a mesma chave `loj
   assert.ok(r.json.clientes.some((x) => chaves.has(`${x.loja}:${x.documento}`)), 'a mesma junção `loja:documento` da tela casa cliente da Ink com o histórico de compras');
 });
 
+test('Clientes · a lista paginada é da Store do contexto: total, página e chave `loja` da Store nativa', async () => {
+  const c = await entrar('C');
+  const r = await c.req('GET', '/api/admin/clientes/lista?page=1&per_page=1&ordem=compras_desc');
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.perPage, 1);
+  assert.equal(r.json.clientes.length, 1, 'uma linha por página');
+  assert.ok(r.json.total >= 1 && r.json.totalPages === r.json.total, 'o total é o da lista inteira, não o da página');
+  assert.equal(r.json.clientes[0].loja, store.C, 'a Store nativa não exige chave legada: a chave é o store_id');
+  assert.ok(!('legacyCustomerKeys' in r.json.clientes[0]), 'só o que a tela usa');
+  // Outra Organization nunca vê os clientes de C.
+  const d = await (await entrar('D')).req('GET', '/api/admin/clientes/lista?page=1&per_page=100');
+  assert.equal(d.status, 200, d.texto);
+  assert.ok(d.json.clientes.every((x) => x.loja === store.D), 'D só vê a própria Store');
+  // Parâmetro inválido cai no padrão em vez de virar erro ou consulta livre.
+  const ruim = await c.req('GET', '/api/admin/clientes/lista?page=abc&ordem=DROP');
+  assert.equal(ruim.status, 200, ruim.texto);
+  assert.equal(ruim.json.page, 1);
+});
+
 test('Migração 0030 · desfaz o UUID já gravado em `loja` e não toca chave legada de verdade', async () => {
   await sup.query("INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status) VALUES ($1, $2, $3, 424242, 'paid')", [ORGS.C, store.C, store.C]);
   await sup.query("INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status) VALUES ($1, $2, 'sul', 424243, 'paid')", [ORGS.A, store.A]);

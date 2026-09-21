@@ -1,149 +1,81 @@
-import { useEffect, useMemo, useState } from 'react';
-import { DataTable, EmptyState, ErrorState, PageHeader, PageStack, SearchInput, Select, Skeleton, StatusBadge, Toolbar } from '../../components/ds';
+import { useEffect, useState } from 'react';
+import { DataTable, EmptyState, ErrorState, PageHeader, PageStack, Pagination, SearchInput, Select, Skeleton, StatusBadge, Toolbar } from '../../components/ds';
 import { formatData, formatValor, plural } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { adminStores } from '../../state/adminStores';
 import { useNomeDaStore } from '../../auth/AuthContext';
-import { getComprasOpcional, getCustomers, type ClienteCompra, type ClienteInk } from '../../api/clientes';
+import { listClientes, type ListaDeClientes, type OrdemClientes } from '../../api/clientes';
 
 import '../../pedidos-central.css';
 import '../../clientes.css';
 
-// Porte de src/clientes.js.
-interface ClienteCruzado {
-  loja: string;
-  nome: string;
-  email: string | null;
-  telefone: string | null;
-  documento: string | null;
-  aceitaMarketing: boolean;
-  totalCompras: number;
-  lucroOperacional: number;
-  pedidosSemFinanceiro: number;
-  ultimaCompraEm: string | null;
-  diasSemComprar: number | null;
-}
-
-function apenasDigitos(texto: string | null | undefined): string {
-  return String(texto || '').replace(/\D/g, '');
-}
-
-function normalizar(texto: string | null | undefined): string {
-  return String(texto || '').toLowerCase();
-}
-
-// Cruza o registro de clientes (API da Ink) com o histórico de compras (agregado do cache local)
-// — casa por documento primeiro, depois telefone, mesma ordem de confiabilidade usada no
-// anti-spam de carrinho (`clienteJaComprou` no servidor).
-function cruzarComCompras(clientes: ClienteInk[], compras: ClienteCompra[]): ClienteCruzado[] {
-  const porDocumento: Record<string, ClienteCompra> = {};
-  const porTelefone: Record<string, ClienteCompra> = {};
-  compras.forEach((c) => {
-    const doc = apenasDigitos(c.documento);
-    const tel = apenasDigitos(c.telefone);
-    if (doc) porDocumento[c.loja + ':' + doc] = c;
-    if (tel) porTelefone[c.loja + ':' + tel] = c;
-  });
-
-  return clientes.map((c) => {
-    const doc = apenasDigitos(c.documento);
-    const tel = apenasDigitos(c.telefone);
-    const match = (doc && porDocumento[c.loja + ':' + doc]) || (tel && porTelefone[c.loja + ':' + tel]) || null;
-    return {
-      loja: c.loja,
-      nome: c.nome,
-      email: c.email,
-      telefone: c.telefone,
-      documento: c.documento,
-      aceitaMarketing: c.aceitaMarketing,
-      totalCompras: match ? match.totalCompras : 0,
-      lucroOperacional: match ? match.lucroOperacional || 0 : 0,
-      pedidosSemFinanceiro: match ? match.pedidosSemFinanceiro || 0 : 0,
-      ultimaCompraEm: match ? match.ultimaCompraEm : null,
-      diasSemComprar: match ? match.diasSemComprar : null,
-    };
-  });
-}
-
-type Ordem = 'compras_desc' | 'lucro_desc' | 'inativos_primeiro' | 'nome';
+const CLIENTES_POR_PAGINA = 25;
+// A busca só vai ao servidor depois de uma pausa na digitação (uma chamada por tecla seria ruído).
+const ATRASO_DA_BUSCA_MS = 300;
 
 export function ClientesPage() {
   const nomeStore = useNomeDaStore();
   const escopo = useLojaAtiva() ?? '';
-  const [dados, setDados] = useState<ClienteCruzado[] | null>(null);
+  const [lista, setLista] = useState<ListaDeClientes | null>(null);
   const [erro, setErro] = useState('');
   const [busca, setBusca] = useState('');
-  const [ordem, setOrdem] = useState<Ordem>('compras_desc');
+  const [buscaAplicada, setBuscaAplicada] = useState('');
+  const [ordem, setOrdem] = useState<OrdemClientes>('compras_desc');
   const [inatividade, setInatividade] = useState('');
+  const [pagina, setPagina] = useState(1);
+
+  // Filtro ou ordem novos mudam a lista inteira: volta para a primeira página.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setBuscaAplicada(busca);
+      setPagina(1);
+    }, ATRASO_DA_BUSCA_MS);
+    return () => clearTimeout(t);
+  }, [busca]);
 
   useEffect(() => {
+    let atual = true;
     setErro('');
-    setDados(null);
-    Promise.all([getCustomers(), getComprasOpcional()])
-      .then(([customers, compras]) => setDados(cruzarComCompras(customers.clientes || [], compras.clientes || [])))
-      .catch((err: Error) => setErro(err.message));
-  }, []);
+    listClientes({ page: pagina, perPage: CLIENTES_POR_PAGINA, ordem, busca: buscaAplicada, inativoDias: inatividade })
+      .then((r) => {
+        if (!atual) return;
+        setLista(r);
+        // O servidor devolve a página real (a lista pode ter encolhido com o filtro).
+        if (r.page !== pagina) setPagina(r.page);
+      })
+      .catch((err: Error) => { if (atual) setErro(err.message); });
+    return () => { atual = false; };
+  }, [escopo, pagina, ordem, buscaAplicada, inatividade]);
 
-  const filtrados = useMemo(() => {
-    if (!dados) return [];
-    // O servidor já devolve só os clientes da Organization ativa.
-    const escopados = dados;
-    const buscaNorm = normalizar(busca);
-    const diasMinimo = inatividade ? Number(inatividade) : null;
-
-    let lista = escopados.filter((c) => {
-      const bateBusca =
-        !buscaNorm ||
-        normalizar(c.nome).includes(buscaNorm) ||
-        normalizar(c.email).includes(buscaNorm) ||
-        normalizar(c.telefone).includes(buscaNorm);
-      if (!bateBusca) return false;
-      if (diasMinimo == null) return true;
-      // "Sem comprar há X+ dias" também inclui quem nunca teve compra confirmada nenhuma.
-      return c.diasSemComprar == null || c.diasSemComprar >= diasMinimo;
-    });
-
-    lista = lista.slice().sort((a, b) => {
-      if (ordem === 'nome') return (a.nome || '').localeCompare(b.nome || '');
-      if (ordem === 'lucro_desc') return b.lucroOperacional - a.lucroOperacional;
-      if (ordem === 'inativos_primeiro') {
-        const da = a.diasSemComprar == null ? Infinity : a.diasSemComprar;
-        const db = b.diasSemComprar == null ? Infinity : b.diasSemComprar;
-        return db - da;
-      }
-      return (b.totalCompras || 0) - (a.totalCompras || 0);
-    });
-
-    return lista;
-  }, [dados, escopo, busca, ordem, inatividade]);
+  const clientes = lista?.clientes ?? [];
 
   return (
     <PageStack>
       <PageHeader
         title="Clientes"
         description={
-          dados ? 'Contagem de compras vem do histórico de pedidos já sincronizado (cache local) — não é uma consulta ao vivo.' : undefined
+          lista ? 'Quem já fez pedido. A contagem de compras vem do histórico de pedidos já sincronizado (cache local) — não é uma consulta ao vivo.' : undefined
         }
       />
 
       {erro && <ErrorState description={erro} />}
-      {!erro && !dados && <Skeleton variant="table" rows={8} />}
-      {!erro && dados && (
+      {!erro && !lista && <Skeleton variant="table" rows={8} />}
+      {!erro && lista && (
         <div className="ds-stack">
-          <Toolbar label="Filtrar clientes" end={<span className="ds-toolbar__meta">{plural(filtrados.length, 'cliente encontrado', 'clientes encontrados')}</span>}>
+          <Toolbar label="Filtrar clientes" end={<span className="ds-toolbar__meta">{plural(lista.total, 'cliente encontrado', 'clientes encontrados')}</span>}>
             <SearchInput
               aria-label="Buscar por nome, email ou telefone"
               placeholder="Buscar por nome, email ou telefone…"
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
             />
-            <Select aria-label="Ordenar clientes" value={ordem} onChange={(e) => setOrdem(e.target.value as Ordem)}>
+            <Select aria-label="Ordenar clientes" value={ordem} onChange={(e) => { setOrdem(e.target.value as OrdemClientes); setPagina(1); }}>
               <option value="compras_desc">Mais compras primeiro</option>
               <option value="lucro_desc">Maior lucro primeiro</option>
               <option value="inativos_primeiro">Sem comprar há mais tempo primeiro</option>
               <option value="nome">Nome (A-Z)</option>
             </Select>
-            <Select aria-label="Filtrar por tempo sem comprar" value={inatividade} onChange={(e) => setInatividade(e.target.value)}>
+            <Select aria-label="Filtrar por tempo sem comprar" value={inatividade} onChange={(e) => { setInatividade(e.target.value); setPagina(1); }}>
               <option value="">Qualquer cliente</option>
               <option value="30">Sem comprar há 30+ dias</option>
               <option value="60">Sem comprar há 60+ dias</option>
@@ -152,13 +84,17 @@ export function ClientesPage() {
             </Select>
           </Toolbar>
 
-          {!filtrados.length ? (
+          {!clientes.length ? (
             <EmptyState title="Nenhum cliente encontrado" />
           ) : (
+            <>
             <DataTable
               label="Clientes"
-              rows={filtrados}
-              rowKey={(c, i) => c.loja + ':' + (c.documento || c.telefone || i)}
+              // A ordem é a do seletor, aplicada no servidor sobre a lista inteira; ordenar pelo cabeçalho só
+              // reordenaria a página atual e enganaria.
+              sortable={false}
+              rows={clientes}
+              rowKey={(c) => c.loja + ':' + c.customerKey}
               columns={[
                 { key: 'nome', label: 'Nome', truncate: true, width: 240, render: (c) => c.nome || 'Sem nome', sortValue: (c) => c.nome },
                 { key: 'loja', priority: 'low', label: 'Loja', muted: true, render: (c) => adminStores.nameOr(c.loja, nomeStore), sortValue: (c) => adminStores.nameOr(c.loja, nomeStore) },
@@ -216,6 +152,17 @@ export function ClientesPage() {
                 },
               ]}
             />
+            {lista.totalPages > 1 && (
+              <Pagination
+                label="Paginação de clientes"
+                page={lista.page}
+                totalPages={lista.totalPages}
+                totalLabel={plural(lista.total, 'cliente', 'clientes')}
+                onPrev={() => setPagina((p) => Math.max(1, p - 1))}
+                onNext={() => setPagina((p) => Math.min(lista.totalPages, p + 1))}
+              />
+            )}
+            </>
           )}
         </div>
       )}

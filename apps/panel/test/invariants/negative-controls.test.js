@@ -1233,6 +1233,15 @@ const VIOLACOES = [
     de: '    const chave = r.loja || chaveDoContexto;',
     para: '    const chave = r.loja; // VIOLAÇÃO DELIBERADA (negative control)',
   },
+  {
+    classe: 'clientes/paginacao-ignora-pagina',
+    invariant: 'CLI-01',
+    teste: 'clientes-lista.test.js',
+    arquivo: 'lib/clientes/lista.js',
+    descricao: 'a lista de Clientes devolve sempre a primeira página: as demais páginas nunca chegam à tela',
+    de: '    clientes: filtrados.slice(inicio, inicio + perPage).map(paraTela),',
+    para: '    clientes: filtrados.slice(0, perPage).map(paraTela), // VIOLAÇÃO DELIBERADA (negative control)',
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────
@@ -1334,7 +1343,7 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
   assert.deepEqual(
     [...new Set(VIOLACOES.map((v) => v.classe))].sort(),
     ['audit/sujeito', 'auth', 'auth/csrf', 'auth/fixation', 'auth/login-tenant', 'auth/revogacao',
-      'clientes/chave-da-store-ausente', 'connector/chamador-exige-loja-legada', 'connector/leitura-por-loja', 'connector/save-sem-atomicidade',
+      'clientes/chave-da-store-ausente', 'clientes/paginacao-ignora-pagina', 'connector/chamador-exige-loja-legada', 'connector/leitura-por-loja', 'connector/save-sem-atomicidade',
       'connector/store-nativa-no-path-legado', 'convite/conta-existente-troca-senha', 'convite/grant-da-role',
       'convite/motivo-vazado', 'convite/sessao-de-outro-email', 'creative/dual-read-confinamento',
       'creative/dual-read-organization', 'creative/tenant-env', 'dashboard/escopo-loja-nula',
