@@ -1233,6 +1233,15 @@ const VIOLACOES = [
     de: '    const chave = r.loja || chaveDoContexto;',
     para: '    const chave = r.loja; // VIOLAÇÃO DELIBERADA (negative control)',
   },
+  {
+    classe: 'catalogo/paginacao-ignora-page',
+    invariant: 'PAG-01',
+    teste: 'ink-store-nativa.test.js',
+    arquivo: 'server.js',
+    descricao: 'a rota de categorias ignora `page`: a tela paginada recebe sempre a primeira página e nunca os totais da Ink',
+    de: '      ? `/v1/stores/collections?page=${page}&per_page=${perPage}`',
+    para: "      ? '/v1/stores/collections?per_page=100' // VIOLAÇÃO DELIBERADA (negative control)",
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────
@@ -1334,7 +1343,7 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
   assert.deepEqual(
     [...new Set(VIOLACOES.map((v) => v.classe))].sort(),
     ['audit/sujeito', 'auth', 'auth/csrf', 'auth/fixation', 'auth/login-tenant', 'auth/revogacao',
-      'clientes/chave-da-store-ausente', 'connector/chamador-exige-loja-legada', 'connector/leitura-por-loja', 'connector/save-sem-atomicidade',
+      'catalogo/paginacao-ignora-page', 'clientes/chave-da-store-ausente', 'connector/chamador-exige-loja-legada', 'connector/leitura-por-loja', 'connector/save-sem-atomicidade',
       'connector/store-nativa-no-path-legado', 'convite/conta-existente-troca-senha', 'convite/grant-da-role',
       'convite/motivo-vazado', 'convite/sessao-de-outro-email', 'creative/dual-read-confinamento',
       'creative/dual-read-organization', 'creative/tenant-env', 'dashboard/escopo-loja-nula',

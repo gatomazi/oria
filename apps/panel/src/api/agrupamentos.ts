@@ -16,8 +16,17 @@ export interface ProdutoResumo {
   product_type?: { name: string } | null;
 }
 
-export function listAgrupamentos() {
-  return api<{ agrupamentos: Agrupamento[] }>(`/api/admin/agrupamentos`);
+export interface ListaDeAgrupamentos {
+  agrupamentos: Agrupamento[];
+  page?: number;
+  totalPages?: number;
+  totalCount?: number | null;
+}
+
+/** Sem `opts` devolve a lista de sempre; com `opts.page` devolve só aquela página e os totais. */
+export function listAgrupamentos(opts?: { page: number; perPage?: number }) {
+  const qs = opts ? `?page=${opts.page}&per_page=${opts.perPage ?? 25}` : '';
+  return api<ListaDeAgrupamentos>(`/api/admin/agrupamentos${qs}`);
 }
 
 export function getAgrupamento(id: number) {

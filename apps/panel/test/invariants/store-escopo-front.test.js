@@ -80,3 +80,14 @@ test('Trocas · o status da troca aparece em português (nunca o código cru da 
 test('Categorias · a listagem usa a contagem (product_count), não o array completo de ids', () => {
   assert.match(ler('pages/categorias/CategoriasPage.tsx'), /c\.product_count \?\? \(c\.product_ids \|\| \[\]\)\.length/);
 });
+
+test('Categorias e Agrupamentos · listas longas são paginadas (25 por página) e mostram o rodapé de paginação', () => {
+  for (const [arquivo, chamada] of [['pages/categorias/CategoriasPage.tsx', 'listCategorias'], ['pages/agrupamentos/AgrupamentosPage.tsx', 'listAgrupamentos']]) {
+    const fonte = ler(arquivo);
+    assert.match(fonte, new RegExp(`${chamada}\\(\\{ page: pagina, perPage: \\w+ \\}\\)`), `${arquivo} pede só a página atual`);
+    assert.match(fonte, /<Pagination[\s\S]*?onPrev=[\s\S]*?onNext=/, `${arquivo} mostra o rodapé de paginação`);
+    assert.match(fonte, /useEffect\(carregar, \[lojaReal, pagina\]\)/, `${arquivo} recarrega ao trocar de página`);
+  }
+  assert.match(ler('pages/categorias/CategoriasPage.tsx'), /const CATEGORIAS_POR_PAGINA = 25;/);
+  assert.match(ler('pages/agrupamentos/AgrupamentosPage.tsx'), /const AGRUPAMENTOS_POR_PAGINA = 25;/);
+});
