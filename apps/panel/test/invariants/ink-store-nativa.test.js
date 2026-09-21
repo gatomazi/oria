@@ -194,11 +194,15 @@ test('teste de conexão · read-only, com a credencial da Organization, sem feed
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.status, 'connected');
   assert.ok(!r.texto.includes(TOKEN.C));
-  // Ink só é "connected" com token E webhook (URL + segredo): token sozinho é "pendente" — e o
-  // teste de conexão não fabrica um webhook que não existe.
+  // A API da Ink está conectada com o token; o webhook é OUTRA parte e está adiado de propósito — sem
+  // ele a integração NÃO fica "pendente". O teste de conexão não fabrica um webhook que não existe.
   const status = await c.req('GET', '/api/admin/integrations');
-  assert.equal(status.json.ink.status, 'pendente');
-  assert.equal(status.json.ink.conectado, false);
+  assert.equal(status.json.ink.status, 'conectada');
+  assert.equal(status.json.ink.conectado, true);
+  assert.equal(status.json.ink.webhook, 'adiado');
+  const ink = status.json.integracoes.find((i) => i.provider === 'ink');
+  assert.equal(ink.estado, 'connected');
+  assert.deepEqual(ink.componentes, { api: 'connected', webhook: 'deferred' });
 });
 
 // ── Produtos, Categorias, Agrupamentos (ao vivo, pela credencial da Store) ────────────────────
@@ -385,7 +389,8 @@ async function entregar(caminho, segredo, evento) {
 test('webhook · evento assinado da Store nativa é verificado, associado à Organization/Store e o pedido é ingerido', async () => {
   const caminhoC = await urlDoWebhook('C');
   const conectada = await (await entrar('C')).req('GET', '/api/admin/integrations');
-  assert.equal(conectada.json.ink.status, 'conectada', 'token + URL + segredo do webhook = conectada');
+  assert.equal(conectada.json.ink.status, 'conectada', 'token = API conectada');
+  assert.equal(conectada.json.ink.webhook, 'configurado', 'URL + segredo do webhook = webhook configurado');
   assert.equal(conectada.json.ink.conectado, true);
   const status = await entregar(caminhoC, SEGREDO_WEBHOOK.C, { event: 'order.paid', order_id: 7001 });
   assert.equal(status, 200);

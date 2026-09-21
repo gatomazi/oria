@@ -3,7 +3,8 @@ import { Card, DataTable, EmptyState, ErrorState, PageHeader, Skeleton, StatusBa
 import { formatData } from '../../lib/format';
 import { adminStores } from '../../state/adminStores';
 import { getIntegrations, type IntegrationsData } from '../../api/integracoes';
-import { hasEntitlement, loadEntitlements } from '../../state/entitlements';
+import { loadEntitlements } from '../../state/entitlements';
+import { NOME_DO_PROVIDER, rotuloDaApiInk, rotuloDoWebhookInk, seloDoEstado } from './estadoIntegracao';
 import { BackfillPedidosCard } from './BackfillPedidosCard';
 import { CatalogoCacheCard } from './CatalogoCacheCard';
 import { lojasComTokenInk } from './lojaOpcao';
@@ -46,6 +47,20 @@ export function IntegracoesPage() {
       {!erro && !data && <Skeleton rows={4} />}
       {!erro && data && (
         <div className="ad-integracoes-grid">
+          <Card title="Estado das integrações" description="Cada integração tem um único estado, calculado no servidor.">
+            <ul className="ad-integracoes-resumo" aria-label="Estado das integrações">
+              {data.integracoes.map((i) => {
+                const selo = seloDoEstado(i.estado);
+                return (
+                  <li key={i.provider}>
+                    <span>{NOME_DO_PROVIDER[i.provider] || i.provider}</span>
+                    <StatusBadge tone={selo.tone} label={selo.label} />
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+
           <Card title="Reserva Ink" flush>
             {/* Organization nova não tem loja ligada à Ink. Uma tabela só com cabeçalho não diz
                 isso — diz que algo falhou. O estado é "ainda não configurada". */}
@@ -65,16 +80,14 @@ export function IntegracoesPage() {
                 { key: 'loja', label: 'Loja', render: (item) => item.nome || (item.loja ? adminStores.name(item.loja) : '—'), sortValue: (item) => item.nome || (item.loja ? adminStores.name(item.loja) : '') },
                 {
                   key: 'status',
-                  label: 'Status',
+                  label: 'API',
                   render: (item) => {
-                    const ok = item.tokenConfigurado && item.webhookConfigurado;
-                    // Configuração pendente é ação necessária, não falha (DESIGN.md › Status Badge).
-                    return <StatusBadge tone={ok ? 'success' : 'warning'} label={ok ? 'OK' : 'Pendente'} />;
+                    const r = rotuloDaApiInk(item.tokenConfigurado ? 'connected' : 'not_configured');
+                    return <StatusBadge tone={r.tone} label={r.label} />;
                   },
-                  sortValue: (item) => (item.tokenConfigurado && item.webhookConfigurado ? 1 : 0),
+                  sortValue: (item) => (item.tokenConfigurado ? 1 : 0),
                 },
-                { key: 'token', label: 'Token', muted: true, render: (item) => (item.tokenConfigurado ? 'Configurado' : 'Não configurado'), sortValue: (item) => (item.tokenConfigurado ? 1 : 0) },
-                { key: 'webhook', label: 'Webhook', muted: true, render: (item) => (item.webhookConfigurado ? 'Configurado' : 'Não configurado'), sortValue: (item) => (item.webhookConfigurado ? 1 : 0) },
+                { key: 'webhook', label: 'Webhook', muted: true, render: (item) => rotuloDoWebhookInk(item.webhookConfigurado ? 'connected' : 'deferred').label, sortValue: (item) => (item.webhookConfigurado ? 1 : 0) },
                 {
                   key: 'evento',
                   label: 'Último evento verificado',
@@ -112,12 +125,6 @@ export function IntegracoesPage() {
 
           <Card title="Instagram">
             <div className="ad-integracao-item__topo">
-              {entitlementsProntos && (
-                <StatusBadge
-                  tone={hasEntitlement('instagram') ? 'success' : 'neutral'}
-                  label={hasEntitlement('instagram') ? 'Incluído no plano' : 'Não incluído no plano'}
-                />
-              )}
               <StatusBadge tone="neutral" label="Em breve" />
             </div>
             <p className="pc-nota">Integração ainda não implementada neste painel.</p>

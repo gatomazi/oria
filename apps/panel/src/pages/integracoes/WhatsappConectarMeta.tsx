@@ -143,6 +143,10 @@ export function WhatsappConectarMeta({ conectado, onConectado }: { conectado: bo
         Você entra com a sua conta da Meta, escolhe ou cria a conta do WhatsApp Business e o número. O Oria guarda o acesso cifrado e
         recebe as mensagens dos seus clientes. O pagamento das mensagens é feito por você, direto à Meta.
       </p>
+      <p className="pc-nota">
+        <strong>Modo atual: homologação.</strong> A conexão automática ainda depende da aprovação do Oria como provedor de tecnologia na Meta;
+        até lá, só contas com função no app da Meta concluem o fluxo. Para as demais lojas, use o cadastro manual abaixo.
+      </p>
       {erro && <p className="ds-form-error" role="alert">{erro}</p>}
       <Button onClick={conectar} disabled={fase !== 'pronto'}>
         {fase === 'salvando' ? 'Concluindo…' : fase === 'aguardando' ? 'Aguardando a Meta…' : conectado ? 'Reconectar com a Meta' : 'Conectar com a Meta'}
