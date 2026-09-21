@@ -35,7 +35,12 @@ const PADRAO_DB = /(urlDoBanco|abrirPool|abrirPoolDescartavel|criarBancoDescarta
 const EXCECOES = Object.freeze({
   // Roda OUTROS arquivos de invariant contra uma cópia defeituosa do lib/: quem precisa de banco
   // são os filhos, e o padrão não vê isso no texto deste arquivo.
-  'test/invariants/negative-controls.test.js': 'db',
+  // Fatias dos negative controls (test/helpers/negative-controls-nucleo.cjs): mesma razão. O arquivo de
+  // cobertura só lê arquivos e não roda ciclo, então cai no grupo sem banco pelo padrão.
+  'test/invariants/negative-controls-fatia-1.test.js': 'db',
+  'test/invariants/negative-controls-fatia-2.test.js': 'db',
+  'test/invariants/negative-controls-fatia-3.test.js': 'db',
+  'test/invariants/negative-controls-fatia-4.test.js': 'db',
 });
 
 // ── Pesos ──────────────────────────────────────────────────────────────────────────────────────
@@ -77,7 +82,12 @@ const PESOS_MEDIDOS = Object.freeze({
   'test/invariants/convite-aceite.test.js': 9.3,
   'test/invariants/fase5c-e2e-whatsapp.test.js': 18.2,
   'test/invariants/migrations.test.js': 17.5,
-  'test/invariants/negative-controls.test.js': 66,
+  // Era um arquivo de ~651 s (medido); agora 4 fatias de ~1/4 cada, para o planejador espalhá-las.
+  'test/invariants/negative-controls-cobertura.test.js': 1,
+  'test/invariants/negative-controls-fatia-1.test.js': 165,
+  'test/invariants/negative-controls-fatia-2.test.js': 165,
+  'test/invariants/negative-controls-fatia-3.test.js': 165,
+  'test/invariants/negative-controls-fatia-4.test.js': 165,
   'test/invariants/release-preflight.test.js': 4.5,
   'test/invariants/tenancy-db-negative-controls.test.js': 17.2,
   'test/invariants/tenancy-isolation.test.js': 9.4,
