@@ -16,6 +16,15 @@ export interface Persona {
   source?: "automatic" | "custom";
 }
 
+export interface MinorWardrobePolicy {
+  enabled?: boolean;
+  legs_coverage?: "full" | "knee" | "default";
+  allow_short_shorts?: boolean;
+  allow_short_skirts?: boolean;
+  allow_revealing_clothing?: boolean;
+  style?: string;
+}
+
 export interface BrandKit {
   id: string;
   name: string;
@@ -37,6 +46,7 @@ export interface BrandKit {
   defaultNicheKitId?: string;
   defaultContextProvider?: "geographic" | "niche" | "custom";
   suggestedPersonas?: Array<Persona>;
+  minorWardrobePolicy?: MinorWardrobePolicy;
   schemaVersion: number;
   version: number;
 }
@@ -86,6 +96,17 @@ export interface ContextProfile {
   profileVersion: number;
 }
 
+export interface ProductSemanticContext {
+  wearer_roles?: Array<string>;
+  relationship_themes?: Array<string>;
+  recommended_supporting_roles?: Array<string>;
+  incompatible_auto_supporting_roles?: Array<string>;
+  scene_intents?: Array<string>;
+  visible_text?: Array<string>;
+  source?: "manual" | "enrichment";
+  confidence?: number;
+}
+
 export interface CreativeProduct {
   id: string;
   brandId?: string;
@@ -94,6 +115,7 @@ export interface CreativeProduct {
   description?: string;
   referenceImages: Array<string>;
   metadata?: Record<string, unknown>;
+  semantic_context?: ProductSemanticContext;
 }
 
 export interface Angle {
@@ -179,6 +201,8 @@ export interface CreativeRequest {
   seed?: number;
   history_hints?: HistoryHints;
   prompt_version?: number;
+  plan_schema_version?: number;
+  gaze_mode?: "camera" | "interaction" | "off_camera" | "product" | "auto";
 }
 
 export interface KitRef {
@@ -221,6 +245,8 @@ export interface ReferenceRole {
 export interface PromptSection {
   name: string;
   length: number;
+  source?: string;
+  value?: string;
 }
 
 export interface PromptInfo {
@@ -240,6 +266,73 @@ export interface ModelSelection {
 export interface ValidationCheck {
   rule: string;
   passed: boolean;
+}
+
+export interface PlanSubject {
+  id: string;
+  role: "primary" | "supporting";
+  label: string;
+  persona?: Record<string, unknown> | null;
+  age_band: "baby" | "child" | "teen" | "adult" | "unknown";
+  is_minor: boolean;
+  minor_source?: string | null;
+  product_use: "wears" | "uses" | "none";
+  product_id?: string | null;
+  role_hint?: string | null;
+  relation_to_primary?: string | null;
+  prominence: "hero" | "secondary" | "background";
+  source: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy";
+}
+
+export interface GazeResolution {
+  mode: "camera" | "interaction" | "off_camera" | "product" | "none";
+  requested: "camera" | "interaction" | "off_camera" | "product" | "auto";
+  source: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy";
+  reason: string;
+}
+
+export interface PlanScene {
+  gaze: GazeResolution;
+  picks: Record<string, unknown>;
+  prompt_version: number;
+  interaction?: string | null;
+}
+
+export interface PlanComposition {
+  people_count: number;
+  pose_risk: "low" | "medium" | "high";
+  risk_reasons: Array<string>;
+}
+
+export interface MinorSafety {
+  applies: boolean;
+  minor_subject_ids: Array<string>;
+  global: Record<string, unknown>;
+  brand?: Record<string, unknown> | null;
+}
+
+export interface PlanSemantics {
+  products: Array<Record<string, unknown>>;
+  supporting?: Record<string, unknown> | null;
+  warnings: Array<Record<string, unknown>>;
+}
+
+export interface ResolvedInputs {
+  brand: Record<string, unknown>;
+  niche: Record<string, unknown>;
+  strategy: Record<string, unknown>;
+}
+
+export interface CompilerSection {
+  section: string;
+  source: string;
+  value: string;
+  length: number;
+}
+
+export interface CompilerInfo {
+  version: number;
+  sections: Array<CompilerSection>;
 }
 
 export interface CreativePlan {
@@ -267,6 +360,76 @@ export interface CreativePlan {
   versions: Record<string, unknown>;
   validations: Array<ValidationCheck>;
   warnings: Array<string>;
+  mode?: "creative";
+  objective?: "clean_creative" | "remarketing" | "funnel_visual";
+  subjects?: Array<PlanSubject>;
+  scene?: PlanScene;
+  composition?: PlanComposition;
+  minor_safety?: MinorSafety;
+  semantics?: PlanSemantics;
+  provenance?: Record<string, string>;
+  resolved_inputs?: ResolvedInputs;
+  compiler?: CompilerInfo;
+  seed?: number | null;
+}
+
+export interface CompiledPrompt {
+  text: string;
+  sections: Array<CompilerSection>;
+  sha256: string;
+  compiler_version: number;
+  prompt_version: number;
+}
+
+export interface GenerationDraft {
+  mode: "creative";
+  objective: "clean_creative" | "remarketing" | "funnel_visual";
+  strategy: "CLEAN_ANGLES" | "REMARKETING" | "FUNNEL_VISUAL";
+  product_mode: "single_product" | "multi_product";
+  product_ids: Array<string>;
+  angle_id: string;
+  placement_id: string;
+  quality: "low" | "medium" | "high";
+  brand_kit: KitRef;
+  niche_kit: KitRef;
+  persona_mode: "automatic" | "custom" | "none";
+  persona?: Record<string, unknown> | null;
+  subjects: Array<PlanSubject>;
+  context: Record<string, unknown>;
+  funnel_stage?: string | null;
+  remarketing?: Record<string, unknown> | null;
+  funnel?: Record<string, unknown> | null;
+  copy: CopyOptions;
+  gaze_mode: "camera" | "interaction" | "off_camera" | "product" | "auto";
+  plan_schema_version: number;
+  prompt_version: number;
+  seed?: number | null;
+  carried: Array<string>;
+  source: Record<string, unknown>;
+}
+
+export interface FeedbackSnapshot {
+  creative_id: string;
+  plan_id: string;
+  plan_schema_version: number;
+  compiler_version?: number | null;
+  prompt_version: number;
+  prompt_sha256: string;
+  mode: "creative";
+  objective: "clean_creative" | "remarketing" | "funnel_visual";
+  strategy: string;
+  angle: string;
+  product_ids: Array<string>;
+  subjects: Array<Record<string, unknown>>;
+  people_count: number;
+  context: Record<string, unknown>;
+  placement: string;
+  quality?: string | null;
+  gaze_mode?: string | null;
+  minor_safety_applied: boolean;
+  flags: Record<string, unknown>;
+  model: Record<string, unknown>;
+  asset_sha256?: string | null;
 }
 
 export interface GenerationError {

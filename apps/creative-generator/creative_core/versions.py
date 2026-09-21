@@ -21,6 +21,13 @@ SUPPORTED_PROMPT_VERSIONS = (1, 2)
 # by the 6 internal strategies of app.py. Recorded in the local history.
 INTERNAL_PROMPT_BANK_VERSION = 1
 
+# Fase B. CreativePlan schema_version 2 is a superset of 1 (same fields plus the v2 ones); SCHEMA_VERSION above stays
+# the shape version of the v1 contracts. COMPILER_VERSION versions the v2 prompt compiler: bump it whenever a section's
+# text, order or source changes, so a persisted plan can always be recompiled with the compiler that produced it.
+PLAN_SCHEMA_V2 = 2
+SUPPORTED_PLAN_SCHEMA_VERSIONS = (1, 2)
+COMPILER_VERSION = 1
+
 # Default schema/revision for kits and context profiles created by the core.
 BRAND_KIT_SCHEMA_VERSION = 1
 NICHE_KIT_SCHEMA_VERSION = 1

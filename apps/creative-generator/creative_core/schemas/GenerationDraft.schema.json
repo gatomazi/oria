@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/GenerationDraft.schema.json",
+  "title": "GenerationDraft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mode",
+    "objective",
+    "strategy",
+    "product_mode",
+    "product_ids",
+    "angle_id",
+    "placement_id",
+    "quality",
+    "brand_kit",
+    "niche_kit",
+    "persona_mode",
+    "subjects",
+    "context",
+    "copy",
+    "gaze_mode",
+    "plan_schema_version",
+    "prompt_version",
+    "carried",
+    "source"
+  ],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "creative"
+      ]
+    },
+    "objective": {
+      "type": "string",
+      "enum": [
+        "clean_creative",
+        "remarketing",
+        "funnel_visual"
+      ]
+    },
+    "strategy": {
+      "type": "string",
+      "enum": [
+        "CLEAN_ANGLES",
+        "REMARKETING",
+        "FUNNEL_VISUAL"
+      ]
+    },
+    "product_mode": {
+      "type": "string",
+      "enum": [
+        "single_product",
+        "multi_product"
+      ]
+    },
+    "product_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "angle_id": {
+      "type": "string"
+    },
+    "placement_id": {
+      "type": "string"
+    },
+    "quality": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "brand_kit": {
+      "$ref": "#/$defs/KitRef"
+    },
+    "niche_kit": {
+      "$ref": "#/$defs/KitRef"
+    },
+    "persona_mode": {
+      "type": "string",
+      "enum": [
+        "automatic",
+        "custom",
+        "none"
+      ]
+    },
+    "persona": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "subjects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PlanSubject"
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "funnel_stage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "remarketing": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "funnel": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "copy": {
+      "$ref": "#/$defs/CopyOptions"
+    },
+    "gaze_mode": {
+      "type": "string",
+      "enum": [
+        "camera",
+        "interaction",
+        "off_camera",
+        "product",
+        "auto"
+      ]
+    },
+    "plan_schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "prompt_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "carried": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "CopyOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generate"
+      ],
+      "properties": {
+        "generate": {
+          "type": "boolean"
+        },
+        "funnel_stages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "TOFU",
+              "MOFU",
+              "BOFU"
+            ]
+          },
+          "maxItems": 3
+        }
+      }
+    },
+    "KitRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "PlanSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role",
+        "label",
+        "age_band",
+        "is_minor",
+        "product_use",
+        "prominence",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "primary",
+            "supporting"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "persona": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "teen",
+            "adult",
+            "unknown"
+          ]
+        },
+        "is_minor": {
+          "type": "boolean"
+        },
+        "minor_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "product_use": {
+          "type": "string",
+          "enum": [
+            "wears",
+            "uses",
+            "none"
+          ]
+        },
+        "product_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role_hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relation_to_primary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prominence": {
+          "type": "string",
+          "enum": [
+            "hero",
+            "secondary",
+            "background"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "product",
+            "product_enrichment",
+            "brand",
+            "niche",
+            "persona",
+            "angle",
+            "planner_default",
+            "safety_policy"
+          ]
+        }
+      }
+    }
+  }
+}

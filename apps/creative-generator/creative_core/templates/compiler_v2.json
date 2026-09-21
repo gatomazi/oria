@@ -1,0 +1,34 @@
+{
+  "_doc": "Fixed wording of the sections the v2 prompt compiler owns (the others reuse the v1 blocks in blocks.py and the person scenes of angles_v2.json). Changing any text here changes the compiler output: bump COMPILER_VERSION in versions.py.",
+  "gaze": {
+    "camera": "OLHAR: a pessoa olha diretamente para a câmera, com expressão natural.",
+    "camera_group": "OLHAR: as pessoas olham diretamente para a câmera, com expressão natural.",
+    "interaction": "OLHAR: as pessoas olham uma para a outra ou para a ação em curso — não para a câmera.",
+    "off_camera": "OLHAR: olhar espontâneo para fora da câmera, como se algo fora de quadro chamasse a atenção; ninguém olha diretamente para a lente.",
+    "product": "OLHAR: a pessoa olha para o produto ou para o objeto em foco — não para a câmera."
+  },
+  "people": {
+    "header": "COMPOSIÇÃO DE PESSOAS (contrato): {count}.",
+    "count_one": "exatamente 1 pessoa em quadro",
+    "count_many": "exatamente {n} pessoas em quadro",
+    "line": "  · {name} ({role}): {label} — {use}.",
+    "roles": {
+      "primary": "principal",
+      "supporting": "apoio"
+    },
+    "uses": {
+      "wears": "veste {product}",
+      "uses": "usa {product}",
+      "none": "não usa o produto"
+    }
+  },
+  "semantics": {
+    "header": "SEMÂNTICA DO PRODUTO (o significado da estampa orienta o clima da cena; não altera a pose, o enquadramento nem a quantidade de pessoas definidos abaixo):",
+    "line": "  · {product}",
+    "theme": "tema: {value}",
+    "wearer": "quem veste: {value}",
+    "intent": "a cena pode remeter a: {value}",
+    "supporting": "pessoa de apoio recomendada: {value}",
+    "visible_text": "texto visível na peça: {value}"
+  }
+}

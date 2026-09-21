@@ -17,9 +17,7 @@ import json
 import mimetypes
 import time
 import uuid
-from pathlib import Path
 
-from .domain.cabide import REGRA_CENTRALIZACAO_CABIDE
 from .domain.remarketing import (
     CLEAN_AUTO,
     CLEAN_NUNCA,
@@ -37,20 +35,32 @@ from .domain.remarketing import (
 )
 
 from . import model_router as mr
-from . import prompt_v2
+from . import planner_v2, prompt_v2
+from .compiler import compile_prompt, prompt_info
 from .angles import CORE_ANGLES, angle_descriptor, angle_is_available
+from .blocks import (
+    COMMUNICATION,
+    _angle_block,
+    _avoid_block,
+    _brand_block,
+    _context_block,
+    _core_rules,
+    _niche_block,
+    _persona_block,
+    _product_block,
+    _product_label,
+)
 from .assets import ReferenceNormalizationError, asset_from_provider_b64, normalize_reference_png
 from .context_intelligence import GeographicContextProvider, deterministic_pick, resolve_context
 from .contracts import ensure_valid, validate
 from .errors import GenerationError, classify_provider_exception
 from .history import utc_now
 from .kits import kit_ref, resolve_kits
-from .personas import describe as describe_persona
 from .personas import describe_identity
 from .personas import persona_pool, resolve_persona
 from .placements import placement_descriptor
-from .products import garment_for_type, validate_products
-from .prompt_builder import PromptBuilder, bullet_block
+from .products import validate_products
+from .prompt_builder import PromptBuilder
 from .references import reference_roles, sniff_mime
 from .rules import CLEAN_ANGLES_FORBIDDEN_OVERLAY
 from .strategies import (
@@ -60,11 +70,7 @@ from .strategies import (
     product_limits,
     strategy_version,
 )
-from .versions import SCHEMA_VERSION, version_manifest
-
-_TEMPLATES = Path(__file__).parent / "templates"
-with open(_TEMPLATES / "communication.json", encoding="utf-8") as _f:
-    COMMUNICATION: dict = json.load(_f)
+from .versions import COMPILER_VERSION, PLAN_SCHEMA_V2, SCHEMA_VERSION, version_manifest
 
 MAX_REFERENCE_IMAGES = 10
 _CLEAN_MODE_MAP = {"auto": CLEAN_AUTO, "always": CLEAN_SEMPRE, "never": CLEAN_NUNCA}
@@ -87,10 +93,6 @@ def _plan_id(request: dict) -> str:
     return f"plan_{digest[:24]}"
 
 
-def _product_label(product: dict) -> str:
-    return f"\"{product['name']}\" ({product['type']})"
-
-
 def _people(n: int, pool: list, seed: int, first: dict | None) -> list[dict]:
     people = [first] if first else []
     rotation = [p for p in pool if not first or p.get("label") != first.get("label")] or pool
@@ -99,112 +101,6 @@ def _people(n: int, pool: list, seed: int, first: dict | None) -> list[dict]:
         people.append(rotation[(seed + i) % len(rotation)])
         i += 1
     return people[:n]
-
-
-def _product_block(products: list, roles: list) -> str:
-    by_product: dict[str, list[int]] = {}
-    for role in roles:
-        by_product.setdefault(role["product_id"], []).append(role["order"])
-
-    def images(pid: str) -> str:
-        orders = by_product[pid]
-        return f"imagem {orders[0]}" if len(orders) == 1 else "imagens " + ", ".join(map(str, orders))
-
-    if len(products) == 1:
-        p = products[0]
-        desc = f" — {p['description']}" if p.get("description") else ""
-        extra = (
-            "\n  · As imagens de referência mostram o MESMO produto por ângulos diferentes: gere uma única unidade."
-            if len(by_product[p["id"]]) > 1 else ""
-        )
-        return f"PRODUTO (autoridade absoluta sobre qualquer outra regra): {images(p['id'])} = {_product_label(p)}{desc}.{extra}"
-    lines = [
-        f"  · Produto {i} ({images(p['id'])}): {_product_label(p)}" + (f" — {p['description']}" if p.get("description") else "")
-        for i, p in enumerate(products, 1)
-    ]
-    return (
-        f"PRODUTOS (autoridade absoluta), {len(products)} produtos DIFERENTES nesta ordem:\n" + "\n".join(lines)
-        + "\n  · Cada produto aparece exatamente uma vez; nunca troque, funda ou duplique produtos."
-    )
-
-
-def _brand_block(brand: dict) -> str:
-    parts = [f"MARCA ({brand['name']}):"]
-    if brand.get("positioning"):
-        parts.append("  · Posicionamento: " + "; ".join(brand["positioning"]) + ".")
-    if brand.get("visualStyle"):
-        parts.append("  · Linguagem visual: " + ", ".join(brand["visualStyle"]) + ".")
-    if brand.get("colors"):
-        parts.append("  · Paleta da marca (guia de cor da CENA, nunca do produto): " + "; ".join(brand["colors"]) + ".")
-    if brand.get("manualNotes"):
-        parts.extend(f"  · {note}" for note in brand["manualNotes"])
-    return "\n".join(parts) if len(parts) > 1 else ""
-
-
-def _niche_block(niche: dict) -> str:
-    items = []
-    if niche.get("materials"):
-        items.append("Materiais e sinais de uso real: " + ", ".join(niche["materials"]) + ".")
-    if niche.get("audienceBehaviors"):
-        items.append("Público: " + "; ".join(niche["audienceBehaviors"][:3]) + ".")
-    return bullet_block(f"NICHO ({niche['name']}):", items)
-
-
-def _context_block(context: dict, uses_person: bool) -> str:
-    element = context.get("supporting_element")
-    if uses_person:
-        text = f"CONTEXTO DA CENA: {context['scene']}."
-        if element:
-            text += f" Elemento de apoio, discreto: {element}."
-    else:
-        text = f"ATMOSFERA (luz, paleta e materiais — não leve o set para este lugar): inspirada em \"{context['scene']}\"."
-        if element:
-            text += f" Detalhe de apoio: {element}."
-    return text + " Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio."
-
-
-def _angle_block(angle_id: str, products: list, persona: dict | None, people: list, scene: str, apparel: bool) -> str:
-    spec = CORE_ANGLES[angle_id]
-    multi = len(products) > 1
-    template = spec["scene_multi"] if multi else spec["scene"]
-    text = template.format(
-        produto=_product_label(products[0]),
-        produtos="; ".join(_product_label(p) for p in products),
-        n=len(products),
-        cenario=scene,
-        persona=persona["label"] if persona else "uma pessoa",
-        pessoas=f"{len(people)} pessoas diferentes ("
-        + "; ".join(p["label"] for p in people) + ")" if people else f"{len(products)} pessoas diferentes",
-    )
-    if angle_id == "CABIDE" and apparel:
-        text += REGRA_CENTRALIZACAO_CABIDE
-    return text
-
-
-def _persona_block(persona: dict | None, people: list) -> str:
-    if len(people) > 1:
-        return bullet_block("PESSOAS (cada uma com 1 produto, na ordem dos produtos):",
-                            [f"Pessoa {i}: {describe_persona(p)}" for i, p in enumerate(people, 1)])
-    if persona:
-        return f"PERSONA: {describe_persona(persona)}. Aparência natural, sem rosto padrão de banco de imagem."
-    return ""
-
-
-def _avoid_block(avoid: list) -> str:
-    return ("EVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): " + "; ".join(avoid) + ".") if avoid else ""
-
-
-def _core_rules(products: list, stage: str | None, strategy: str) -> tuple[str, bool]:
-    rules = list(COMMUNICATION["core_rules"])
-    garments = [garment_for_type(p["type"]) for p in products]
-    apparel = any(garments)
-    for garment in dict.fromkeys(g["regra_preservacao"] for g in garments if g):
-        rules.append(garment)
-    if apparel:
-        rules.extend(COMMUNICATION["apparel_rules"])
-    if strategy == "FUNNEL_VISUAL" and stage == "TOFU":
-        rules.append(COMMUNICATION["tofu_rule"])
-    return "REGRAS OBRIGATÓRIAS (nunca ignore):\n" + "\n".join(f"- {r}" for r in rules), apparel
 
 
 # ------------------------------------------------------------------ remarketing
@@ -339,11 +235,16 @@ def plan_creative(
     router: mr.ModelRouter | None = None,
     geographic: GeographicContextProvider | None = None,
     default_prompt_version: int = 1,
+    default_plan_schema_version: int = 1,
 ) -> dict:
     """Validates a CreativeRequest and returns a CreativePlan. Raises GenerationError.
 
     `default_prompt_version` applies when the request carries no `prompt_version` (the service passes its
-    CREATIVE_PROMPT_VERSION). Version 1 is the default and stays byte-identical to what shipped before v2."""
+    CREATIVE_PROMPT_VERSION). Version 1 is the default and stays byte-identical to what shipped before v2.
+
+    `plan_schema_version` (request, else `default_plan_schema_version`) selects the plan: 1 = the v1 plan built with the
+    v1 PromptBuilder, untouched; 2 = a CreativePlan v2 (gaze, subjects, minor safety, semantics, provenance) whose prompt
+    is produced by the v2 compiler from the plan alone."""
     ensure_valid("CreativeRequest", request)
     request = copy.deepcopy(request)
     router = router or mr.ModelRouter()
@@ -421,26 +322,48 @@ def plan_creative(
     )
     people = _people(people_needed, persona_pool(brand, niche), seed, persona) if people_needed > 1 else []
 
-    builder = PromptBuilder(ordered=True, separator="\n\n")
-    builder.add("core_rules", core_rules)
-    builder.add("strategy_rules", engine["text_rule"])
-    builder.add("brand_kit", _brand_block(brand))
-    builder.add("niche_kit", _niche_block(niche))
-    builder.add("context_profile", _context_block(context, uses_person))
-    builder.add("product", _product_block(products, roles))
-    if prompt_version == 2:
-        builder.add("angle", prompt_v2.angle_block(
-            angle_id, product=_product_label(products[0]), products="; ".join(_product_label(p) for p in products),
-            count=len(products), scene=context["scene"], apparel=apparel, seed=seed, persona=persona, people=people,
-        ))
-        builder.add("persona", prompt_v2.persona_block(angle_id, len(products), persona, people, describe_identity))
+    plan_schema = request.get("plan_schema_version", default_plan_schema_version)
+    if plan_schema != PLAN_SCHEMA_V2 and request.get("gaze_mode") not in (None, "auto"):
+        warnings.append("gaze_mode_ignored_needs_plan_schema_2")  # a v1 plan has no gaze; say so instead of dropping it silently
+    v2_extra: dict = {}
+    if plan_schema == PLAN_SCHEMA_V2:
+        planned = planner_v2.build(
+            request=request, angle_id=angle_id, strategy=strategy, products=products, brand=brand, niche=niche,
+            persona=persona, people=people, people_needed=people_needed, prompt_version=prompt_version, seed=seed,
+            apparel=apparel, pool=persona_pool(brand, niche), engine=engine)
+        warnings.extend(planned["warnings"])
+        view = {
+            "schema_version": PLAN_SCHEMA_V2, "strategy": strategy, "funnel_stage": None if strategy == "CLEAN_ANGLES" else stage,
+            "products": products, "references": roles, "angle": angle, "context": context,
+            "placement": placement_descriptor(request["placement_id"]), "persona": persona, **planned["fields"],
+        }
+        view["provenance"] = planner_v2.build_provenance(
+            request=request, plan=view, brand=brand, niche=niche, semantics_source=planned["semantics_source"])
+        compiled = compile_prompt(view)
+        prompt = prompt_info(compiled)
+        v2_extra = {**planned["fields"], "provenance": view["provenance"], "seed": seed,
+                    "compiler": {"version": COMPILER_VERSION, "sections": compiled["sections"]}}
     else:
-        builder.add("angle", _angle_block(angle_id, products, persona, people, context["scene"], apparel))
-        builder.add("persona", _persona_block(persona, people))
-    builder.add("placement", COMMUNICATION["placements"][request["placement_id"]])
-    builder.add("strategy_communication", engine["communication"])
-    builder.add("avoid", _avoid_block(context["avoid"]))
-    prompt = builder.info(prompt_version)
+        builder = PromptBuilder(ordered=True, separator="\n\n")
+        builder.add("core_rules", core_rules)
+        builder.add("strategy_rules", engine["text_rule"])
+        builder.add("brand_kit", _brand_block(brand))
+        builder.add("niche_kit", _niche_block(niche))
+        builder.add("context_profile", _context_block(context, uses_person))
+        builder.add("product", _product_block(products, roles))
+        if prompt_version == 2:
+            builder.add("angle", prompt_v2.angle_block(
+                angle_id, product=_product_label(products[0]), products="; ".join(_product_label(p) for p in products),
+                count=len(products), scene=context["scene"], apparel=apparel, seed=seed, persona=persona, people=people,
+            ))
+            builder.add("persona", prompt_v2.persona_block(angle_id, len(products), persona, people, describe_identity))
+        else:
+            builder.add("angle", _angle_block(angle_id, products, persona, people, context["scene"], apparel))
+            builder.add("persona", _persona_block(persona, people))
+        builder.add("placement", COMMUNICATION["placements"][request["placement_id"]])
+        builder.add("strategy_communication", engine["communication"])
+        builder.add("avoid", _avoid_block(context["avoid"]))
+        prompt = builder.info(prompt_version)
 
     overlay = engine["overlay"]
     validations = [
@@ -472,7 +395,7 @@ def plan_creative(
     plan = {
         "plan_id": _plan_id(request),
         "creative_id": request.get("creative_id") or str(uuid.uuid4()),
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": PLAN_SCHEMA_V2 if v2_extra else SCHEMA_VERSION,
         "strategy": strategy,
         "internal_strategy_id": internal_id(strategy),
         "product_mode": product_mode,
@@ -497,7 +420,9 @@ def plan_creative(
             "quality": request.get("quality", "medium"),
             "size": placement_descriptor(request["placement_id"])["api_size"],
         },
+        **v2_extra,
         "versions": {**version_manifest(), "prompt_version": prompt_version, "strategy_version": strategy_version(strategy),
+                     **({"compiler_version": COMPILER_VERSION} if v2_extra else {}),
                      "brand_kit_version": brand["version"], "niche_kit_version": niche["version"],
                      "context_profile_version": context["profile_version"]},
         "validations": validations,

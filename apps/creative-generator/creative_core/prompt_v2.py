@@ -46,6 +46,17 @@ def _pick(options: list, seed: int, angle_id: str, pool: str) -> str:
     return deterministic_pick(options, salt)
 
 
+def choose_picks(angle_id: str, seed: int) -> dict:
+    """The pool entries the plan picks for this angle: {pool: {"index", "text"}}. Same choice `angle_block` makes
+    from the seed, but made visible so a v2 plan can store it — the image model never picks the action/format,
+    and the compiler does not need the seed to reproduce the prompt."""
+    picks = {}
+    for name, options in ANGLES[angle_id].get("pools", {}).items():
+        text = _pick(options, seed, angle_id, name)
+        picks[name] = {"index": options.index(text), "text": text}
+    return picks
+
+
 # In REMARKETING the layout owns the composition (how many people, where), and a v2 scene that also declares its
 # own cast would contradict it. v2 therefore only applies where the angle owns the scene.
 V2_STRATEGIES = frozenset({"CLEAN_ANGLES", "FUNNEL_VISUAL"})
@@ -77,7 +88,7 @@ def _label(person: dict | None, fallback: str) -> str:
 
 def angle_block(
     angle_id: str, *, product: str, products: str, count: int, scene: str, apparel: bool, seed: int,
-    persona: dict | None, people: list,
+    persona: dict | None, people: list, picks: dict | None = None,
 ) -> str:
     spec = ANGLES[angle_id]
     multi = count > 1
@@ -95,8 +106,9 @@ def angle_block(
         if people else f"{count} pessoas diferentes",
     }
     # Pools render in file order, so a later pool (formato) can use an earlier pick (celular).
-    for name, options in spec.get("pools", {}).items():
-        variables[name] = _pick(options, seed, angle_id, name).format(**variables)
+    chosen = picks if picks is not None else choose_picks(angle_id, seed)
+    for name in spec.get("pools", {}):
+        variables[name] = chosen[name]["text"].format(**variables)
     return template.format(**variables)
 
 

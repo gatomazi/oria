@@ -49,6 +49,24 @@ RESULT_STATUS = ("completed", "failed")
 REFERENCE_ROLES = ("product_art", "layout_only")
 MAX_PRODUCTS = 6
 
+# --- Fase B (CreativePlan v2). All additive: a v1 plan/request stays valid and unchanged.
+PLAN_SCHEMA_VERSIONS = (1, 2)
+# The gaze the caller may ask for. `auto` is a REQUEST value only: the planner resolves it to a concrete mode
+# (GAZE_RESOLVED) before the prompt is compiled — it never means "let the image model decide".
+GAZE_MODES = ("camera", "interaction", "off_camera", "product", "auto")
+GAZE_RESOLVED = ("camera", "interaction", "off_camera", "product", "none")
+# Where the value of a plan field came from (see plan_sources.py for the field -> origin map).
+VALUE_ORIGINS = ("user", "product", "product_enrichment", "brand", "niche", "persona", "angle", "planner_default", "safety_policy")
+AGE_BANDS = ("baby", "child", "teen", "adult", "unknown")
+LEGS_COVERAGES = ("full", "knee", "default")
+POSE_RISKS = ("low", "medium", "high")
+PRODUCT_USES = ("wears", "uses", "none")
+SUBJECT_ROLES = ("primary", "supporting")
+SUBJECT_PROMINENCE = ("hero", "secondary", "background")
+PLAN_MODES = ("creative",)
+OBJECTIVES = ("clean_creative", "remarketing", "funnel_visual")
+FEEDBACK_VERDICTS = ("liked", "disliked")
+
 
 @dataclass(frozen=True)
 class F:
@@ -117,6 +135,16 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "notes": S(max_length=1000),
         "source": S(enum=PERSONA_SOURCES),
     },
+    # The brand's wardrobe preference for minors. It can only ADD restrictions to the global minor policy:
+    # `allow_revealing_clothing` is accepted for the shape but has no effect (the global layer forbids it).
+    "MinorWardrobePolicy": {
+        "enabled": B(),
+        "legs_coverage": S(enum=LEGS_COVERAGES),
+        "allow_short_shorts": B(),
+        "allow_short_skirts": B(),
+        "allow_revealing_clothing": B(),
+        "style": S(max_length=60),
+    },
     "BrandKit": {
         "id": ID,
         "name": S(required=True, min_length=1, max_length=200),
@@ -138,6 +166,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "defaultNicheKitId": S(max_length=120),
         "defaultContextProvider": S(enum=CONTEXT_PROVIDERS),
         "suggestedPersonas": A(R("Persona"), max_items=50),
+        "minorWardrobePolicy": R("MinorWardrobePolicy"),
         "schemaVersion": I(required=True, minimum=1),
         "version": I(required=True, minimum=1),
     },
@@ -183,6 +212,18 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "promptVersion": I(required=True, minimum=1),
         "profileVersion": I(required=True, minimum=1),
     },
+    # What the print/product MEANS for the scene (Fase B leaves the space typed; nothing fills it automatically yet —
+    # the GPT enrichment that proposes it is a later phase and never saves without approval).
+    "ProductSemanticContext": {
+        "wearer_roles": A(S(min_length=1, max_length=40), max_items=10),
+        "relationship_themes": A(S(min_length=1, max_length=40), max_items=10),
+        "recommended_supporting_roles": A(S(min_length=1, max_length=40), max_items=10),
+        "incompatible_auto_supporting_roles": A(S(min_length=1, max_length=40), max_items=10),
+        "scene_intents": A(S(min_length=1, max_length=40), max_items=10),
+        "visible_text": A(S(min_length=1, max_length=200), max_items=10),
+        "source": S(enum=("manual", "enrichment")),
+        "confidence": N(minimum=0, maximum=1),
+    },
     "CreativeProduct": {
         "id": ID,
         "brandId": S(max_length=120),
@@ -191,6 +232,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "description": S(max_length=2000),
         "referenceImages": A(S(min_length=1, max_length=500), required=True, min_items=1, max_items=4),
         "metadata": O(),
+        "semantic_context": R("ProductSemanticContext"),
     },
     "Angle": {
         "id": S(required=True, enum=ANGLE_IDS),
@@ -268,6 +310,9 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "seed": I(minimum=0),
         "history_hints": R("HistoryHints"),
         "prompt_version": I(minimum=1, maximum=2),
+        # Fase B: 2 builds a CreativePlan v2 and compiles it with the v2 compiler; default 1 = the v1 builder.
+        "plan_schema_version": I(minimum=1, maximum=2),
+        "gaze_mode": S(enum=GAZE_MODES),
     },
     "KitRef": {
         "id": S(required=True),
@@ -305,6 +350,9 @@ CONTRACTS: dict[str, dict[str, F]] = {
     "PromptSection": {
         "name": S(required=True),
         "length": I(required=True),
+        # v2 compiler only: which part of the plan fed the section and its resolved value (inspectable).
+        "source": S(),
+        "value": S(),
     },
     "PromptInfo": {
         "text": S(required=True),
@@ -321,6 +369,64 @@ CONTRACTS: dict[str, dict[str, F]] = {
     "ValidationCheck": {
         "rule": S(required=True),
         "passed": B(required=True),
+    },
+    "PlanSubject": {
+        "id": S(required=True, min_length=1, max_length=20),
+        "role": S(required=True, enum=SUBJECT_ROLES),
+        "label": S(required=True, min_length=1, max_length=300),
+        "persona": O(nullable=True),
+        "age_band": S(required=True, enum=AGE_BANDS),
+        "is_minor": B(required=True),
+        "minor_source": S(nullable=True),
+        "product_use": S(required=True, enum=PRODUCT_USES),
+        "product_id": S(nullable=True),
+        "role_hint": S(nullable=True),
+        "relation_to_primary": S(nullable=True),  # slot for Fase C (Subjects/Relations); always null in Fase B
+        "prominence": S(required=True, enum=SUBJECT_PROMINENCE),
+        "source": S(required=True, enum=VALUE_ORIGINS),
+    },
+    "GazeResolution": {
+        "mode": S(required=True, enum=GAZE_RESOLVED),
+        "requested": S(required=True, enum=GAZE_MODES),
+        "source": S(required=True, enum=VALUE_ORIGINS),
+        "reason": S(required=True),
+    },
+    "PlanScene": {
+        "gaze": R("GazeResolution", required=True),
+        "picks": O(required=True),  # pool -> {"index", "text"}: the choices the image model used to make on its own
+        "prompt_version": I(required=True),  # wording version of the scene text (1 generic, 2 person scenes)
+        "interaction": S(nullable=True),  # slot for Fase C; null in Fase B
+    },
+    "PlanComposition": {
+        "people_count": I(required=True, minimum=0),
+        "pose_risk": S(required=True, enum=POSE_RISKS),
+        "risk_reasons": A(S(), required=True),
+    },
+    "MinorSafety": {
+        "applies": B(required=True),
+        "minor_subject_ids": A(S(), required=True),
+        "global": O(required=True),  # {policy, version, rules[], adult_child_rule|null}
+        "brand": O(nullable=True),  # {policy, source, requested, effective, ignored[]} — null when the brand set none
+    },
+    "PlanSemantics": {
+        "products": A(O(), required=True),  # [{product_id, semantic_context|null}]
+        "supporting": O(nullable=True),  # {role, source, matched_role|null} when a supporting person was cast
+        "warnings": A(O(), required=True),  # [{code, theme, supporting_role, product_id}] — informative, never blocking
+    },
+    "ResolvedInputs": {
+        "brand": O(required=True),
+        "niche": O(required=True),
+        "strategy": O(required=True),  # {text_rule, communication}
+    },
+    "CompilerSection": {
+        "section": S(required=True),
+        "source": S(required=True),
+        "value": S(required=True),
+        "length": I(required=True, minimum=0),
+    },
+    "CompilerInfo": {
+        "version": I(required=True, minimum=1),
+        "sections": A(R("CompilerSection"), required=True),
     },
     "CreativePlan": {
         "plan_id": S(required=True),
@@ -347,6 +453,78 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "versions": O(required=True),
         "validations": A(R("ValidationCheck"), required=True),
         "warnings": A(S(), required=True),
+        # --- schema_version 2 only (all optional, so a v1 plan is unchanged) ---
+        "mode": S(enum=PLAN_MODES),
+        "objective": S(enum=OBJECTIVES),
+        "subjects": A(R("PlanSubject")),
+        "scene": R("PlanScene"),
+        "composition": R("PlanComposition"),
+        "minor_safety": R("MinorSafety"),
+        "semantics": R("PlanSemantics"),
+        "provenance": M(),  # plan field -> origin (VALUE_ORIGINS)
+        "resolved_inputs": R("ResolvedInputs"),
+        "compiler": R("CompilerInfo"),
+        "seed": I(nullable=True, minimum=0),  # the seed the plan was built with: same request + seed = same plan
+    },
+    "CompiledPrompt": {
+        "text": S(required=True),
+        "sections": A(R("CompilerSection"), required=True),
+        "sha256": S(required=True),
+        "compiler_version": I(required=True, minimum=1),
+        "prompt_version": I(required=True),
+    },
+    # Input of the generator rebuilt from a persisted plan ("Copiar Dados"). Not a CreativeRequest: it mirrors what
+    # the user chose (ids and options), never execution ids.
+    "GenerationDraft": {
+        "mode": S(required=True, enum=PLAN_MODES),
+        "objective": S(required=True, enum=OBJECTIVES),
+        "strategy": S(required=True, enum=PUBLIC_STRATEGIES),
+        "product_mode": S(required=True, enum=PRODUCT_MODES),
+        "product_ids": A(S(), required=True),
+        "angle_id": S(required=True),
+        "placement_id": S(required=True),
+        "quality": S(required=True, enum=QUALITIES),
+        "brand_kit": R("KitRef", required=True),
+        "niche_kit": R("KitRef", required=True),
+        "persona_mode": S(required=True, enum=PERSONA_MODES),
+        "persona": O(nullable=True),
+        "subjects": A(R("PlanSubject"), required=True),
+        "context": O(required=True),  # {mode, context_id, provider, scene}
+        "funnel_stage": S(nullable=True),
+        "remarketing": O(nullable=True),
+        "funnel": O(nullable=True),
+        "copy": R("CopyOptions", required=True),
+        "gaze_mode": S(required=True, enum=GAZE_MODES),
+        "plan_schema_version": I(required=True, minimum=1),
+        "prompt_version": I(required=True, minimum=1),
+        "seed": I(nullable=True),
+        "carried": A(S(), required=True),  # names of the fields brought over, for the "what came along" summary
+        "source": O(required=True),  # {creative_id, plan_id, plan_schema_version, compiler_version}
+    },
+    # What is worth remembering about a creative when the user marks liked/disliked. The panel adds who/where/when
+    # (organization_id, store_id, job_id, user_id, verdict, timestamp) — those are not plan facts.
+    "FeedbackSnapshot": {
+        "creative_id": S(required=True),
+        "plan_id": S(required=True),
+        "plan_schema_version": I(required=True, minimum=1),
+        "compiler_version": I(nullable=True),
+        "prompt_version": I(required=True),
+        "prompt_sha256": S(required=True),
+        "mode": S(required=True, enum=PLAN_MODES),
+        "objective": S(required=True, enum=OBJECTIVES),
+        "strategy": S(required=True),
+        "angle": S(required=True),
+        "product_ids": A(S(), required=True),
+        "subjects": A(O(), required=True),  # [{role, label, age_band, is_minor, product_use, role_hint}]
+        "people_count": I(required=True, minimum=0),
+        "context": O(required=True),  # {context_id, context_type, provider, scene}
+        "placement": S(required=True),
+        "quality": S(nullable=True),
+        "gaze_mode": S(nullable=True),
+        "minor_safety_applied": B(required=True),
+        "flags": O(required=True),  # {normalize_references, ...} read from the result trace when there is one
+        "model": O(required=True),  # {requested, served}
+        "asset_sha256": S(nullable=True),
     },
     "GenerationError": {
         "code": S(required=True),
@@ -412,6 +590,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
 EXPORTED_CONTRACTS = (
     "BrandKit", "NicheKit", "ContextProfile", "CreativeProduct", "Persona", "Angle", "Placement",
     "CreativeRequest", "CreativePlan", "CreativeResult", "GenerationError", "GenerationRecord", "CopyVariant",
+    "CompiledPrompt", "GenerationDraft", "FeedbackSnapshot",
 )
 
 _PY_TYPES = {

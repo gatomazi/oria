@@ -163,6 +163,9 @@
       },
       "maxItems": 50
     },
+    "minorWardrobePolicy": {
+      "$ref": "#/$defs/MinorWardrobePolicy"
+    },
     "schemaVersion": {
       "type": "integer",
       "minimum": 1
@@ -173,6 +176,37 @@
     }
   },
   "$defs": {
+    "MinorWardrobePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "legs_coverage": {
+          "type": "string",
+          "enum": [
+            "full",
+            "knee",
+            "default"
+          ]
+        },
+        "allow_short_shorts": {
+          "type": "boolean"
+        },
+        "allow_short_skirts": {
+          "type": "boolean"
+        },
+        "allow_revealing_clothing": {
+          "type": "boolean"
+        },
+        "style": {
+          "type": "string",
+          "maxLength": 60
+        }
+      }
+    },
     "Persona": {
       "type": "object",
       "additionalProperties": false,
