@@ -551,6 +551,60 @@ test('Clientes · a lista paginada é da Store do contexto: total, página e cha
   assert.equal(ruim.json.page, 1);
 });
 
+test('Clientes · quem só tem cadastro na Ink entra sem pedido, filtra por tipo, não duplica e não vaza entre Organizations', async () => {
+  const c = await entrar('C');
+  const lista = (nav, tipo) => nav.req('GET', `/api/admin/clientes/lista?per_page=100&tipo=${tipo}`);
+
+  const so = await lista(c, 'sem_pedido');
+  assert.equal(so.status, 200, so.texto);
+  assert.equal(so.json.total, 1, 'só o cadastro que nunca pediu (o outro já tem pedido)');
+  const [novo] = so.json.clientes;
+  assert.equal(novo.origem, 'cadastro');
+  assert.equal(novo.customerKey, 'cadastro:1501', 'é o cliente 501 da Store C');
+  assert.equal(novo.loja, store.C, 'na Store nativa a chave é o store_id, a mesma dos pedidos');
+  assert.equal(novo.totalCompras, 0);
+  assert.equal(so.json.cadastro.incluido, true);
+  assert.equal(so.json.cadastro.disponivel, true);
+  assert.equal(so.json.cadastro.parcial, false);
+
+  const com = await lista(c, 'com_pedido');
+  assert.ok(com.json.clientes.length >= 1 && com.json.clientes.every((x) => x.origem === 'pedido'), 'com pedido: só quem tem histórico');
+  assert.equal(com.json.cadastro.incluido, false, 'sem pedido não precisa do cadastro (nem chama a Ink)');
+
+  const todos = await lista(c, 'todos');
+  assert.equal(todos.json.total, com.json.total + so.json.total, 'todos = com pedido + só cadastro');
+  assert.equal(todos.json.clientes.filter((x) => x.documento === '12345678901').length, 1, 'quem está no cadastro E no histórico aparece uma vez');
+
+  // Isolamento: a Organization D lê o PRÓPRIO cadastro (o de C já está no cache), nunca o de C.
+  const d = await (await entrar('D')).req('GET', '/api/admin/clientes/lista?per_page=100&tipo=sem_pedido');
+  assert.equal(d.status, 200, d.texto);
+  assert.deepEqual(d.json.clientes.map((x) => x.customerKey).sort(), ['cadastro:2500', 'cadastro:2501'], 'D não tem pedidos: os dois cadastros são dela (faixa 2xxx), nenhum é de C (1xxx)');
+  assert.ok(d.json.clientes.every((x) => x.loja === store.D));
+});
+
+test('Clientes · com a Ink fora do ar a lista segue com quem já pediu e avisa (não quebra a tela)', async () => {
+  const a = await entrar('A');
+  const trocarToken = async (apiToken) => {
+    const r = await a.req('PUT', '/api/admin/integrations/ink/credenciais', { corpo: { apiToken } });
+    assert.equal(r.status, 200, r.texto);
+  };
+  await trocarToken(`inkA-cadastro-falha-${crypto.randomBytes(6).toString('hex')}`);
+  try {
+    const todos = await a.req('GET', '/api/admin/clientes/lista?per_page=100&tipo=todos');
+    assert.equal(todos.status, 200, `a Ink fora do ar não pode derrubar a lista: ${todos.texto}`);
+    assert.equal(todos.json.cadastro.disponivel, false);
+    assert.equal(todos.json.cadastro.incluido, false);
+    assert.ok(todos.json.clientes.every((x) => x.origem === 'pedido'), 'segue com quem já pediu');
+    const so = await a.req('GET', '/api/admin/clientes/lista?per_page=100&tipo=sem_pedido');
+    assert.equal(so.status, 200, so.texto);
+    assert.equal(so.json.total, 0, 'só cadastro sem cadastro não tem o que mostrar');
+    assert.equal(so.json.cadastro.disponivel, false);
+    assert.ok(!saida.includes('cadastro-falha'), 'o token nunca vai para o log');
+  } finally {
+    await trocarToken(TOKEN.A);
+  }
+});
+
 test('Migração 0030 · desfaz o UUID já gravado em `loja` e não toca chave legada de verdade', async () => {
   await sup.query("INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status) VALUES ($1, $2, $3, 424242, 'paid')", [ORGS.C, store.C, store.C]);
   await sup.query("INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status) VALUES ($1, $2, 'sul', 424243, 'paid')", [ORGS.A, store.A]);

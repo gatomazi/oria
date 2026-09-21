@@ -4,7 +4,7 @@ import { formatData, formatValor, plural } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { adminStores } from '../../state/adminStores';
 import { useNomeDaStore } from '../../auth/AuthContext';
-import { listClientes, type ListaDeClientes, type OrdemClientes } from '../../api/clientes';
+import { listClientes, type ListaDeClientes, type OrdemClientes, type TipoClientes } from '../../api/clientes';
 
 import '../../pedidos-central.css';
 import '../../clientes.css';
@@ -22,6 +22,7 @@ export function ClientesPage() {
   const [buscaAplicada, setBuscaAplicada] = useState('');
   const [ordem, setOrdem] = useState<OrdemClientes>('compras_desc');
   const [inatividade, setInatividade] = useState('');
+  const [tipo, setTipo] = useState<TipoClientes>('todos');
   const [pagina, setPagina] = useState(1);
 
   // Filtro ou ordem novos mudam a lista inteira: volta para a primeira página.
@@ -36,7 +37,7 @@ export function ClientesPage() {
   useEffect(() => {
     let atual = true;
     setErro('');
-    listClientes({ page: pagina, perPage: CLIENTES_POR_PAGINA, ordem, busca: buscaAplicada, inativoDias: inatividade })
+    listClientes({ page: pagina, perPage: CLIENTES_POR_PAGINA, ordem, busca: buscaAplicada, inativoDias: inatividade, tipo })
       .then((r) => {
         if (!atual) return;
         setLista(r);
@@ -45,7 +46,7 @@ export function ClientesPage() {
       })
       .catch((err: Error) => { if (atual) setErro(err.message); });
     return () => { atual = false; };
-  }, [escopo, pagina, ordem, buscaAplicada, inatividade]);
+  }, [escopo, pagina, ordem, buscaAplicada, inatividade, tipo]);
 
   const clientes = lista?.clientes ?? [];
 
@@ -54,7 +55,7 @@ export function ClientesPage() {
       <PageHeader
         title="Clientes"
         description={
-          lista ? 'Quem já fez pedido. A contagem de compras vem do histórico de pedidos já sincronizado (cache local) — não é uma consulta ao vivo.' : undefined
+          lista ? 'Quem já fez pedido e quem só tem cadastro na Reserva Ink. A contagem de compras vem do histórico de pedidos já sincronizado (cache local) — não é uma consulta ao vivo.' : undefined
         }
       />
 
@@ -69,6 +70,11 @@ export function ClientesPage() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
             />
+            <Select aria-label="Filtrar por pedido" value={tipo} onChange={(e) => { setTipo(e.target.value as TipoClientes); setPagina(1); }}>
+              <option value="todos">Todos os clientes</option>
+              <option value="com_pedido">Com pedido</option>
+              <option value="sem_pedido">Só cadastro (nunca pediu)</option>
+            </Select>
             <Select aria-label="Ordenar clientes" value={ordem} onChange={(e) => { setOrdem(e.target.value as OrdemClientes); setPagina(1); }}>
               <option value="compras_desc">Mais compras primeiro</option>
               <option value="lucro_desc">Maior lucro primeiro</option>
@@ -84,6 +90,12 @@ export function ClientesPage() {
             </Select>
           </Toolbar>
 
+          {!lista.cadastro.disponivel && (
+            <ErrorState description="O cadastro da Reserva Ink não respondeu agora. Mostrando só quem já fez pedido — tente de novo em instantes." />
+          )}
+          {lista.cadastro.parcial && (
+            <p className="ds-form-note">Cadastro carregado parcialmente: a loja tem mais clientes do que o limite lido de uma vez.</p>
+          )}
           {!clientes.length ? (
             <EmptyState title="Nenhum cliente encontrado" />
           ) : (
@@ -113,7 +125,7 @@ export function ClientesPage() {
                   label: 'Compras',
                   align: 'right',
                   // Contagem não é estado: texto tabular, sem cor semântica (Semantic-Only Rule).
-                  render: (c) => (!c.totalCompras ? <span className="ds-table__cell--muted">Sem compra</span> : plural(c.totalCompras, 'compra', 'compras')),
+                  render: (c) => (!c.totalCompras ? <span className="ds-table__cell--muted">{c.origem === 'cadastro' ? 'Só cadastro' : 'Sem compra'}</span> : plural(c.totalCompras, 'compra', 'compras')),
                   sortValue: (c) => c.totalCompras,
                 },
                 {

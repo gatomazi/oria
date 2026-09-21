@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const h = require('./harness');
-const { normalizarConsulta, listarClientes } = h.sujeito('lib/clientes/lista.js');
+const { normalizarConsulta, listarClientes, unirComCadastro } = h.sujeito('lib/clientes/lista.js');
 
 function cliente(i, extra = {}) {
   return {
@@ -107,7 +107,10 @@ test('página além do fim volta para a última; lista vazia tem 1 página', () 
 
 test('entrada por lista de permissão: valor fora dela cai no padrão, nunca é interpretado', () => {
   assert.deepEqual(consulta({ page: 'abc', per_page: '9999', ordem: 'DROP', inativoDias: '45', busca: 5 }),
-    { page: 1, perPage: 100, ordem: 'compras_desc', inativoDias: null, busca: '' });
+    { page: 1, perPage: 100, ordem: 'compras_desc', inativoDias: null, busca: '', tipo: 'todos' });
+  assert.equal(consulta({ tipo: 'sem_pedido' }).tipo, 'sem_pedido');
+  assert.equal(consulta({ tipo: 'qualquer' }).tipo, 'todos', 'tipo fora da lista de permissão cai no padrão');
+  assert.equal(consulta({ tipo: ['sem_pedido'] }).tipo, 'todos');
   assert.equal(consulta({ page: '0' }).page, 1);
   assert.equal(consulta({ page: '1001' }).page, 1);
   assert.equal(consulta({ page: '2;drop' }).page, 1, 'lixo depois do número não é aceito');
@@ -121,4 +124,43 @@ test('a resposta só leva o que a tela usa (nada do agregado interno)', () => {
   assert.equal(c.totalCompras, 2);
   assert.ok(!('legacyCustomerKeys' in c) && !('totalGasto' in c), 'campos internos não saem');
   assert.equal(typeof c.aceitaMarketing, 'boolean');
+});
+
+const registro = (id, extra = {}) => ({ id: String(id), nome: `Cadastro ${id}`, email: `cad${id}@x.com`, telefone: `(11) 9${String(id).padStart(4, '0')}-1111`, documento: `9990000${String(id).padStart(4, '0')}`, aceitaMarketing: false, ...extra });
+
+test('cadastro: quem nunca pediu entra sem compra; quem já pediu não duplica (documento, telefone ou e-mail)', () => {
+  const historico = [
+    cliente(1, { documento: '111.222.333-44', telefone: '(51) 99999-0001', email: 'A@x.com', totalCompras: 2 }),
+    cliente(2, { documento: null, telefone: '(51) 98888-0002', email: null, totalCompras: 1, customerKey: '(51) 98888-0002', legacyCustomerKeys: ['(51) 98888-0002'] }),
+  ];
+  const cadastro = [
+    registro(10, { documento: '11122233344', telefone: null, email: null }), // mesmo documento do histórico #1
+    registro(11, { documento: null, telefone: '51988880002', email: null }), // mesmo telefone do histórico #2
+    registro(12, { documento: null, telefone: null, email: 'a@x.com' }),     // mesmo e-mail (caixa diferente) do histórico #1
+    registro(13),                                                            // só cadastro
+  ];
+  const uniao = unirComCadastro(historico, cadastro, { loja: 'loja-1' });
+  assert.equal(uniao.length, 3, '2 do histórico + 1 só de cadastro');
+  const so = uniao.filter((c) => c.origem === 'cadastro');
+  assert.equal(so.length, 1);
+  assert.equal(so[0].customerKey, 'cadastro:13');
+  assert.equal(so[0].loja, 'loja-1');
+  assert.equal(so[0].totalCompras, 0);
+  assert.ok(uniao.filter((c) => c.origem === 'pedido').length === 2, 'o histórico segue com origem "pedido" e seus totais');
+});
+
+test('filtro por tipo: todos, só com pedido, só cadastro — e a origem sai na linha', () => {
+  const uniao = unirComCadastro([cliente(1, { totalCompras: 3 }), cliente(2, { totalCompras: 1 })], [registro(20), registro(21), registro(22)], { loja: 'l' });
+  const total = (tipo) => listarClientes(uniao, consulta({ tipo, per_page: '100' }));
+  assert.equal(total('todos').total, 5);
+  assert.equal(total('com_pedido').total, 2);
+  assert.ok(total('com_pedido').clientes.every((c) => c.origem === 'pedido'));
+  assert.equal(total('sem_pedido').total, 3);
+  assert.ok(total('sem_pedido').clientes.every((c) => c.origem === 'cadastro' && c.totalCompras === 0));
+});
+
+test('quem só tem cadastro entra em "sem comprar há N+ dias" e vai depois de quem comprou em "mais compras"', () => {
+  const uniao = unirComCadastro([cliente(1, { totalCompras: 4, diasSemComprar: 10 })], [registro(30)], { loja: 'l' });
+  assert.equal(listarClientes(uniao, consulta({ inativoDias: '90' })).total, 1, 'só o de cadastro (nunca comprou)');
+  assert.equal(listarClientes(uniao, consulta({ ordem: 'compras_desc' })).clientes[0].origem, 'pedido');
 });

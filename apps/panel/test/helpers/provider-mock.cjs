@@ -59,7 +59,15 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     return json({ product: { id: Number(m[1]), name: `Produto ${m[1]}`, main_image_url: null } });
   }
   if (p === '/v1/stores/customers' && metodo === 'GET') {
-    return json({ customers: [{ id: base + 500, first_name: 'Cliente', last_name: tag, email: `c${tag.toLowerCase()}@exemplo.com`, phone: '11999990000', document: '12345678901', accepts_marketing: true }], total_pages: 1 });
+    // A: já pediu (mesmo documento/telefone do pedido do mock). B: só cadastro, nunca pediu.
+    const A = { id: base + 500, first_name: 'Cliente', last_name: tag, email: `c${tag.toLowerCase()}@exemplo.com`, phone: '11999990000', document: '12345678901', accepts_marketing: true };
+    const B = { id: base + 501, first_name: 'Cadastro', last_name: tag, email: `n${tag.toLowerCase()}@exemplo.com`, phone: '11888880000', document: '99999999999', accepts_marketing: false };
+    // Com `page` o cadastro vem em 2 páginas (A, depois B); sem `page` é a chamada antiga da lista de 100.
+    const pagina = new URL(url, 'http://ink.invalid').searchParams.get('page');
+    if (!pagina) return json({ customers: [A], total_pages: 1 });
+    // Token de teste com `cadastro-falha`: a Ink recusa a leitura paginada do cadastro (fora do ar).
+    if (String(auth || '').includes('cadastro-falha')) return json({ error: 'indisponível' }, 503);
+    return json({ customers: Number(pagina) === 1 ? [A] : [B], page: Number(pagina), total_pages: 2 });
   }
   if (p === '/v1/stores/product_types') return json({ product_types: [{ id: base + 10, name: 'Camiseta' }] });
   if (p === '/v1/stores/collections' && metodo === 'GET') {

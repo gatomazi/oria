@@ -15,12 +15,17 @@ export interface Cliente {
   pedidosSemFinanceiro: number;
   ultimaCompraEm: string | null;
   diasSemComprar: number | null;
+  // 'pedido': já fez ao menos um pedido. 'cadastro': só tem cadastro na Ink, nunca pediu.
+  origem: 'pedido' | 'cadastro';
 }
 
 export type OrdemClientes = 'compras_desc' | 'lucro_desc' | 'inativos_primeiro' | 'nome';
 
+export type TipoClientes = 'todos' | 'com_pedido' | 'sem_pedido';
+
 export interface ListaDeClientes {
   clientes: Cliente[];
+  cadastro: { incluido: boolean; disponivel: boolean; parcial: boolean; atualizadoEm: string | null };
   page: number;
   perPage: number;
   totalPages: number;
@@ -33,11 +38,12 @@ export interface FiltroClientes {
   ordem: OrdemClientes;
   busca: string;
   inativoDias: string;
+  tipo: TipoClientes;
 }
 
 // Busca, ordem e filtro rodam no servidor antes de fatiar a página (valem para a lista inteira).
-export function listClientes({ page, perPage, ordem, busca, inativoDias }: FiltroClientes) {
-  const qs = new URLSearchParams({ page: String(page), per_page: String(perPage), ordem });
+export function listClientes({ page, perPage, ordem, busca, inativoDias, tipo }: FiltroClientes) {
+  const qs = new URLSearchParams({ page: String(page), per_page: String(perPage), ordem, tipo });
   if (busca.trim()) qs.set('busca', busca.trim());
   if (inativoDias) qs.set('inativoDias', inativoDias);
   return api<ListaDeClientes>(`/api/admin/clientes/lista?${qs.toString()}`);

@@ -1258,6 +1258,24 @@ const VIOLACOES = [
     de: '    clientes: filtrados.slice(inicio, inicio + perPage).map(paraTela),',
     para: '    clientes: filtrados.slice(0, perPage).map(paraTela), // VIOLAÇÃO DELIBERADA (negative control)',
   },
+  {
+    classe: 'clientes/cadastro-duplica-comprador',
+    invariant: 'CLI-02',
+    teste: 'clientes-lista.test.js',
+    arquivo: 'lib/clientes/lista.js',
+    descricao: 'a união com o cadastro da Ink não descarta quem já pediu: o mesmo cliente aparece duas vezes (com compra e como "só cadastro")',
+    de: '    if ((doc && documentos.has(doc)) || (tel && telefones.has(tel)) || (email && emails.has(email))) continue;',
+    para: '    // VIOLAÇÃO DELIBERADA (negative control): não descarta quem já pediu',
+  },
+  {
+    classe: 'clientes/cadastro-cache-sem-store',
+    invariant: 'CLI-03',
+    teste: 'operacao-store-nativa.test.js',
+    arquivo: 'server.js',
+    descricao: 'o cache do cadastro da Ink usa uma chave única para todo mundo: uma Organization lê o cadastro (PII) de outra',
+    de: '  const chave = `${orgDoContexto()}:${storeDoContexto()}`;',
+    para: "  const chave = 'cadastro-de-clientes'; // VIOLAÇÃO DELIBERADA (negative control)",
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────
