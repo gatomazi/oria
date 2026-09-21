@@ -6,7 +6,7 @@ server-to-server; browsers never do.
     GET  /v1/health        liveness + versions
     GET  /v1/contracts     strategies, multi-product rules, versions, catalog, JSON Schemas
     POST /v1/validate/<C>  {payload} -> {valid, errors}   (C = exported contract, e.g. BrandKit)
-    POST /v1/plans         CreativeRequest            -> CreativePlan
+    POST /v1/plans         {request}                  -> {plan: CreativePlan}   (request.prompt_version 1|2, optional)
     POST /v1/generations   {plan, references, openai_api_key[, generation_attempt, normalize_references]} -> CreativeResult
     POST /v1/copies        {request, openai_api_key}  -> {variants: CopyVariant[], usage}
 
@@ -37,18 +37,26 @@ from .errors import GenerationError
 from .kits import list_builtin_kits, load_brand_kit, load_niche_kit
 from .model_router import ModelRouter
 from .placements import PUBLIC_PLACEMENTS, placement_descriptor
+from .prompt_v2 import PROMPT_V2_ANGLES
 from .references import decode_reference
 from .strategies import MULTI_PRODUCT_RULES, SAAS_STRATEGIES, compatibility_matrix
-from .versions import version_manifest
+from .versions import SUPPORTED_PROMPT_VERSIONS, version_manifest
 
 MAX_BODY_BYTES = 60 * 1024 * 1024
 TOKEN_ENV = "CREATIVE_CORE_SERVICE_TOKEN"
 NORMALIZE_REFERENCES_ENV = "CREATIVE_NORMALIZE_REFERENCES"
+PROMPT_VERSION_ENV = "CREATIVE_PROMPT_VERSION"
 _TRUTHY = {"1", "true", "yes", "on"}
 
 
 def _env_flag(name: str, env: dict | None = None) -> bool:
     return str((os.environ if env is None else env).get(name, "")).strip().lower() in _TRUTHY
+
+
+def _env_prompt_version(env: dict | None = None) -> int:
+    """CREATIVE_PROMPT_VERSION: 2 turns the v2 person scenes on by default; anything else (unset, garbage) is 1."""
+    raw = str((os.environ if env is None else env).get(PROMPT_VERSION_ENV, "")).strip()
+    return int(raw) if raw.isdigit() and int(raw) in SUPPORTED_PROMPT_VERSIONS else 1
 
 ClientFactory = Callable[[str], object]
 
@@ -63,7 +71,7 @@ def openai_client_factory(api_key: str):
 
 class CreativeCoreService:
     def __init__(self, token: str, client_factory: ClientFactory = openai_client_factory,
-                 router: ModelRouter | None = None, normalize_references: bool = False):
+                 router: ModelRouter | None = None, normalize_references: bool = False, prompt_version: int = 1):
         if not token or len(token) < 32:
             raise ValueError(f"{TOKEN_ENV} must be set with at least 32 characters")
         self._token = token.encode()
@@ -71,6 +79,8 @@ class CreativeCoreService:
         self._router = router or ModelRouter()
         # Default for POST /v1/generations; a request may override it with `normalize_references`.
         self._normalize_references = normalize_references
+        # Default for POST /v1/plans when the request carries no `prompt_version`.
+        self._prompt_version = prompt_version if prompt_version in SUPPORTED_PROMPT_VERSIONS else 1
 
     # ------------------------------------------------------------ plumbing
     def __call__(self, environ: dict, start_response) -> Iterable[bytes]:
@@ -170,6 +180,8 @@ class CreativeCoreService:
             "multi_product_rules": MULTI_PRODUCT_RULES,
             "compatibility_matrix": compatibility_matrix(),
             "models": self._router.describe(),
+            "prompt_versions": {"supported": list(SUPPORTED_PROMPT_VERSIONS), "default": self._prompt_version,
+                                "v2_angles": sorted(PROMPT_V2_ANGLES)},
             "catalog": self._catalog(),
             "schemas": {name: contracts.json_schema(name) for name in contracts.EXPORTED_CONTRACTS},
         }
@@ -208,7 +220,7 @@ class CreativeCoreService:
 
     def _plans(self, environ: dict) -> tuple[int, dict]:
         body = self._read_json(environ, allowed={"request"}, required={"request"})
-        return 200, {"plan": plan_creative(body["request"], router=self._router)}
+        return 200, {"plan": plan_creative(body["request"], router=self._router, default_prompt_version=self._prompt_version)}
 
     def _generations(self, environ: dict) -> tuple[int, dict]:
         body = self._read_json(environ, allowed={"plan", "references", "openai_api_key", "generation_attempt",
@@ -249,7 +261,8 @@ class _HttpError(Exception):
 
 
 def create_app() -> CreativeCoreService:
-    return CreativeCoreService(os.environ.get(TOKEN_ENV, ""), normalize_references=_env_flag(NORMALIZE_REFERENCES_ENV))
+    return CreativeCoreService(os.environ.get(TOKEN_ENV, ""), normalize_references=_env_flag(NORMALIZE_REFERENCES_ENV),
+                               prompt_version=_env_prompt_version())
 
 
 if __name__ == "__main__":

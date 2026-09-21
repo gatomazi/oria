@@ -267,6 +267,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "quality": S(enum=QUALITIES),
         "seed": I(minimum=0),
         "history_hints": R("HistoryHints"),
+        "prompt_version": I(minimum=1, maximum=2),
     },
     "KitRef": {
         "id": S(required=True),

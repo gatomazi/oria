@@ -137,7 +137,8 @@ function produtoDoRegistro(p) {
 }
 
 // Carrega do banco tudo que o request referencia (sempre filtrado pelo tenant) e monta os CreativeRequest.
-async function buildRequests(input, { store, tenantId, hints, randomInt = crypto.randomInt, uuid = crypto.randomUUID }) {
+// `promptVersion` (Fase A3): 2 liga o prompt V2 dos ângulos com pessoa para este lote; ausente = padrão do serviço.
+async function buildRequests(input, { store, tenantId, hints, promptVersion, randomInt = crypto.randomInt, uuid = crypto.randomUUID }) {
   const produtos = [];
   for (const id of input.product_ids) {
     const p = await store.getProduct(tenantId, id);
@@ -189,6 +190,7 @@ async function buildRequests(input, { store, tenantId, hints, randomInt = crypto
     base.context = { ...input.context };
   }
 
+  if (promptVersion === 2) base.prompt_version = 2;
   if (input.funnel_stage) base.funnel_stage = input.funnel_stage;
   if (input.funnel) base.funnel = input.funnel;
   if (input.remarketing) base.remarketing = input.remarketing;

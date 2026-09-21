@@ -23,6 +23,7 @@ const { createPgStore } = require('../lib/creative-core/pgStore');
 const { normalizeJobInput, buildRequests, planSummary, planPrompt, InputError } = require('../lib/creative-core/requests');
 const { createWorker } = require('../lib/creative-core/worker');
 const { progress } = require('../lib/creative-core/status');
+const { promptVersionFor } = require('../lib/creative-core/rollout');
 
 const PROFILE_CONTRACT = { brand: 'BrandKit', niche: 'NicheKit', context: 'ContextProfile', persona: 'Persona' };
 const PROFILE_PATH = { brand: 'brand-kits', niche: 'niche-kits', context: 'context-profiles', persona: 'personas' };
@@ -303,7 +304,7 @@ function criarRouterCriativos(deps) {
       throw e;
     }
     const hints = await store.recentHints(req.creativeTenant);
-    const items = await buildRequests(input, { store, tenantId: req.creativeTenant, hints });
+    const items = await buildRequests(input, { store, tenantId: req.creativeTenant, hints, promptVersion: promptVersionFor(env, req.creativeTenant) });
     return { input, items };
   }
 

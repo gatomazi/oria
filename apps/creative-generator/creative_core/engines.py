@@ -37,6 +37,7 @@ from .domain.remarketing import (
 )
 
 from . import model_router as mr
+from . import prompt_v2
 from .angles import CORE_ANGLES, angle_descriptor, angle_is_available
 from .assets import ReferenceNormalizationError, asset_from_provider_b64, normalize_reference_png
 from .context_intelligence import GeographicContextProvider, deterministic_pick, resolve_context
@@ -45,6 +46,7 @@ from .errors import GenerationError, classify_provider_exception
 from .history import utc_now
 from .kits import kit_ref, resolve_kits
 from .personas import describe as describe_persona
+from .personas import describe_identity
 from .personas import persona_pool, resolve_persona
 from .placements import placement_descriptor
 from .products import garment_for_type, validate_products
@@ -58,7 +60,7 @@ from .strategies import (
     product_limits,
     strategy_version,
 )
-from .versions import PROMPT_VERSION, SCHEMA_VERSION, version_manifest
+from .versions import SCHEMA_VERSION, version_manifest
 
 _TEMPLATES = Path(__file__).parent / "templates"
 with open(_TEMPLATES / "communication.json", encoding="utf-8") as _f:
@@ -72,7 +74,11 @@ _CLEAN_MODE_MAP = {"auto": CLEAN_AUTO, "always": CLEAN_SEMPRE, "never": CLEAN_NU
 def _seed(request: dict) -> int:
     if isinstance(request.get("seed"), int):
         return request["seed"]
-    digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    # prompt_version is left out on purpose: v1 and v2 of the same request must pick the same scene, persona and
+    # pool entries, so an A/B between versions changes the prompt and nothing else. Requests without the key hash
+    # exactly as before.
+    unversioned = {k: v for k, v in request.items() if k != "prompt_version"}
+    digest = hashlib.sha256(json.dumps(unversioned, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     return int(digest[:8], 16)
 
 
@@ -332,8 +338,12 @@ def plan_creative(
     *,
     router: mr.ModelRouter | None = None,
     geographic: GeographicContextProvider | None = None,
+    default_prompt_version: int = 1,
 ) -> dict:
-    """Validates a CreativeRequest and returns a CreativePlan. Raises GenerationError."""
+    """Validates a CreativeRequest and returns a CreativePlan. Raises GenerationError.
+
+    `default_prompt_version` applies when the request carries no `prompt_version` (the service passes its
+    CREATIVE_PROMPT_VERSION). Version 1 is the default and stays byte-identical to what shipped before v2."""
     ensure_valid("CreativeRequest", request)
     request = copy.deepcopy(request)
     router = router or mr.ModelRouter()
@@ -388,7 +398,13 @@ def plan_creative(
         stage, intent, layout = engine["stage"], None, None
         people_needed = len(products) if angle["uses_person"] and len(products) > 1 else int(angle["uses_person"])
 
+    prompt_version = prompt_v2.resolve_prompt_version(
+        request.get("prompt_version"), default_prompt_version, angle_id, people_needed, strategy)
+    if prompt_version == 2:
+        people_needed = prompt_v2.people_needed(angle_id, len(products), people_needed)
     core_rules, apparel = _core_rules(products, stage, strategy)
+    if prompt_version == 2:
+        core_rules = prompt_v2.narrow_model_rule(core_rules, angle_id, len(products))
     hints = request.get("history_hints") or {}
     context, _profile = resolve_context(
         request.get("context"), brand_kit=brand, niche_kit=niche, products=products, angle=angle,
@@ -412,12 +428,19 @@ def plan_creative(
     builder.add("niche_kit", _niche_block(niche))
     builder.add("context_profile", _context_block(context, uses_person))
     builder.add("product", _product_block(products, roles))
-    builder.add("angle", _angle_block(angle_id, products, persona, people, context["scene"], apparel))
-    builder.add("persona", _persona_block(persona, people))
+    if prompt_version == 2:
+        builder.add("angle", prompt_v2.angle_block(
+            angle_id, product=_product_label(products[0]), products="; ".join(_product_label(p) for p in products),
+            count=len(products), scene=context["scene"], apparel=apparel, seed=seed, persona=persona, people=people,
+        ))
+        builder.add("persona", prompt_v2.persona_block(angle_id, len(products), persona, people, describe_identity))
+    else:
+        builder.add("angle", _angle_block(angle_id, products, persona, people, context["scene"], apparel))
+        builder.add("persona", _persona_block(persona, people))
     builder.add("placement", COMMUNICATION["placements"][request["placement_id"]])
     builder.add("strategy_communication", engine["communication"])
     builder.add("avoid", _avoid_block(context["avoid"]))
-    prompt = builder.info(PROMPT_VERSION)
+    prompt = builder.info(prompt_version)
 
     overlay = engine["overlay"]
     validations = [
@@ -474,7 +497,7 @@ def plan_creative(
             "quality": request.get("quality", "medium"),
             "size": placement_descriptor(request["placement_id"])["api_size"],
         },
-        "versions": {**version_manifest(), "strategy_version": strategy_version(strategy),
+        "versions": {**version_manifest(), "prompt_version": prompt_version, "strategy_version": strategy_version(strategy),
                      "brand_kit_version": brand["version"], "niche_kit_version": niche["version"],
                      "context_profile_version": context["profile_version"]},
         "validations": validations,

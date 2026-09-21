@@ -417,14 +417,14 @@ test('erro inesperado nunca expõe a mensagem interna', async () => {
 
 // ── rotas ────────────────────────────────────────────────────────────────────
 
-async function subirApp({ entitlements = {}, envFlags = 'creative_generator,creative_clean_angles', store = createMemoryStore(), core = fakeCore(), semStore = false, tenantAtual = () => TENANT } = {}) {
+async function subirApp({ entitlements = {}, envFlags = 'creative_generator,creative_clean_angles', store = createMemoryStore(), core = fakeCore(), semStore = false, tenantAtual = () => TENANT, envExtra = {} } = {}) {
   const app = express();
   app.use(express.json({ limit: '20mb' }));
   const requireAdmin = (req, res, next) => (req.headers.cookie === 'admin=1' ? next() : res.status(401).json({ error: 'não autenticado' }));
   const modulo = criarRouterCriativos({
     requireAdmin, tenantAtual, paraCadaTenant: (fn) => fn(TENANT), pgPool: null, store: semStore ? null : store, core, uploadsDir: tmpDir(),
     lerEntitlements: async () => entitlements, encriptarSegredo: encrypt, descriptografarSegredo: decrypt,
-    env: { CREATIVE_FEATURE_FLAGS: envFlags }, logger: silencioso,
+    env: { CREATIVE_FEATURE_FLAGS: envFlags, ...envExtra }, logger: silencioso,
   });
   app.use('/api/admin/criativos', modulo.router);
   // Escuta no mesmo endereço que o teste chama: em todas as interfaces, a porta escolhida pode estar
@@ -566,6 +566,39 @@ test('prévia planeja cada ângulo × formato uma vez, sem repetir pela quantida
     assert.deepEqual(preview.body.prompts.map((p) => `${p.angle.id}|${p.placement}`), ['CABIDE|FEED_4X5', 'CABIDE|STORY_9X16', 'PRODUTO_ESTAMPA|FEED_4X5', 'PRODUTO_ESTAMPA|STORY_9X16']);
   } finally {
     server.close();
+  }
+});
+
+test('rollout do prompt V2: só as Organizations da env recebem prompt_version, e o padrão é não mandar nada', () => {
+  const { promptVersionFor, orgsComPromptV2 } = require('../lib/creative-core/rollout');
+  const org = 'a1000000-0000-4000-8000-000000000001';
+  assert.equal(promptVersionFor({}, org), undefined);
+  assert.equal(promptVersionFor({ CREATIVE_PROMPT_V2_ORGS: '' }, org), undefined);
+  assert.equal(promptVersionFor({ CREATIVE_PROMPT_V2_ORGS: `x, ${org.toUpperCase()}` }, org), 2);
+  assert.equal(promptVersionFor({ CREATIVE_PROMPT_V2_ORGS: 'outra-org' }, org), undefined);
+  assert.equal(promptVersionFor({ CREATIVE_PROMPT_V2_ORGS: '*' }, org), 2);
+  assert.deepEqual([...orgsComPromptV2('ok, ../etc, ')], ['ok'], 'valor inválido é ignorado');
+});
+
+test('prévia e lote mandam prompt_version=2 ao core só para a Organization habilitada, e ele fica no request persistido', async () => {
+  for (const [envExtra, esperado] of [[{}, undefined], [{ CREATIVE_PROMPT_V2_ORGS: 'outra' }, undefined], [{ CREATIVE_PROMPT_V2_ORGS: TENANT }, 2], [{ CREATIVE_PROMPT_V2_ORGS: '*' }, 2]]) {
+    const store = createMemoryStore();
+    const { server, call, core } = await subirApp({ envExtra, store });
+    try {
+      await call('PUT', '/settings/openai-key', { apiKey: API_KEY });
+      const brand = await call('POST', '/brand-kits', { data: { name: 'Marca' } });
+      const prod = await call('POST', '/products', { name: 'Caneca', type: 'caneca', images: [{ data_base64: PNG.toString('base64') }] });
+      const input = jobInput({ productId: prod.body.id, brandId: brand.body.id });
+      const preview = await call('POST', '/preview', input);
+      assert.equal(preview.status, 200);
+      assert.ok(core.calls.plan.length > 0 && core.calls.plan.every((r) => r.prompt_version === esperado), JSON.stringify(envExtra));
+      const job = await call('POST', '/jobs', input);
+      assert.equal(job.status, 201);
+      const salvo = await store.getJob(TENANT, job.body.id);
+      assert.ok(salvo.items.every((i) => i.request.prompt_version === esperado));
+    } finally {
+      server.close();
+    }
   }
 });
 

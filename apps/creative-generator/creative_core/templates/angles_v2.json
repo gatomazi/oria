@@ -1,0 +1,71 @@
+{
+  "_doc": "PROMPT_VERSION=2 scene templates for the angles that put people in the frame. Only these four angles change under v2; every other angle keeps its v1 prompt byte for byte. PORTED = wording taken from the internal generator's tested templates (ads/templates/angulos_limpos_feed.json, lojas/entre_nos/), adapted to product-agnostic placeholders. AUTHORED = written for v2 (see _authored). Placeholders: {persona} {pessoa_a} {pessoa_b} {pessoas} {produto} {produtos} {n} {cenario} {uso} plus the pools of each angle. Each pool entry is picked deterministically from the plan seed (never by the image model) and is rendered with the same placeholders.",
+  "_authored": {
+    "LIFESTYLE_COTIDIANO": "the hand/arm clause appended to each situation; 'apenas essa pessoa em quadro; no maximo um objeto simples' ; the multi scene's 'bracos soltos' clause",
+    "CAIMENTO": "'e sem objetos nas maos'; 'ninguem segurando nada' in the multi scene",
+    "CREATOR_STYLE": "the hand placement in each of the three formats; 'no maximo UM celular em cena' in the multi scene",
+    "PRESENTE_AFETO": "the whole scene: roles of Pessoa A and B, who wears, who hands over/receives, main action and hand position. The internal template says 'choose ONE of two' and leaves the choice to the model; v2 makes the choice in the plan and renders only the chosen one. The kit (multi) scene forbids people and visible hands, where the internal template allowed hands delivering the set"
+  },
+  "angles": {
+    "LIFESTYLE_COTIDIANO": {
+      "scene": "ÂNGULO LIFESTYLE (a peça sendo VIVIDA no dia a dia, sem texto): {persona} {uso} {produto}, EM AÇÃO, numa única situação: {acao}. Cenário: {cenario}. A câmera registra um momento em andamento, levemente desalinhada, como capturado de relance — NÃO é ensaio de estúdio nem pose de catálogo, e a pessoa não fica parada olhando para um ponto fixo sem nenhuma ação. Apenas essa pessoa em quadro; no máximo um objeto simples, sem marca, nas mãos dela. Produto nítido e legível apesar do enquadramento espontâneo.",
+      "scene_multi": "ÂNGULO LIFESTYLE (GRUPO): {pessoas} vivendo um momento cotidiano juntas em {cenario} — caminhando, conversando, atravessando o mesmo ambiente — cada uma {uso} um produto diferente: {produtos}. Câmera registrando um momento em andamento, NÃO ensaio de estúdio nem pose de catálogo; ninguém parado e estático olhando para um ponto fixo sem ação; braços soltos em movimento natural. Cada produto nítido e legível, nenhuma pessoa cobrindo o produto da pessoa ao lado. EVITAR: quantidade de pessoas diferente de {n}, pessoa com mais de 1 produto. IMPORTANTE: EXATAMENTE {n} pessoas, cada uma com exatamente 1 produto, todas em ação natural.",
+      "pools": {
+        "acao": [
+          "atravessando uma rua com passo natural, os dois braços soltos em movimento natural",
+          "saindo de um café com um copo descartável simples numa das mãos, a outra mão solta ao lado do corpo",
+          "caminhando em movimento, olhando de relance para alguém fora de quadro, as mãos soltas e relaxadas",
+          "a caminho de algum lugar com uma sacola simples pendurada numa das mãos, a outra mão livre",
+          "chegando a um ambiente, cruzando a entrada com os braços soltos ao lado do corpo",
+          "de pé ao balcão de uma loja, uma das mãos apoiada no balcão e a outra solta"
+        ]
+      }
+    },
+    "CAIMENTO": {
+      "scene": "ÂNGULO CAIMENTO (registro quase técnico de vestibilidade — 'como esta peça fica vestida', não uma foto de moda genérica): {persona} em pé, corpo inteiro ou da cabeça até pelo menos a metade das coxas, posição frontal ou 3/4 muito leve, braços em posição natural e relaxada ao lado do corpo (NUNCA cruzados), {uso} {produto} completamente visível — barra da peça claramente visível e NÃO enfiada dentro da calça, sem jaqueta, mochila ou bolsa cobrindo a peça. Fundo simples e neutro inspirado em {cenario}, sem competir com a informação de caimento. PRIORIDADE VISUAL ESTRITA nesta ordem: 1) silhueta da peça no corpo, 2) largura, 3) comprimento, 4) comprimento de manga, 5) gola, 6) queda do tecido, 7) estampa. A pessoa está parada em pose natural — NÃO mostrar a pessoa mexendo, ajeitando, puxando ou segurando qualquer parte da peça, e sem objetos nas mãos. SEM óculos escuros, sem pose editorial, sem cenário dramático, sem acessórios chamativos, sem composição cinematográfica. Preservar rigorosamente o tipo de peça (manga, gola, comprimento) conforme especificado.",
+      "scene_multi": "ÂNGULO CAIMENTO (GRUPO): {pessoas}, lado a lado e relativamente próximas entre si, cada uma {uso} um produto diferente — {produtos} — em enquadramento fechado que prioriza as peças como protagonistas (medium shot, closer framing, t-shirt as main subject): do topo da cabeça até a cintura ou o quadril de cada pessoa, no máximo até a metade da coxa quando necessário; evitar corpo inteiro e enquadramento aberto demais (avoid full-body framing unless explicitly requested). Braços em posição natural e relaxada ao lado do corpo (NUNCA cruzados), ninguém segurando nada, barra de cada peça visível e NÃO enfiada dentro da calça. Fundo simples e neutro inspirado em {cenario}, sem competir com a leitura das peças. Cada peça ocupa área significativa do quadro, com foco no torso e na estampa (focus on torso and print), nenhuma pessoa cobrindo a peça da pessoa ao lado. SEM óculos escuros, sem pose editorial, sem cenário dramático. EVITAR: pessoas se sobrepondo, quantidade de pessoas diferente de {n}, pessoa com mais de 1 peça ao mesmo tempo, enquadramento distante que deixe as peças pequenas. IMPORTANTE: EXATAMENTE {n} pessoas, cada uma com exatamente 1 peça, com enquadramento fechado priorizando a peça.",
+      "pools": {}
+    },
+    "CREATOR_STYLE": {
+      "scene": "ÂNGULO CREATOR-STYLE (conteúdo social espontâneo, SEM fingir depoimento real de cliente): {persona} {uso} {produto}. Formato da foto: {formato} Luz doméstica (nunca de estúdio), ambiente cotidiano ({cenario}: quarto, corredor, sala ou similar). Apenas essa pessoa em quadro. PROIBIDO: qualquer elemento visual que sugira review, depoimento, avaliação por estrelas, embalagem sendo aberta como 'unboxing de cliente satisfeito' ou cenário que simule prova social de compra real — é uma FOTO ESTÉTICA no estilo criador de conteúdo, não a encenação de uma experiência de compra. Produto legível.",
+      "scene_multi": "ÂNGULO CREATOR-STYLE (GRUPO): {pessoas} num grupo de amigos, simulando conteúdo social espontâneo (foto tirada por um dos amigos, quem fotografa não aparece; ou selfie de grupo com o braço estendido, celular: {celular}) — SEM fingir depoimento real de cliente. Cada pessoa {uso} um produto diferente: {produtos}. Luz doméstica (nunca de estúdio), ambiente cotidiano em {cenario}. Poses simples, braços soltos ou ombros próximos, no máximo UM celular em cena, segurado por uma única pessoa. PROIBIDO: qualquer elemento visual que sugira review, depoimento, avaliação por estrelas ou prova social de compra real — é uma FOTO ESTÉTICA no estilo criador de conteúdo. Cada produto legível, nenhuma pessoa cobrindo o produto da pessoa ao lado. EVITAR: quantidade de pessoas diferente de {n}. IMPORTANTE: EXATAMENTE {n} pessoas, cada uma com exatamente 1 produto.",
+      "pools": {
+        "celular": [
+          "celular com capinha de silicone verde-oliva, nenhum logotipo de marca visível",
+          "celular com capinha transparente e traseira branca, nenhum logotipo de marca visível",
+          "celular com capinha rosa-claro fosca, nenhum logotipo de marca visível",
+          "celular com capinha de couro caramelo, nenhum logotipo de marca visível",
+          "celular com capinha azul-marinho e alça de pulso, nenhum logotipo de marca visível",
+          "celular com capinha estampada de flores miúdas, nenhum logotipo de marca visível",
+          "celular com traseira lilás, sem capinha, duas lentes alinhadas na vertical, nenhum logotipo de marca visível",
+          "celular com capinha bege e cordão transversal, nenhum logotipo de marca visível",
+          "celular com capinha vermelha fosca, nenhum logotipo de marca visível",
+          "celular com traseira prata e módulo de câmera em faixa horizontal, nenhum logotipo de marca visível",
+          "celular com capinha amarela translúcida, nenhum logotipo de marca visível",
+          "celular com capinha preta cheia de adesivos coloridos, nenhum logotipo de marca visível"
+        ],
+        "formato": [
+          "selfie de espelho: a pessoa segura o celular ({celular}) com UMA mão, à altura do peito, visível no reflexo; a outra mão fica relaxada ao lado do corpo.",
+          "foto tirada por um amigo (quem fotografa não aparece, nem o celular dele), em ambiente casual, com enquadramento levemente desalinhado; a pessoa com os braços soltos ao lado do corpo ou uma mão no bolso, sem segurar nada.",
+          "braço estendido segurando o celular ({celular}), ângulo levemente inclinado, típico de conteúdo social: só o braço que segura o celular aparece esticado e a outra mão fica relaxada ao lado do corpo."
+        ]
+      }
+    },
+    "PRESENTE_AFETO": {
+      "scene": "ÂNGULO PRESENTE (valor emocional da peça como presente, sem nenhum texto): EXATAMENTE 2 pessoas em quadro, em {cenario}. Pessoa A: {pessoa_a}. Pessoa B: {pessoa_b}. {cena} Afeto genuíno e contido: gesto real, olhar natural, nenhum sorriso escancarado de banco de imagem, ninguém posando em fileira olhando para a câmera. Produto claramente visível.",
+      "scene_multi": "ÂNGULO PRESENTE (KIT): {n} produtos organizados como um conjunto de presente — {produtos}. Peças dobradas de forma que cada estampa fique visível, embrulho simples e afetivo (tecido ou papel kraft; sem caixa comercial genérica, sem laço enorme, sem estética de Natal), apoiadas juntas sobre uma superfície, com espaçamento equilibrado. NENHUMA pessoa em quadro e nenhuma mão visível; ninguém veste as peças. Foco no valor emocional; sem texto. EVITAR: quantidade de peças diferente de {n}, peças amontoadas escondendo estampas umas das outras. IMPORTANTE: EXATAMENTE {n} peças, todas dobradas e visíveis como parte do mesmo kit.",
+      "pools": {
+        "cena": [
+          "Cena: Pessoa A entrega {produto} a Pessoa B, que o recebe; NINGUÉM veste a peça nesta versão. A peça aparece dobrada, com a estampa visível, num embrulho simples e afetivo (tecido, papel kraft ou fita de algodão fina — sem caixa comercial genérica, sem laço enorme, sem estética de Natal). Ação principal: a entrega. Mãos: A segura a peça dobrada com as duas mãos, por baixo, à altura do peito; B a recebe com as duas mãos; nenhuma mão cruza o corpo de outra pessoa. Expressão calorosa e contato visual entre A e B.",
+          "Cena: Pessoa A VESTE {produto}; Pessoa B NÃO veste a peça e usa roupa lisa e neutra, sem estampa. Ação principal: as duas convivem de forma natural, lado a lado, numa conversa leve. Mãos: as de A ficam relaxadas ao lado do corpo; as de B relaxadas ou apoiadas numa superfície do ambiente; nenhuma das duas segura o produto e nenhuma mão cruza o corpo da outra pessoa. Expressão calorosa e contato visual entre A e B."
+        ]
+      }
+    }
+  },
+  "persona": {
+    "single": "PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): {identidade}.{comportamento} Aparência natural, sem rosto padrão de banco de imagem.",
+    "group": "PESSOAS (cada uma com 1 produto, na ordem dos produtos; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem):",
+    "pair": "PESSOAS (os papéis de cada uma estão definidos na cena; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem):",
+    "behavior": " Jeito natural: {comportamento} — só se não contrariar a ação ou a pose pedida pelo ângulo."
+  }
+}

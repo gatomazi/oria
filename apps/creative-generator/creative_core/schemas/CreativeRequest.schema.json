@@ -123,6 +123,11 @@
     },
     "history_hints": {
       "$ref": "#/$defs/HistoryHints"
+    },
+    "prompt_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2
     }
   },
   "$defs": {

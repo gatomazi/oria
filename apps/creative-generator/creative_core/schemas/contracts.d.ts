@@ -178,6 +178,7 @@ export interface CreativeRequest {
   quality?: "low" | "medium" | "high";
   seed?: number;
   history_hints?: HistoryHints;
+  prompt_version?: number;
 }
 
 export interface KitRef {

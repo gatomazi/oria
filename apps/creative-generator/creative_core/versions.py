@@ -12,7 +12,10 @@ CORE_VERSION = "1.1.0"
 SCHEMA_VERSION = 1
 
 # Text of the prompts assembled by the core engines (templates + rules).
+# 1 = the generic bank, frozen (golden hashes). 2 = opt-in scene contracts for the four angles that put people
+# in the frame (prompt_v2.py); a plan reports the version it ACTUALLY used, so angles v2 does not touch say 1.
 PROMPT_VERSION = 1
+SUPPORTED_PROMPT_VERSIONS = (1, 2)
 
 # Revision of the internal prompt banks (ads/templates, lojas/*/templates) used
 # by the 6 internal strategies of app.py. Recorded in the local history.

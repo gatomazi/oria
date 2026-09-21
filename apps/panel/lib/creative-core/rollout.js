@@ -1,0 +1,26 @@
+'use strict';
+
+// Rollout operacional do prompt V2 do Gerador (Fase A3). NÃO é feature comercial nem module capability:
+// é o interruptor de um experimento de qualidade, por Organization, controlado por env do painel.
+//
+//   CREATIVE_PROMPT_V2_ORGS = "<organization_id>,<organization_id>"   só essas Organizations
+//   CREATIVE_PROMPT_V2_ORGS = "*"                                     todas
+//   (vazio/ausente)                                                    ninguém — o padrão
+//
+// Fora da lista o painel NÃO manda `prompt_version` e o serviço usa o padrão dele (V1, salvo
+// CREATIVE_PROMPT_VERSION no serviço). O valor escolhido fica no `request` persistido de cada geração,
+// então uma tentativa (e um retry) sempre reproduz o prompt com que foi planejada.
+
+const ID_RE = /^[a-z0-9_-]{1,64}$/;
+
+function orgsComPromptV2(envValue) {
+  return new Set(String(envValue || '').split(',').map((s) => s.trim().toLowerCase()).filter((s) => s === '*' || ID_RE.test(s)));
+}
+
+// 2 quando a Organization está na lista; `undefined` caso contrário (não manda o campo).
+function promptVersionFor(env, tenantId) {
+  const orgs = orgsComPromptV2(env && env.CREATIVE_PROMPT_V2_ORGS);
+  return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase()) ? 2 : undefined;
+}
+
+module.exports = { promptVersionFor, orgsComPromptV2 };
