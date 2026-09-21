@@ -80,6 +80,8 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     return json({ orders: historico ? [pedidoInk(base + 500, tag)] : [], total_pages: 1, meta: { total_pages: 1 } });
   }
   // Carrinhos abandonados (Recuperação sem webhook): UM carrinho, com telefone e e-mail da "loja de teste".
+  // Só para tokens marcados com `-carrinho` (os demais testes veem a lista vazia, como sempre viram).
+  if (p === '/v1/stores/abandoned_carts' && !String(auth || '').includes('-carrinho')) return json({ abandoned_carts: [], total_pages: 1 });
   if (p === '/v1/stores/abandoned_carts') {
     return json({ abandoned_carts: [{ id: base + 300, created_at: new Date().toISOString(), contactable: true,
       buyer: { first_name: 'Carla', last_name: tag, phone: '11988887777', document: '98765432100', email: `carrinho${tag}@exemplo.com`, marketing: true },
@@ -175,6 +177,10 @@ function responder(url, metodo, corpo, auth) {
       if (p === '/revoke') return json({});
       const form = new URLSearchParams(String(corpo || ''));
       if (form.get('grant_type') === 'refresh_token') {
+        // Refresh token de uma conexão "revogada": o Google devolve invalid_grant (consentimento acabou).
+        if (String(form.get('refresh_token') || '').includes('revoked')) {
+          return json({ error: 'invalid_grant', error_description: 'Token has been expired or revoked.' }, 400);
+        }
         return json({ access_token: `ya29.${form.get('refresh_token')}`, expires_in: 3600 });
       }
       return json({ access_token: `ya29.code-${form.get('code')}`, refresh_token: `1//code-refresh-${form.get('code')}`, expires_in: 3600, scope: 'x' });
@@ -199,6 +205,8 @@ function responder(url, metodo, corpo, auth) {
       return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
     }
     case 'api.openai.com':
+      // Chave "inválida" (o texto contém `invalid`): a OpenAI a recusa com 401, como faria de verdade.
+      if (String(auth || '').includes('invalid')) return json({ error: { message: 'Incorrect API key provided' } }, 401);
       return json({ data: [] });
     default:
       return json({}, 404);

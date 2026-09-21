@@ -39,9 +39,9 @@ const SENHA_ROLE = crypto.randomBytes(16).toString('hex');
 const MESTRA = crypto.randomBytes(32).toString('base64');
 // 4ª letra do token = "loja de teste" do provider mock.
 const TOKEN = {
-  A: `inkA${crypto.randomBytes(10).toString('hex')}`,
-  C: `inkC${crypto.randomBytes(10).toString('hex')}`,
-  D: `inkD${crypto.randomBytes(10).toString('hex')}`,
+  A: `inkA-carrinho-${crypto.randomBytes(10).toString('hex')}`,
+  C: `inkC-carrinho-${crypto.randomBytes(10).toString('hex')}`,
+  D: `inkD-carrinho-${crypto.randomBytes(10).toString('hex')}`,
 };
 let dirMock;
 
@@ -103,7 +103,7 @@ async function criarNativa(letra) {
 async function pessoa(letra) {
   const { rows: [u] } = await sup.query('INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id', [email(letra), await senhas.gerarHash(SENHA)]);
   await sup.query("INSERT INTO organization_members (organization_id, user_id, papel) VALUES ($1, $2, 'owner')", [ORGS[letra], u.id]);
-  await concederFeatures(sup, ORGS[letra], { financial: true, catalog: true, exchanges: true, refunds: true, whatsapp: true });
+  await concederFeatures(sup, ORGS[letra], { financial: true, catalog: true, exchanges: true, refunds: true, whatsapp: true, creative_generator: true });
 }
 
 function subirServidor() {
@@ -395,4 +395,38 @@ test('Recuperação · o job persiste os carrinhos abandonados da Store nativa S
   }, { tentativas: 160, intervalo: 500 });
   assert.ok(doD, 'D tem o carrinho DELA (outra credencial)');
   assert.ok(!Object.keys(doD).some((k) => k.startsWith(`${store.C}:`)), 'nada de C aparece em D');
+});
+
+// ── OpenAI (BYOK) ─────────────────────────────────────────────────────────────────────────────
+
+test('OpenAI · BYOK da Store nativa: salva mascarada, testa, recusa chave inválida, revoga — e a outra Organization não a vê', async () => {
+  const c = await entrar('C');
+  const d = await entrar('D');
+  const chave = `sk-teste-claude-${crypto.randomBytes(8).toString('hex')}`;
+  const salva = await c.req('PUT', '/api/admin/criativos/settings/openai-key', { corpo: { apiKey: chave } });
+  assert.equal(salva.status, 200, salva.texto);
+  assert.equal(salva.json.configured, true);
+  assert.equal(salva.json.last4, chave.slice(-4), 'só os 4 últimos caracteres voltam');
+  assert.ok(!salva.texto.includes(chave), 'a chave inteira nunca volta');
+  const { rows } = await sup.query("SELECT ciphertext FROM integration_secrets WHERE organization_id = $1 AND tipo = 'api_key'", [ORGS.C]);
+  assert.ok(rows.length === 1 && !String(rows[0].ciphertext).includes(chave), 'cifrada no banco');
+
+  assert.deepEqual((await c.req('POST', '/api/admin/criativos/settings/openai-key/test')).json, { ok: true });
+  assert.equal((await d.req('GET', '/api/admin/criativos/settings/openai-key')).json.configured, false, 'D não vê a chave de C');
+  const status = await c.req('GET', '/api/admin/integrations');
+  assert.equal(status.json.integracoes.find((i) => i.provider === 'openai').estado, 'connected');
+
+  // Chave rejeitada pela OpenAI: o teste diz "rejected", sem devolver a resposta do provider.
+  const ruim = await c.req('PUT', '/api/admin/criativos/settings/openai-key', { corpo: { apiKey: 'sk-invalid-0123456789abcdef' } });
+  assert.equal(ruim.status, 200, ruim.texto);
+  const teste = await c.req('POST', '/api/admin/criativos/settings/openai-key/test');
+  assert.equal(teste.json.ok, false);
+  assert.equal(teste.json.reason, 'rejected');
+  assert.doesNotMatch(teste.texto, /Incorrect API key/);
+
+  const removida = await c.req('DELETE', '/api/admin/criativos/settings/openai-key');
+  assert.ok([200, 204].includes(removida.status), removida.texto);
+  assert.equal((await c.req('GET', '/api/admin/criativos/settings/openai-key')).json.configured, false);
+  assert.equal((await c.req('GET', '/api/admin/integrations')).json.integracoes.find((i) => i.provider === 'openai').estado, 'not_configured');
+  assert.ok(!saida.includes(chave) && !saida.includes('sk-invalid-0123456789abcdef'), 'a chave nunca vai ao log');
 });

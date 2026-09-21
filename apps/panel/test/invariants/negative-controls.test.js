@@ -295,7 +295,7 @@ const VIOLACOES = [
     teste: 'fase3-static.test.js',
     arquivo: 'server.js',
     descricao: 'fetchAcrossInkStores() de volta: a consulta percorre todas as lojas da instalação',
-    de: '  for (const { loja } of await storesInkDoContexto()) {\n    try {\n      const data = await inkApiRequest(loja, pathAndQuery);',
+    de: '  for (const store of await storesInkDoContexto()) {\n    // `loja` aqui é a CHAVE de escopo (mapas de automação/envios), não a chave legada.\n    const loja = store.loja || chaveDaStore();\n    try {\n      const data = await inkApiRequestDaStore(pathAndQuery);',
     para: '  // VIOLAÇÃO DELIBERADA (negative control) — reintrodução de fetchAcrossInkStores()\n'
         + '  for (const loja of LOJAS_LEGADAS) {\n    try {\n      const data = await inkApiRequest(loja, pathAndQuery);',
   },
@@ -1142,6 +1142,34 @@ const VIOLACOES = [
     de: 'entityId: `${loja || storeDoContexto()}:${id}`,',
     para: 'entityId: `${loja}:${id}`, // VIOLAÇÃO DELIBERADA (negative control)',
   },
+  // ── Google · cliente HTTP (retry, timeout, reconexão) ──────────────────────────────────────
+  {
+    classe: 'google/invalid-grant-vira-erro-generico',
+    invariant: 'GHTTP-01',
+    teste: 'google-http.test.js',
+    arquivo: 'lib/google/http.js',
+    descricao: 'consentimento revogado (invalid_grant/401) deixa de virar "reconecte" e vaza como erro genérico do provider',
+    de: "  if (oauth === 'invalid_grant' || oauth === 'invalid_token' || status === 401 || statusGoogle === 'UNAUTHENTICATED') {",
+    para: '  if (false) { // VIOLAÇÃO DELIBERADA (negative control)',
+  },
+  {
+    classe: 'google/retry-em-erro-definitivo',
+    invariant: 'GHTTP-02',
+    teste: 'google-http.test.js',
+    arquivo: 'lib/google/http.js',
+    descricao: 'o cliente passa a repetir 403 (erro definitivo): repetir não muda a resposta e queima a cota',
+    de: 'const STATUS_TRANSITORIOS = Object.freeze([429, 500, 502, 503, 504]);',
+    para: 'const STATUS_TRANSITORIOS = Object.freeze([403, 429, 500, 502, 503, 504]); // VIOLAÇÃO DELIBERADA (negative control)',
+  },
+  {
+    classe: 'google/chamada-sem-timeout',
+    invariant: 'GHTTP-03',
+    teste: 'google-http.test.js',
+    arquivo: 'lib/google/http.js',
+    descricao: 'a chamada ao Google perde o timeout: uma resposta que nunca vem pendura a rota',
+    de: '      const resposta = await chamar(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });',
+    para: '      const resposta = await chamar(url, { ...init }); // VIOLAÇÃO DELIBERADA (negative control)',
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────
@@ -1250,7 +1278,8 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
       'dashboard/midia-zero-sem-conta', 'dre/customer-de-outra-org', 'dre/loja-atribuida-padrao', 'dre/sem-loja',
       'entitlement', 'entitlement/app-config-como-fonte', 'entitlement/ausencia', 'fase6/bypass-interno',
       'financeiro/despesas-exige-loja-legada', 'ga4/cache-sem-store-id', 'ga4/connect-exige-loja-legada',
-      'ga4/oauth-aceita-store-arbitraria', 'http/async-sem-rede', 'http/erro-vaza-stack', 'ink/catalogo-sem-store-id',
+      'ga4/oauth-aceita-store-arbitraria', 'google/chamada-sem-timeout', 'google/invalid-grant-vira-erro-generico',
+      'google/retry-em-erro-definitivo', 'http/async-sem-rede', 'http/erro-vaza-stack', 'ink/catalogo-sem-store-id',
       'ink/catalogo-status-exige-loja-legada', 'ink/categorias-exige-loja-legada', 'ink/feed-descontinuado-vira-erro',
       'ink/job-catalogo-so-legado', 'ink/lote-sem-store-id', 'ink/webhook-exige-loja-legada',
       'integracoes/desconectar-cruzado', 'integracoes/env-global', 'integracoes/google-ads-sem-developer-token',

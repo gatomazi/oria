@@ -9044,6 +9044,11 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const GA_ADMIN_API = 'https://analyticsadmin.googleapis.com/v1beta';
+// Chamadas ao Google com timeout e retry curto (lib/google/http.js). `Leitura` repete em 429/5xx/rede —
+// relatório e renovação de token só LEEM; `Unica` (troca do code de autorização, que só vale uma vez)
+// nunca repete.
+const googleFetchLeitura = (url, init) => fetchGoogle(url, init, { idempotente: true });
+const googleFetchUnica = (url, init) => fetchGoogle(url, init, { idempotente: false });
 
 function googleOAuthConfigurado() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REDIRECT_URI);
@@ -9104,6 +9109,7 @@ const { createSecretStore } = require('./lib/secrets/store');
 const { createIntegrationResolver, IntegracaoError } = require('./lib/platform/integrations');
 const { createOAuthStates, OAuthStateError } = require('./lib/platform/oauth-state');
 const { linhaDoProvider, linhaComFalha } = require('./lib/platform/integration-read-model');
+const { fetchGoogle, erroGoogle } = require('./lib/google/http');
 const { EmbeddedSignupError, criarClienteEmbeddedSignup, validarEntrada: validarEntradaEmbeddedSignup, gerarPin, VERSAO_PADRAO: ES_VERSAO_PADRAO } = require('./lib/whatsapp/embedded-signup');
 const {
   resolveWebhookConnection,
@@ -9286,7 +9292,7 @@ async function desconectarGA4() {
 }
 
 async function trocarCodePorTokensGA4(code) {
-  const res = await fetch(GOOGLE_TOKEN_URL, {
+  const res = await googleFetchUnica(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -9295,12 +9301,12 @@ async function trocarCodePorTokensGA4(code) {
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error_description || data.error || 'falha ao trocar code por tokens');
+  if (!res.ok) throw erroGoogle(res.status, data, 'falha ao trocar o código de autorização');
   return data;
 }
 
 async function renovarAccessTokenGA4(refreshTokenPlano) {
-  const res = await fetch(GOOGLE_TOKEN_URL, {
+  const res = await googleFetchLeitura(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -9309,7 +9315,7 @@ async function renovarAccessTokenGA4(refreshTokenPlano) {
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error_description || data.error || 'falha ao renovar access token (reconecte a loja)');
+  if (!res.ok) throw erroGoogle(res.status, data, 'renovação de token');
   return data;
 }
 
@@ -9345,6 +9351,9 @@ async function accessTokenGoogle(provider, aoFalhar) {
         ? 'não foi possível decifrar o token salvo — reconecte'
         : `renovação de token falhou: ${err.message}`;
     await aoFalhar(mensagem, err).catch(() => {});
+    // Erro já classificado pelo cliente do Google (ex.: RECONNECT_REQUIRED) sobe com o código: a tela
+    // oferece "Reconectar" em vez de um 502 genérico.
+    if (err.codigo && err.status) throw err;
     throw new Error(mensagem);
   }
   const novaExpiracao = new Date(Date.now() + tokens.expires_in * 1000);
@@ -9367,9 +9376,9 @@ async function obterAccessTokenValidoGA4() {
 }
 
 async function listarPropriedadesGA4(accessToken) {
-  const res = await fetch(`${GA_ADMIN_API}/accountSummaries?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const res = await googleFetchLeitura(`${GA_ADMIN_API}/accountSummaries?pageSize=200`, { headers: { Authorization: `Bearer ${accessToken}` } });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error?.message || 'falha ao listar propriedades do Google Analytics');
+  if (!res.ok) throw erroGoogle(res.status, data, 'não foi possível listar as propriedades do Google Analytics');
   const propriedades = [];
   for (const conta of data.accountSummaries || []) {
     for (const prop of conta.propertySummaries || []) {
@@ -9482,7 +9491,7 @@ app.get('/api/admin/integrations/google-analytics/properties', requireAdmin, asy
     res.json({ propriedades: await listarPropriedadesGA4(accessToken) });
   } catch (err) {
     console.error(`[GA4] falha ao listar propriedades (store ${storeDoContexto()}): ${err.message}`);
-    res.status(500).json({ error: err.message || 'não foi possível listar as propriedades' });
+    res.status(err.status || 500).json({ error: err.message || 'não foi possível listar as propriedades', ...(err.codigo ? { codigo: err.codigo } : {}) });
   }
 });
 
@@ -9533,7 +9542,7 @@ function resolverPeriodoGA4(periodoRaw) {
 // 1 request pra tabela inteira (nunca 1 por linha — spec §21). "(not set)" é o texto literal que o
 // GA4 usa pra sessão sem UTM nenhuma; filtramos direto na API pra não gastar cota trazendo lixo.
 async function buscarPerformanceGA4Bruto(accessToken, propertyId, periodo) {
-  const res = await fetch(`${GA_DATA_API}/properties/${propertyId}:runReport`, {
+  const res = await googleFetchLeitura(`${GA_DATA_API}/properties/${propertyId}:runReport`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -9555,7 +9564,7 @@ async function buscarPerformanceGA4Bruto(accessToken, propertyId, periodo) {
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error?.message || 'falha ao consultar dados do Google Analytics');
+  if (!res.ok) throw erroGoogle(res.status, data, 'não foi possível consultar o Google Analytics');
   const linhas = (data.rows || []).map((row) => {
     const [source, medium, campaign, content, term] = row.dimensionValues.map((d) => d.value);
     const [sessions, users, purchases, revenue] = row.metricValues.map((m) => Number(m.value) || 0);
@@ -9660,7 +9669,7 @@ app.get('/api/admin/integrations/google-analytics/performance', requireAdmin, as
     res.json({ ...dados, atualizadoEm: new Date().toISOString(), doCache: false });
   } catch (err) {
     console.error(`[GA4] falha ao buscar performance (store ${storeId}): ${err.message}`);
-    res.status(502).json({ error: err.message || 'não foi possível buscar dados do Google Analytics' });
+    res.status(err.status || 502).json({ error: err.message || 'não foi possível buscar dados do Google Analytics', ...(err.codigo ? { codigo: err.codigo } : {}) });
   }
 });
 
@@ -9668,7 +9677,7 @@ app.get('/api/admin/integrations/google-analytics/performance', requireAdmin, as
 // linha (spec §21: nunca 1 request por linha pra todas de uma vez, e nunca fica em cache pra todas).
 async function buscarSerieDiariaGA4(accessToken, propertyId, periodo, combo) {
   const filtro = (campo, valor) => ({ filter: { fieldName: campo, stringFilter: { matchType: 'EXACT', value: valor } } });
-  const res = await fetch(`${GA_DATA_API}/properties/${propertyId}:runReport`, {
+  const res = await googleFetchLeitura(`${GA_DATA_API}/properties/${propertyId}:runReport`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -9689,7 +9698,7 @@ async function buscarSerieDiariaGA4(accessToken, propertyId, periodo, combo) {
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error?.message || 'falha ao consultar a série diária do Google Analytics');
+  if (!res.ok) throw erroGoogle(res.status, data, 'não foi possível consultar a série diária do Google Analytics');
   return (data.rows || []).map((row) => {
     const bruta = row.dimensionValues[0].value; // YYYYMMDD
     const [sessions, users, purchases, revenue] = row.metricValues.map((m) => Number(m.value) || 0);
@@ -9722,7 +9731,7 @@ app.get('/api/admin/integrations/google-analytics/performance/series', requireAd
     res.json({ serie });
   } catch (err) {
     console.error(`[GA4] falha ao buscar série diária (store ${storeId}): ${err.message}`);
-    res.status(502).json({ error: err.message || 'não foi possível buscar a série diária do Google Analytics' });
+    res.status(err.status || 502).json({ error: err.message || 'não foi possível buscar a série diária do Google Analytics', ...(err.codigo ? { codigo: err.codigo } : {}) });
   }
 });
 
@@ -9745,7 +9754,7 @@ function numeroDaLinhaGA4(row, indice) {
 async function buscarOverviewGA4(accessToken, propertyId, periodo) {
   const dateRanges = [{ startDate: periodo.startDate, endDate: periodo.endDate }];
   const metricasCanal = metricasGA4(['sessions', 'ecommercePurchases', 'totalRevenue']);
-  const res = await fetch(`${GA_DATA_API}/properties/${propertyId}:batchRunReports`, {
+  const res = await googleFetchLeitura(`${GA_DATA_API}/properties/${propertyId}:batchRunReports`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -9759,7 +9768,7 @@ async function buscarOverviewGA4(accessToken, propertyId, periodo) {
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error?.message || 'falha ao consultar o panorama do Google Analytics');
+  if (!res.ok) throw erroGoogle(res.status, data, 'não foi possível consultar o panorama do Google Analytics');
   const [rTotais, rCanais, rDispositivos, rSerie, rHoras] = data.reports || [];
 
   const linhaTotais = rTotais?.rows?.[0];
@@ -9823,7 +9832,7 @@ app.get('/api/admin/integrations/google-analytics/overview', requireAdmin, async
     res.json({ ...dados, atualizadoEm: new Date().toISOString(), doCache: false });
   } catch (err) {
     console.error(`[GA4] falha ao buscar panorama (store ${storeId}): ${err.message}`);
-    res.status(502).json({ error: err.message || 'não foi possível buscar o panorama do Google Analytics' });
+    res.status(err.status || 502).json({ error: err.message || 'não foi possível buscar o panorama do Google Analytics', ...(err.codigo ? { codigo: err.codigo } : {}) });
   }
 });
 

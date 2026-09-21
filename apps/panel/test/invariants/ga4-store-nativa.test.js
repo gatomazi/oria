@@ -362,6 +362,34 @@ test('erro do Google no callback vira estado de integração (error), não exce�
   assert.match(status.json.conexoes[0].lastError, /access_denied/);
 });
 
+// ── Reconexão: consentimento revogado ────────────────────────────────────────────────────────
+
+test('reconectar · refresh token revogado (invalid_grant) vira RECONNECT_REQUIRED (409) e o estado "error", nunca 500 com o texto do Google', async () => {
+  const c = await entrar('C');
+  const { state } = await iniciar(c);
+  await callback(navegador(), { code: 'single-revoked', state });
+  assert.equal((await c.req('GET', '/api/admin/integrations/google-analytics/status')).json.conexoes[0].status, 'connected');
+  // O access token vence: o painel tenta renovar com o refresh token e o Google diz invalid_grant.
+  await sup.query(
+    `UPDATE integration_secrets SET expires_at = now() - interval '1 minute'
+      WHERE organization_id = $1 AND tipo = 'access_token' AND integration_id IN (SELECT id FROM integrations WHERE organization_id = $1 AND provider = 'ga4')`,
+    [ORGS.C]
+  );
+  const r = await c.req('GET', '/api/admin/integrations/google-analytics/performance?periodo=7d');
+  assert.equal(r.status, 409, r.texto);
+  assert.equal(r.json.codigo, 'RECONNECT_REQUIRED');
+  assert.doesNotMatch(r.texto, /invalid_grant|expired or revoked|Token has been/, 'o texto do provider não chega à tela');
+  const status = await c.req('GET', '/api/admin/integrations/google-analytics/status');
+  assert.equal(status.json.conexoes[0].status, 'error', 'a conexão fica em erro até reconectar');
+  const integ = await c.req('GET', '/api/admin/integrations');
+  assert.equal(integ.json.integracoes.find((i) => i.provider === 'ga4').estado, 'error', 'o read model diz "reconectar"');
+  assert.equal(integ.json.integracoes.find((i) => i.provider === 'ga4').proximaAcao, 'reconnect');
+  // Reconectar de verdade resolve: novo consentimento, novo token.
+  const { state: novo } = await iniciar(c);
+  await callback(navegador(), { code: 'single-C', state: novo });
+  assert.equal((await c.req('GET', '/api/admin/integrations/google-analytics/status')).json.conexoes[0].status, 'connected');
+});
+
 // ── Segredos, logs e processo ─────────────────────────────────────────────────────────────────
 
 test('segurança · nenhum token nem segredo da plataforma aparece no log do processo', () => {
