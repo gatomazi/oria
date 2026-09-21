@@ -91,3 +91,12 @@ test('Trocas · o status da troca aparece em português (nunca o código cru da 
 test('Categorias · a listagem usa a contagem (product_count), não o array completo de ids', () => {
   assert.match(ler('pages/categorias/CategoriasPage.tsx'), /c\.product_count \?\? \(c\.product_ids \|\| \[\]\)\.length/);
 });
+
+test('Sidebar · Clientes tem item de navegação (a rota existia, mas nada levava até ela)', () => {
+  const nav = ler('shell/nav.ts');
+  assert.match(nav, /key: 'clientes', label: 'Clientes', href: '\/admin\/clientes'/, 'Clientes é item da sidebar');
+  assert.ok(/'clientes':|\bclientes:/.test(nav.slice(nav.indexOf('NAV_ICON_PATHS'))), 'e tem ícone');
+  // Como item de navegação ele fica ativo pelo href; uma entrada em ROUTE_CONTEXT o trataria como "fora do menu" (sem destaque).
+  assert.doesNotMatch(nav, /match: \/\^\\\/admin\\\/clientes/, 'Clientes não é mais rota fora do menu');
+  assert.match(ler('App.tsx'), /path="\/admin\/clientes"/, 'a rota continua registrada');
+});
