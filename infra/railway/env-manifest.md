@@ -48,7 +48,7 @@ painel, `getEnv` no Go, `Procfile` e `gunicorn.conf.py` no Gerador).
 | `WHATSAPP_CONTEXT_RATE_PER_MIN` | limite dos endpoints de contexto (opcional) |
 
 **OAuth e APIs externas:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`,
-`GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`, `GOOGLE_ADS_API_VERSION`,
+`GOOGLE_ADS_LOGIN_CUSTOMER_ID` (opcional, só com conta gerente/MCC), `GOOGLE_ADS_API_VERSION`,
 `GOOGLE_ADS_SYNC_INTERVALO_MIN`, `GOOGLE_ADS_BACKFILL_DIAS`, `META_SYNC_INTERVALO_MIN`, `META_BACKFILL_DIAS`.
 
 **Meta — dois apps, dois conjuntos de variáveis (nunca misturar):**
@@ -177,3 +177,10 @@ serviço Go realmente lê fora dos testes. Resultado:
   `WEBHOOK_TEST_SCHEMA` e as demais variáveis de processo-filho dos testes.
 - **Esclarecido:** `META_VERIFY_TOKEN` é obrigatória em qualquer ambiente (`mustEnv`), não só em
   produção; `META_APP_ID` é exigida pelo preflight, mas não derruba o boot.
+
+**Google Ads — o developer token não existe mais (09/09/2026).** O Google descontinuou os developer tokens da Google
+Ads API em 09/09/2026: o nível de acesso passou a ser do **projeto do Google Cloud dono das credenciais OAuth**
+(`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`), e o cabeçalho `developer-token` é opcional e ignorado pelos servidores.
+`GOOGLE_ADS_DEVELOPER_TOKEN` não é requisito de nada no Oria e pode ser apagada do Railway. O Google Ads fica disponível
+quando o OAuth do Google está configurado (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`).
+
