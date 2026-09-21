@@ -84,7 +84,7 @@ Nenhum runtime foi unificado e nenhum componente virou "aplicação da raiz".
 | Volume | não (serviço stateless) |
 | Banco | não |
 | Variáveis obrigatórias | `CREATIVE_CORE_SERVICE_TOKEN` (≥ 32; o mesmo do painel). Sem ela o serviço não sobe |
-| Variáveis opcionais | `OPENAI_IMAGE_MODEL`, `OPENAI_IMAGE_MODEL_FALLBACKS`, `OPENAI_TEXT_MODEL`, `WEB_CONCURRENCY`; `CREATIVE_NORMALIZE_REFERENCES` (`1`/`true`/`on`: reencoda cada referência como PNG real, com orientação EXIF e sem resize; padrão desligado; uma requisição pode sobrescrever) e `CREATIVE_PROMPT_VERSION` (`1` padrão; `2` liga o prompt V2 dos ângulos com pessoa) |
+| Variáveis opcionais | `OPENAI_IMAGE_MODEL`, `OPENAI_IMAGE_MODEL_FALLBACKS`, `OPENAI_TEXT_MODEL`, `WEB_CONCURRENCY`; `CREATIVE_NORMALIZE_REFERENCES` (`1`/`true`/`on`: reencoda cada referência como PNG real, com orientação EXIF e sem resize; padrão desligado; uma requisição pode sobrescrever) `CREATIVE_PROMPT_VERSION` (`1` padrão; `2` liga o prompt V2 dos ângulos com pessoa) e `CREATIVE_PLAN_SCHEMA_VERSION` (`1` padrão; `2` planeja com o CreativePlan v2 e o compiler novo quando o request não pede a versão) |
 | Ingress público | **não.** Só rede privada; o painel chama por `CREATIVE_CORE_URL` |
 
 ## `oria-whatsapp`
