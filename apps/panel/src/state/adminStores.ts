@@ -27,6 +27,11 @@ export const adminStores = {
   name(id: string | null | undefined): string {
     return id ? STORES[id]?.name ?? id : '—';
   },
+  // Nome para exibir: chave legada conhecida, senão `fallback` (o nome da Store nativa). A chave de
+  // uma Store nativa é o `store_id` — um id opaco que nunca deve aparecer como nome.
+  nameOr(id: string | null | undefined, fallback: string): string {
+    return (id && STORES[id]?.name) || fallback || '—';
+  },
   color(id: string | null | undefined): string {
     return (id && STORES[id]?.color) || '#4d543d';
   },

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useNomeDaStore } from '../../auth/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, ErrorState, Field, FormActions, FormStack, Icon, Input, PageHeader, Select, Skeleton } from '../../components/ds';
 import { eventoLabel } from '../../lib/eventLabels';
@@ -33,6 +34,7 @@ const FORMATOS = [
 ];
 
 export function MensagemWebEditorPage() {
+  const nomeStore = useNomeDaStore();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const edicao = !!id;
@@ -160,7 +162,7 @@ export function MensagemWebEditorPage() {
           </p>
           {original && original.eventos.length > 0 && (
             <p className="ds-note">
-              Em uso em: {original.eventos.map((v) => `${adminStores.name(v.loja)}: ${eventoLabel(v.evento)}`).join(', ')}. Alterações valem pros próximos envios.
+              Em uso em: {original.eventos.map((v) => `${adminStores.nameOr(v.loja, nomeStore)}: ${eventoLabel(v.evento)}`).join(', ')}. Alterações valem pros próximos envios.
             </p>
           )}
 

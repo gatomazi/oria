@@ -25,6 +25,11 @@ export interface OrganizacaoAtiva {
   papel: 'owner' | 'member';
   // Loja da Store da Organization — só para exibir nome/cor. Nunca volta para o servidor.
   loja: string | null;
+  // Identidade da Store (só leitura): id, nome, e a chave de escopo dos mapas por loja
+  // (`loja` legada quando existe; `storeId` na Store nativa). Nenhuma delas é enviada ao servidor.
+  storeId?: string | null;
+  storeNome?: string | null;
+  chaveEscopo?: string | null;
 }
 
 // Por que não há Organization ativa (vem do servidor):
@@ -148,4 +153,17 @@ export function useAuth(): AuthContextValue {
 // Loja da Store ativa, só para exibição. Nenhuma chamada de API a recebe.
 export function useLojaAtiva(): string | null {
   return useAuth().organizacaoAtiva?.loja ?? null;
+}
+
+// Chave sob a qual o servidor guarda o estado por loja (vínculos de automação, histórico de envios).
+// Store com chave legada: a própria chave. Store nativa: o `store_id`. Nunca vazia com Store ativa.
+export function useChaveDaStore(): string {
+  const o = useAuth().organizacaoAtiva;
+  return o?.chaveEscopo ?? o?.loja ?? o?.storeId ?? '';
+}
+
+// Nome da Store para exibição: o registro (Store nativa) ou o nome da chave legada.
+export function useNomeDaStore(): string {
+  const o = useAuth().organizacaoAtiva;
+  return o?.storeNome ?? '';
 }
