@@ -7528,10 +7528,14 @@ async function buscarClientesAgregados() {
 
   // Identidade nunca cruza lojas diferentes (mesmo documento podendo se repetir em 2 lojas
   // distintas, cada loja mantém seus próprios registros de cliente) — agrupa por loja primeiro.
+  // A Store nativa grava `loja` NULA nos pedidos; o cliente da Ink chega com a chave da Store
+  // (`chaveDaStore()`). A tela cruza os dois por `loja + documento/telefone`, então a chave precisa ser a mesma.
+  const chaveDoContexto = chaveDaStore();
   const pedidosPorLoja = new Map();
   for (const r of rows) {
-    if (!pedidosPorLoja.has(r.loja)) pedidosPorLoja.set(r.loja, []);
-    pedidosPorLoja.get(r.loja).push(r);
+    const chave = r.loja || chaveDoContexto;
+    if (!pedidosPorLoja.has(chave)) pedidosPorLoja.set(chave, []);
+    pedidosPorLoja.get(chave).push(r);
   }
 
   const agora = Date.now();
