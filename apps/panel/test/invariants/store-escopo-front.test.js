@@ -61,6 +61,19 @@ test('Rotas · endereço que não existe mostra "Página não encontrada" (nunca
   assert.match(ler('pages/PaginaNaoEncontrada.tsx'), /Página não encontrada/);
 });
 
+test('Clientes · a tela pagina no servidor (25 por página) e não ordena só a página pelo cabeçalho', () => {
+  const fonte = ler('pages/clientes/ClientesPage.tsx');
+  assert.match(fonte, /const CLIENTES_POR_PAGINA = 25;/);
+  assert.match(fonte, /listClientes\(\{ page: pagina, perPage: CLIENTES_POR_PAGINA, ordem, busca: buscaAplicada, inativoDias: inatividade, tipo \}\)/, 'pede só a página atual, com busca/ordem/filtros');
+  assert.match(fonte, /<option value="sem_pedido">Só cadastro \(nunca pediu\)<\/option>/, 'filtro de quem só tem cadastro');
+  assert.match(fonte, /lista\.cadastro\.disponivel/, 'avisa quando o cadastro da Ink não respondeu');
+  assert.match(fonte, /c\.origem === 'cadastro' \? 'Só cadastro' : 'Sem compra'/, 'a linha diz se é só cadastro');
+  assert.match(fonte, /<Pagination[\s\S]*?onPrev=[\s\S]*?onNext=/, 'rodapé de paginação');
+  assert.match(fonte, /sortable=\{false\}/, 'ordenar pelo cabeçalho reordenaria só a página e enganaria');
+  assert.doesNotMatch(fonte, /getCustomers|cruzarComCompras/, 'a base é o histórico de pedidos, não a 1ª página do cadastro da Ink');
+  assert.match(ler('api/clientes.ts'), /\/api\/admin\/clientes\/lista\?/);
+});
+
 test('WhatsApp · o card avisa quando a Meta recusa o token, sem sugerir que está tudo conectado', () => {
   const fonte = ler('pages/integracoes/WhatsappRemetenteCard.tsx');
   assert.match(fonte, /Token recusado pela Meta/);

@@ -15,6 +15,8 @@ const metaActions  = require('./lib/meta/actions');
 const metaInsights = require('./lib/meta/insights');
 const metaCriativos = require('./lib/meta/criativos');
 const financeiroConsolidado = require('./lib/financeiro/consolidado');
+const clientesLista = require('./lib/clientes/lista');
+const clientesCadastro = require('./lib/clientes/cadastro');
 const financeiroDespesas = require('./lib/financeiro/despesas');
 const { resolverMidiaDaOrganizacao } = require('./lib/financeiro/midia');
 const custosPrecos = require('./lib/custos/precos');
@@ -7521,6 +7523,48 @@ app.get('/api/admin/clientes', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(`[CLIENTES] falha ao listar histórico de compras: ${err.message}`);
     res.status(500).json({ error: 'não foi possível ler o histórico de compras' });
+  }
+});
+
+// Cadastro de clientes da Ink (todas as páginas), com cache curto POR STORE. A chave é montada aqui com a
+// Organization e a Store do contexto — nunca vem do request — e o cache só guarda o cadastro daquela chave.
+const cadastroDeClientesCache = clientesCadastro.criarCacheDoCadastro();
+
+function cadastroDeClientesDaStore() {
+  const chave = `${orgDoContexto()}:${storeDoContexto()}`;
+  return cadastroDeClientesCache.obter(chave, (page) => inkApiRequestDaStore(`/v1/stores/customers?page=${page}&per_page=100`));
+}
+
+// Lista paginada da tela de Clientes: busca, ordenação e filtros rodam aqui, ANTES de fatiar a página, para valerem
+// para a lista inteira (lib/clientes/lista.js). A base é o histórico de pedidos da Organization/Store do contexto
+// MAIS o cadastro da Ink de quem nunca pediu (filtro `tipo`). Se a Ink não responder, a tela segue com quem já pediu
+// e avisa (`cadastro.disponivel: false`) em vez de quebrar.
+app.get('/api/admin/clientes/lista', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });
+
+  try {
+    const consulta = clientesLista.normalizarConsulta(req.query);
+    const historico = await buscarClientesAgregados();
+    let base = historico;
+    let cadastro = { incluido: false, disponivel: true, parcial: false, atualizadoEm: null };
+
+    if (consulta.tipo !== 'com_pedido') {
+      try {
+        const registro = await cadastroDeClientesDaStore();
+        base = clientesLista.unirComCadastro(historico, registro.clientes, { loja: chaveDaStore() });
+        cadastro = { incluido: true, disponivel: true, parcial: registro.parcial, atualizadoEm: registro.carregadoEm };
+      } catch (err) {
+        console.error(`[CLIENTES] cadastro da Ink indisponível: ${err.message}`);
+        cadastro = { incluido: false, disponivel: false, parcial: false, atualizadoEm: null };
+        // "Só cadastro" sem cadastro não tem o que mostrar; os demais tipos seguem com o histórico.
+        if (consulta.tipo === 'sem_pedido') base = [];
+      }
+    }
+
+    res.json({ ...clientesLista.listarClientes(base, consulta), cadastro });
+  } catch (err) {
+    console.error(`[CLIENTES] falha ao listar clientes paginados: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível ler os clientes' });
   }
 });
 
