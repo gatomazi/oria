@@ -79,6 +79,34 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     const historico = url.searchParams.get('begin_date') === '2015-01-01';
     return json({ orders: historico ? [pedidoInk(base + 500, tag)] : [], total_pages: 1, meta: { total_pages: 1 } });
   }
+  // Carrinhos abandonados (Recuperação sem webhook): UM carrinho, com telefone e e-mail da "loja de teste".
+  // Só para tokens marcados com `-carrinho` (os demais testes veem a lista vazia, como sempre viram).
+  if (p === '/v1/stores/abandoned_carts' && !String(auth || '').includes('-carrinho')) return json({ abandoned_carts: [], total_pages: 1 });
+  if (p === '/v1/stores/abandoned_carts') {
+    return json({ abandoned_carts: [{ id: base + 300, created_at: new Date().toISOString(), contactable: true,
+      buyer: { first_name: 'Carla', last_name: tag, phone: '11988887777', document: '98765432100', email: `carrinho${tag}@exemplo.com`, marketing: true },
+      items: [{ product_name: `Produto ${tag}1`, quantity: 1 }] }], total_pages: 1 });
+  }
+  // Trocas, reembolsos e promoções: o id carrega a faixa da "loja de teste" do token.
+  if (p === '/v1/stores/exchanges' && metodo === 'GET') {
+    return json({ exchanges: [{ id: base + 700, exchange_type: 'exchange', status: 'waiting', old_order: { id: base + 500 }, created_at: new Date().toISOString() }], page: 1, per_page: 20, total_pages: 1, total_count: 1 });
+  }
+  if (p === '/v1/stores/exchanges' && metodo === 'POST') {
+    return json({ exchange: { id: base + 701, status: 'waiting', old_order: { id: JSON.parse(corpo || '{}').original_order_id } } }, 201);
+  }
+  if ((m = p.match(/^\/v1\/stores\/exchanges\/(\d+)$/))) return json({ exchange: { id: Number(m[1]), status: 'waiting', old_order: { id: base + 500 } } });
+  if ((m = p.match(/^\/v1\/stores\/orders\/(\d+)\/refunds$/))) {
+    if (metodo === 'POST') return json({ refund: { id: base + 801, value: 10 } }, 201);
+    return json({ refunds: [{ id: base + 800, value: 10 }] });
+  }
+  if (p === '/v1/stores/promotions' && metodo === 'GET') return json({ promotions: [{ id: base + 900, code: `PROMO${tag}`, type: 'standard' }] });
+  if ((m = p.match(/^\/v1\/stores\/promotions\/(standard|progressive|unit_free)$/)) && metodo === 'POST') {
+    return json({ promotion: { id: base + 901, type: m[1], code: JSON.parse(corpo || '{}').code } }, 201);
+  }
+  if ((m = p.match(/^\/v1\/stores\/promotions\/(standard|progressive|unit_free)\/(\d+)$/)) && metodo === 'PATCH') {
+    return json({ promotion: { id: Number(m[2]), type: m[1], ...JSON.parse(corpo || '{}') } });
+  }
+  if ((m = p.match(/^\/v1\/stores\/promotions\/(\d+)$/)) && metodo === 'DELETE') return json({});
   // Financeiro (somente leitura): valores fixos e reconhecíveis.
   if (p === '/v1/stores/balance') return json({ balance: { available: 1234.56, pending: 78.9 } });
   if (p === '/v1/stores/balance_extract') return json({ balance_extract: [{ id: 1, description: 'venda', value: 10 }], page: 1, total_pages: 1, has_more: false });
@@ -149,6 +177,10 @@ function responder(url, metodo, corpo, auth) {
       if (p === '/revoke') return json({});
       const form = new URLSearchParams(String(corpo || ''));
       if (form.get('grant_type') === 'refresh_token') {
+        // Refresh token de uma conexão "revogada": o Google devolve invalid_grant (consentimento acabou).
+        if (String(form.get('refresh_token') || '').includes('revoked')) {
+          return json({ error: 'invalid_grant', error_description: 'Token has been expired or revoked.' }, 400);
+        }
         return json({ access_token: `ya29.${form.get('refresh_token')}`, expires_in: 3600 });
       }
       return json({ access_token: `ya29.code-${form.get('code')}`, refresh_token: `1//code-refresh-${form.get('code')}`, expires_in: 3600, scope: 'x' });
@@ -173,6 +205,8 @@ function responder(url, metodo, corpo, auth) {
       return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
     }
     case 'api.openai.com':
+      // Chave "inválida" (o texto contém `invalid`): a OpenAI a recusa com 401, como faria de verdade.
+      if (String(auth || '').includes('invalid')) return json({ error: { message: 'Incorrect API key provided' } }, 401);
       return json({ data: [] });
     default:
       return json({}, 404);

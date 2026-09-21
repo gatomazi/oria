@@ -372,10 +372,10 @@ test('Dashboard · pedidos e carrinhos não exigem chave legada (o front recebe 
 
 // ── Erro central: o que ainda depende da chave legada responde, não pendura ──────────────────
 
-test('handler ainda legado (Trocas) numa Store nativa → 409 STORE_WITHOUT_LEGACY_KEY controlado, sem stack, sem pendurar', async () => {
+test('handler ainda legado (Controle de estoque, adiado) numa Store nativa → 409 STORE_WITHOUT_LEGACY_KEY controlado, sem stack, sem pendurar', async () => {
   const c = await navegador().entrar('dogf-c@teste.oria');
   const inicio = Date.now();
-  const r = await c.req('GET', '/api/admin/trocas?page=1&per_page=20');
+  const r = await c.req('GET', '/api/admin/controle-estoque');
   assert.ok(Date.now() - inicio < 5000, 'responde de imediato, não fica pendente');
   assert.equal(r.status, 409, r.texto);
   assert.equal(r.json.codigo, 'STORE_WITHOUT_LEGACY_KEY');
