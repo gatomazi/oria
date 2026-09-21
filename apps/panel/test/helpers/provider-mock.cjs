@@ -60,7 +60,8 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
   }
   if (p === '/v1/stores/product_types') return json({ product_types: [{ id: base + 10, name: 'Camiseta' }] });
   if (p === '/v1/stores/collections' && metodo === 'GET') {
-    return json({ collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: [] }], total_pages: 1 });
+    // A lista traz product_ids como a Ink de verdade (o painel devolve só a contagem); o detalhe segue vazio.
+    return json({ collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: [base + 1, base + 2, base + 3] }], total_pages: 1 });
   }
   if (p === '/v1/stores/collections' && metodo === 'POST') {
     return json({ collection: { id: base + 101, name: JSON.parse(corpo || '{}').name || `Categoria ${tag} nova` } }, 201);

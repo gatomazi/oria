@@ -159,6 +159,29 @@ export function lookup(map: StatusMap, key: string | null | undefined, fallbackL
 
 // A API de Trocas não documenta o enum de `status`/`support_review_status` — em vez de inventar
 // uma lista fixa, coloriza por palavra-chave e sempre mostra o texto cru que a Ink devolveu.
+// Status de uma TROCA na Ink (`exchange.status`). Valores conhecidos em português; o que não está aqui
+// aparece humanizado ("waiting_for_approval" → "Waiting for approval") em vez de código cru.
+export const EXCHANGE_STATUS_LABELS: Record<string, string> = {
+  waiting_for_approval: 'Aguardando aprovação',
+  waiting_approval: 'Aguardando aprovação',
+  in_progress: 'Em andamento',
+  canceled: 'Cancelada',
+  cancelled: 'Cancelada',
+  completed: 'Concluída',
+  finished: 'Concluída',
+  approved: 'Aprovada',
+  refused: 'Recusada',
+  rejected: 'Recusada',
+};
+
+export function labelForExchangeStatus(status: string | null | undefined): string {
+  if (!status) return '—';
+  const conhecido = EXCHANGE_STATUS_LABELS[String(status).toLowerCase()];
+  if (conhecido) return conhecido;
+  const humano = String(status).replace(/_/g, ' ').trim();
+  return humano.charAt(0).toUpperCase() + humano.slice(1);
+}
+
 export function toneForGenericStatus(status: string | null | undefined): Tone {
   const s = String(status || '').toLowerCase();
   if (/approv|paid|success|deliver|ok|concluid|aprovad/.test(s)) return 'success';

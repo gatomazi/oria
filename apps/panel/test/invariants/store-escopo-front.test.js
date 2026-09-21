@@ -66,3 +66,17 @@ test('WhatsApp · o card avisa quando a Meta recusa o token, sem sugerir que est
   assert.match(fonte, /Token recusado pela Meta/);
   assert.match(fonte, /dados\.tokenInvalidoEm/);
 });
+
+test('Trocas · o status da troca aparece em português (nunca o código cru da Ink)', () => {
+  const trocas = ler('pages/trocas/TrocasPage.tsx');
+  const drawer = ler('pages/trocas/TrocaDrawer.tsx');
+  assert.match(trocas, /label=\{labelForExchangeStatus\(t\.status\)\}/);
+  assert.match(drawer, /label=\{labelForExchangeStatus\(troca\.status\)\}/);
+  const mapa = ler('lib/statusMap.ts');
+  assert.match(mapa, /in_progress: 'Em andamento'/);
+  assert.match(mapa, /waiting_for_approval: 'Aguardando aprovação'/);
+});
+
+test('Categorias · a listagem usa a contagem (product_count), não o array completo de ids', () => {
+  assert.match(ler('pages/categorias/CategoriasPage.tsx'), /c\.product_count \?\? \(c\.product_ids \|\| \[\]\)\.length/);
+});

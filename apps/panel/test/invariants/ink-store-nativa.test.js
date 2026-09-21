@@ -226,6 +226,10 @@ test('Categorias · lista, detalhe e criação na Store nativa', async () => {
   const lista = await c.req('GET', '/api/admin/categorias');
   assert.equal(lista.status, 200, `Categorias não pode exigir chave legada: ${lista.texto}`);
   assert.deepEqual(lista.json.categorias.map((x) => x.id), [1100]);
+  // A listagem devolve só a CONTAGEM (os ids completos ficam no detalhe): sem isso a tela carregava centenas de KB
+  // de ids só para mostrar um número.
+  assert.equal(lista.json.categorias[0].product_count, 3);
+  assert.ok(!('product_ids' in lista.json.categorias[0]), 'a lista não carrega product_ids');
   const um = await c.req('GET', '/api/admin/categorias/1100');
   assert.equal(um.status, 200, um.texto);
   const nova = await c.req('POST', '/api/admin/categorias', { corpo: { name: 'Teste nativa' } });

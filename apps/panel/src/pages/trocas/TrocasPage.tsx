@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { adminStores } from '../../state/adminStores';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { formatData, plural } from '../../lib/format';
-import { toneForGenericStatus } from '../../lib/statusMap';
+import { labelForExchangeStatus, toneForGenericStatus } from '../../lib/statusMap';
 import { listTrocas, type TrocaListItem, type TrocasListResponse } from '../../api/trocas';
 import { TrocaDrawer, reasonLabel } from './TrocaDrawer';
 
@@ -123,7 +123,7 @@ export function TrocasPage() {
                   {
                     key: 'status',
                     label: 'Status',
-                    render: (t) => <StatusBadge tone={toneForGenericStatus(t.status)} label={t.status || '—'} />,
+                    render: (t) => <StatusBadge tone={toneForGenericStatus(t.status)} label={labelForExchangeStatus(t.status)} />,
                     sortValue: (t) => t.status,
                   },
                   {
