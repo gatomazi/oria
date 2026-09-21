@@ -15,8 +15,17 @@ export interface Categoria {
   updated_at?: string;
 }
 
-export function listCategorias() {
-  return api<{ categorias: Categoria[] }>(`/api/admin/categorias`);
+export interface ListaDeCategorias {
+  categorias: Categoria[];
+  page?: number;
+  totalPages?: number;
+  totalCount?: number | null;
+}
+
+/** Sem `opts` devolve a lista de sempre (seletores); com `opts.page` devolve só aquela página e os totais. */
+export function listCategorias(opts?: { page: number; perPage?: number }) {
+  const qs = opts ? `?page=${opts.page}&per_page=${opts.perPage ?? 25}` : '';
+  return api<ListaDeCategorias>(`/api/admin/categorias${qs}`);
 }
 
 export function getCategoria(id: number) {

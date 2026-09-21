@@ -3237,6 +3237,16 @@ app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
 });
 
 
+// Paginação opcional das listas de catálogo: sem `page` a rota mantém o comportamento de sempre (uma página de
+// 100, usada por seletores); com `page` devolve só aquela página e os totais. Entrada validada como inteiro
+// dentro de limites — nunca repassada crua para a Ink.
+function paginaDaQuery(query, { padrao = 25, maximo = 100 } = {}) {
+  const soDigitos = (v) => typeof v === 'string' && /^\d{1,4}$/.test(v);
+  if (!soDigitos(query.page) || Number(query.page) < 1 || Number(query.page) > 1000) return { paginado: false, page: 1, perPage: 100 };
+  const perPage = soDigitos(query.per_page) && Number(query.per_page) >= 1 ? Math.min(Number(query.per_page), maximo) : padrao;
+  return { paginado: true, page: Number(query.page), perPage };
+}
+
 // ── Catálogo — Categorias (Fase 8.2, ver docs/plan.md) ──────────────────
 // Único módulo de catálogo com CRUD completo de verdade (a API documenta DELETE aqui, ao
 // contrário de produtos). `product_ids`/`kit_ids` são substituição TOTAL do array (não soma) —
@@ -3245,7 +3255,10 @@ app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
 app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
   const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequestDaStore('/v1/stores/collections?per_page=100');
+    const { paginado, page, perPage } = paginaDaQuery(req.query);
+    const data = await inkApiRequestDaStore(paginado
+      ? `/v1/stores/collections?page=${page}&per_page=${perPage}`
+      : '/v1/stores/collections?per_page=100');
     // A listagem só precisa da CONTAGEM: cada categoria traz `product_ids` com todos os produtos (a maior tem
     // ~100 mil ids), e a tela levava 10+ s só para carregar esse volume. Os ids completos seguem no detalhe
     // (`GET /api/admin/categorias/:id`), que é o que o drawer usa para editar.
@@ -3253,7 +3266,7 @@ app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
       ...resto,
       product_count: Array.isArray(ids) ? ids.length : 0,
     }));
-    res.json({ categorias });
+    res.json({ categorias, page: paginado ? page : 1, totalPages: data.total_pages || 1, totalCount: data.total_count ?? null });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao listar (${loja}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível listar as categorias' });
@@ -7140,7 +7153,10 @@ function migracaoChaveDoProdutoOrigem(nome) {
 app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
   const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequestDaStore('/v1/stores/product_clusters?per_page=100');
+    const { paginado, page, perPage } = paginaDaQuery(req.query);
+    const data = await inkApiRequestDaStore(paginado
+      ? `/v1/stores/product_clusters?page=${page}&per_page=${perPage}`
+      : '/v1/stores/product_clusters?per_page=100');
     const clusters = data.product_clusters || [];
     // Resolve nome/imagem só do produto de vitrine (não de todos os `product_ids`, que pode ser
     // bem maior) — sem isso a listagem só mostrava o id cru do agrupamento e do produto de
@@ -7169,7 +7185,7 @@ app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
         });
       });
     }
-    res.json({ agrupamentos });
+    res.json({ agrupamentos, page: paginado ? page : 1, totalPages: data.total_pages || 1, totalCount: data.total_count ?? null });
   } catch (err) {
     console.error(`[AGRUPAMENTOS] falha ao listar (${loja}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível listar os agrupamentos' });

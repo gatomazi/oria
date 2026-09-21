@@ -241,6 +241,28 @@ test('Categorias · lista, detalhe e criação na Store nativa', async () => {
   assert.ok(!('product_ids' in d.json.categorias[0]), 'a lista não carrega os ids completos');
 });
 
+test('Categorias e Agrupamentos · paginação: `page` chega à Ink, os totais voltam e valor inválido não vira consulta livre', async () => {
+  const c = await entrar('C');
+  const cat = await c.req('GET', '/api/admin/categorias?page=2&per_page=20');
+  assert.equal(cat.status, 200, cat.texto);
+  assert.equal(cat.json.page, 2);
+  assert.equal(cat.json.totalPages, 3, 'o total de páginas é o da Ink');
+  assert.equal(cat.json.totalCount, 60);
+  const agr = await c.req('GET', '/api/admin/agrupamentos?page=3&per_page=20');
+  assert.equal(agr.status, 200, agr.texto);
+  assert.equal(agr.json.page, 3);
+  assert.equal(agr.json.totalPages, 3);
+  // Sem `page` (seletores): comportamento de sempre, uma página só.
+  const sem = await c.req('GET', '/api/admin/categorias');
+  assert.equal(sem.json.totalPages, 1);
+  // `page` que não é inteiro na faixa cai no modo sem paginação — nunca é repassado cru à Ink.
+  for (const ruim of ['0', '-1', 'abc', '1001', '2;drop']) {
+    const r = await c.req('GET', `/api/admin/categorias?page=${encodeURIComponent(ruim)}`);
+    assert.equal(r.status, 200, r.texto);
+    assert.equal(r.json.totalPages, 1, `page=${ruim} não pagina`);
+  }
+});
+
 test('Agrupamentos · lista e detalhe na Store nativa, por credencial', async () => {
   const c = await entrar('C');
   const lista = await c.req('GET', '/api/admin/agrupamentos');

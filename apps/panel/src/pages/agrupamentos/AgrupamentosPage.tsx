@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, DataTable, EmptyState, ErrorState, PageHeader, Skeleton } from '../../components/ds';
+import { Button, DataTable, EmptyState, ErrorState, PageHeader, Pagination, Skeleton } from '../../components/ds';
+import { plural } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { listAgrupamentos, type Agrupamento } from '../../api/agrupamentos';
 import { ModalNovoAgrupamento } from './ModalNovoAgrupamento';
@@ -14,12 +15,17 @@ function Thumb({ a }: { a: Agrupamento }) {
   return <div className="pr-thumb pr-thumb--placeholder">sem foto</div>;
 }
 
+const AGRUPAMENTOS_POR_PAGINA = 25;
+
 // Porte de src/agrupamentos.js.
 export function AgrupamentosPage() {
   const lojaSelecionada = useLojaAtiva() ?? '';
   const lojaReal = lojaSelecionada;
 
   const [agrupamentos, setAgrupamentos] = useState<Agrupamento[] | null>(null);
+  const [pagina, setPagina] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalAgrupamentos, setTotalAgrupamentos] = useState<number | null>(null);
   const [erro, setErro] = useState('');
   const [modalAberto, setModalAberto] = useState(false);
   const [drawerId, setDrawerId] = useState<number | null>(null);
@@ -27,12 +33,19 @@ export function AgrupamentosPage() {
   function carregar() {
     setErro('');
     setAgrupamentos(null);
-    listAgrupamentos()
-      .then((data) => setAgrupamentos(data.agrupamentos || []))
+    listAgrupamentos({ page: pagina, perPage: AGRUPAMENTOS_POR_PAGINA })
+      .then((data) => {
+        const lista = data.agrupamentos || [];
+        if (lista.length === 0 && pagina > 1) { setPagina(pagina - 1); return; }
+        setAgrupamentos(lista);
+        setTotalPaginas(data.totalPages ?? 1);
+        setTotalAgrupamentos(data.totalCount ?? null);
+      })
       .catch((err: Error) => setErro(err.message));
   }
 
-  useEffect(carregar, [lojaReal]);
+  useEffect(() => { setPagina(1); }, [lojaReal]);
+  useEffect(carregar, [lojaReal, pagina]);
 
   const prefixo = '';
 
@@ -52,6 +65,7 @@ export function AgrupamentosPage() {
       {!erro && !agrupamentos && <Skeleton variant="table" rows={6} />}
       {!erro && agrupamentos && agrupamentos.length === 0 && <EmptyState title="Nenhum agrupamento ainda" />}
       {!erro && agrupamentos && agrupamentos.length > 0 && (
+        <>
         <DataTable
           rows={agrupamentos}
           rowKey={(a) => a.id}
@@ -78,6 +92,17 @@ export function AgrupamentosPage() {
             { key: 'id', label: 'Agrupamento', render: (a) => <span className="ds-form-note">#{a.id}</span>, sortValue: (a) => a.id },
           ]}
         />
+        {totalPaginas > 1 && (
+          <Pagination
+            label="Paginação de agrupamentos"
+            page={pagina}
+            totalPages={totalPaginas}
+            totalLabel={totalAgrupamentos != null ? plural(totalAgrupamentos, 'agrupamento', 'agrupamentos') : undefined}
+            onPrev={() => setPagina((p) => Math.max(1, p - 1))}
+            onNext={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+          />
+        )}
+        </>
       )}
 
       <ModalNovoAgrupamento open={modalAberto} onClose={() => setModalAberto(false)} onCriado={carregar} />

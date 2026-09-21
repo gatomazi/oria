@@ -66,14 +66,22 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     // Só a Store D traz product_ids na lista (como a Ink de verdade; o painel devolve só a contagem). As demais
     // seguem vazias: o job de categorias em lote lê esta lista para saber o que já está associado.
     const ids = tag === 'D' ? [base + 1, base + 2, base + 3] : [];
-    return json({ collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: ids }], total_pages: 1 });
+    // Com `page` na query a Ink pagina: o mock devolve 3 páginas de 20 itens e ecoa a página pedida.
+    const pagina = new URL(url, 'http://ink.invalid').searchParams.get('page');
+    return json(pagina
+      ? { collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: ids }], page: Number(pagina), total_pages: 3, total_count: 60 }
+      : { collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: ids }], total_pages: 1 });
   }
   if (p === '/v1/stores/collections' && metodo === 'POST') {
     return json({ collection: { id: base + 101, name: JSON.parse(corpo || '{}').name || `Categoria ${tag} nova` } }, 201);
   }
   if ((m = p.match(/^\/v1\/stores\/collections\/(\d+)$/))) return json({ collection: { id: Number(m[1]), name: `Categoria ${tag}`, product_ids: [] } });
   if (p === '/v1/stores/product_clusters') {
-    return json({ product_clusters: [{ id: base + 200, default_product_id: base + 1, product_ids: [base + 1, base + 2] }], total_pages: 1 });
+    const pagina = new URL(url, 'http://ink.invalid').searchParams.get('page');
+    const cluster = { id: base + 200, default_product_id: base + 1, product_ids: [base + 1, base + 2] };
+    return json(pagina
+      ? { product_clusters: [cluster], page: Number(pagina), total_pages: 3, total_count: 60 }
+      : { product_clusters: [cluster], total_pages: 1 });
   }
   if ((m = p.match(/^\/v1\/stores\/product_clusters\/(\d+)$/))) {
     return json({ product_cluster: { id: Number(m[1]), default_product_id: base + 1, product_ids: [base + 1, base + 2] } });
