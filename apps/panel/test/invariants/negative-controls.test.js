@@ -865,9 +865,9 @@ const VIOLACOES = [
     teste: 'ink-store-nativa.test.js',
     arquivo: 'server.js',
     descricao: 'Categorias volta a exigir a chave legada da Store (a rota que pendurava a tela)',
-    de: "    const data = await inkApiRequestDaStore('/v1/stores/collections?per_page=100');",
-    para: "    lojaLegadaDoContexto(); // VIOLAÇÃO DELIBERADA (negative control)\n"
-        + "    const data = await inkApiRequestDaStore('/v1/stores/collections?per_page=100');",
+    de: '    const data = await inkApiRequestDaStore(paginado\n      ? `/v1/stores/collections?page=${page}&per_page=${perPage}`',
+    para: '    lojaLegadaDoContexto(); // VIOLAÇÃO DELIBERADA (negative control)\n'
+        + '    const data = await inkApiRequestDaStore(paginado\n      ? `/v1/stores/collections?page=${page}&per_page=${perPage}`',
   },
   {
     classe: 'ink/catalogo-sem-store-id',
