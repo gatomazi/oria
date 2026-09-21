@@ -106,7 +106,8 @@ export function ClientesPage() {
               // reordenaria a página atual e enganaria.
               sortable={false}
               rows={clientes}
-              rowKey={(c) => c.loja + ':' + c.customerKey}
+              // A chave leva a posição: a lista é trocada inteira a cada página/filtro, e uma chave repetida faria o React duplicar linhas.
+              rowKey={(c, i) => c.loja + ':' + c.customerKey + ':' + i}
               columns={[
                 { key: 'nome', label: 'Nome', truncate: true, width: 240, render: (c) => c.nome || 'Sem nome', sortValue: (c) => c.nome },
                 { key: 'loja', priority: 'low', label: 'Loja', muted: true, render: (c) => adminStores.nameOr(c.loja, nomeStore), sortValue: (c) => adminStores.nameOr(c.loja, nomeStore) },
