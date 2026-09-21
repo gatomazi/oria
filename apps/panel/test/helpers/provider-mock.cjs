@@ -72,7 +72,14 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
   if ((m = p.match(/^\/v1\/stores\/product_clusters\/(\d+)$/))) {
     return json({ product_cluster: { id: Number(m[1]), default_product_id: base + 1, product_ids: [base + 1, base + 2] } });
   }
-  if ((m = p.match(/^\/v1\/stores\/orders\/(\d+)$/))) return json({ order: pedidoInk(Number(m[1]), tag) });
+  if ((m = p.match(/^\/v1\/stores\/orders\/(\d+)$/))) {
+    const pedido = pedidoInk(Number(m[1]), tag);
+    // Pedido com Pix pendente (id terminado em 777): o vínculo manual grava o pedido no banco.
+    if (Number(m[1]) % 1000 === 777) {
+      Object.assign(pedido, { payment_status: 'pending', payment_method: 'pix', pix: { qr_code: '00020126580014br.gov.bcb.pix0136teste-claude', expiration_date: new Date(Date.now() + 3600_000).toISOString() } });
+    }
+    return json({ order: pedido });
+  }
   // Lista de pedidos: vazia, exceto no backfill histórico (`begin_date=2015-01-01`), que traz UM
   // pedido da "loja" do token — o bastante para provar ingestão por Store sem mexer nos outros testes.
   if (p === '/v1/stores/orders') {
