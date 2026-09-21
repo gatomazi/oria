@@ -1224,6 +1224,15 @@ const VIOLACOES = [
     de: '  return loja && loja !== storeDoContexto() ? loja : null;',
     para: '  return loja || null; // VIOLAÇÃO DELIBERADA (negative control)',
   },
+  {
+    classe: 'clientes/chave-da-store-ausente',
+    invariant: 'PED-02',
+    teste: 'operacao-store-nativa.test.js',
+    arquivo: 'server.js',
+    descricao: 'o histórico de compras da Store nativa sai com `loja` nula: a tela cruza por `loja + documento` e todo cliente vira "Sem compra"',
+    de: '    const chave = r.loja || chaveDoContexto;',
+    para: '    const chave = r.loja; // VIOLAÇÃO DELIBERADA (negative control)',
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────
@@ -1325,7 +1334,7 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
   assert.deepEqual(
     [...new Set(VIOLACOES.map((v) => v.classe))].sort(),
     ['audit/sujeito', 'auth', 'auth/csrf', 'auth/fixation', 'auth/login-tenant', 'auth/revogacao',
-      'connector/chamador-exige-loja-legada', 'connector/leitura-por-loja', 'connector/save-sem-atomicidade',
+      'clientes/chave-da-store-ausente', 'connector/chamador-exige-loja-legada', 'connector/leitura-por-loja', 'connector/save-sem-atomicidade',
       'connector/store-nativa-no-path-legado', 'convite/conta-existente-troca-senha', 'convite/grant-da-role',
       'convite/motivo-vazado', 'convite/sessao-de-outro-email', 'creative/dual-read-confinamento',
       'creative/dual-read-organization', 'creative/tenant-env', 'dashboard/escopo-loja-nula',

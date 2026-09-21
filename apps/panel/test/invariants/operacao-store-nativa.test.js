@@ -519,6 +519,19 @@ test('Pedidos · vincular um pedido na Store nativa grava `loja` NULA (nunca o s
   assert.ok(itens.length > 0 && itens.every((i) => i.loja === null), 'os itens também');
 });
 
+test('Clientes · o histórico de compras da Store nativa usa a mesma chave `loja` dos clientes da Ink (senão nunca casam)', async () => {
+  const c = await entrar('C');
+  const r = await c.req('GET', '/api/admin/clientes');
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(r.json.clientes.length > 0, 'há histórico de compras do pedido vinculado');
+  assert.ok(r.json.clientes.every((x) => x.loja === store.C), 'a tela cruza `loja + documento`: pedido com loja NULA precisa sair com a chave da Store');
+  const ink = await c.req('GET', '/api/admin/dashboard/customers');
+  assert.equal(ink.status, 200, ink.texto);
+  assert.ok(ink.json.clientes.length > 0 && ink.json.clientes.every((x) => x.loja === store.C), 'clientes da Ink saem com a mesma chave');
+  const chaves = new Set(ink.json.clientes.map((x) => `${x.loja}:${x.documento}`));
+  assert.ok(r.json.clientes.some((x) => chaves.has(`${x.loja}:${x.documento}`)), 'a mesma junção `loja:documento` da tela casa cliente da Ink com o histórico de compras');
+});
+
 test('Migração 0030 · desfaz o UUID já gravado em `loja` e não toca chave legada de verdade', async () => {
   await sup.query("INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status) VALUES ($1, $2, $3, 424242, 'paid')", [ORGS.C, store.C, store.C]);
   await sup.query("INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status) VALUES ($1, $2, 'sul', 424243, 'paid')", [ORGS.A, store.A]);

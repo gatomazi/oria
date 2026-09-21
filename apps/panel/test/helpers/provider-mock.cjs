@@ -58,6 +58,9 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     if (metodo === 'PATCH') return json({ product: { id: Number(m[1]), collections: (JSON.parse(corpo || '{}').collections || []) } });
     return json({ product: { id: Number(m[1]), name: `Produto ${m[1]}`, main_image_url: null } });
   }
+  if (p === '/v1/stores/customers' && metodo === 'GET') {
+    return json({ customers: [{ id: base + 500, first_name: 'Cliente', last_name: tag, email: `c${tag.toLowerCase()}@exemplo.com`, phone: '11999990000', document: '12345678901', accepts_marketing: true }], total_pages: 1 });
+  }
   if (p === '/v1/stores/product_types') return json({ product_types: [{ id: base + 10, name: 'Camiseta' }] });
   if (p === '/v1/stores/collections' && metodo === 'GET') {
     // Só a Store D traz product_ids na lista (como a Ink de verdade; o painel devolve só a contagem). As demais
