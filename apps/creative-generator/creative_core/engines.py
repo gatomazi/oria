@@ -38,7 +38,7 @@ from .domain.remarketing import (
 
 from . import model_router as mr
 from .angles import CORE_ANGLES, angle_descriptor, angle_is_available
-from .assets import asset_from_provider_b64
+from .assets import ReferenceNormalizationError, asset_from_provider_b64, normalize_reference_png
 from .context_intelligence import GeographicContextProvider, deterministic_pick, resolve_context
 from .contracts import ensure_valid, validate
 from .errors import GenerationError, classify_provider_exception
@@ -573,7 +573,7 @@ def _result(
 TRACE_VERSION = 1
 
 
-def _new_trace(plan: dict, router: mr.ModelRouter, attempt: int) -> dict:
+def _new_trace(plan: dict, router: mr.ModelRouter, attempt: int, normalize_references: bool) -> dict:
     """Skeleton of the generation trace. Purely observational and never raises: it is built before
     the plan is validated, so it must survive a malformed plan."""
     plan = plan if isinstance(plan, dict) else {}
@@ -588,7 +588,7 @@ def _new_trace(plan: dict, router: mr.ModelRouter, attempt: int) -> dict:
         "models_tried": [],
         "params": {"size": model.get("size"), "quality": model.get("quality")},
         "prompt": {"sha256": prompt.get("sha256"), "version": prompt.get("prompt_version"), "length": len(text)},
-        "references": {"count": 0, "items": []},
+        "references": {"count": 0, "normalized": normalize_references, "items": []},
         "provider_request_id": None,
         "provider_ms": None,
         "duration_ms": None,
@@ -597,19 +597,24 @@ def _new_trace(plan: dict, router: mr.ModelRouter, attempt: int) -> dict:
     }
 
 
-def _reference_trace(order: int, data: bytes, sent_name: str) -> dict:
+def _reference_trace(order: int, original: bytes, sent: io.BytesIO, normalized: dict | None) -> dict:
     """One reference as it went out: what the bytes really are, and what they were announced as.
-    The two differ when the original is JPEG/WebP but is sent under a `.png` name."""
-    declared = mimetypes.guess_type(sent_name)[0]
-    return {
+    The two differ when the original is JPEG/WebP but is sent under a `.png` name (the legacy path);
+    with normalization they agree."""
+    sent_bytes = sent.getvalue()
+    item = {
         "order": order,
-        "original_mime": sniff_mime(data),
-        "sent_name": sent_name,
-        "sent_mime": declared,
-        "sent_actual_mime": sniff_mime(data),
-        "original_bytes": len(data),
-        "sent_bytes": len(data),
+        "original_mime": sniff_mime(original),
+        "sent_name": sent.name,
+        "sent_mime": mimetypes.guess_type(sent.name)[0],
+        "sent_actual_mime": sniff_mime(sent_bytes),
+        "original_bytes": len(original),
+        "sent_bytes": len(sent_bytes),
+        "normalized": normalized is not None,
     }
+    if normalized:
+        item.update({k: normalized[k] for k in ("width", "height", "mode_in", "mode_out", "exif_orientation")})
+    return item
 
 
 def _finish_trace(trace: dict, started: float, err: GenerationError | None) -> dict:
@@ -628,18 +633,21 @@ def generate_creative(
     router: mr.ModelRouter | None = None,
     attempt: int = 1,
     now: str | None = None,
+    normalize_references: bool = False,
 ) -> dict:
     """Runs one image generation for a plan. `client` must expose
     `images.edit(model, image, prompt, size, quality)` (OpenAI SDK shape) and is
     created by the caller with the tenant's credential. `references` maps each
-    plan reference ref to its image bytes. Never raises: failures come back as a
+    plan reference ref to its image bytes. With `normalize_references` each reference is decoded, EXIF-
+    oriented and re-encoded as a real PNG (no resize) before it is sent; off by default, which keeps the
+    original bytes (announced as `.png`) exactly as before. Never raises: failures come back as a
     `failed` CreativeResult with a safe GenerationError."""
     router = router or mr.ModelRouter()
     # Fora do try: uma chamada que já foi cobrada precisa sobreviver ao caminho de erro, senão o
     # painel subestima a fatura justamente nas gerações que falharam depois de gastar.
     usage = None
     started = time.monotonic()
-    trace = _new_trace(plan, router, attempt)
+    trace = _new_trace(plan, router, attempt, normalize_references)
     try:
         errors = validate("CreativePlan", plan)
         if errors:
@@ -649,10 +657,19 @@ def generate_creative(
             data = references.get(role["ref"])
             if not data:
                 raise GenerationError("INVALID_REFERENCE", {"ref_order": role["order"], "reason": "missing_bytes"})
-            buf = io.BytesIO(data)
-            buf.name = f"reference_{role['order']}.png"
+            sent_name = f"reference_{role['order']}.png"
+            info = None
+            if normalize_references:
+                try:
+                    buf, info = normalize_reference_png(data, sent_name)
+                except ReferenceNormalizationError as exc:
+                    # Fail closed: a silent fallback to the original bytes would contaminate the normalized arm.
+                    raise GenerationError("INVALID_REFERENCE", {"ref_order": role["order"], "reason": exc.reason}) from None
+            else:
+                buf = io.BytesIO(data)
+                buf.name = sent_name
             images.append(buf)
-            trace["references"]["items"].append(_reference_trace(role["order"], data, buf.name))
+            trace["references"]["items"].append(_reference_trace(role["order"], data, buf, info))
 
         def call(model: str):
             return client.images.edit(

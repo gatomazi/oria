@@ -7,7 +7,7 @@ server-to-server; browsers never do.
     GET  /v1/contracts     strategies, multi-product rules, versions, catalog, JSON Schemas
     POST /v1/validate/<C>  {payload} -> {valid, errors}   (C = exported contract, e.g. BrandKit)
     POST /v1/plans         CreativeRequest            -> CreativePlan
-    POST /v1/generations   {plan, references, openai_api_key} -> CreativeResult
+    POST /v1/generations   {plan, references, openai_api_key[, generation_attempt, normalize_references]} -> CreativeResult
     POST /v1/copies        {request, openai_api_key}  -> {variants: CopyVariant[], usage}
 
 Security controls:
@@ -43,6 +43,12 @@ from .versions import version_manifest
 
 MAX_BODY_BYTES = 60 * 1024 * 1024
 TOKEN_ENV = "CREATIVE_CORE_SERVICE_TOKEN"
+NORMALIZE_REFERENCES_ENV = "CREATIVE_NORMALIZE_REFERENCES"
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _env_flag(name: str, env: dict | None = None) -> bool:
+    return str((os.environ if env is None else env).get(name, "")).strip().lower() in _TRUTHY
 
 ClientFactory = Callable[[str], object]
 
@@ -57,12 +63,14 @@ def openai_client_factory(api_key: str):
 
 class CreativeCoreService:
     def __init__(self, token: str, client_factory: ClientFactory = openai_client_factory,
-                 router: ModelRouter | None = None):
+                 router: ModelRouter | None = None, normalize_references: bool = False):
         if not token or len(token) < 32:
             raise ValueError(f"{TOKEN_ENV} must be set with at least 32 characters")
         self._token = token.encode()
         self._client_factory = client_factory
         self._router = router or ModelRouter()
+        # Default for POST /v1/generations; a request may override it with `normalize_references`.
+        self._normalize_references = normalize_references
 
     # ------------------------------------------------------------ plumbing
     def __call__(self, environ: dict, start_response) -> Iterable[bytes]:
@@ -203,7 +211,8 @@ class CreativeCoreService:
         return 200, {"plan": plan_creative(body["request"], router=self._router)}
 
     def _generations(self, environ: dict) -> tuple[int, dict]:
-        body = self._read_json(environ, allowed={"plan", "references", "openai_api_key", "generation_attempt"},
+        body = self._read_json(environ, allowed={"plan", "references", "openai_api_key", "generation_attempt",
+                                                 "normalize_references"},
                                required={"plan", "references", "openai_api_key"})
         refs = body["references"]
         if not isinstance(refs, list) or not refs or len(refs) > 10:
@@ -216,8 +225,12 @@ class CreativeCoreService:
         attempt = body.get("generation_attempt", 1)
         if not isinstance(attempt, int) or attempt < 1:
             raise GenerationError("INVALID_INPUT", {"errors": ["generation_attempt: must be a positive integer"]})
+        normalize = body.get("normalize_references", self._normalize_references)
+        if not isinstance(normalize, bool):
+            raise GenerationError("INVALID_INPUT", {"errors": ["normalize_references: must be a boolean"]})
         client = self._client_factory(self._api_key(body))
-        result = generate_creative(body["plan"], client=client, references=decoded, router=self._router, attempt=attempt)
+        result = generate_creative(body["plan"], client=client, references=decoded, router=self._router, attempt=attempt,
+                                   normalize_references=normalize)
         return 200, {"result": result}
 
     def _copies(self, environ: dict) -> tuple[int, dict]:
@@ -236,7 +249,7 @@ class _HttpError(Exception):
 
 
 def create_app() -> CreativeCoreService:
-    return CreativeCoreService(os.environ.get(TOKEN_ENV, ""))
+    return CreativeCoreService(os.environ.get(TOKEN_ENV, ""), normalize_references=_env_flag(NORMALIZE_REFERENCES_ENV))
 
 
 if __name__ == "__main__":

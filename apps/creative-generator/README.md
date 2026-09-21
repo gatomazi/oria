@@ -34,6 +34,8 @@ python run_tests.py
   Healthcheck `/v1/health`. Bind, workers e timeouts ficam em `gunicorn.conf.py` (sem `$PORT` no comando).
 - O serviço não sobe sem `CREATIVE_CORE_SERVICE_TOKEN` (≥ 32 caracteres): criar a variável antes do primeiro deploy.
 - Variáveis: `CREATIVE_CORE_SERVICE_TOKEN` (≥ 32 caracteres, o mesmo configurado no Node), opcionais `OPENAI_IMAGE_MODEL`, `OPENAI_TEXT_MODEL`, `*_FALLBACKS`, `WEB_CONCURRENCY`.
+- Flags de experimento (Fase A, todas desligadas por padrão): `CREATIVE_NORMALIZE_REFERENCES=1` (referência vira PNG real, EXIF aplicado, sem resize; `POST /v1/generations` aceita `normalize_references` para sobrescrever por requisição) e `CREATIVE_PROMPT_VERSION=2` (prompt V2 dos ângulos com pessoa; `POST /v1/plans` aceita `prompt_version` no request).
+- Pendência operacional: conferir no serviço `OPENAI_IMAGE_MODEL` e `OPENAI_IMAGE_MODEL_FALLBACKS`. Desde a Fase A o modelo que de fato respondeu fica em `metadata.trace.model_served`.
 - Não expor publicamente se possível (rede privada do Railway); o serviço exige o token em todas as rotas exceto `/v1/health`.
 
 ## Endpoints
