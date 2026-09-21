@@ -263,7 +263,8 @@ test('upsert · todo ON CONFLICT com alvo em tabela tenant-owned começa por org
   // Fase 4: o upsert de creative_settings saiu (a OpenAI key é integration_secrets).
   // Fase 7: + app_config 'entitlements' no seed de plataforma do onboarding (lib/platform/onboarding.js).
   // Aceite de convite: + organization_members em lib/auth/invites.js (mesmo alvo da Fase 2).
-  assert.equal(total, 34, 'número de alvos mudou — revise a lista de famílias');
+  // Fase C: + creative_feedback em lib/creative-core/pgFeedback.js (tabela de plataforma; organization_id primeiro).
+  assert.equal(total, 35, 'número de alvos mudou — revise a lista de famílias');
   assert.deepEqual(ruins, []);
 });
 
