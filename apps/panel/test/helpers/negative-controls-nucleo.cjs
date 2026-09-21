@@ -1276,6 +1276,15 @@ const VIOLACOES = [
     de: '  const chave = `${orgDoContexto()}:${storeDoContexto()}`;',
     para: "  const chave = 'cadastro-de-clientes'; // VIOLAÇÃO DELIBERADA (negative control)",
   },
+  {
+    classe: 'clientes/chave-repetida-na-lista',
+    invariant: 'CLI-04',
+    teste: 'clientes-lista.test.js',
+    arquivo: 'lib/clientes/lista.js',
+    descricao: 'duas contas de cadastro com o mesmo documento saem com a mesma chave de linha: a tela duplica e omite linhas ao trocar de filtro',
+    de: '    for (let n = 2; usadas.has(customerKey); n += 1) customerKey = `${base}#${n}`;',
+    para: '    // VIOLAÇÃO DELIBERADA (negative control): não desambigua chave repetida',
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────

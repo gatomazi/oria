@@ -164,3 +164,19 @@ test('quem só tem cadastro entra em "sem comprar há N+ dias" e vai depois de q
   assert.equal(listarClientes(uniao, consulta({ inativoDias: '90' })).total, 1, 'só o de cadastro (nunca comprou)');
   assert.equal(listarClientes(uniao, consulta({ ordem: 'compras_desc' })).clientes[0].origem, 'pedido');
 });
+
+test('toda linha tem chave ÚNICA, mesmo com duas contas de cadastro com o mesmo documento e sem `id` (a Ink não manda id)', () => {
+  // A mesma pessoa com dois e-mails: mesmo CPF, contas diferentes. Foi o que duplicava linhas na tela (chave repetida).
+  const semId = (extra) => ({ id: null, nome: 'Adilson', email: null, telefone: null, documento: '585.949.229-49', aceitaMarketing: false, ...extra });
+  const cadastro = [
+    semId({ email: 'a@x.com', telefone: '(41) 98415-8491' }),
+    semId({ email: 'b@x.com', telefone: '(41) 98415-8481', nome: 'ADILSON' }),
+    semId({ email: 'b@x.com', telefone: '(41) 98415-8481', nome: 'ADILSON' }), // exatamente igual: chega repetido
+  ];
+  const historico = [cliente(1)];
+  const chaves = unirComCadastro(historico, cadastro, { loja: 'l' }).map((c) => c.customerKey);
+  assert.equal(new Set(chaves).size, chaves.length, `chaves repetidas: ${chaves.join(' | ')}`);
+  assert.equal(chaves.length, 4, '1 do histórico + 3 de cadastro');
+  // A mesma entrada sempre gera as mesmas chaves (a página não muda entre chamadas).
+  assert.deepEqual(unirComCadastro(historico, cadastro, { loja: 'l' }).map((c) => c.customerKey), chaves);
+});

@@ -97,15 +97,23 @@ function unirComCadastro(historico, cadastro, { loja } = {}) {
     }
   }
 
+  // Toda linha precisa de chave ÚNICA (a tela usa como `key` do React; repetida, ela duplica e omite linhas a
+  // cada troca de filtro). A Ink não manda `id` nos clientes e duas contas podem ter o mesmo documento (a mesma
+  // pessoa com dois e-mails), então a chave leva documento, telefone e e-mail — e, se ainda repetir, um sufixo.
+  const usadas = new Set(historico.map((h) => String(h.customerKey)));
   const soCadastro = [];
   for (const c of cadastro) {
     const doc = apenasDigitos(c.documento);
     const tel = apenasDigitos(c.telefone);
     const email = normalizar(c.email);
     if ((doc && documentos.has(doc)) || (tel && telefones.has(tel)) || (email && emails.has(email))) continue;
+    const base = `cadastro:${c.id ?? ([doc, tel, email].filter(Boolean).join('|') || 'sem-identidade')}`;
+    let customerKey = base;
+    for (let n = 2; usadas.has(customerKey); n += 1) customerKey = `${base}#${n}`;
+    usadas.add(customerKey);
     soCadastro.push({
       loja,
-      customerKey: `cadastro:${c.id ?? (doc || tel || email)}`,
+      customerKey,
       nome: c.nome,
       email: c.email,
       telefone: c.telefone,

@@ -70,6 +70,7 @@ test('Clientes · a tela pagina no servidor (25 por página) e não ordena só a
   assert.match(fonte, /c\.origem === 'cadastro' \? 'Só cadastro' : 'Sem compra'/, 'a linha diz se é só cadastro');
   assert.match(fonte, /<Pagination[\s\S]*?onPrev=[\s\S]*?onNext=/, 'rodapé de paginação');
   assert.match(fonte, /sortable=\{false\}/, 'ordenar pelo cabeçalho reordenaria só a página e enganaria');
+  assert.match(fonte, /rowKey=\{\(c, i\) => c\.loja \+ ':' \+ c\.customerKey \+ ':' \+ i\}/, 'a chave da linha leva a posição: chave repetida duplicaria linhas ao trocar de filtro');
   assert.doesNotMatch(fonte, /getCustomers|cruzarComCompras/, 'a base é o histórico de pedidos, não a 1ª página do cadastro da Ink');
   assert.match(ler('api/clientes.ts'), /\/api\/admin\/clientes\/lista\?/);
 });
