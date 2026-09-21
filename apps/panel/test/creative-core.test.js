@@ -670,6 +670,22 @@ test('planSummary do plano v2 traz gaze, pessoas, risco e menores — e nunca o 
   assert.deepEqual([v1.compiler_version, v1.gaze, v1.people_count, v1.pose_risk, v1.minor_safety_applied], [null, null, null, null, null]);
 });
 
+test('semantic_context gravado no produto viaja no campo tipado do request, fora de metadata', async () => {
+  const store = createMemoryStore();
+  const storage = createStorage({ uploadsDir: tmpDir(), tenantId: TENANT });
+  const ids = await semear(store, storage);
+  const semantic = { wearer_roles: ['child'], relationship_themes: ['father_child'], recommended_supporting_roles: ['father'], source: 'manual' };
+  const produto = await store.getProduct(TENANT, ids.productId);
+  await store.createProduct(TENANT, { ...produto, id: crypto.randomUUID(), name: 'Pipa', metadata: { city: 'Blumenau', semantic_context: semantic } });
+  const [pipa] = (await store.listProducts(TENANT)).filter((p) => p.name === 'Pipa');
+  const input = normalizeJobInput(jobInput({ productId: pipa.id, brandId: ids.brandId }));
+  const [item] = await buildRequests(input, { store, tenantId: TENANT, hints: null });
+  assert.deepEqual(item.request.products[0].semantic_context, semantic);
+  assert.deepEqual(item.request.products[0].metadata, { city: 'Blumenau' });
+  const sem = await buildRequests(normalizeJobInput(jobInput(ids)), { store, tenantId: TENANT, hints: null });
+  assert.equal(sem[0].request.products[0].semantic_context, undefined, 'sem semântica gravada, nada muda');
+});
+
 test('migration 0032 (plano/compiler) só acrescenta colunas em creative_generations e copia o que o plano já diz', () => {
   const up = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0032-creative-plan-v2.up.sql'), 'utf8')
     .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');

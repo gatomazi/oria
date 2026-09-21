@@ -132,7 +132,14 @@ function produtoDoRegistro(p) {
     referenceImages: (p.references || []).map((r) => r.ref),
   };
   if (p.description) produto.description = p.description;
-  if (p.metadata && Object.keys(p.metadata).length) produto.metadata = p.metadata;
+  if (p.metadata && Object.keys(p.metadata).length) {
+    // Fase B: o significado da estampa (semantic_context) viaja no campo tipado do produto, não dentro de `metadata`.
+    // Hoje nada grava isso pela API do painel (a proposta por GPT e a edição com aprovação são da Fase F); o que estiver
+    // gravado no registro chega ao core e o core valida o contrato.
+    const { semantic_context: semanticContext, ...resto } = p.metadata;
+    if (Object.keys(resto).length) produto.metadata = resto;
+    if (semanticContext && typeof semanticContext === 'object' && !Array.isArray(semanticContext)) produto.semantic_context = semanticContext;
+  }
   return produto;
 }
 
