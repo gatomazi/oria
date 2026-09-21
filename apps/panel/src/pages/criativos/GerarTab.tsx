@@ -78,7 +78,7 @@ const MOTIVO_INDISPONIVEL: Record<string, string> = {
 };
 
 // A tela nunca mostra idade: o texto livre da persona pode trazê-la ("menina 7 anos"), então ela sai do resumo.
-const semIdade = (t: string) => t.replace(/\s*\d+\s*anos?\b/gi, '').trim();
+const semIdade = (t: string) => t.replace(/\s*(de\s+)?\d+(\s*(a|e|-)\s*\d+)?\s*anos?\b/gi, '').replace(/\s{2,}/g, ' ').trim();
 const capitalizar = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 
 export function GerarTab({ status, catalog, copia, onCopiaLida, onJobCriado }: {
