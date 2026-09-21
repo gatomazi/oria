@@ -1225,9 +1225,9 @@ function copiarLib(destino) {
   fs.cpSync(path.join(RAIZ_REPO, 'routes'), path.join(destino, 'routes'), { recursive: true });
   fs.copyFileSync(path.join(RAIZ_REPO, 'server.js'), path.join(destino, 'server.js'));
   // Rodada de dogfooding: o controle do Dashboard viola o front (escopoLoja.ts) e roda o teste dele.
-  fs.cpSync(path.join(RAIZ_REPO, 'src', 'pages', 'dashboard'), path.join(destino, 'src', 'pages', 'dashboard'), { recursive: true });
-  // WhatsApp · Embedded Signup: o controle da origem da mensagem viola o helper do front.
-  fs.cpSync(path.join(RAIZ_REPO, 'src', 'pages', 'integracoes'), path.join(destino, 'src', 'pages', 'integracoes'), { recursive: true });
+  // Os controles do front (Dashboard, Integrações, Automações, Templates, rotas, sessão) violam e leem
+  // arquivos do SPA: copia `src` inteiro (só texto; o build do SPA não roda aqui).
+  fs.cpSync(path.join(RAIZ_REPO, 'src'), path.join(destino, 'src'), { recursive: true });
   // A cópia precisa resolver as mesmas dependências (express, pg) que o lib/ real.
   fs.symlinkSync(path.join(RAIZ_REPO, 'node_modules'), path.join(destino, 'node_modules'), 'dir');
 }
