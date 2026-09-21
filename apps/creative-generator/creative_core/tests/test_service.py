@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+from pathlib import Path
 
 from _support import AuthenticationError, FakeClient, FakeImages, load_fixture, png_bytes, run
 
@@ -102,6 +103,31 @@ def test_given_plan_request_then_plan_returned():
     app, _ = _app()
     status, body, _ = _call(app, "POST", "/v1/plans", {"request": load_fixture("fixture-clean-multi")["input"]})
     assert status == 200 and body["plan"]["product_mode"] == "multi_product"
+
+
+def test_given_a_persisted_plan_then_draft_and_feedback_snapshot_endpoints_are_pure_and_share_the_core_logic():
+    from creative_core.drafts import feedback_snapshot, generation_draft_from_plan
+    app, factory = _app()
+    for name in ("fixture-clean-single", "fixture-c1-a-pai-e-filha"):
+        request = load_fixture(name)["input"] if not name.startswith("fixture-c1") else json.loads(
+            (Path(__file__).resolve().parents[1] / "fixtures_v2" / f"{name}.json").read_text(encoding="utf-8"))["input"]
+        status, body, _ = _call(app, "POST", "/v1/plans", {"request": request})
+        plan = body["plan"]
+        status, body, _ = _call(app, "POST", "/v1/draft", {"plan": plan})
+        assert status == 200 and body["draft"] == generation_draft_from_plan(plan) and set(body["draft"]["actions"]) == {"again", "variation"}
+        status, body, _ = _call(app, "POST", "/v1/feedback-snapshot", {"plan": plan})
+        assert status == 200 and body["snapshot"] == feedback_snapshot(plan)
+        meta = {"trace": {"model_requested": "gpt-image-2", "model_served": "gpt-image-2"}}
+        status, body, _ = _call(app, "POST", "/v1/feedback-snapshot", {"plan": plan, "result_metadata": meta, "asset_sha256": "ab" * 32})
+        assert status == 200 and body["snapshot"]["model"]["served"] == "gpt-image-2" and body["snapshot"]["asset_sha256"] == "ab" * 32
+    assert factory.keys == [], "no client is ever built for these routes"
+    for path, extra in (("/v1/draft", {}), ("/v1/feedback-snapshot", {})):
+        assert _call(app, "POST", path, {"plan": {"nope": 1}, **extra})[0] == 422
+        assert _call(app, "POST", path, {"plan": plan, "openai_api_key": KEY})[0] == 422, "no key belongs here"
+        assert _call(app, "POST", path, {"plan": plan}, token=None)[0] == 401
+        assert _call(app, "GET", path)[0] == 405
+    for bad in ({"asset_sha256": "xyz"}, {"result_metadata": []}):
+        assert _call(app, "POST", "/v1/feedback-snapshot", {"plan": plan, **bad})[0] == 422
 
 
 def test_given_unknown_top_level_field_or_invalid_request_then_422():

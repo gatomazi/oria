@@ -525,7 +525,9 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "niche_kit": R("KitRef", required=True),
         "persona_mode": S(required=True, enum=PERSONA_MODES),
         "persona": O(nullable=True),
-        "subjects": A(R("PlanSubject"), required=True),
+        "subjects": A(R("RequestSubject"), required=True),  # explicit cast only; a legacy/persona-only cast is []
+        "interaction": S(nullable=True),
+        "scene_picks": O(nullable=True),  # {pool name: index}; replay them with the same seed to get the same scene
         "context": O(required=True),  # {mode, context_id, provider, scene}
         "funnel_stage": S(nullable=True),
         "remarketing": O(nullable=True),
@@ -535,6 +537,9 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "plan_schema_version": I(required=True, minimum=1),
         "prompt_version": I(required=True, minimum=1),
         "seed": I(nullable=True),
+        "plan_warnings": A(S()),
+        # patches over the fields above: {"again": {seed, scene_picks, gaze_mode}, "variation": {...}}
+        "actions": O(required=True),
         "carried": A(S(), required=True),  # names of the fields brought over, for the "what came along" summary
         "source": O(required=True),  # {creative_id, plan_id, plan_schema_version, compiler_version}
     },
@@ -554,6 +559,11 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "product_ids": A(S(), required=True),
         "subjects": A(O(), required=True),  # [{role, label, age_band, is_minor, product_use, role_hint}]
         "people_count": I(required=True, minimum=0),
+        "interaction": S(nullable=True),
+        "composition_source": S(nullable=True),
+        "composition_key": S(nullable=True),  # `p2|child_6_9+father|playing`: who is in the scene doing what, one indexable string
+        "pose_risk": S(nullable=True),
+        "warnings": A(S()),
         "context": O(required=True),  # {context_id, context_type, provider, scene}
         "placement": S(required=True),
         "quality": S(nullable=True),

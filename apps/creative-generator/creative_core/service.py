@@ -8,6 +8,8 @@ server-to-server; browsers never do.
     POST /v1/validate/<C>  {payload} -> {valid, errors}   (C = exported contract, e.g. BrandKit)
     POST /v1/plans         {request}                  -> {plan: CreativePlan}   (request.prompt_version / plan_schema_version 1|2, optional)
     POST /v1/compile       {plan}                     -> {compiled: CompiledPrompt}   (schema_version 2 plans; pure)
+    POST /v1/draft         {plan}                     -> {draft: GenerationDraft}   (any persisted plan; pure — "Copiar dados")
+    POST /v1/feedback-snapshot {plan[, result_metadata, asset_sha256]} -> {snapshot: FeedbackSnapshot}   (pure — "Gostei / Não gostei")
     POST /v1/generations   {plan, references, openai_api_key[, generation_attempt, normalize_references]} -> CreativeResult
     POST /v1/copies        {request, openai_api_key}  -> {variants: CopyVariant[], usage}
 
@@ -34,6 +36,7 @@ from typing import Callable, Iterable
 from . import contracts
 from .angles import ANGLE_IDS, CORE_ANGLES
 from .compiler import compile_prompt
+from .drafts import feedback_snapshot, generation_draft_from_plan
 from .engines import generate_copy_with_usage, generate_creative, plan_creative
 from .errors import GenerationError
 from .kits import list_builtin_kits, load_brand_kit, load_niche_kit
@@ -158,6 +161,8 @@ class CreativeCoreService:
             ("GET", "/v1/contracts"): self._contracts,
             ("POST", "/v1/plans"): self._plans,
             ("POST", "/v1/compile"): self._compile,
+            ("POST", "/v1/draft"): self._draft,
+            ("POST", "/v1/feedback-snapshot"): self._feedback_snapshot,
             ("POST", "/v1/generations"): self._generations,
             ("POST", "/v1/copies"): self._copies,
         }
@@ -248,6 +253,31 @@ class CreativeCoreService:
         if body["plan"].get("schema_version") != 2:
             raise GenerationError("INVALID_INPUT", {"errors": ["plan: only schema_version 2 plans are compiled here"]})
         return 200, {"compiled": compile_prompt(body["plan"])}
+
+    @staticmethod
+    def _persisted_plan(body: dict) -> dict:
+        errors = contracts.validate("CreativePlan", body["plan"])
+        if errors:
+            raise GenerationError("INVALID_INPUT", {"contract": "CreativePlan", "errors": errors[:20]})
+        return body["plan"]
+
+    def _draft(self, environ: dict) -> tuple[int, dict]:
+        """The generator input that produced a persisted plan, with "again" / "variation" prepared. Pure: no provider
+        call, no key, and no state — the panel decides what of the draft still exists (products, profiles)."""
+        body = self._read_json(environ, allowed={"plan"}, required={"plan"})
+        return 200, {"draft": generation_draft_from_plan(self._persisted_plan(body))}
+
+    def _feedback_snapshot(self, environ: dict) -> tuple[int, dict]:
+        """What to remember about a creative when the user says liked/disliked, read from its persisted plan. The
+        panel adds organization/store/job/user/verdict/timestamps; the snapshot logic lives only here."""
+        body = self._read_json(environ, allowed={"plan", "result_metadata", "asset_sha256"}, required={"plan"})
+        plan = self._persisted_plan(body)
+        metadata, asset = body.get("result_metadata"), body.get("asset_sha256")
+        if metadata is not None and not isinstance(metadata, dict):
+            raise GenerationError("INVALID_INPUT", {"errors": ["result_metadata: expected object"]})
+        if asset is not None and not (isinstance(asset, str) and len(asset) == 64 and all(c in "0123456789abcdef" for c in asset)):
+            raise GenerationError("INVALID_INPUT", {"errors": ["asset_sha256: expected 64 hex characters"]})
+        return 200, {"snapshot": feedback_snapshot(plan, metadata, asset)}
 
     def _generations(self, environ: dict) -> tuple[int, dict]:
         body = self._read_json(environ, allowed={"plan", "references", "openai_api_key", "generation_attempt",

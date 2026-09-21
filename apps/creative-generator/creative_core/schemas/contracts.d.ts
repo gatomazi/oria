@@ -418,7 +418,9 @@ export interface GenerationDraft {
   niche_kit: KitRef;
   persona_mode: "automatic" | "custom" | "none";
   persona?: Record<string, unknown> | null;
-  subjects: Array<PlanSubject>;
+  subjects: Array<RequestSubject>;
+  interaction?: string | null;
+  scene_picks?: Record<string, unknown> | null;
   context: Record<string, unknown>;
   funnel_stage?: string | null;
   remarketing?: Record<string, unknown> | null;
@@ -428,6 +430,8 @@ export interface GenerationDraft {
   plan_schema_version: number;
   prompt_version: number;
   seed?: number | null;
+  plan_warnings?: Array<string>;
+  actions: Record<string, unknown>;
   carried: Array<string>;
   source: Record<string, unknown>;
 }
@@ -446,6 +450,11 @@ export interface FeedbackSnapshot {
   product_ids: Array<string>;
   subjects: Array<Record<string, unknown>>;
   people_count: number;
+  interaction?: string | null;
+  composition_source?: string | null;
+  composition_key?: string | null;
+  pose_risk?: string | null;
+  warnings?: Array<string>;
   context: Record<string, unknown>;
   placement: string;
   quality?: string | null;

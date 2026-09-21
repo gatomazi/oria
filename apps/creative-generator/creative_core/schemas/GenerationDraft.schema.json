@@ -22,6 +22,7 @@
     "gaze_mode",
     "plan_schema_version",
     "prompt_version",
+    "actions",
     "carried",
     "source"
   ],
@@ -103,8 +104,29 @@
     "subjects": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/PlanSubject"
+        "$ref": "#/$defs/RequestSubject"
       }
+    },
+    "interaction": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "scene_picks": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "context": {
       "type": "object",
@@ -173,6 +195,16 @@
         }
       ]
     },
+    "plan_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "carried": {
       "type": "array",
       "items": {
@@ -225,46 +257,47 @@
         }
       }
     },
-    "PlanSubject": {
+    "Persona": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "id",
-        "role",
-        "label",
-        "age_band",
-        "is_minor",
-        "product_use",
-        "prominence",
-        "source"
+        "label"
       ],
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 20
-        },
-        "role": {
-          "type": "string",
-          "enum": [
-            "primary",
-            "supporting"
-          ]
+          "maxLength": 120
         },
         "label": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 300
+          "maxLength": 200
         },
-        "persona": {
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": true
-            },
-            {
-              "type": "null"
-            }
+        "age_range": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "appearance": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "style": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "behavior": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "custom"
           ]
         },
         "age_band": {
@@ -280,83 +313,68 @@
             "senior",
             "unknown"
           ]
+        }
+      }
+    },
+    "RequestSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "persona"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
         },
-        "is_minor": {
-          "type": "boolean"
-        },
-        "minor_source": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "age_source": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "product_use": {
+        "role": {
           "type": "string",
           "enum": [
-            "wears",
-            "uses",
-            "none"
+            "primary",
+            "supporting"
           ]
         },
-        "product_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "persona": {
+          "$ref": "#/$defs/Persona"
         },
-        "role_hint": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
+            "teen",
+            "adult",
+            "senior",
+            "unknown"
           ]
         },
         "relation_to_primary": {
-          "anyOf": [
-            {
-              "type": "string",
-              "enum": [
-                "mother",
-                "father",
-                "daughter",
-                "son",
-                "sibling",
-                "partner",
-                "friend",
-                "grandparent",
-                "custom"
-              ]
-            },
-            {
-              "type": "null"
-            }
+          "type": "string",
+          "enum": [
+            "mother",
+            "father",
+            "daughter",
+            "son",
+            "sibling",
+            "partner",
+            "friend",
+            "grandparent",
+            "custom"
           ]
         },
         "relation_label": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "wears_product_id": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "string",
+              "maxLength": 120
             },
             {
               "type": "null"
@@ -369,20 +387,6 @@
             "hero",
             "secondary",
             "background"
-          ]
-        },
-        "source": {
-          "type": "string",
-          "enum": [
-            "user",
-            "product",
-            "product_enrichment",
-            "brand",
-            "niche",
-            "persona",
-            "angle",
-            "planner_default",
-            "safety_policy"
           ]
         }
       }
