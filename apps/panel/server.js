@@ -373,6 +373,14 @@ function lojaLegadaDoContextoOuNula() {
   return ctx.loja || null;
 }
 
+// Chave de ESCOPO da Store para estado guardado em mapas por chave (vínculos de automação, histórico
+// de envios de carrinho/Pix). Store com chave legada mantém a dela — o dado existente continua
+// achável; Store nativa usa o próprio `store_id`, que é opaco e nunca colide com `sul`/`centro`/`norte`.
+// NÃO é a chave legada: nunca vai para uma coluna `loja` nem para a checagem de credencial.
+function chaveDaStore() {
+  return lojaLegadaDoContextoOuNula() || storeDoContexto();
+}
+
 // Escopo de Store para leitura, com os dois caminhos SEPARADOS e explícitos.
 //
 //   canônico     store_id = <Store do contexto>
@@ -552,7 +560,7 @@ async function aplicarPedidoInk(pedidos, id, pedido, order) {
 }
 
 async function syncPedidoFromInk(loja, inkOrderId) {
-  const data = await inkApiRequest(loja, `/v1/stores/orders/${inkOrderId}`);
+  const data = await inkApiRequestDaStore(`/v1/stores/orders/${inkOrderId}`);
   if (!data.order) return;
 
   const pedidos = await readPedidos();
@@ -636,9 +644,11 @@ JOBS.agendar('reconcile-ink', RECONCILE_INTERVAL_MS, () => reconcilePendingInkPe
 async function fetchInkDaStore(pathAndQuery) {
   const resultados = [];
   const erros = [];
-  for (const { loja } of await storesInkDoContexto()) {
+  for (const store of await storesInkDoContexto()) {
+    // `loja` aqui é a CHAVE de escopo (mapas de automação/envios), não a chave legada.
+    const loja = store.loja || chaveDaStore();
     try {
-      const data = await inkApiRequest(loja, pathAndQuery);
+      const data = await inkApiRequestDaStore(pathAndQuery);
       resultados.push({ loja, data });
     } catch (err) {
       erros.push({ loja, error: err.message });
@@ -968,12 +978,13 @@ async function buscarPedidosPixPendentes() {
   const pendentes = [];
   const erros = [];
 
-  for (const { loja } of await storesInkDoContexto()) {
+  for (const store of await storesInkDoContexto()) {
+    const loja = store.loja || chaveDaStore();
     try {
       let page = 1;
       let totalPages = 1;
       do {
-        const data = await inkApiRequest(loja, `/v1/stores/orders?begin_date=${desde}&page=${page}&per_page=100`);
+        const data = await inkApiRequestDaStore(`/v1/stores/orders?begin_date=${desde}&page=${page}&per_page=100`);
         for (const o of data.orders || []) {
           if (!o.pix) continue;
           pendentes.push({
@@ -1046,7 +1057,7 @@ app.post('/api/admin/pedidos/ink', requireAdmin, async (req, res) => {
   // por isso uma Store nativa do Oria levava 503 mesmo com a Ink conectada.
   const [store] = await storesInkDoContexto();
   if (!store) return res.status(503).json({ error: 'esta organization não tem integração com a Reserva Ink configurada' });
-  const loja = store.loja;
+  const loja = store.loja || chaveDaStore();
   const orderId = Number(inkOrderId);
   if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ error: 'id do pedido inválido' });
 
@@ -1251,7 +1262,7 @@ function calcularMetricasEnvio(envios, lembretes, lojaFiltro) {
 }
 
 app.get('/api/admin/recuperacao', requireAdmin, async (req, res) => {
-  const lojaFiltro = lojaLegadaDoContexto();
+  const lojaFiltro = chaveDaStore();
 
   let envios, lembretes, eventosPorLoja;
   try {
@@ -1461,7 +1472,7 @@ app.get('/api/admin/recuperacao', requireAdmin, async (req, res) => {
 // não verificou) e o admin quer disparar na hora pela Meta em vez de só copiar e mandar na mão.
 app.post('/api/admin/recuperacao/carrinho/enviar', requireAdmin, async (req, res) => {
   const { cartId } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = chaveDaStore();
   if (cartId == null) return res.status(400).json({ error: 'cartId obrigatório' });
 
   try {
@@ -1475,7 +1486,7 @@ app.post('/api/admin/recuperacao/carrinho/enviar', requireAdmin, async (req, res
     // acha pelo id (mesma limitação do webhook, ver `extrairCarrinhoDoWebhook`). Se não achar (Ink
     // já apagou — carrinho abandonado some depois de 30 dias), cai pro snapshot salvo aqui: é
     // exatamente pra isso que ele existe (achado do usuário, 2026-09-06).
-    const data = await inkApiRequest(loja, '/v1/stores/abandoned_carts?per_page=100');
+    const data = await inkApiRequestDaStore('/v1/stores/abandoned_carts?per_page=100');
     const cart = (data.abandoned_carts || []).find((c) => String(c.id) === String(cartId))
       || (envios[chave] ? envios[chave].cart : null);
     if (!cart) return res.status(404).json({ error: 'carrinho não encontrado (nem ao vivo na Ink, nem salvo aqui)' });
@@ -1523,7 +1534,7 @@ app.post('/api/admin/recuperacao/carrinho/enviar', requireAdmin, async (req, res
 // (achado do usuário, 2026-09-05: Pix de véspera parado em 0 tentativas).
 app.post('/api/admin/recuperacao/pix/enviar', requireAdmin, async (req, res) => {
   const { inkOrderId } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = chaveDaStore();
   if (inkOrderId == null) return res.status(400).json({ error: 'inkOrderId obrigatório' });
 
   try {
@@ -1532,7 +1543,7 @@ app.post('/api/admin/recuperacao/pix/enviar', requireAdmin, async (req, res) => 
       return res.status(400).json({ error: 'nenhuma mensagem de Pix pendente vinculada pra esta loja' });
     }
 
-    const data = await inkApiRequest(loja, `/v1/stores/orders/${inkOrderId}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/orders/${inkOrderId}`);
     if (!data.order || !pedidoPixPendente(data.order)) return res.status(400).json({ error: 'pedido não está mais com Pix pendente' });
 
     const to = formatarTelefoneWhatsapp(data.order.buyer && data.order.buyer.phone);
@@ -2054,7 +2065,7 @@ function mapExchangeSummary(loja, e) {
 const EXCHANGES_QUERY_PARAMS = ['order_id', 'external_order_id', 'begin_date', 'end_date', 'waiting_for_approval'];
 
 app.get('/api/admin/trocas', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
 
   const baseParams = new URLSearchParams();
   EXCHANGES_QUERY_PARAMS.forEach((key) => { if (req.query[key]) baseParams.set(key, req.query[key]); });
@@ -2065,7 +2076,7 @@ app.get('/api/admin/trocas', requireAdmin, async (req, res) => {
   query.set('page', String(page));
   query.set('per_page', String(perPage));
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/exchanges?${query.toString()}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/exchanges?${query.toString()}`);
     const trocas = (data.exchanges || []).map((e) => mapExchangeSummary(loja, e));
     res.json({
       trocas,
@@ -2084,9 +2095,9 @@ app.get('/api/admin/trocas', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/trocas/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/exchanges/${id}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/exchanges/${id}`);
     res.json({ loja, exchange: data.exchange });
   } catch (err) {
     console.error(`[TROCAS] falha ao buscar troca ${loja}/${id}: ${err.message}`);
@@ -2100,7 +2111,7 @@ app.get('/api/admin/trocas/:id', requireAdmin, async (req, res) => {
 // nunca duplicar uma troca por duplo clique/retry de rede.
 app.post('/api/admin/trocas', requireAdmin, async (req, res) => {
   const { original_order_id: originalOrderId, exchange_reason: exchangeReason, problem_description: problemDescription, items, photos } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   if (!Number.isInteger(originalOrderId) || originalOrderId <= 0) return res.status(400).json({ error: 'original_order_id inválido' });
   if (!EXCHANGE_REASONS.includes(exchangeReason)) return res.status(400).json({ error: 'exchange_reason inválido' });
   if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'informe ao menos 1 item' });
@@ -2136,7 +2147,7 @@ app.post('/api/admin/trocas', requireAdmin, async (req, res) => {
   }
 
   try {
-    const data = await inkApiPost(loja, '/v1/stores/exchanges', body, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPostDaStore('/v1/stores/exchanges', body, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(201).json({ loja, exchange: data.exchange });
   } catch (err) {
     console.error(`[TROCAS] falha ao criar troca (${loja}, pedido ${originalOrderId}): ${err.message}`);
@@ -2161,9 +2172,9 @@ app.get('/api/admin/reembolsos', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/pedidos/central/:id/reembolsos', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/orders/${id}/refunds`);
+    const data = await inkApiRequestDaStore(`/v1/stores/orders/${id}/refunds`);
     res.json({ loja, refunds: data.refunds || [] });
   } catch (err) {
     console.error(`[REEMBOLSOS] falha ao listar reembolsos do pedido ${loja}/${id}: ${err.message}`);
@@ -2176,7 +2187,7 @@ app.get('/api/admin/pedidos/central/:id/reembolsos', requireAdmin, async (req, r
 // `confirmadoTotal: true` explícito no corpo (checkbox de confirmação na UI, spec §32/§72).
 app.post('/api/admin/pedidos/:id/reembolsos', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   const { reason, refundedItems, confirmadoTotal } = req.body || {};
 
   if (typeof reason !== 'string' || !reason.trim()) return res.status(400).json({ error: 'informe o motivo do reembolso' });
@@ -2189,7 +2200,7 @@ app.post('/api/admin/pedidos/:id/reembolsos', requireAdmin, async (req, res) => 
 
   let order;
   try {
-    const orderData = await inkApiRequest(loja, `/v1/stores/orders/${id}`);
+    const orderData = await inkApiRequestDaStore(`/v1/stores/orders/${id}`);
     order = orderData.order;
   } catch (err) {
     console.error(`[REEMBOLSOS] falha ao buscar pedido ${loja}/${id} antes de reembolsar: ${err.message}`);
@@ -2211,12 +2222,12 @@ app.post('/api/admin/pedidos/:id/reembolsos', requireAdmin, async (req, res) => 
   };
 
   try {
-    const data = await inkApiPost(loja, `/v1/stores/orders/${id}/refunds`, body, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPostDaStore(`/v1/stores/orders/${id}/refunds`, body, { 'Idempotency-Key': crypto.randomUUID() });
     await registrarAuditLog({
       actorUserId: req.auth.userId,
       action: 'refund.create',
       entityType: 'order',
-      entityId: `${loja}:${id}`,
+      entityId: `${loja || storeDoContexto()}:${id}`,
       loja,
       before: {
         paymentStatus: order.payment_status, orderStatus: order.order_status, totalValue: order.total_value,
@@ -7204,11 +7215,11 @@ app.delete('/api/admin/agrupamentos/:clusterId/produtos/:produtoId', requireAdmi
 const PROMOTION_SUBTYPES = ['standard', 'progressive', 'unit_free'];
 
 app.get('/api/admin/promocoes', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   const params = new URLSearchParams({ per_page: '100' });
   if (req.query.type) params.set('type', req.query.type);
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/promotions?${params.toString()}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/promotions?${params.toString()}`);
     res.json({ promocoes: data.promotions || [] });
   } catch (err) {
     console.error(`[PROMOCOES] falha ao listar (${loja}): ${err.message}`);
@@ -7218,12 +7229,12 @@ app.get('/api/admin/promocoes', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/promocoes', requireAdmin, async (req, res) => {
   const { type, ...campos } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   if (!PROMOTION_SUBTYPES.includes(type)) return res.status(400).json({ error: `type deve ser um de: ${PROMOTION_SUBTYPES.join(', ')}` });
   if (typeof campos.code !== 'string' || !campos.code.trim()) return res.status(400).json({ error: 'informe o código da promoção' });
 
   try {
-    const data = await inkApiPost(loja, `/v1/stores/promotions/${type}`, campos, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPostDaStore(`/v1/stores/promotions/${type}`, campos, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(201).json({ loja, promocao: data.promotion });
   } catch (err) {
     console.error(`[PROMOCOES] falha ao criar promoção (${loja}, ${type}): ${err.message}`);
@@ -7233,10 +7244,10 @@ app.post('/api/admin/promocoes', requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/promocoes/:type/:id', requireAdmin, async (req, res) => {
   const { type, id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   if (!PROMOTION_SUBTYPES.includes(type)) return res.status(400).json({ error: `type deve ser um de: ${PROMOTION_SUBTYPES.join(', ')}` });
   try {
-    const data = await inkApiPatch(loja, `/v1/stores/promotions/${type}/${id}`, req.body || {}, { 'Idempotency-Key': crypto.randomUUID() });
+    const data = await inkApiPatchDaStore(`/v1/stores/promotions/${type}/${id}`, req.body || {}, { 'Idempotency-Key': crypto.randomUUID() });
     res.json({ loja, promocao: data.promotion });
   } catch (err) {
     console.error(`[PROMOCOES] falha ao atualizar promoção ${loja}/${type}/${id}: ${err.message}`);
@@ -7246,9 +7257,9 @@ app.patch('/api/admin/promocoes/:type/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/promocoes/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   try {
-    await inkApiDelete(loja, `/v1/stores/promotions/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
+    await inkApiDeleteDaStore(`/v1/stores/promotions/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
     res.status(204).end();
   } catch (err) {
     console.error(`[PROMOCOES] falha ao excluir promoção ${loja}/${id}: ${err.message}`);
@@ -7314,11 +7325,11 @@ app.get('/api/admin/financeiro/saques', requireAdmin, async (req, res) => {
 // Sempre estimativa sobre um produto de referência (a própria Ink avisa isso) — nunca
 // apresentar como cotação definitiva.
 app.get('/api/admin/frete/simular', requireAdmin, async (req, res) => {
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   const cep = String(req.query.cep || '').replace(/\D/g, '');
   if (cep.length !== 8) return res.status(400).json({ error: 'CEP inválido' });
   try {
-    const data = await inkApiRequest(loja, `/v1/stores/shipping_simulation?cep=${cep}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/shipping_simulation?cep=${cep}`);
     res.json({ loja, simulacao: data.shipping_simulation });
   } catch (err) {
     console.error(`[FRETE] falha ao simular frete (${loja}, ${cep}): ${err.message}`);
@@ -7637,7 +7648,7 @@ async function avaliarAudienciaCampanha(loja, matchTipo, filtros, exclusoes) {
   let telefonesComCarrinho = new Set();
   if ((filtros || []).some((f) => f.field === 'temCarrinhoAbandonado')) {
     try {
-      const data = await inkApiRequest(loja, '/v1/stores/abandoned_carts?per_page=100');
+      const data = await inkApiRequestDaStore('/v1/stores/abandoned_carts?per_page=100');
       telefonesComCarrinho = new Set(
         (data.abandoned_carts || [])
           .map((c) => String((c.buyer && c.buyer.phone) || '').replace(/\D/g, ''))
@@ -7764,7 +7775,7 @@ async function calcularAudienciaCampanha(loja, matchTipo, filtros, exclusoes) {
 
 app.post('/api/admin/campaigns/audience/preview', requireAdmin, async (req, res) => {
   const { match, filters, exclusions } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   if (!pgPool) return res.status(503).json({ error: 'audiência de campanha exige Postgres configurado' });
   try {
     const resultado = await calcularAudienciaCampanha(loja, match === 'ANY' ? 'ANY' : 'ALL', filters || [], exclusions || {});
@@ -8086,7 +8097,7 @@ app.delete('/api/admin/utm/presets/:id', requireAdmin, exigirRecurso('utm_preset
 // ── Campanhas (Fase 4 do plano) — CRUD de rascunho/agendamento. Nada aqui processa envio de
 // verdade: uma campanha só chega a "draft" ou "scheduled" nesta fase. A fila de envio de
 // verdade (snapshot de destinatários, jobs, Meta) é a Fase 5, ainda não implementada.
-const CAMPAIGN_SELECT_COLS = `id, loja, nome, descricao, template_nome, segmento_id, audience_definition,
+const CAMPAIGN_SELECT_COLS = `id, store_id, loja, nome, descricao, template_nome, segmento_id, audience_definition,
   status, agendada_para, iniciada_em, finalizada_em, total_matched, total_excluded, total_recipients,
   criado_por, criado_em, atualizado_em, tamanho_lote, mensagem_web_id, mensagem_web_corpo, mensagem_web_variacoes,
   (SELECT m.nome FROM whatsapp_web_mensagens m WHERE m.id = campaigns.mensagem_web_id) AS mensagem_web_nome`;
@@ -8097,7 +8108,7 @@ const CAMPAIGN_STATUS_EDITAVEL = new Set(['draft', 'scheduled']);
 
 function mapCampanhaRow(r) {
   return {
-    id: String(r.id), loja: r.loja, nome: r.nome, descricao: r.descricao,
+    id: String(r.id), storeId: r.store_id || null, loja: r.loja || null, nome: r.nome, descricao: r.descricao,
     templateNome: r.template_nome, segmentoId: r.segmento_id != null ? String(r.segmento_id) : null,
     audienceDefinition: r.audience_definition,
     status: r.status, agendadaPara: r.agendada_para, iniciadaEm: r.iniciada_em, finalizadaEm: r.finalizada_em,
@@ -8118,11 +8129,11 @@ function normalizarMensagemWebId(valor) {
 
 app.get('/api/admin/campaigns', requireAdmin, async (req, res) => {
   if (!pgPool) return res.json({ campanhas: [] });
-  const loja = lojaLegadaDoContexto();
   try {
-    const { rows } = loja
-      ? await pgPool.query(`SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns WHERE loja = $1 ORDER BY criado_em DESC`, [loja])
-      : await pgPool.query(`SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns ORDER BY criado_em DESC`);
+    // Identidade canônica: a Store do contexto. A linha histórica (sem `store_id`) só entra quando a
+    // Store tem chave legada — Store nativa nunca enxerga linha que não seja dela.
+    const escopo = escopoDaStore(1);
+    const { rows } = await pgPool.query(`SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns WHERE ${escopo.sql} ORDER BY criado_em DESC`, escopo.params);
     res.json({ campanhas: rows.map(mapCampanhaRow) });
   } catch (err) {
     console.error(`[CAMPANHAS] falha ao listar campanhas: ${err.message}`);
@@ -8144,7 +8155,7 @@ app.get('/api/admin/campaigns/:id', requireAdmin, exigirRecurso('campaigns'), as
 
 app.post('/api/admin/campaigns', requireAdmin, async (req, res) => {
   const { nome, descricao, templateNome, segmentoId, audienceDefinition } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   if (!nome || !String(nome).trim()) return res.status(400).json({ error: 'nome é obrigatório' });
   const tamanhoLote = normalizarTamanhoLote(req.body?.tamanhoLote);
   if (tamanhoLote === undefined) return res.status(400).json({ error: 'tamanho de lote inválido' });
@@ -8153,9 +8164,9 @@ app.post('/api/admin/campaigns', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'campanhas exigem Postgres configurado' });
   try {
     const { rows } = await pgPool.query(
-      `INSERT INTO campaigns (loja, nome, descricao, template_nome, segmento_id, audience_definition, status, criado_por, tamanho_lote, mensagem_web_id)
-       VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,$9) RETURNING ${CAMPAIGN_SELECT_COLS}`,
-      [loja, String(nome).trim(), descricao || null, templateNome || null, segmentoId || null, JSON.stringify(audienceDefinition || {}), 'admin', tamanhoLote, mensagemWebId]
+      `INSERT INTO campaigns (store_id, loja, nome, descricao, template_nome, segmento_id, audience_definition, status, criado_por, tamanho_lote, mensagem_web_id)
+       VALUES ($10,$1,$2,$3,$4,$5,$6,'draft',$7,$8,$9) RETURNING ${CAMPAIGN_SELECT_COLS}`,
+      [loja, String(nome).trim(), descricao || null, templateNome || null, segmentoId || null, JSON.stringify(audienceDefinition || {}), 'admin', tamanhoLote, mensagemWebId, storeDoContexto()]
     );
     res.json({ campanha: mapCampanhaRow(rows[0]) });
   } catch (err) {
@@ -8222,10 +8233,10 @@ app.post('/api/admin/campaigns/:id/duplicate', requireAdmin, exigirRecurso('camp
     if (!rows.length) return res.status(404).json({ error: 'campanha não encontrada' });
     const original = rows[0];
     const { rows: novaRows } = await pgPool.query(
-      `INSERT INTO campaigns (loja, nome, descricao, template_nome, segmento_id, audience_definition, status, criado_por, tamanho_lote, mensagem_web_id)
-       VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,$9) RETURNING ${CAMPAIGN_SELECT_COLS}`,
+      `INSERT INTO campaigns (store_id, loja, nome, descricao, template_nome, segmento_id, audience_definition, status, criado_por, tamanho_lote, mensagem_web_id)
+       VALUES ($10,$1,$2,$3,$4,$5,$6,'draft',$7,$8,$9) RETURNING ${CAMPAIGN_SELECT_COLS}`,
       [original.loja, `${original.nome} (cópia)`, original.descricao, original.template_nome, original.segmento_id,
-        JSON.stringify(original.audience_definition || {}), 'admin', original.tamanho_lote, original.mensagem_web_id]
+        JSON.stringify(original.audience_definition || {}), 'admin', original.tamanho_lote, original.mensagem_web_id, original.store_id || storeDoContexto()]
     );
     res.json({ campanha: mapCampanhaRow(novaRows[0]) });
   } catch (err) {
@@ -8298,7 +8309,8 @@ async function iniciarDisparoCampanha(campanha) {
     throw err;
   }
 
-  const resultado = await avaliarAudienciaCampanha(campanha.loja, def.match === 'ANY' ? 'ANY' : 'ALL', def.filtros || [], def.exclusoes || {});
+  const chaveDaCampanha = campanha.loja || campanha.store_id;
+  const resultado = await avaliarAudienciaCampanha(chaveDaCampanha, def.match === 'ANY' ? 'ANY' : 'ALL', def.filtros || [], def.exclusoes || {});
   const variaveisMapa = Array.isArray(def.variaveis) ? def.variaveis : [];
   const mediaAssetId = modoWeb ? null : def.mediaAssetId || null;
   // Campos personalizados: lidos 1x por campanha (não por cliente) e interpolados com as
@@ -8312,9 +8324,9 @@ async function iniciarDisparoCampanha(campanha) {
   for (const cliente of resultado.elegiveis) {
     const vars = {};
     if (modoWeb) {
-      Object.assign(vars, variaveisCampanhaWeb(cliente, campanha.loja));
+      Object.assign(vars, variaveisCampanhaWeb(cliente, chaveDaCampanha));
       for (const chave of Object.keys(camposCustomizados)) {
-        const bruto = (camposCustomizados[chave].valores && camposCustomizados[chave].valores[campanha.loja]) || '';
+        const bruto = (camposCustomizados[chave].valores && camposCustomizados[chave].valores[chaveDaCampanha]) || '';
         vars[`custom.${chave}`] = interpolarCampoCustomizado(bruto, vars);
       }
     }
@@ -8526,8 +8538,9 @@ async function calcularAtribuicaoCampanha(campanha, janelaDias) {
     pgPool.query(
       `SELECT r.sent_at, r.telefone, r.customer_key
          FROM campaign_recipients r JOIN campaigns c ON c.id = r.campaign_id
-        WHERE c.loja = $1 AND r.campaign_id <> $2 AND r.sent_at > $3 AND r.sent_at <= $4`,
-      [campanha.loja, campanha.id, desde, ate]
+        WHERE (c.store_id = $1 OR (c.store_id IS NULL AND c.loja = $5))
+          AND r.campaign_id <> $2 AND r.sent_at > $3 AND r.sent_at <= $4`,
+      [campanha.store_id || null, campanha.id, desde, ate, campanha.loja || null]
     ),
   ]);
   const mapaEnvio = (e) => ({ lote: e.lote, sentAt: e.sent_at, telefone: e.telefone, customerKey: e.customer_key });
@@ -14092,7 +14105,7 @@ async function clienteJaComprou(loja, registro, desdeIso) {
   let page = 1;
   let totalPages = 1;
   do {
-    const data = await inkApiRequest(loja, `/v1/stores/orders?begin_date=${desde}&page=${page}&per_page=100`);
+    const data = await inkApiRequestDaStore(`/v1/stores/orders?begin_date=${desde}&page=${page}&per_page=100`);
     for (const o of data.orders || []) {
       if (!PAYMENT_STATUSES_CONVERTIDO.has(normalizarPaymentStatusInk(o.payment_status)) || o.is_exchange) continue;
       const buyer = o.buyer || {};
@@ -15219,7 +15232,7 @@ async function whatsappUploadHandleRequest(buffer, mimeType, filename) {
 // Consistente com o resto do app; evita introduzir uma 2ª forma de subir arquivo no projeto.
 app.post('/api/admin/media', requireAdmin, async (req, res) => {
   const { filename, mimeType, dataBase64 } = req.body || {};
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   if (!filename || !mimeType || !dataBase64) return res.status(400).json({ error: 'filename, mimeType e dataBase64 são obrigatórios' });
   if (!pgPool) return res.status(503).json({ error: 'mídia exige Postgres configurado' });
 
@@ -15282,7 +15295,7 @@ app.post('/api/admin/media', requireAdmin, async (req, res) => {
 app.get('/api/admin/media', requireAdmin, async (req, res) => {
   if (!pgPool) return res.json({ assets: [] });
   const { kind } = req.query;
-  const loja = lojaLegadaDoContexto();
+  const loja = lojaLegadaDoContextoOuNula();
   const condicoes = [];
   const params = [];
   if (loja) { params.push(loja); condicoes.push(`loja = $${params.length}`); }
@@ -15670,7 +15683,7 @@ app.put('/api/admin/campos-customizados/:chave', requireAdmin, async (req, res) 
       }
       // Valor por loja: só a loja da Store da sessão pode ser escrita.
       for (const loja of Object.keys(valores)) {
-        if (loja !== lojaLegadaDoContexto()) return res.status(400).json({ error: 'só é possível editar o valor da sua loja', codigo: 'TENANT_SELECTOR_NOT_ALLOWED' });
+        if (loja !== chaveDaStore()) return res.status(400).json({ error: 'só é possível editar o valor da sua loja', codigo: 'TENANT_SELECTOR_NOT_ALLOWED' });
       }
       campos[chave].valores = { ...campos[chave].valores, ...valores };
     }
@@ -15750,7 +15763,7 @@ function validarAutomacaoEvento(body) {
 
 app.put('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) => {
   const { evento } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = chaveDaStore();
   if (!evento || evento.length > 80) return res.status(400).json({ error: 'evento inválido' });
 
   const erro = validarAutomacaoEvento(req.body);
@@ -15863,7 +15876,7 @@ app.put('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) =
 
 app.delete('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) => {
   const { evento } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = chaveDaStore();
   const { modo } = req.query;
   if (modo !== undefined && modo !== 'api' && modo !== 'web') return res.status(400).json({ error: 'modo deve ser "api" ou "web"' });
   try {
@@ -15885,7 +15898,7 @@ app.delete('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res
 // não do modo); o template da Meta, se existir, fica intacto.
 app.put('/api/admin/automacao-eventos/:evento/web', requireAdmin, async (req, res) => {
   const { evento } = req.params;
-  const loja = lojaLegadaDoContexto();
+  const loja = chaveDaStore();
   if (!evento || evento.length > 80) return res.status(400).json({ error: 'evento inválido' });
   const { mensagemWeb, maxEnvios, intervaloHoras, checarCompra, atrasoPrimeiroEnvioHoras } = req.body || {};
   if (typeof mensagemWeb !== 'string' || !UUID_RE.test(mensagemWeb)) return res.status(400).json({ error: 'selecione uma mensagem' });
@@ -16470,7 +16483,7 @@ app.post('/api/admin/pedidos', requireAdmin, async (req, res) => {
 
   const { pixCode, cliente, valor, referencia } = req.body || {};
 
-  const loja = lojaLegadaDoContexto();
+  const loja = chaveDaStore();
 
   try {
     await generateQrPng(pixCode.trim()); // valida que o código gera um QR de verdade antes de salvar
