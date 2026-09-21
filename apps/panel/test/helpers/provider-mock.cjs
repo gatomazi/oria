@@ -63,7 +63,10 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
   }
   if (p === '/v1/stores/product_types') return json({ product_types: [{ id: base + 10, name: 'Camiseta' }] });
   if (p === '/v1/stores/collections' && metodo === 'GET') {
-    return json({ collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: [] }], total_pages: 1 });
+    // Só a Store D traz product_ids na lista (como a Ink de verdade; o painel devolve só a contagem). As demais
+    // seguem vazias: o job de categorias em lote lê esta lista para saber o que já está associado.
+    const ids = tag === 'D' ? [base + 1, base + 2, base + 3] : [];
+    return json({ collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: ids }], total_pages: 1 });
   }
   if (p === '/v1/stores/collections' && metodo === 'POST') {
     return json({ collection: { id: base + 101, name: JSON.parse(corpo || '{}').name || `Categoria ${tag} nova` } }, 201);

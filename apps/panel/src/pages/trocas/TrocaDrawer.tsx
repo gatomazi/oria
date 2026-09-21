@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Drawer, ErrorState, Skeleton, StatusBadge } from '../../components/ds';
 import { adminStores } from '../../state/adminStores';
-import { EXCHANGE_REASONS, toneForGenericStatus } from '../../lib/statusMap';
+import { EXCHANGE_REASONS, labelForExchangeStatus, toneForGenericStatus } from '../../lib/statusMap';
 import { formatData } from '../../lib/format';
 import { getTroca, type TrocaDetalhe } from '../../api/trocas';
 
@@ -37,7 +37,7 @@ export function TrocaDrawer({ loja, id, onClose }: { loja: string; id: number; o
       {!erro && troca && (
         <>
           <div className="pc-drawer-header__badges">
-            <StatusBadge tone={toneForGenericStatus(troca.status)} label={troca.status || '—'} />
+            <StatusBadge tone={toneForGenericStatus(troca.status)} label={labelForExchangeStatus(troca.status)} />
             {troca.is_courtesy_exchange && <StatusBadge tone="info" label="Cortesia" />}
           </div>
           <div className="pc-kv ds-bloco-seguinte">

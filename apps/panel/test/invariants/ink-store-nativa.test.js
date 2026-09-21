@@ -226,6 +226,10 @@ test('Categorias · lista, detalhe e criação na Store nativa', async () => {
   const lista = await c.req('GET', '/api/admin/categorias');
   assert.equal(lista.status, 200, `Categorias não pode exigir chave legada: ${lista.texto}`);
   assert.deepEqual(lista.json.categorias.map((x) => x.id), [1100]);
+  // A listagem devolve só a CONTAGEM (os ids completos ficam no detalhe): sem isso a tela carregava centenas de KB
+  // de ids só para mostrar um número.
+  assert.equal(lista.json.categorias[0].product_count, 0);
+  assert.ok(!('product_ids' in lista.json.categorias[0]), 'a lista não carrega product_ids');
   const um = await c.req('GET', '/api/admin/categorias/1100');
   assert.equal(um.status, 200, um.texto);
   const nova = await c.req('POST', '/api/admin/categorias', { corpo: { name: 'Teste nativa' } });
@@ -233,6 +237,8 @@ test('Categorias · lista, detalhe e criação na Store nativa', async () => {
   assert.equal(nova.json.categoria.id, 1101);
   const d = await (await entrar('D')).req('GET', '/api/admin/categorias');
   assert.deepEqual(d.json.categorias.map((x) => x.id), [2100], 'D não vê as categorias de C');
+  assert.equal(d.json.categorias[0].product_count, 3, 'a lista devolve a contagem de product_ids');
+  assert.ok(!('product_ids' in d.json.categorias[0]), 'a lista não carrega os ids completos');
 });
 
 test('Agrupamentos · lista e detalhe na Store nativa, por credencial', async () => {

@@ -3245,7 +3245,14 @@ app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
   const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
     const data = await inkApiRequestDaStore('/v1/stores/collections?per_page=100');
-    res.json({ categorias: data.collections || [] });
+    // A listagem só precisa da CONTAGEM: cada categoria traz `product_ids` com todos os produtos (a maior tem
+    // ~100 mil ids), e a tela levava 10+ s só para carregar esse volume. Os ids completos seguem no detalhe
+    // (`GET /api/admin/categorias/:id`), que é o que o drawer usa para editar.
+    const categorias = (data.collections || []).map(({ product_ids: ids, ...resto }) => ({
+      ...resto,
+      product_count: Array.isArray(ids) ? ids.length : 0,
+    }));
+    res.json({ categorias });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao listar (${loja}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível listar as categorias' });

@@ -9,6 +9,8 @@ export interface Categoria {
   is_available: boolean;
   position: number;
   product_ids?: number[];
+  /** Só na listagem: quantidade de produtos (a lista não traz os ids — estão no detalhe). */
+  product_count?: number;
   kit_ids?: number[];
   updated_at?: string;
 }
