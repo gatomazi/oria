@@ -41,6 +41,7 @@ painel, `getEnv` no Go, `Procfile` e `gunicorn.conf.py` no Gerador).
 |---|---|
 | `CREATIVE_CORE_URL` | `oria-creatives` (domínio privado) |
 | `CREATIVE_CORE_SERVICE_TOKEN` | mesmo valor do `oria-creatives` |
+| `CREATIVE_PROMPT_V2_ORGS` | só do painel; opcional. `id` de Organization (lista separada por vírgula) ou `*` que recebem o prompt V2 dos ângulos com pessoa; vazio = ninguém (padrão). Não é feature comercial: é o rollout de um experimento de qualidade |
 | `WHATSAPP_SERVICE_URL`, `WHATSAPP_API_KEY` | `oria-whatsapp` (domínio privado) |
 | `WHATSAPP_SENDER_REF_SECRET` | só do painel (assina a referência; o Go não conhece) |
 | `WHATSAPP_SENDER_RESOLVER_KEY` | = `PANEL_SENDER_RESOLVER_KEY` do Go |
