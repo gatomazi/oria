@@ -23,6 +23,13 @@
 // contra a cópia via `INVARIANT_SUBJECT_ROOT`. Nada no repositório é modificado em nenhum momento.
 //
 // Cada violação abaixo é o código que existe (ou existia) em produção, citado por arquivo:linha.
+//
+// ── Fatias (CI) ────────────────────────────────────────────────────────────────────────────────
+// Os controles são independentes entre si (cada um roda numa cópia própria do código), mas o CI
+// particiona por ARQUIVO. Um arquivo só concentrava ~30 min do caminho crítico; agora os controles
+// vivem aqui e `negative-controls-fatia-N.test.js` roda uma fatia cada (índice % FATIAS). Nenhum
+// controle foi removido, encurtado ou reordenado dentro do ciclo: `negative-controls-cobertura.test.js`
+// prova que a união das fatias é EXATAMENTE a lista `VIOLACOES`.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -31,7 +38,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { RAIZ_REPO } = require('./harness');
+const { RAIZ_REPO } = require('../invariants/harness');
 
 // ── As violações ───────────────────────────────────────────────────────────────────────────────
 
@@ -1271,7 +1278,7 @@ function rodarInvariant(arquivoDeTeste, raizDoSujeito) {
 
   const r = spawnSync(
     process.execPath,
-    ['--test', '--test-reporter=tap', path.join(__dirname, arquivoDeTeste)],
+    ['--test', '--test-reporter=tap', path.join(__dirname, '..', 'invariants', arquivoDeTeste)],
     { cwd: RAIZ_REPO, encoding: 'utf8', env, timeout: 120000 }
   );
   const saida = `${r.stdout || ''}${r.stderr || ''}`;
@@ -1301,94 +1308,56 @@ function aplicarViolacao(raiz, violacao) {
   return () => fs.writeFileSync(alvo, original);
 }
 
-for (const v of VIOLACOES) {
-  test(`negative control · ${v.classe} · ${v.invariant} · ciclo de 5 passos`, { timeout: 180000 }, (t) => {
-    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), `oria-nc-${v.invariant}-`));
-    t.after(() => fs.rmSync(raiz, { recursive: true, force: true }));
-    copiarLib(raiz);
+// Quantas fatias existem (um arquivo `negative-controls-fatia-N.test.js` para cada). Mudar este valor
+// sem criar o arquivo novo reprova em `negative-controls-cobertura.test.js`.
+const FATIAS = 4;
 
-    // Passo 1 — passa no estado correto (a cópia intacta).
-    const passo1 = rodarInvariant(v.teste, raiz);
-    assertRodouDeVerdade(1, passo1, v.invariant);
-    assert.ok(passo1.ok, `[1] ${v.invariant} reprovou no estado CORRETO:\n${passo1.saida}`);
+// A fatia (1..FATIAS) que roda a violação de posição `i` na lista. Round-robin: determinístico e
+// balanceia sozinho quando violações novas entram no fim da lista.
+function fatiaDe(i) {
+  return (i % FATIAS) + 1;
+}
 
-    // Passo 2 — introduz a violação.
-    const desfazer = aplicarViolacao(raiz, v);
+function registrarFatia(fatia) {
+  assert.ok(Number.isInteger(fatia) && fatia >= 1 && fatia <= FATIAS, `fatia inválida: ${fatia}`);
+  VIOLACOES.forEach((v, i) => {
+    if (fatiaDe(i) !== fatia) return;
+    test(`negative control · ${v.classe} · ${v.invariant} · ciclo de 5 passos`, { timeout: 180000 }, (t) => {
+      const raiz = fs.mkdtempSync(path.join(os.tmpdir(), `oria-nc-${v.invariant}-`));
+      t.after(() => fs.rmSync(raiz, { recursive: true, force: true }));
+      copiarLib(raiz);
 
-    // Passo 3 — o MESMO invariant falha.
-    const passo3 = rodarInvariant(v.teste, raiz);
-    assertRodouDeVerdade(3, passo3, v.invariant);
-    assert.equal(
-      passo3.ok, false,
-      `[3] ${v.invariant} PASSOU com a violação aplicada (${v.descricao}).\n` +
-      'Este invariant não detecta o defeito que existe para detectar — ele está escrito para ' +
-      `passar, não para medir.\n${passo3.saida}`
-    );
+      // Passo 1 — passa no estado correto (a cópia intacta).
+      const passo1 = rodarInvariant(v.teste, raiz);
+      assertRodouDeVerdade(1, passo1, v.invariant);
+      assert.ok(passo1.ok, `[1] ${v.invariant} reprovou no estado CORRETO:\n${passo1.saida}`);
 
-    // Passo 4 — remove a violação.
-    desfazer();
+      // Passo 2 — introduz a violação.
+      const desfazer = aplicarViolacao(raiz, v);
 
-    // Passo 5 — volta a passar. Prova que a reprovação veio do defeito, não de dano colateral
-    // da manipulação de arquivos.
-    const passo5 = rodarInvariant(v.teste, raiz);
-    assertRodouDeVerdade(5, passo5, v.invariant);
-    assert.ok(passo5.ok, `[5] ${v.invariant} não voltou a passar após remover a violação:\n${passo5.saida}`);
-    assert.equal(passo5.executados, passo1.executados, '[5] o conjunto de testes executados mudou');
+      // Passo 3 — o MESMO invariant falha.
+      const passo3 = rodarInvariant(v.teste, raiz);
+      assertRodouDeVerdade(3, passo3, v.invariant);
+      assert.equal(
+        passo3.ok, false,
+        `[3] ${v.invariant} PASSOU com a violação aplicada (${v.descricao}).\n` +
+        'Este invariant não detecta o defeito que existe para detectar — ele está escrito para ' +
+        `passar, não para medir.\n${passo3.saida}`
+      );
 
-    console.log(`  ✔ ${v.classe.padEnd(18)} ${v.invariant}  passa → viola → FALHA → restaura → passa`);
+      // Passo 4 — remove a violação.
+      desfazer();
+
+      // Passo 5 — volta a passar. Prova que a reprovação veio do defeito, não de dano colateral
+      // da manipulação de arquivos.
+      const passo5 = rodarInvariant(v.teste, raiz);
+      assertRodouDeVerdade(5, passo5, v.invariant);
+      assert.ok(passo5.ok, `[5] ${v.invariant} não voltou a passar após remover a violação:\n${passo5.saida}`);
+      assert.equal(passo5.executados, passo1.executados, '[5] o conjunto de testes executados mudou');
+
+      console.log(`  ✔ ${v.classe.padEnd(18)} ${v.invariant}  passa → viola → FALHA → restaura → passa`);
+    });
   });
 }
 
-test('negative control · cobre as classes críticas das Fases 0 a 5c e da construção da Fase 7', () => {
-  assert.deepEqual(
-    [...new Set(VIOLACOES.map((v) => v.classe))].sort(),
-    ['audit/sujeito', 'auth', 'auth/csrf', 'auth/fixation', 'auth/login-tenant', 'auth/revogacao',
-      'catalogo/paginacao-ignora-page', 'clientes/chave-da-store-ausente', 'connector/chamador-exige-loja-legada', 'connector/leitura-por-loja', 'connector/save-sem-atomicidade',
-      'connector/store-nativa-no-path-legado', 'convite/conta-existente-troca-senha', 'convite/grant-da-role',
-      'convite/motivo-vazado', 'convite/sessao-de-outro-email', 'creative/dual-read-confinamento',
-      'creative/dual-read-organization', 'creative/tenant-env', 'dashboard/escopo-loja-nula',
-      'dashboard/midia-zero-sem-conta', 'dre/customer-de-outra-org', 'dre/loja-atribuida-padrao', 'dre/sem-loja',
-      'entitlement', 'entitlement/app-config-como-fonte', 'entitlement/ausencia', 'fase6/bypass-interno',
-      'financeiro/despesas-exige-loja-legada', 'ga4/cache-sem-store-id', 'ga4/connect-exige-loja-legada',
-      'ga4/oauth-aceita-store-arbitraria', 'google/chamada-sem-timeout', 'google/invalid-grant-vira-erro-generico',
-      'google/retry-em-erro-definitivo', 'http/async-sem-rede', 'http/erro-vaza-stack', 'ink/catalogo-sem-store-id',
-      'ink/catalogo-status-exige-loja-legada', 'ink/categorias-exige-loja-legada', 'ink/feed-descontinuado-vira-erro',
-      'ink/job-catalogo-so-legado', 'ink/lote-sem-store-id', 'ink/webhook-exige-loja-legada',
-      'integracoes/desconectar-cruzado', 'integracoes/env-global', 'integracoes/google-ads-exige-developer-token',
-      'integracoes/instagram-finge-conexao', 'integracoes/leitura-falha-vira-nao-configurado',
-      'integracoes/plataforma-ausente-vira-nao-configurado', 'integracoes/resolver-global',
-      'integracoes/sem-plano-vira-conectavel', 'integracoes/token-de-outra-org', 'integracoes/webhook-adiado-rebaixa-ink',
-      'jobs/contexto', 'jobs/lease-ignorado', 'meta/conexao-com-problema-vira-saudavel',
-      'meta/oauth-aceita-store-arbitraria', 'midia/atribuicao-canonica-ausente', 'midia/conta-de-outra-organization',
-      'midia/select-exige-loja-legada', 'midia/store-nativa-no-ramo-legado', 'oauth/org-do-navegador',
-      'onboarding/chave-sem-pedido', 'onboarding/erro-bruto', 'onboarding/gate', 'onboarding/ja-existe-uma',
-      'onboarding/segunda-fonte', 'operacao/auditoria-com-id-nulo', 'operacao/automacoes-so-chave-legada',
-      'operacao/campanha-sem-store-id', 'operacao/escopo-exige-chave-legada', 'operacao/job-ignora-store-nativa',
-      'operacao/promocoes-exigem-chave-legada', 'operacao/sessao-sem-chave-de-escopo',
-      'operacao/trocas-exige-chave-legada', 'pedidos/loja-recebe-store-id', 'recuperacao/escopo', 'secrets', 'secrets/log',
-      'secrets/resposta', 'store-nativa/clientes-exige-loja-legada', 'store-nativa/financeiro-exige-loja-legada',
-      'store-nativa/lucro-produtos-join-por-loja', 'tenancy/agregacao-lojas', 'tenancy/candidato-unico',
-      'tenancy/loja-do-request', 'tenancy/mapping', 'tenancy/ownership', 'tenancy/ownership-id', 'tenancy/rls-context',
-      'utm/exige-loja-legada', 'webhook', 'webhook/ink-segredo-de-outra-org', 'webhook/ink-segredo-do-ambiente',
-      'whatsapp/contexto-sem-store', 'whatsapp/entrada-divergente', 'whatsapp/entrada-org-do-corpo',
-      'whatsapp/erro-cru-da-meta-na-tela', 'whatsapp/es-aceita-token-de-outro-app', 'whatsapp/es-confia-no-navegador',
-      'whatsapp/es-deixa-claim-orfao', 'whatsapp/es-origem-frouxa', 'whatsapp/es-sem-posse-do-recurso',
-      'whatsapp/es-state-nao-amarrado', 'whatsapp/health-como-remetente', 'whatsapp/par-cruzado', 'whatsapp/ref-forjada',
-      'whatsapp/remetente-global', 'whatsapp/repasse-boot-inferido', 'whatsapp/repasse-boot-so-avisa',
-      'whatsapp/repasse-rota-legada', 'whatsapp/repasse-segredo-na-query', 'whatsapp/repasse-sem-segredo',
-      'whatsapp/token-expirado-vira-erro-generico', 'whatsapp/token-recusado-nao-marca-integracao',
-      'whatsapp/token-serializavel', 'whatsapp/tolerancia-compara-query', 'whatsapp/tolerancia-sem-assinatura',
-      'whatsapp/tolerancia-sem-flag']
-  );
-});
-
-test('negative control · o repositório nunca é modificado pelo ciclo', () => {
-  // Cinturão e suspensório: se alguma violação vazasse para o `lib/` real, ela estaria aqui.
-  for (const v of VIOLACOES) {
-    const conteudo = fs.readFileSync(path.join(RAIZ_REPO, v.arquivo), 'utf8');
-    assert.ok(
-      !conteudo.includes('VIOLAÇÃO DELIBERADA'),
-      `${v.arquivo} contém uma violação de negative control — ela vazou para o repositório`
-    );
-  }
-});
+module.exports = { VIOLACOES, FATIAS, fatiaDe, registrarFatia };
