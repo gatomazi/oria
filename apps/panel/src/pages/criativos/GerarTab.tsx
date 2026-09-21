@@ -264,10 +264,10 @@ export function GerarTab({ status, catalog, copia, onCopiaLida, onJobCriado }: {
     const pessoas = cena?.subjects;
     if (!pessoas || pessoas.length < 2) return null;
     const relacao = (p: CenaPessoa) => (p.relation_to_primary === 'custom' ? p.relation_label : catalog.catalog.relations?.find((r) => r.id === p.relation_to_primary)?.label);
-    const nomes = pessoas.map((p, i) => capitalizar(i === 0 ? semIdade(p.persona.label) : (relacao(p) ?? semIdade(p.persona.label)).toLowerCase()));
+    const nomes = pessoas.map((p, i) => (i === 0 ? semIdade(p.persona.label) : (relacao(p) ?? semIdade(p.persona.label))).toLowerCase());
     const interacao = catalog.catalog.interactions?.find((i) => i.id === cena?.interaction)?.label;
     const contextoNome = contextMode === 'custom' ? String((contextos.find((c) => c.id === contextProfileId)?.data.subject as { name?: string } | undefined)?.name || '') : contextMode === 'geographic' ? geo.city : '';
-    return [nomes.join(' + '), interacao, contextoNome].filter(Boolean).join(' · ');
+    return [capitalizar(nomes.join(' + ')), interacao, contextoNome].filter(Boolean).join(' · ');
   }, [cena, catalog, contextMode, contextos, contextProfileId, geo.city]);
 
   const interacoesPossiveis = (catalog.catalog.interactions || []).filter((i) => (cena?.subjects?.length ?? 0) >= i.min_people && (cena?.subjects?.length ?? 0) <= i.max_people);
