@@ -481,7 +481,8 @@ test('tenant novo · salva credencial Ink, testa e gera webhook sem chave legada
   assert.match(url.json.caminho, /^\/api\/webhooks\/ink\/[A-Za-z0-9_-]{20,}$/);
 
   const estado = await c.req('GET', '/api/admin/integrations');
-  assert.equal(estado.json.ink.status, 'pendente', 'com token e sem segredo de webhook, o estado é pendente');
+  assert.equal(estado.json.ink.status, 'conectada', 'a API está conectada com o token');
+  assert.equal(estado.json.ink.webhook, 'adiado', 'sem segredo de webhook, o webhook segue adiado — não é pendência da API');
   assert.equal(estado.json.reservaInk[0].loja, null);
   assert.ok(estado.json.reservaInk[0].storeId, 'a linha é identificada pela Store');
 });

@@ -7127,14 +7127,29 @@ app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
     // bem maior) — sem isso a listagem só mostrava o id cru do agrupamento e do produto de
     // vitrine, achado do refinamento visual (nunca inventar dado que a API não dá, mas o nome
     // real está a 1 chamada de distância, então busca).
-    const agrupamentos = await Promise.all(clusters.map(async (c) => {
-      const produto = await inkApiRequestDaStore(`/v1/stores/products/${c.default_product_id}`).then((d) => d.product).catch(() => null);
-      return {
-        ...c,
-        defaultProductName: produto ? produto.name : null,
-        defaultProductImageUrl: produto ? produto.main_image_url : null,
-      };
-    }));
+    // Até 100 agrupamentos = até 100 chamadas. Em paralelo total, elas esgotavam o limite de taxa da
+    // Ink (429) — com o catálogo sincronizando ao mesmo tempo, a tela ficava sem nome de produto. Lotes
+    // pequenos e um produto de vitrine repetido só é buscado uma vez.
+    const produtosDeVitrine = new Map();
+    const buscarVitrine = (id) => {
+      if (!produtosDeVitrine.has(id)) {
+        produtosDeVitrine.set(id, inkApiRequestDaStore(`/v1/stores/products/${id}`).then((d) => d.product).catch(() => null));
+      }
+      return produtosDeVitrine.get(id);
+    };
+    const agrupamentos = [];
+    const LOTE_VITRINE = 5;
+    for (let i = 0; i < clusters.length; i += LOTE_VITRINE) {
+      const lote = clusters.slice(i, i + LOTE_VITRINE);
+      const produtos = await Promise.all(lote.map((c) => buscarVitrine(c.default_product_id)));
+      lote.forEach((c, k) => {
+        agrupamentos.push({
+          ...c,
+          defaultProductName: produtos[k] ? produtos[k].name : null,
+          defaultProductImageUrl: produtos[k] ? produtos[k].main_image_url : null,
+        });
+      });
+    }
     res.json({ agrupamentos });
   } catch (err) {
     console.error(`[AGRUPAMENTOS] falha ao listar (${loja}): ${err.message}`);
@@ -8660,6 +8675,88 @@ async function statusDaIntegracaoInk() {
   }];
 }
 
+// Lê os FATOS de cada provider e entrega ao read model. Cada leitura é isolada: uma que falha vira
+// `error` só para aquele provider (nunca "não configurado", que seria mentira) e não derruba as outras.
+async function lerIntegracoesParaTela({ inkConectada, inkWebhook, whatsappServicoConfigurado }) {
+  let plano = null;
+  try { plano = await planoEfetivo(PLANO_DA_ORGANIZACAO); } catch { plano = null; }
+  // Plano ilegível é "não sei", não "negado": a decisão de bloquear é de quem usa a rota, não da leitura.
+  const entitled = (feature) => (plano && typeof plano === 'object' ? plano[feature] === true : null);
+  const expirado = (data) => !!data && new Date(data).getTime() < Date.now();
+  const isolar = async (provider, ler) => {
+    try {
+      return await ler();
+    } catch (err) {
+      console.error(`[INTEGRACOES] leitura de ${provider} falhou: ${mascararToken(String(err && err.message))}`);
+      return linhaComFalha(provider);
+    }
+  };
+
+  const linhas = [];
+  linhas.push(await isolar('ink', async () => linhaDoProvider('ink', {
+    entitled: null, platformAvailable: true, configured: inkConectada, connected: inkConectada,
+  }, { api: inkConectada ? 'connected' : 'not_configured', webhook: inkWebhook ? 'connected' : 'deferred' })));
+
+  linhas.push(await isolar('ga4', async () => {
+    const row = await obterConexaoGA4();
+    const conectado = !!row && row.status !== 'disconnected' && row.status !== 'error';
+    return linhaDoProvider('ga4', {
+      entitled: entitled('analytics_ga4'), platformAvailable: googleOAuthConfigurado(),
+      configured: !!row && row.status !== 'disconnected', connected: conectado, needsResource: conectado && !row.property_id,
+      hasData: conectado && !!row.last_sync_at, failing: row && row.status === 'error' ? 'error' : null,
+    });
+  }));
+
+  linhas.push(await isolar('meta_ads', async () => {
+    const conexao = await obterConexaoMeta();
+    const temToken = !!conexao && conexao.status !== 'disconnected' && (await exigirIntegracoes().temSegredo('meta', 'access_token'));
+    const { rows: contas } = pgPool ? await pgPool.query('SELECT * FROM meta_ad_accounts') : { rows: [] };
+    const daStore = contas.filter((c) => c.selecionada && contaAtribuidaAEstaStore(c));
+    return linhaDoProvider('meta_ads', {
+      entitled: entitled('meta_ads'), platformAvailable: metaOAuthConfigurado(),
+      configured: temToken, connected: temToken && conexao.status !== 'error', needsResource: temToken && daStore.length === 0,
+      hasData: !!conexao && !!conexao.last_successful_sync_at && daStore.length > 0,
+      failing: conexao && (conexao.status === 'error' || conexao.status === 'expired' || expirado(conexao.token_expires_at)) ? 'error' : null,
+    });
+  }));
+
+  linhas.push(await isolar('google_ads', async () => {
+    const conexao = await obterConexaoGoogleAds();
+    const temToken = !!conexao && conexao.status !== 'disconnected' && (await exigirIntegracoes().temSegredo('google_ads', 'refresh_token'));
+    const { rows: contas } = pgPool ? await pgPool.query('SELECT * FROM google_ads_customers') : { rows: [] };
+    const daStore = contas.filter((c) => c.selecionada && contaAtribuidaAEstaStore(c));
+    return linhaDoProvider('google_ads', {
+      entitled: entitled('google_ads'), platformAvailable: googleAdsOAuthConfigurado(),
+      configured: temToken, connected: temToken && conexao.status !== 'error', needsResource: temToken && daStore.length === 0,
+      hasData: !!conexao && !!conexao.last_successful_sync_at && daStore.length > 0,
+      failing: conexao && conexao.status === 'error' ? 'error' : null,
+    });
+  }));
+
+  linhas.push(await isolar('whatsapp', async () => {
+    const remetente = await remetenteWhatsappParaTela();
+    const conectado = remetente.status === 'connected' && !!remetente.token;
+    return linhaDoProvider('whatsapp', {
+      entitled: entitled('whatsapp'), platformAvailable: whatsappServicoConfigurado,
+      configured: conectado, connected: conectado, failing: remetente.status === 'error' ? 'error' : null,
+    }, {
+      modo: remetente.conectadoVia || null,
+      // Conectar clientes de fora depende da aprovação do app como Tech Provider (Business Verification
+      // + App Review): adiado, e isso não é falha do número que já está conectado.
+      embeddedSignup: embeddedSignupConfigurado() ? 'homologacao' : 'deferred',
+    });
+  }));
+
+  linhas.push(await isolar('openai', async () => {
+    const m = await exigirIntegracoes().metadata('openai');
+    const conectado = m.segredos.some((x) => x.tipo === 'api_key');
+    return linhaDoProvider('openai', { entitled: null, platformAvailable: true, configured: conectado, connected: conectado });
+  }));
+
+  linhas.push(linhaDoProvider('instagram', { comingSoon: true, entitled: entitled('instagram') }));
+  return linhas;
+}
+
 // Tela de STATUS: abrir não pode depender de nada estar configurado, e nenhuma leitura daqui fala
 // com provider externo. Handler async sem try/catch vira unhandled rejection — a requisição fica
 // sem resposta e o proxy devolve 502, que foi o que aconteceu no primeiro acesso do Tenant #1.
@@ -8689,11 +8786,11 @@ app.get('/api/admin/integrations', requireAdmin, async (req, res) => {
       ultimoEventoEm: ultimoEvento ? ultimoEvento.recebidoEm : null,
     }));
 
-    // Três estados, e a diferença importa: sem credencial é `not_configured`; com credencial e sem
-    // webhook é `pendente`; tudo no lugar é `conectada`. Nada aqui afirma que a credencial FUNCIONA
-    // — isso só o teste de conexão diz, e ele é explícito (§25 do comando).
-    const inkStatus = reservaInk.every((r) => r.tokenConfigurado && r.webhookConfigurado) ? 'conectada'
-      : (reservaInk.some((r) => r.tokenConfigurado) ? 'pendente' : 'not_configured');
+    // O que a tela chama de "Ink conectada" é a API: credencial no lugar. O webhook é outra coisa e,
+    // hoje, foi ADIADO de propósito (o sistema anterior segue consumindo os eventos): a ausência dele
+    // não rebaixa a integração. Nada aqui afirma que a credencial FUNCIONA — isso só o teste de
+    // conexão diz, e ele é explícito (§25 do comando).
+    const inkStatus = reservaInk.some((r) => r.tokenConfigurado) ? 'conectada' : 'not_configured';
 
     const whatsappConfigurado = !!(WHATSAPP_SERVICE_URL && WHATSAPP_API_KEY);
     let provider = WHATSAPP_PROVIDER_PADRAO.provider;
@@ -8706,7 +8803,13 @@ app.get('/api/admin/integrations', requireAdmin, async (req, res) => {
       reservaInk,
       // Resumo explícito por provider: uma organization nova responde `not_configured`, e não um
       // silêncio que a tela precise adivinhar a partir de uma lista vazia.
-      ink: { conectado: inkStatus === 'conectada', status: inkStatus },
+      ink: {
+        conectado: inkStatus === 'conectada',
+        status: inkStatus,
+        webhook: reservaInk.every((r) => r.webhookConfigurado) && reservaInk.length > 0 ? 'configurado' : 'adiado',
+      },
+      // Read model: UM estado por provider, derivado no servidor (lib/platform/integration-read-model.js).
+      integracoes: await lerIntegracoesParaTela({ inkConectada: inkStatus === 'conectada', inkWebhook: reservaInk.every((r) => r.webhookConfigurado) && reservaInk.length > 0, whatsappServicoConfigurado: whatsappConfigurado }),
       whatsapp: {
         // Configurado = variáveis de ambiente presentes; conectividade real (o serviço está de
         // pé agora) é responsabilidade de /admin/whatsapp (GET /api/admin/whatsapp/visao-geral).
@@ -8987,6 +9090,7 @@ if (CHAVEIRO.legacyAtivo) {
 const { createSecretStore } = require('./lib/secrets/store');
 const { createIntegrationResolver, IntegracaoError } = require('./lib/platform/integrations');
 const { createOAuthStates, OAuthStateError } = require('./lib/platform/oauth-state');
+const { linhaDoProvider, linhaComFalha } = require('./lib/platform/integration-read-model');
 const { EmbeddedSignupError, criarClienteEmbeddedSignup, validarEntrada: validarEntradaEmbeddedSignup, gerarPin, VERSAO_PADRAO: ES_VERSAO_PADRAO } = require('./lib/whatsapp/embedded-signup');
 const {
   resolveWebhookConnection,
@@ -9741,8 +9845,10 @@ const GOOGLE_ADS_DIAS_BACKFILL = Number(process.env.GOOGLE_ADS_BACKFILL_DIAS || 
 const GOOGLE_ADS_DIAS_IMPORT_INICIAL = 90;
 const GOOGLE_ADS_INTERVALO_SYNC_MIN = Number(process.env.GOOGLE_ADS_SYNC_INTERVALO_MIN || 45);
 
+// A API do Google Ads exige, além do OAuth, o developer token da PLATAFORMA. Sem ele o consentimento
+// funcionaria e a primeira leitura falharia — então a integração fica "indisponível na plataforma".
 function googleAdsOAuthConfigurado() {
-  return googleOAuthConfigurado();
+  return googleOAuthConfigurado() && !!process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
 }
 
 // ── Conexão ─────────────────────────────────────────────────────────────────────────────────

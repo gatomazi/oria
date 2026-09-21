@@ -25,7 +25,6 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
   const [dados, setDados] = useState<InkCredenciais | null>(null);
   const [erro, setErro] = useState('');
   const [token, setToken] = useState('');
-  const [feed, setFeed] = useState('');
   const [segredoWebhook, setSegredoWebhook] = useState('');
   const [urlGerada, setUrlGerada] = useState<string | null>(null);
   const [urlCopiada, setUrlCopiada] = useState(false);
@@ -40,23 +39,20 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
   useEffect(carregar, [carregar]);
 
   const tokenInfo = dados?.segredos.find((s) => s.tipo === 'api_token');
-  const feedInfo = dados?.segredos.find((s) => s.tipo === 'feed_url');
   const segredoWebhookInfo = dados?.segredos.find((s) => s.tipo === 'webhook_secret');
   const viaEnv = dados?.viaEnvLegado || [];
 
   function salvar(ev: FormEvent) {
     ev.preventDefault();
-    const corpo: { apiToken?: string; feedUrl?: string; webhookSecret?: string } = {};
+    const corpo: { apiToken?: string; webhookSecret?: string } = {};
     if (token.trim()) corpo.apiToken = token.trim();
-    if (feed.trim()) corpo.feedUrl = feed.trim();
     if (segredoWebhook.trim()) corpo.webhookSecret = segredoWebhook.trim();
-    if (!corpo.apiToken && !corpo.feedUrl && !corpo.webhookSecret) return;
+    if (!corpo.apiToken && !corpo.webhookSecret) return;
     setSalvando(true);
     setTeste(null);
     salvarInkCredenciais(corpo)
       .then((r) => {
         setToken(''); // o segredo nunca fica no estado da tela depois de enviado
-        setFeed('');
         setSegredoWebhook('');
         setDados(r);
         toast('Credencial da Reserva Ink salva com criptografia.', 'sucesso');
@@ -103,18 +99,23 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
             ) : (
               <StatusBadge tone="warning" label="Token não cadastrado" />
             )}
-            {/* O feed CSV é caminho legado descontinuado: não é requisito de conexão. Só aparece para quem já tem um cadastrado. */}
-            {feedInfo && <StatusBadge tone="neutral" label="Feed legado cadastrado" />}
+            {/* O feed CSV é caminho legado descontinuado: não é requisito de conexão e não aparece aqui. */}
             <StatusBadge
-              tone={dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado ? 'success' : 'warning'}
-              label={dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado ? 'Webhook configurado' : 'Webhook pendente'}
+              tone={dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado ? 'success' : 'neutral'}
+              label={dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado ? 'Webhook configurado' : 'Webhook não ativado'}
             />
             {segredoWebhookInfo && (
               <StatusBadge tone="success" label={`Segredo do webhook cadastrado${segredoWebhookInfo.last4 ? ` · final ${segredoWebhookInfo.last4}` : ''}`} />
             )}
           </div>
+          {!(dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado) && (
+            <p className="pc-nota">
+              A API da Reserva Ink está em uso (pedidos, produtos e catálogo). O webhook ainda não foi ativado nesta loja: os eventos da
+              Reserva Ink seguem sendo recebidos pelo sistema anterior. Isso não é uma falha — ative quando for migrar.
+            </p>
+          )}
           <InkWebhookGuia
-            pendente={!(dados.webhook?.urlEmitida && dados.webhook?.segredoCadastrado)}
+            pendente={false}
             segredoFinal={segredoWebhookInfo?.last4 || null}
           />
           {urlGerada && (
@@ -132,11 +133,6 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
               <Field label={tokenInfo ? 'Substituir token da API' : 'Token da API'} hint="Gerado no painel da Reserva Ink. Não é salvo no navegador.">
                 <Input type="password" autoComplete="off" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} />
               </Field>
-              {feedInfo && (
-                <Field label="Substituir URL do feed legado" hint="Descontinuado: o catálogo é sincronizado direto pela API da Reserva Ink.">
-                  <Input type="url" autoComplete="off" spellCheck={false} value={feed} onChange={(e) => setFeed(e.target.value)} placeholder="https://" />
-                </Field>
-              )}
               <Field
                 label={dados.webhook?.segredoCadastrado ? 'Substituir segredo do webhook' : 'Segredo do webhook'}
                 optional
@@ -154,7 +150,7 @@ export function InkCredenciaisCard({ onAlterado }: { onAlterado: () => void }) {
                     <Button variant="danger" onClick={remover}>Remover</Button>
                   </>
                 )}
-                <Button type="submit" disabled={salvando || (!token.trim() && !feed.trim() && !segredoWebhook.trim())}>
+                <Button type="submit" disabled={salvando || (!token.trim() && !segredoWebhook.trim())}>
                   {salvando ? 'Salvando…' : 'Salvar'}
                 </Button>
               </FormActions>

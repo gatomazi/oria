@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { IntegracaoLeitura } from '../pages/integracoes/estadoIntegracao';
 
 export interface ReservaInkStatus {
   /** Identidade canônica da Store. É por ela que a linha é identificada. */
@@ -20,12 +21,16 @@ export interface WhatsappStatus {
 export interface ConnectorStatus {
   conectado: boolean;
   status: 'not_configured' | 'pendente' | 'conectada' | 'configurado';
+  /** Ink: o webhook é uma parte separada da API. `adiado` não é falha. */
+  webhook?: 'configurado' | 'adiado';
 }
 
 export interface IntegrationsData {
   reservaInk: ReservaInkStatus[];
   ink: ConnectorStatus;
   whatsapp: WhatsappStatus;
+  /** Read model: um estado por provider, derivado no servidor. */
+  integracoes: IntegracaoLeitura[];
 }
 
 export function getIntegrations() {

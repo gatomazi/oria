@@ -49,7 +49,9 @@ test('o segredo salvo nunca reaparece inteiro: só os 4 últimos caracteres, e o
   assert.doesNotMatch(guia, /segredoWebhook/);
 });
 
-test('o guia aparece aberto enquanto o webhook está pendente e recolhido depois de configurado', () => {
+test('o guia fica recolhido: o webhook está adiado de propósito e não é pendência da API', () => {
   assert.match(guia, /defaultOpen=\{pendente\}/);
-  assert.match(card, /pendente=\{!\(dados\.webhook\?\.urlEmitida && dados\.webhook\?\.segredoCadastrado\)\}/);
+  assert.match(card, /pendente=\{false\}/);
+  assert.doesNotMatch(card, /Webhook pendente/, 'sem webhook, o selo não diz "pendente"');
+  assert.match(card, /Webhook não ativado/);
 });
