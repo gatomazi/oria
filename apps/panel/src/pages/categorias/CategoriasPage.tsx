@@ -123,7 +123,7 @@ export function CategoriasPage() {
             }}
             columns={[
               { key: 'nome', label: 'Categoria', render: (c) => c.name, sortValue: (c) => c.name },
-              { key: 'produtos', label: 'Produtos', align: 'right', render: (c) => (c.product_ids || []).length, sortValue: (c) => (c.product_ids || []).length },
+              { key: 'produtos', label: 'Produtos', align: 'right', render: (c) => c.product_count ?? (c.product_ids || []).length, sortValue: (c) => c.product_count ?? (c.product_ids || []).length },
               { key: 'kits', priority: 'low', label: 'Kits', align: 'right', render: (c) => (c.kit_ids || []).length, sortValue: (c) => (c.kit_ids || []).length },
               {
                 key: 'visivel',
