@@ -141,7 +141,8 @@ test.before(async () => {
       PORT: String(porta), NODE_ENV: 'development', NODE_PATH: path.join(h.RAIZ_REPO, 'node_modules'),
       DATABASE_URL: h.urlComUsuario(db.url, ROLE, SENHA_ROLE), DB_ENFORCE_APP_ROLE: '1',
       ENCRYPTION_MASTER_KEY: MESTRA, ADMIN_SESSION_SECRET: crypto.randomBytes(32).toString('base64url'),
-      // Google pronto (GA4 disponível); SEM developer token (Google Ads indisponível) e SEM app de Ads.
+      // Google pronto (GA4 e Google Ads disponíveis); SEM developer token (descontinuado em 09/09/2026: não é
+      // requisito) e SEM app de Ads (Meta indisponível).
       GOOGLE_CLIENT_ID: 'cid', GOOGLE_CLIENT_SECRET: 'csecret', GOOGLE_OAUTH_REDIRECT_URI: 'https://oria.test/google/callback',
       WHATSAPP_SERVICE_URL: 'http://127.0.0.1:1', WHATSAPP_API_KEY: 'k'.repeat(24),
     },
@@ -166,7 +167,8 @@ test('endpoint · o plano concede: cada integração reflete a plataforma, sem c
   assert.equal(r.status, 200);
   assert.equal(linha(r.json, 'ga4').estado, 'not_configured', 'plataforma do Google pronta, nada conectado');
   assert.equal(linha(r.json, 'meta_ads').estado, 'platform_unavailable', 'app de Ads não configurado na plataforma');
-  assert.equal(linha(r.json, 'google_ads').estado, 'platform_unavailable', 'sem developer token o Google Ads não é oferecido');
+  assert.equal(linha(r.json, 'google_ads').estado, 'not_configured', 'developer token ausente NÃO torna a plataforma indisponível: com o OAuth do Google configurado, o Google Ads está pronto');
+  assert.equal(linha(r.json, 'google_ads').platformAvailable, true);
   assert.equal(linha(r.json, 'whatsapp').estado, 'not_configured', 'serviço de WhatsApp pronto, sem número');
   assert.equal(linha(r.json, 'openai').estado, 'not_configured');
   assert.equal(linha(r.json, 'ink').estado, 'not_configured');
@@ -212,4 +214,14 @@ test('endpoint · Ink com token e SEM webhook: API conectada, webhook adiado —
   assert.equal(ink.estado, 'connected', 'o webhook adiado não rebaixa a API');
   assert.deepEqual(ink.componentes, { api: 'connected', webhook: 'deferred' });
   assert.ok(!JSON.stringify(r.json).includes('token-de-teste-da-ink'), 'o token nunca sai na resposta');
+});
+
+test('fonte · o Google Ads não depende de developer token (descontinuado em 09/09/2026): readiness = OAuth do Google, e o cabeçalho não é enviado', () => {
+  const fonte = fs.readFileSync(SERVER, 'utf8');
+  const gate = fonte.slice(fonte.indexOf('function googleAdsOAuthConfigurado() {'), fonte.indexOf('function googleAdsOAuthConfigurado() {') + 200);
+  assert.match(gate, /return googleOAuthConfigurado\(\);/);
+  const cliente = fonte.slice(fonte.indexOf('async function googleAdsClient() {'), fonte.indexOf('async function googleAdsClient() {') + 700);
+  assert.doesNotMatch(cliente, /developerToken:\s*process\.env/, 'o painel não repassa mais o developer token ao cliente');
+  const oauth = fonte.slice(fonte.indexOf("'/api/admin/integrations/google-ads/oauth/start'"), fonte.indexOf("'/api/admin/integrations/google-ads/oauth/start'") + 600);
+  assert.doesNotMatch(oauth, /GOOGLE_CLIENT_ID\/GOOGLE_CLIENT_SECRET/, 'a resposta ao tenant nunca cita nome de variável de ambiente');
 });

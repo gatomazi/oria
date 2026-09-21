@@ -9868,10 +9868,12 @@ const GOOGLE_ADS_DIAS_BACKFILL = Number(process.env.GOOGLE_ADS_BACKFILL_DIAS || 
 const GOOGLE_ADS_DIAS_IMPORT_INICIAL = 90;
 const GOOGLE_ADS_INTERVALO_SYNC_MIN = Number(process.env.GOOGLE_ADS_SYNC_INTERVALO_MIN || 45);
 
-// A API do Google Ads exige, além do OAuth, o developer token da PLATAFORMA. Sem ele o consentimento
-// funcionaria e a primeira leitura falharia — então a integração fica "indisponível na plataforma".
+// Prontidão da PLATAFORMA para o Google Ads = o cliente OAuth do Google está configurado. O developer
+// token deixou de existir em 09/09/2026: o nível de acesso da API passou a ser do projeto do Google
+// Cloud dono das credenciais OAuth, e o cabeçalho `developer-token` é opcional e ignorado pelo Google.
+// Portanto `GOOGLE_ADS_DEVELOPER_TOKEN` NUNCA é requisito de readiness (ver docs/operations/google-ads-2026-09-21.md).
 function googleAdsOAuthConfigurado() {
-  return googleOAuthConfigurado() && !!process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+  return googleOAuthConfigurado();
 }
 
 // ── Conexão ─────────────────────────────────────────────────────────────────────────────────
@@ -9917,8 +9919,7 @@ async function googleAdsClient() {
   const accessToken = await obterAccessTokenValidoGoogleAds();
   return new GoogleAdsClient({
     accessToken,
-    // Descontinuado em 09/2026; só é enviado se o ambiente ainda tiver um.
-    developerToken: process.env.GOOGLE_ADS_DEVELOPER_TOKEN || null,
+    // Sem `developer-token`: descontinuado em 09/09/2026 (o acesso vem do projeto das credenciais OAuth).
     loginCustomerId: (row && row.login_customer_id) || process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || null,
     versao: GOOGLE_ADS_API_VERSION,
   });
@@ -9928,7 +9929,7 @@ async function googleAdsClient() {
 
 app.get('/api/admin/integrations/google-ads/oauth/start', requireAdmin, async (req, res) => {
   if (!googleAdsOAuthConfigurado()) {
-    return res.status(503).json({ error: 'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/GOOGLE_OAUTH_REDIRECT_URI não configurados neste ambiente' });
+    return res.status(503).json({ error: 'a conexão com o Google ainda não está habilitada na plataforma', codigo: 'PLATFORM_UNAVAILABLE' });
   }
   const url = new URL(GOOGLE_AUTH_URL);
   url.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID);

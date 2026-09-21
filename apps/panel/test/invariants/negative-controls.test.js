@@ -1079,13 +1079,13 @@ const VIOLACOES = [
     para: '  // VIOLAÇÃO DELIBERADA (negative control) — entitlement deixa de bloquear',
   },
   {
-    classe: 'integracoes/google-ads-sem-developer-token',
+    classe: 'integracoes/google-ads-exige-developer-token',
     invariant: 'INTEG-06',
     teste: 'integracoes-read-model.test.js',
     arquivo: 'server.js',
-    descricao: 'o Google Ads é oferecido sem o developer token da plataforma (o consentimento passa e a primeira leitura falha)',
-    de: '  return googleOAuthConfigurado() && !!process.env.GOOGLE_ADS_DEVELOPER_TOKEN;',
-    para: '  return googleOAuthConfigurado(); // VIOLAÇÃO DELIBERADA (negative control)',
+    descricao: 'o developer token (descontinuado em 09/09/2026) volta a ser requisito de readiness: o Google Ads fica "indisponível na plataforma" sem necessidade',
+    de: 'function googleAdsOAuthConfigurado() {\n  return googleOAuthConfigurado();\n}',
+    para: 'function googleAdsOAuthConfigurado() {\n  return googleOAuthConfigurado() && !!process.env.GOOGLE_ADS_DEVELOPER_TOKEN; // VIOLAÇÃO DELIBERADA (negative control)\n}',
   },
   // ── Operação · Trocas, Promoções, Campanhas, Recuperação na Store nativa ───────────────────
   {
@@ -1327,7 +1327,7 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
       'google/retry-em-erro-definitivo', 'http/async-sem-rede', 'http/erro-vaza-stack', 'ink/catalogo-sem-store-id',
       'ink/catalogo-status-exige-loja-legada', 'ink/categorias-exige-loja-legada', 'ink/feed-descontinuado-vira-erro',
       'ink/job-catalogo-so-legado', 'ink/lote-sem-store-id', 'ink/webhook-exige-loja-legada',
-      'integracoes/desconectar-cruzado', 'integracoes/env-global', 'integracoes/google-ads-sem-developer-token',
+      'integracoes/desconectar-cruzado', 'integracoes/env-global', 'integracoes/google-ads-exige-developer-token',
       'integracoes/instagram-finge-conexao', 'integracoes/leitura-falha-vira-nao-configurado',
       'integracoes/plataforma-ausente-vira-nao-configurado', 'integracoes/resolver-global',
       'integracoes/sem-plano-vira-conectavel', 'integracoes/token-de-outra-org', 'integracoes/webhook-adiado-rebaixa-ink',
