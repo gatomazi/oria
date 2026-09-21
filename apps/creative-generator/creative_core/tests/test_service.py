@@ -134,6 +134,18 @@ def test_given_generation_with_byok_then_key_used_once_and_never_echoed():
     assert KEY not in json.dumps(body)
 
 
+def test_given_generation_then_result_carries_a_trace_without_prompt_or_key():
+    app, _ = _app()
+    plan = _call(app, "POST", "/v1/plans", {"request": load_fixture("fixture-clean-single")["input"]})[1]["plan"]
+    refs = [{"ref": r["ref"], "data_base64": base64.b64encode(png_bytes()).decode()} for r in plan["references"]]
+    _, body, _ = _call(app, "POST", "/v1/generations", {"plan": plan, "references": refs, "openai_api_key": KEY,
+                                                        "generation_attempt": 3})
+    trace = body["result"]["metadata"]["trace"]
+    assert trace["attempt"] == 3 and trace["model_served"] == "gpt-image-2"
+    assert trace["prompt"]["sha256"] == plan["prompt"]["sha256"]
+    assert plan["prompt"]["text"][:60] not in json.dumps(trace) and KEY not in json.dumps(trace)
+
+
 def test_given_provider_rejects_key_then_safe_failed_result_without_key():
     client = FakeClient(images=FakeImages(error=AuthenticationError(f"Incorrect API key provided: {KEY}")))
     app, _ = _app(Factory(client))

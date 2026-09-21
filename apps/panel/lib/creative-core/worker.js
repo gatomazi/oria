@@ -38,6 +38,31 @@ function consumoDoResultado(result, plan) {
   };
 }
 
+// Trace da chamada ao provedor (Fase A1), no formato das colunas da tabela. Só observação: um trace ausente,
+// malformado ou grande demais é descartado — nunca derruba nem altera a geração.
+//
+// `generation_trace` guarda um trace POR TENTATIVA (chave = nº da tentativa): um retry não apaga a evidência
+// da tentativa anterior. As colunas escalares refletem a tentativa mais recente.
+const MAX_TRACE_BYTES = 16 * 1024;
+
+function traceDoResultado(result, item) {
+  const trace = result && result.metadata && result.metadata.trace;
+  if (!trace || typeof trace !== 'object' || Array.isArray(trace)) return {};
+  let tamanho = 0;
+  try { tamanho = JSON.stringify(trace).length; } catch { return {}; }
+  if (tamanho > MAX_TRACE_BYTES) return {};
+  const anteriores = item && item.generationTrace && typeof item.generationTrace === 'object' && !Array.isArray(item.generationTrace)
+    ? item.generationTrace : {};
+  const tentativa = String(Number.isInteger(trace.attempt) && trace.attempt > 0 ? trace.attempt : (item && item.generationAttempt) || 1);
+  const texto = (v, max) => (typeof v === 'string' && v.length > 0 ? v.slice(0, max) : null);
+  return {
+    generationTrace: { ...anteriores, [tentativa]: trace },
+    modelServed: texto(trace.model_served, 80),
+    durationMs: Number.isInteger(trace.duration_ms) && trace.duration_ms >= 0 && trace.duration_ms < 2 ** 31 ? trace.duration_ms : null,
+    providerRequestId: texto(trace.provider_request_id, 120),
+  };
+}
+
 // Multi-tenant (Fase 3 · INV-22): `paraCadaTenant(fn)` chama fn(tenantId) uma vez por Organization, já dentro
 // do contexto dela; `byokDe`/`storageDe` dão a chave e o storage DAQUELE tenant. Não existe tenant de processo.
 function createWorker({ store, core, byokDe, storageDe, paraCadaTenant, flagsProvider, logger = console, intervalMs = 5_000 }) {
@@ -86,7 +111,7 @@ function createWorker({ store, core, byokDe, storageDe, paraCadaTenant, flagsPro
         data_base64: storage.readProductReference(r.ref).toString('base64'),
       }));
       const result = await core.generate({ plan, references, apiKey, attempt: item.generationAttempt });
-      const consumo = consumoDoResultado(result, plan);
+      const consumo = { ...consumoDoResultado(result, plan), ...traceDoResultado(result, item) };
 
       await store.updateItem(tenantId, item.creativeId, { status: 'processing' });
       if (result.status !== 'completed' || !result.asset) {
@@ -197,4 +222,4 @@ function createWorker({ store, core, byokDe, storageDe, paraCadaTenant, flagsPro
   };
 }
 
-module.exports = { createWorker, INFRA_RETRY_DELAY_MS, MAX_INFRA_RETRIES };
+module.exports = { createWorker, traceDoResultado, INFRA_RETRY_DELAY_MS, MAX_INFRA_RETRIES };

@@ -74,5 +74,16 @@ def decode_reference(data_base64: str) -> tuple[bytes, str]:
     raise GenerationError("INVALID_REFERENCE", {"reason": "unsupported_type"})
 
 
+def sniff_mime(data: bytes) -> str | None:
+    """Real image type of `data` by magic bytes (None when unknown). Same signatures decode_reference
+    enforces, exposed so a generation trace can tell the bytes apart from the name they are sent under."""
+    for signature, mime in _SIGNATURES.items():
+        if data.startswith(signature):
+            if mime == "image/webp" and data[8:12] != b"WEBP":
+                return None
+            return mime
+    return None
+
+
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()

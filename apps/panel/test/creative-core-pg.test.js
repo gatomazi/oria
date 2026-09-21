@@ -78,6 +78,15 @@ test('pgStore cumpre o contrato do store (schema, perfis, produtos, lotes, fila,
     await store.updateItem(tenant, primeiro.creativeId, { status: 'generating', plan: { p: 1 }, planSummary: { scene: 'rua' }, persona: 'P1', hacker: 'ignorado' });
     assert.equal((await store.refreshJobStatus(tenant, jobId)).status, 'generating');
     await store.updateItem(tenant, primeiro.creativeId, { status: 'completed', finishedAt: new Date().toISOString(), record: { engine: 'CLEAN_ANGLES' } });
+    // Fase A1: trace por tentativa em JSONB + colunas escalares (migration 0031).
+    await store.updateItem(tenant, primeiro.creativeId, {
+      generationTrace: { 1: { attempt: 1, model_served: 'gpt-image-2', duration_ms: 1234 } },
+      modelServed: 'gpt-image-2', durationMs: 1234, providerRequestId: 'req_abc',
+    });
+    const comTrace = await store.getItem(tenant, primeiro.creativeId);
+    assert.deepEqual(comTrace.generationTrace, { 1: { attempt: 1, model_served: 'gpt-image-2', duration_ms: 1234 } });
+    assert.deepEqual([comTrace.modelServed, comTrace.durationMs, comTrace.providerRequestId], ['gpt-image-2', 1234, 'req_abc']);
+    assert.equal((await store.getItem(tenant, primeiro.creativeId)).status, 'completed', 'trace não mexe no status');
     const assetId = crypto.randomUUID();
     await store.insertAsset(tenant, { id: assetId, creativeId: primeiro.creativeId, storageKey: 'creatives/a/image.png', mime: 'image/png', byteSize: 10, sha256: 'x' });
     assert.equal((await store.getAssetByCreative(tenant, primeiro.creativeId)).id, assetId);

@@ -333,6 +333,80 @@ test('erro do provedor falha só o item (parcial) e retry mantém creative_id co
   assert.equal(core.calls.plan.length, 2, 'retry reaproveita o plano salvo em vez de replanejar');
 });
 
+function traceDe(attempt, extra = {}) {
+  return {
+    trace_version: 1, attempt, model_requested: 'gpt-image-2', model_served: 'gpt-image-2', models_tried: ['gpt-image-2'],
+    params: { size: '1088x1360', quality: 'medium' }, prompt: { sha256: 'abc', version: 1, length: 10 },
+    references: { count: 1, items: [{ order: 1, original_mime: 'image/jpeg', sent_mime: 'image/png', sent_actual_mime: 'image/jpeg', original_bytes: 9, sent_bytes: 9 }] },
+    provider_request_id: `req_${attempt}`, provider_ms: 800, duration_ms: 900 + attempt, outcome: 'completed', error_code: null, ...extra,
+  };
+}
+
+test('trace de geração fica por tentativa: o retry não apaga a evidência da tentativa anterior', async () => {
+  const base = fakeCore();
+  let n = 0;
+  const { store, worker, job } = await prepararWorker({
+    generate: async (args) => {
+      n += 1;
+      if (n === 1) {
+        return {
+          status: 'failed', asset: null, error: { code: 'MODEL_RATE_LIMITED', message: 'Limite de uso do provedor de IA atingido.', retryable: true },
+          metadata: { trace: traceDe(args.attempt, { model_served: null, provider_request_id: null, outcome: 'failed', error_code: 'MODEL_RATE_LIMITED' }) },
+        };
+      }
+      const ok = await base.generate(args);
+      return { ...ok, metadata: { trace: traceDe(args.attempt, { model_served: 'gpt-image-1', models_tried: ['gpt-image-2', 'gpt-image-1'] }) } };
+    },
+  });
+  await drenar(worker);
+  const falho = (await store.getJob(TENANT, job.id)).items.find((i) => i.status === 'failed');
+  assert.equal(falho.generationTrace['1'].error_code, 'MODEL_RATE_LIMITED');
+  assert.equal(falho.modelServed, null, 'falha antes de qualquer modelo responder');
+  await store.retryItem(TENANT, job.id, falho.creativeId);
+  await drenar(worker);
+  const item = await store.getItem(TENANT, falho.creativeId);
+  assert.deepEqual(Object.keys(item.generationTrace).sort(), ['1', '2']);
+  assert.equal(item.generationTrace['1'].outcome, 'failed', 'tentativa 1 preservada');
+  assert.equal(item.generationTrace['2'].model_served, 'gpt-image-1');
+  assert.equal(item.modelServed, 'gpt-image-1');
+  assert.equal(item.durationMs, 902);
+  assert.equal(item.providerRequestId, 'req_2');
+  assert.ok(!JSON.stringify(item.generationTrace).includes('PROMPT INTERNO SECRETO'));
+});
+
+test('trace ausente, malformado ou grande demais é descartado sem afetar a geração', async () => {
+  const base = fakeCore();
+  for (const trace of [undefined, 'texto', ['x'], { lixo: 'x'.repeat(20000) }]) {
+    const { store, worker, job } = await prepararWorker({
+      generate: async (args) => ({ ...(await base.generate(args)), metadata: { trace } }),
+    });
+    await drenar(worker);
+    const final = await store.getJob(TENANT, job.id);
+    assert.equal(final.status, 'completed');
+    assert.ok(final.items.every((i) => !i.generationTrace && !i.modelServed));
+  }
+});
+
+test('traceDoResultado normaliza os campos escalares e limita o tamanho dos textos', () => {
+  const { traceDoResultado } = require('../lib/creative-core/worker');
+  const t = traceDoResultado({ metadata: { trace: traceDe(3, { model_served: 'm'.repeat(200), duration_ms: -5, provider_request_id: '' }) } }, { generationAttempt: 3 });
+  assert.equal(t.modelServed.length, 80);
+  assert.equal(t.durationMs, null);
+  assert.equal(t.providerRequestId, null);
+  assert.deepEqual(Object.keys(t.generationTrace), ['3']);
+  assert.deepEqual(traceDoResultado({ metadata: {} }, {}), {});
+});
+
+test('migration 0031 (trace) é só acréscimo de coluna em creative_generations', () => {
+  const up = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0031-creative-trace.up.sql'), 'utf8')
+    .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+  assert.doesNotMatch(up, /\b(DROP|DELETE|TRUNCATE|UPDATE|RENAME)\b/i);
+  const alters = [...up.matchAll(/ALTER TABLE (\w+)\s+ADD COLUMN IF NOT EXISTS (\w+) (\w+);/g)];
+  assert.deepEqual(alters.map((m) => m[2]), ['generation_trace', 'model_served', 'duration_ms', 'provider_request_id']);
+  assert.ok(alters.every((m) => m[1] === 'creative_generations'));
+  assert.equal([...up.matchAll(/ALTER TABLE/g)].length, alters.length);
+});
+
 test('erro inesperado nunca expõe a mensagem interna', async () => {
   const { store, worker, job } = await prepararWorker({ generate: async () => { throw new Error('/var/data/segredo.txt ENOENT'); } });
   await drenar(worker);

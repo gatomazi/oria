@@ -41,8 +41,12 @@ const ITEM_PATCH_COLUMNS = Object.freeze({
   tokensEntradaCache: 'tokens_entrada_cache',
   tokensEntradaTexto: 'tokens_entrada_texto',
   tokensEntradaImagem: 'tokens_entrada_imagem',
+  generationTrace: 'generation_trace',
+  modelServed: 'model_served',
+  durationMs: 'duration_ms',
+  providerRequestId: 'provider_request_id',
 });
-const JSON_COLUMNS = new Set(['plan', 'plan_summary', 'record', 'error']);
+const JSON_COLUMNS = new Set(['plan', 'plan_summary', 'record', 'error', 'generation_trace']);
 
 function iso(v) {
   return v instanceof Date ? v.toISOString() : v || null;
@@ -80,6 +84,8 @@ function mapItem(r) {
     modeloImagem: r.modelo_imagem, tokensEntrada: r.tokens_entrada, tokensSaida: r.tokens_saida,
     tokensEntradaCache: r.tokens_entrada_cache,
     tokensEntradaTexto: r.tokens_entrada_texto, tokensEntradaImagem: r.tokens_entrada_imagem,
+    generationTrace: r.generation_trace, modelServed: r.model_served, durationMs: r.duration_ms,
+    providerRequestId: r.provider_request_id,
   };
 }
 

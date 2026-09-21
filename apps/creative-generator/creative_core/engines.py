@@ -14,6 +14,8 @@ import copy
 import hashlib
 import io
 import json
+import mimetypes
+import time
 import uuid
 from pathlib import Path
 
@@ -47,7 +49,7 @@ from .personas import persona_pool, resolve_persona
 from .placements import placement_descriptor
 from .products import garment_for_type, validate_products
 from .prompt_builder import PromptBuilder, bullet_block
-from .references import reference_roles
+from .references import reference_roles, sniff_mime
 from .rules import CLEAN_ANGLES_FORBIDDEN_OVERLAY
 from .strategies import (
     MULTI_PRODUCT_RULES,
@@ -531,6 +533,7 @@ def _result(
     error: GenerationError | None,
     now: str | None,
     usage: dict | None = None,
+    trace: dict | None = None,
 ) -> dict:
     return {
         "creative_id": plan.get("creative_id", ""),
@@ -557,11 +560,64 @@ def _result(
             "prompt_sha256": (plan.get("prompt") or {}).get("sha256"),
             # Consumo real cobrado pelo provedor. None quando ele não reportou — ver usage_from_response.
             "usage": usage,
+            # What actually happened in the provider call (see generation_trace). None only when the
+            # caller passed no trace; generate_creative always does.
+            "trace": trace,
         },
         "versions": plan.get("versions", {}),
         "error": error.to_dict() if error else None,
         "created_at": now or utc_now(),
     }
+
+
+TRACE_VERSION = 1
+
+
+def _new_trace(plan: dict, router: mr.ModelRouter, attempt: int) -> dict:
+    """Skeleton of the generation trace. Purely observational and never raises: it is built before
+    the plan is validated, so it must survive a malformed plan."""
+    plan = plan if isinstance(plan, dict) else {}
+    model = plan.get("model") if isinstance(plan.get("model"), dict) else {}
+    prompt = plan.get("prompt") if isinstance(plan.get("prompt"), dict) else {}
+    text = prompt.get("text") if isinstance(prompt.get("text"), str) else ""
+    return {
+        "trace_version": TRACE_VERSION,
+        "attempt": attempt,
+        "model_requested": router.model_for(mr.IMAGE_GENERATION),
+        "model_served": None,
+        "models_tried": [],
+        "params": {"size": model.get("size"), "quality": model.get("quality")},
+        "prompt": {"sha256": prompt.get("sha256"), "version": prompt.get("prompt_version"), "length": len(text)},
+        "references": {"count": 0, "items": []},
+        "provider_request_id": None,
+        "provider_ms": None,
+        "duration_ms": None,
+        "outcome": None,
+        "error_code": None,
+    }
+
+
+def _reference_trace(order: int, data: bytes, sent_name: str) -> dict:
+    """One reference as it went out: what the bytes really are, and what they were announced as.
+    The two differ when the original is JPEG/WebP but is sent under a `.png` name."""
+    declared = mimetypes.guess_type(sent_name)[0]
+    return {
+        "order": order,
+        "original_mime": sniff_mime(data),
+        "sent_name": sent_name,
+        "sent_mime": declared,
+        "sent_actual_mime": sniff_mime(data),
+        "original_bytes": len(data),
+        "sent_bytes": len(data),
+    }
+
+
+def _finish_trace(trace: dict, started: float, err: GenerationError | None) -> dict:
+    trace["duration_ms"] = int((time.monotonic() - started) * 1000)
+    trace["outcome"] = "failed" if err else "completed"
+    trace["error_code"] = err.code if err else None
+    trace["references"]["count"] = len(trace["references"]["items"])
+    return trace
 
 
 def generate_creative(
@@ -582,6 +638,8 @@ def generate_creative(
     # Fora do try: uma chamada que já foi cobrada precisa sobreviver ao caminho de erro, senão o
     # painel subestima a fatura justamente nas gerações que falharam depois de gastar.
     usage = None
+    started = time.monotonic()
+    trace = _new_trace(plan, router, attempt)
     try:
         errors = validate("CreativePlan", plan)
         if errors:
@@ -594,6 +652,7 @@ def generate_creative(
             buf = io.BytesIO(data)
             buf.name = f"reference_{role['order']}.png"
             images.append(buf)
+            trace["references"]["items"].append(_reference_trace(role["order"], data, buf.name))
 
         def call(model: str):
             return client.images.edit(
@@ -601,12 +660,19 @@ def generate_creative(
                 size=plan["model"]["size"], quality=plan["model"]["quality"],
             )
 
+        provider_started = time.monotonic()
         try:
-            response = router.run(mr.IMAGE_GENERATION, call)
+            response, served = router.run_traced(mr.IMAGE_GENERATION, call, trace["models_tried"])
         except GenerationError:
             raise
         except Exception as exc:  # noqa: BLE001 — provider errors are classified, never echoed
             raise classify_provider_exception(exc) from None
+        finally:
+            trace["provider_ms"] = int((time.monotonic() - provider_started) * 1000)
+        trace["model_served"] = served
+        request_id = getattr(response, "_request_id", None)
+        if isinstance(request_id, str) and 0 < len(request_id) <= 120:
+            trace["provider_request_id"] = request_id
         # Lido ANTES de processar o asset: a chamada já foi cobrada neste ponto, e falha no
         # processamento não deve apagar o registro de um gasto que existiu.
         usage = usage_from_response(response)
@@ -615,9 +681,9 @@ def generate_creative(
             asset = asset_from_provider_b64(b64, plan["placement"]["width"], plan["placement"]["height"])
         except Exception:  # noqa: BLE001
             raise GenerationError("ASSET_PROCESSING_FAILED") from None
-        return _result(plan, attempt, asset, None, now, usage)
+        return _result(plan, attempt, asset, None, now, usage, _finish_trace(trace, started, None))
     except GenerationError as err:
-        return _result(plan if isinstance(plan, dict) else {}, attempt, None, err, now, usage)
+        return _result(plan if isinstance(plan, dict) else {}, attempt, None, err, now, usage, _finish_trace(trace, started, err))
 
 
 # ------------------------------------------------------------------ copy

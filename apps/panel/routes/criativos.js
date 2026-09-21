@@ -45,6 +45,12 @@ function responderErro(res, err, logger) {
   return res.status(500).json({ error: 'erro interno no gerador de criativos' });
 }
 
+function ultimoTrace(item) {
+  const porTentativa = item.generationTrace;
+  if (!porTentativa || typeof porTentativa !== 'object') return null;
+  return porTentativa[String(item.generationAttempt)] || null;
+}
+
 function resumoItem(item) {
   return {
     creativeId: item.creativeId,
@@ -66,6 +72,8 @@ function resumoItem(item) {
     promptVersion: item.promptVersion,
     summary: item.planSummary,
     error: item.error,
+    // Trace da tentativa mais recente (sem prompt e sem chave): modelo pedido x servido, referências, duração.
+    trace: ultimoTrace(item),
     assetUrl: item.assetId ? `/api/admin/criativos/assets/${item.creativeId}` : null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
