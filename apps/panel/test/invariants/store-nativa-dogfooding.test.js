@@ -220,7 +220,7 @@ test('Clientes · Store nativa: 200 com o histórico da PRÓPRIA Store, agregado
   assert.equal(cliente.documento, '11111111111');
   assert.equal(cliente.totalCompras, 2);
   assert.equal(cliente.lucroOperacional, 50);
-  assert.equal(cliente.loja, null, 'a Store nativa não tem chave legada — e não pode precisar de uma');
+  assert.equal(cliente.loja, store[ORG_C], 'a Store nativa não tem chave legada: a chave é o store_id, a mesma dos clientes da Ink (a tela cruza por `loja + documento`)');
 });
 
 test('Clientes · isolamento: C não vê D nem A, D não vê C, A (legada) vê só os dela — histórico e novo', async () => {
