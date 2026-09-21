@@ -8751,7 +8751,7 @@ async function lerIntegracoesParaTela({ inkConectada, inkWebhook, whatsappServic
     const conectado = remetente.status === 'connected' && !!remetente.token;
     return linhaDoProvider('whatsapp', {
       entitled: entitled('whatsapp'), platformAvailable: whatsappServicoConfigurado,
-      configured: conectado, connected: conectado, failing: remetente.status === 'error' ? 'error' : null,
+      configured: conectado, connected: conectado, failing: remetente.status === 'error' || remetente.tokenInvalidoEm ? 'error' : null,
     }, {
       modo: remetente.conectadoVia || null,
       // Conectar clientes de fora depende da aprovação do app como Tech Provider (Business Verification
@@ -9110,6 +9110,7 @@ const { createIntegrationResolver, IntegracaoError } = require('./lib/platform/i
 const { createOAuthStates, OAuthStateError } = require('./lib/platform/oauth-state');
 const { linhaDoProvider, linhaComFalha } = require('./lib/platform/integration-read-model');
 const { fetchGoogle, erroGoogle } = require('./lib/google/http');
+const { classificarErroWhatsapp } = require('./lib/whatsapp/erros');
 const { EmbeddedSignupError, criarClienteEmbeddedSignup, validarEntrada: validarEntradaEmbeddedSignup, gerarPin, VERSAO_PADRAO: ES_VERSAO_PADRAO } = require('./lib/whatsapp/embedded-signup');
 const {
   resolveWebhookConnection,
@@ -12273,6 +12274,15 @@ async function whatsappRequest(method, pathAndQuery, body) {
   }
 }
 
+// A Meta recusou o token (expirado/revogado): guarda o fato na integração para o painel dizer a verdade.
+// Trocar o token (salvar de novo) recria a config e apaga a marca.
+async function marcarTokenWhatsappInvalido() {
+  const integracoes = exigirIntegracoes();
+  const m = await integracoes.metadata('whatsapp');
+  if (m.config.token_invalido_em) return;
+  await integracoes.gravarConfig('whatsapp', { ...m.config, token_invalido_em: new Date().toISOString() });
+}
+
 async function chamarServicoWhatsapp(method, pathAndQuery, body, headersDoRemetenteOuVazio) {
   const headers = { 'X-Api-Key': WHATSAPP_API_KEY, ...headersDoRemetenteOuVazio };
   if (body) headers['Content-Type'] = 'application/json';
@@ -12289,6 +12299,17 @@ async function chamarServicoWhatsapp(method, pathAndQuery, body, headersDoRemete
     // ("meta api 400: {...}") — tenta extrair a mensagem amigável (`error_user_msg`) em vez de
     // mostrar o JSON cru pro admin.
     let mensagem = data.error || `whatsapp-webhook-go respondeu ${res.status}`;
+    // Erro da Meta embutido ("meta api 401: {…}"): vira código + mensagem de produto. O corpo bruto (com
+    // fbtrace_id, horário em PDT…) nunca chega à tela. Token expirado também marca a integração como
+    // "com problema" — o card deixa de dizer "Conectada" enquanto a Meta recusa o token.
+    const classificado = classificarErroWhatsapp(res.status, typeof mensagem === 'string' ? mensagem : '');
+    if (classificado) {
+      if (classificado.tokenInvalido) await marcarTokenWhatsappInvalido().catch(() => {});
+      const erroMeta = new Error(classificado.mensagem);
+      erroMeta.status = classificado.httpStatus;
+      erroMeta.codigo = classificado.codigo;
+      throw erroMeta;
+    }
     const match = typeof mensagem === 'string' && mensagem.match(/\{.*\}/s);
     if (match) {
       try {
@@ -12866,6 +12887,7 @@ async function remetenteWhatsappParaTela() {
     webhookAssinado: m.config.webhook_subscribed === true,
     numeroRegistrado: m.config.phone_registered === true,
     conectadoEm: typeof m.config.connected_at === 'string' ? m.config.connected_at : null,
+    tokenInvalidoEm: typeof m.config.token_invalido_em === 'string' ? m.config.token_invalido_em : null,
     replyRedirectMessage: comportamento.replyRedirectMessage,
     notifyNumber: comportamento.notifyNumber,
     token,
@@ -12916,6 +12938,8 @@ app.put('/api/admin/whatsapp/remetente', requireAdmin, (req, res, next) => TENAN
     } : {};
     await integracoes.gravarConfig('whatsapp', {
       ...identidadeMeta,
+      // Só trocar o token limpa a marca de "a Meta recusou o token"; salvar só o comportamento a mantém.
+      ...(accessToken === undefined && antes.tokenInvalidoEm ? { token_invalido_em: antes.tokenInvalidoEm } : {}),
       phone_number_id: phoneNumberId,
       waba_id: wabaId,
       reply_redirect_message: replyRedirectMessage !== undefined ? replyRedirectMessage : antes.replyRedirectMessage,
@@ -15804,7 +15828,11 @@ app.put('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) =
       botaoInfo = extrairBotaoDinamico(t.components);
     } catch (err) {
       console.error(`[AUTOMACAO] falha ao buscar estrutura do template ${template}: ${err.message}`);
-      return res.status(err.status || 502).json({ error: 'não foi possível confirmar a estrutura do template na Meta' });
+      // Erro já classificado (token expirado, permissão…) explica a causa; o genérico só cobre o resto.
+      return res.status(err.status || 502).json({
+        error: err.codigo ? err.message : 'não foi possível confirmar a estrutura do template na Meta',
+        ...(err.codigo ? { codigo: err.codigo } : {}),
+      });
     }
 
     // Tipo desconhecido (template legado, criado antes dessa separação) não valida essa

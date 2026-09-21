@@ -174,11 +174,13 @@ test('categorias em lote · job da Store nativa nasce com store_id e é processa
   assert.equal(job.store_id, store.C);
   assert.equal(job.loja, null);
   assert.equal(job.total, 3);
-  // O runner de jobs (15 s) processa o lote sob o contexto da Organization/Store.
+  // O runner de jobs (15 s) processa o lote sob o contexto da Organization/Store. Na CI lenta (Full
+  // Verification em modo owner) o job passou dos 40 s antigos. 60 s dá folga sem estourar o limite de 120 s
+  // do negative control (que roda este arquivo 3 vezes): um job que NUNCA roda continua reprovando.
   const concluido = await ate(async () => {
     const { rows } = await sup.query('SELECT status, succeeded, failed FROM bulk_category_jobs WHERE id = $1', [r.json.jobId]);
     return rows[0] && !['queued', 'running'].includes(rows[0].status) ? rows[0] : null;
-  }, { tentativas: 80, intervalo: 500 });
+  }, { tentativas: 120, intervalo: 500 });
   assert.ok(concluido, 'o job de categoria em lote não foi processado');
   assert.notEqual(concluido.status, 'cancelled');
   assert.equal(concluido.failed, 0);

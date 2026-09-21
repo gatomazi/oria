@@ -7,8 +7,19 @@ import { listarMensagensWeb, salvarVinculoWeb, type MensagemWeb } from '../../ap
 import { definirCamposCustomizados, extrairTextosComponentes } from '../../lib/templateVariables';
 import { eventoLabel } from '../../lib/eventLabels';
 import { ApiError } from '../../api/client';
-import { useLojaAtiva } from '../../auth/AuthContext';
+import { useChaveDaStore, useLojaAtiva, useNomeDaStore } from '../../auth/AuthContext';
+import { mesmaLoja } from '../dashboard/escopoLoja';
 import { adminStores } from '../../state/adminStores';
+
+// Nome para exibir: chave legada conhecida, senão o nome da Store (a chave da Store nativa é um id opaco).
+function nomeDaLojaComFallback(loja: string, nomeStore: string): string {
+  return adminStores.get(loja) ? adminStores.name(loja) : nomeStore || 'Sua loja';
+}
+
+function useNomeDaLoja(): (loja: string) => string {
+  const nomeStore = useNomeDaStore();
+  return (loja) => nomeDaLojaComFallback(loja, nomeStore);
+}
 import {
   getAutomacaoEventos,
   getAutomationSettings,
@@ -190,6 +201,7 @@ function VinculoCard({
   recarregar: () => void;
   abrirDeInicio: boolean;
 }) {
+  const nomeDaLoja = useNomeDaLoja();
   const temCadencia = eventoTemCadencia(eventName);
   const [aberto, setAberto] = useState(abrirDeInicio);
   const [templateNome, setTemplateNome] = useState(configExistente?.template || '');
@@ -296,7 +308,7 @@ function VinculoCard({
           <ConfirmDialog
             open={confirmandoRemocao}
             onClose={() => setConfirmandoRemocao(false)}
-            title={`Remover a automação do evento "${eventName}" na ${adminStores.name(loja)}?`}
+            title={`Remover a automação do evento "${eventName}" na ${nomeDaLoja(loja)}?`}
             confirmLabel="Remover"
             onConfirm={remover}
           />
@@ -323,6 +335,7 @@ function VinculoCardWeb({
   recarregar: () => void;
   abrirDeInicio: boolean;
 }) {
+  const nomeDaLoja = useNomeDaLoja();
   const temCadencia = eventoTemCadencia(eventName);
   const tipoDoEvento = eventoEhDeCarrinho(eventName) ? 'carrinho' : 'pedido';
   const compativeis = mensagens.filter((m) => m.tipo === 'comum' || m.tipo === tipoDoEvento);
@@ -423,7 +436,7 @@ function VinculoCardWeb({
           <ConfirmDialog
             open={confirmandoRemocao}
             onClose={() => setConfirmandoRemocao(false)}
-            title={`Remover a mensagem do evento "${eventName}" na ${adminStores.name(loja)}?`}
+            title={`Remover a mensagem do evento "${eventName}" na ${nomeDaLoja(loja)}?`}
             description="Só o vínculo do WhatsApp Web é removido; o template da API da Meta (se houver) continua configurado."
             confirmLabel="Remover"
             onConfirm={remover}
@@ -451,6 +464,7 @@ function LojaSection({
   logDaLoja: WebhookEvento[];
   recarregar: () => void;
 }) {
+  const nomeDaLoja = useNomeDaLoja();
   const nomesObservados = Array.from(new Set(logDaLoja.map((e) => e.eventName).filter((n): n is string => !!n)));
   // pix.pendente é sintético (nunca aparece no webhook-log) — sempre disponível pra configurar.
   const baseNomes = Array.from(new Set([...nomesObservados, ...Object.keys(eventosConfigLoja), EVENTO_PIX_PENDENTE])).sort();
@@ -476,7 +490,7 @@ function LojaSection({
   }
 
   return (
-    <Card title={adminStores.name(loja)}>
+    <Card title={nomeDaLoja(loja)}>
       <div className="ad-vinculos-lista">
         {!todosNomes.length ? (
           <EmptyState title="Nenhum evento observado ainda pra essa loja" description="Confira em Eventos, ou adicione manualmente abaixo." />
@@ -576,20 +590,27 @@ function FluxoEventosCard() {
 
 // Sem número de WhatsApp cadastrado não há templates para listar — é o estado de quem ainda não
 // configurou o canal, e a tela abre normalmente com a lista vazia (o cadastro é em Integrações).
-async function templatesOuVazioSemNumero(): Promise<{ templates: WhatsappTemplate[] }> {
+// Canal com problema (token recusado pela Meta, permissão, limite, país restrito) também não derruba a
+// tela: os vínculos e o log continuam legíveis e o motivo aparece num aviso, em texto de produto.
+async function templatesOuVazioSemNumero(): Promise<{ templates: WhatsappTemplate[]; avisoCanal?: string }> {
   try {
     return await getWhatsappTemplates();
   } catch (err) {
     if (err instanceof ApiError && err.codigo === 'WHATSAPP_SENDER_NOT_CONFIGURED') return { templates: [] };
+    if (err instanceof ApiError && err.codigo && err.codigo.startsWith('WHATSAPP_')) return { templates: [], avisoCanal: err.message };
     throw err;
   }
 }
 
 export function AutomacoesPage() {
-  const escopo = useLojaAtiva() ?? '';
+  // Chave sob a qual o servidor guarda os vínculos desta Store (legada ou store_id). O log de eventos é
+  // filtrado pela chave LEGADA, que a Store nativa não tem.
+  const escopo = useChaveDaStore();
+  const lojaLegada = useLojaAtiva();
   const [dados, setDados] = useState<{
     settings: AutomationSettings;
     templates: WhatsappTemplate[];
+    avisoCanal: string | null;
     mensagens: MensagemWeb[];
     eventosConfig: EventosConfigPorLoja;
     log: WebhookEvento[];
@@ -606,7 +627,7 @@ export function AutomacoesPage() {
         const modoWeb = settings.provider === 'whatsapp_web';
         return Promise.all([
           settings,
-          modoWeb ? Promise.resolve({ templates: [] as WhatsappTemplate[] }) : templatesOuVazioSemNumero(),
+          modoWeb ? Promise.resolve({ templates: [] as WhatsappTemplate[], avisoCanal: undefined as string | undefined }) : templatesOuVazioSemNumero(),
           modoWeb ? listarMensagensWeb() : Promise.resolve({ mensagens: [] as MensagemWeb[] }),
           getAutomacaoEventos(),
           getWebhookLogAutomacoes(),
@@ -618,6 +639,7 @@ export function AutomacoesPage() {
         setDados({
           settings,
           templates: templatesRes.templates || [],
+          avisoCanal: ('avisoCanal' in templatesRes && templatesRes.avisoCanal) || null,
           mensagens: mensagensRes.mensagens || [],
           eventosConfig: eventosRes.eventos || {},
           log: logRes.log || [],
@@ -670,6 +692,12 @@ export function AutomacoesPage() {
           />
         }
       />
+      {dados.avisoCanal && (
+        <Callout tone="warning" title="Canal do WhatsApp com problema">
+          <p className="pc-nota">{dados.avisoCanal}</p>
+          <p className="pc-nota">Os vínculos abaixo continuam salvos; a lista de templates volta quando o canal voltar.</p>
+        </Callout>
+      )}
       <div className="ad-automacoes-grid">
         <FluxoEventosCard />
         <EnvioSwitch dados={dados.settings} recarregar={carregar} />
@@ -681,7 +709,7 @@ export function AutomacoesPage() {
             mensagens={dados.mensagens}
             modoWeb={modoWeb}
             eventosConfigLoja={dados.eventosConfig[loja] || {}}
-            logDaLoja={dados.log.filter((e) => e.loja === loja)}
+            logDaLoja={dados.log.filter((e) => mesmaLoja(e.loja, lojaLegada))}
             recarregar={carregar}
           />
         ))}

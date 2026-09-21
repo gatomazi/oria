@@ -90,14 +90,14 @@ async function selecionarOrganizacao(poolReal, auth, organizationIdProposta) {
 // Organization → Store (PD-002, 1:1). Nunca por loja do request, env ou "a única Store do banco".
 async function resolverStore(poolReal, organizationId) {
   const { rows } = await comOrganization(poolReal, organizationId, (c) => c.query(
-    'SELECT id, loja_legada FROM stores WHERE organization_id = $1 AND ativa', [organizationId]
+    'SELECT id, loja_legada, nome FROM stores WHERE organization_id = $1 AND ativa', [organizationId]
   ));
   if (rows.length === 0) throw new TenantContextHttpError(409, 'STORE_NOT_FOUND', 'organization sem store ativa');
   if (rows.length > 1) {
     console.error(`[TENANCY] integridade: organization ${organizationId} com ${rows.length} stores ativas`);
     throw new TenantContextHttpError(500, 'STORE_INTEGRITY_ERROR', 'erro de integridade da organization');
   }
-  return { storeId: rows[0].id, loja: rows[0].loja_legada };
+  return { storeId: rows[0].id, loja: rows[0].loja_legada, nome: rows[0].nome || null };
 }
 
 function responderErro(res, err) {

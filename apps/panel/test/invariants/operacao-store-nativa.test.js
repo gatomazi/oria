@@ -44,6 +44,9 @@ const TOKEN = {
   D: `inkD-carrinho-${crypto.randomBytes(10).toString('hex')}`,
 };
 let dirMock;
+let goFalso;
+let urlGoFalso;
+let metaRecusaToken = false;
 
 let db;
 let sup;
@@ -117,6 +120,8 @@ function subirServidor() {
       ENCRYPTION_MASTER_KEY: MESTRA,
       ADMIN_SESSION_SECRET: crypto.randomBytes(32).toString('base64url'),
       PROVIDER_MOCK_LOG: path.join(dirMock, 'chamadas.jsonl'),
+      // Serviço de WhatsApp (Go) falso: devolve, como o real, o erro da Meta embutido numa string.
+      WHATSAPP_SERVICE_URL: urlGoFalso, WHATSAPP_API_KEY: 'k'.repeat(24), WHATSAPP_SENDER_REF_SECRET: crypto.randomBytes(32).toString('hex'),
     },
   }), {
     aoLer: (pedaco, { reiniciando }) => { saida = reiniciando ? '' : saida + pedaco; },
@@ -125,6 +130,17 @@ function subirServidor() {
 }
 
 test.before(async () => {
+  goFalso = require('node:http').createServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url.startsWith('/health')) return res.end(JSON.stringify({ status: 'ok' }));
+    if (!metaRecusaToken && req.url.startsWith('/templates/list')) {
+      return res.end(JSON.stringify({ success: true, data: { data: [{ name: 'recupera_carrinho', status: 'APPROVED', language: 'pt_BR', components: [{ type: 'BODY', text: 'Olá {{1}}, seu carrinho ficou esperando.' }] }] } }));
+    }
+    res.statusCode = 500;
+    return res.end(JSON.stringify({ success: false, error: 'meta api 401: {"error":{"message":"Error validating access token: Session has expired on Sunday, 20-Sep-26 16:00:00 PDT.","type":"OAuthException","code":190,"error_subcode":463,"fbtrace_id":"AgNIN"}}' }));
+  });
+  await new Promise((resolve) => goFalso.listen(0, '127.0.0.1', resolve));
+  urlGoFalso = `http://127.0.0.1:${goFalso.address().port}`;
   db = await h.criarBancoDescartavel('oria_op_srv');
   const r = h.migrar(db.url, { env: { TENANCY_MAPPING_FILE: CENARIO_A } });
   assert.equal(r.status, 0, `${r.stdout.slice(-2000)}${r.stderr}`);
@@ -153,6 +169,7 @@ test.before(async () => {
 });
 
 test.after(async () => {
+  if (goFalso) goFalso.close();
   if (filho && filho.exitCode === null) filho.kill('SIGKILL');
   if (sup) {
     await sup.query(`DROP OWNED BY ${ROLE}`).catch(() => {});
@@ -354,15 +371,19 @@ test('Recuperação · envio manual sem vínculo devolve 400 explicativo (nunca 
 test('Automações · o vínculo do evento é guardado pela chave da Store nativa e só ela o enxerga', async () => {
   const c = await entrar('C');
   const d = await entrar('D');
+  // O vínculo confere o template na Meta: precisa de um número cadastrado (o serviço Go é falso).
+  const cad = await c.req('PUT', '/api/admin/whatsapp/remetente', { corpo: { phoneNumberId: '1357017780827002', wabaId: '2150656822240540', accessToken: `EAAG-token-de-teste-${crypto.randomBytes(6).toString('hex')}` } });
+  assert.equal(cad.status, 200, cad.texto);
   const vinculo = await c.req('PUT', '/api/admin/automacao-eventos/cart.abandoned', { corpo: { template: 'recupera_carrinho', maxEnvios: 2, intervaloHoras: 24 } });
-  assert.notEqual(vinculo.status, 409, vinculo.texto);
+  assert.equal(vinculo.status, 200, vinculo.texto);
   assert.doesNotMatch(vinculo.texto, /STORE_WITHOUT_LEGACY_KEY|chave legada/);
-  if (vinculo.status === 200) {
+  {
     const lido = await c.req('GET', '/api/admin/automacao-eventos');
     assert.ok(lido.json.eventos[store.C] && lido.json.eventos[store.C]['cart.abandoned'], 'chave = store_id');
     assert.ok(!('null' in lido.json.eventos), 'nunca a chave "null"');
     assert.deepEqual(Object.keys((await d.req('GET', '/api/admin/automacao-eventos')).json.eventos), [], 'D não vê o vínculo de C');
     await c.req('DELETE', '/api/admin/automacao-eventos/cart.abandoned');
+    await c.req('DELETE', '/api/admin/whatsapp/remetente');
   }
 });
 
@@ -429,4 +450,57 @@ test('OpenAI · BYOK da Store nativa: salva mascarada, testa, recusa chave invá
   assert.equal((await c.req('GET', '/api/admin/criativos/settings/openai-key')).json.configured, false);
   assert.equal((await c.req('GET', '/api/admin/integrations')).json.integracoes.find((i) => i.provider === 'openai').estado, 'not_configured');
   assert.ok(!saida.includes(chave) && !saida.includes('sk-invalid-0123456789abcdef'), 'a chave nunca vai ao log');
+});
+
+// ── Sessão: a identidade da Store chega à tela (Automações/Templates indexam por ela) ─────────
+
+test('Sessão · expõe storeId, nome e a chave de escopo: legada quando existe, store_id na Store nativa', async () => {
+  const c = await entrar('C');
+  const sc = await c.req('GET', '/api/admin/session');
+  assert.equal(sc.status, 200, sc.texto);
+  assert.equal(sc.json.organizacaoAtiva.loja, null);
+  assert.equal(sc.json.organizacaoAtiva.storeId, store.C);
+  assert.equal(sc.json.organizacaoAtiva.chaveEscopo, store.C, 'Store nativa: a chave é o store_id');
+  assert.equal(sc.json.organizacaoAtiva.storeNome, 'Loja Nativa C');
+  const a = await entrar('A');
+  const sa = await a.req('GET', '/api/admin/session');
+  assert.equal(sa.json.organizacaoAtiva.chaveEscopo, 'sul', 'Store com chave legada mantém a dela');
+  assert.equal(sa.json.organizacaoAtiva.storeId, store.A);
+});
+
+// ── WhatsApp: a Meta recusa o token (achado do smoke em produção) ─────────────────────────────
+
+test('WhatsApp · token recusado pela Meta vira mensagem de produto, marca a integração e o card deixa de dizer "conectada"', async () => {
+  const c = await entrar('C');
+  const token = `EAAG-token-de-teste-${crypto.randomBytes(6).toString('hex')}`;
+  const cadastro = { phoneNumberId: '1357017780827002', wabaId: '2150656822240540' };
+  const salvo = await c.req('PUT', '/api/admin/whatsapp/remetente', { corpo: { ...cadastro, accessToken: token } });
+  assert.equal(salvo.status, 200, salvo.texto);
+  assert.equal(salvo.json.tokenInvalidoEm, null);
+
+  metaRecusaToken = true;
+  const r = await c.req('GET', '/api/admin/whatsapp-templates');
+  assert.equal(r.status, 409, r.texto);
+  assert.equal(r.json.codigo, 'WHATSAPP_TOKEN_EXPIRED');
+  assert.match(r.json.error, /cole um token novo em Integrações/);
+  assert.doesNotMatch(r.texto, /fbtrace|OAuthException|PDT|meta api/, 'o corpo bruto da Meta nunca chega à tela');
+
+  const estado = await c.req('GET', '/api/admin/whatsapp/remetente');
+  assert.ok(estado.json.tokenInvalidoEm, 'a integração ficou marcada');
+  const integ = await c.req('GET', '/api/admin/integrations');
+  const linha = integ.json.integracoes.find((i) => i.provider === 'whatsapp');
+  assert.equal(linha.estado, 'error');
+  assert.equal(linha.proximaAcao, 'reconnect');
+
+  // Salvar só o comportamento NÃO apaga a marca; trocar o token, sim.
+  const soComportamento = await c.req('PUT', '/api/admin/whatsapp/remetente', { corpo: { ...cadastro, replyRedirectMessage: 'Olá!' } });
+  assert.equal(soComportamento.status, 200, soComportamento.texto);
+  assert.ok(soComportamento.json.tokenInvalidoEm, 'sem token novo, a marca fica');
+  const novo = await c.req('PUT', '/api/admin/whatsapp/remetente', { corpo: { ...cadastro, accessToken: `${token}-novo` } });
+  assert.equal(novo.status, 200, novo.texto);
+  assert.equal(novo.json.tokenInvalidoEm, null, 'token novo limpa a marca');
+  assert.ok(!novo.texto.includes(token) && !saida.includes(token), 'o token nunca sai na resposta nem no log');
+
+  metaRecusaToken = false;
+  await c.req('DELETE', '/api/admin/whatsapp/remetente');
 });

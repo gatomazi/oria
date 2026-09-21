@@ -46,6 +46,7 @@ const WhatsappVisaoGeralPage = tela(() => import('./pages/whatsapp-visao-geral/W
 const FilaWhatsappWebPage = tela(() => import('./pages/whatsapp-web-fila/FilaWhatsappWebPage'), 'FilaWhatsappWebPage');
 const MensagensWebPage = tela(() => import('./pages/mensagens-web/MensagensWebPage'), 'MensagensWebPage');
 const MensagemWebEditorPage = tela(() => import('./pages/mensagens-web/MensagemWebEditorPage'), 'MensagemWebEditorPage');
+import { PaginaNaoEncontrada } from './pages/PaginaNaoEncontrada';
 const SegmentosPage = tela(() => import('./pages/campanhas/SegmentosPage'), 'SegmentosPage');
 const CampanhasPage = tela(() => import('./pages/campanhas/CampanhasPage'), 'CampanhasPage');
 const NovaCampanhaPage = tela(() => import('./pages/campanhas/NovaCampanhaPage'), 'NovaCampanhaPage');
@@ -153,6 +154,9 @@ export function App() {
             <Route path="/admin/eventos" element={<EventosPage />} />
             <Route path="/admin/integracoes" element={<IntegracoesPage />} />
             <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
+            {/* Atalho comum: Segmentos mora sob Campanhas. */}
+            <Route path="/admin/segmentos" element={<Navigate to="/admin/campanhas/segmentos" replace />} />
+            <Route path="*" element={<PaginaNaoEncontrada />} />
             </Route>
           </Routes>
     </AuthProvider>

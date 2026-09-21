@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { useNomeDaStore } from '../../auth/AuthContext';
 import { Callout, ConfirmDialog, DataTable, EmptyState, ErrorState, PageHeader, PageStack, RowActionsMenu, Skeleton, StatusBadge } from '../../components/ds';
 import { eventoLabel, idiomaLabel, templateCategoriaLabel } from '../../lib/eventLabels';
 import { adminStores } from '../../state/adminStores';
@@ -25,6 +26,7 @@ function statusCell(t: WhatsappTemplate) {
 }
 
 export function TemplatesPage() {
+  const nomeStore = useNomeDaStore();
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<WhatsappTemplate[] | null>(null);
   const [erro, setErro] = useState('');
@@ -103,7 +105,7 @@ export function TemplatesPage() {
               label: 'Automações',
               truncate: true,
               width: 320,
-              render: (t) => (t.eventos && t.eventos.length ? t.eventos.map((v) => `${adminStores.name(v.loja)}: ${eventoLabel(v.evento)}`).join(', ') : '—'),
+              render: (t) => (t.eventos && t.eventos.length ? t.eventos.map((v) => `${adminStores.nameOr(v.loja, nomeStore)}: ${eventoLabel(v.evento)}`).join(', ') : '—'),
               sortValue: (t) => (t.eventos ? t.eventos.length : 0),
             },
             {

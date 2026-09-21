@@ -107,6 +107,8 @@ export interface WhatsappRemetente {
   webhookAssinado: boolean;
   numeroRegistrado: boolean;
   conectadoEm: string | null;
+  // A Meta recusou o token (expirado/revogado) nesta data; some quando um token novo é salvo.
+  tokenInvalidoEm: string | null;
   // Fase 5c: comportamento por loja (antes eram variáveis do serviço de envio). Vazio desliga.
   replyRedirectMessage: string;
   notifyNumber: string;

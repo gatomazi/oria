@@ -1,4 +1,4 @@
-import { useLojaAtiva } from '../../auth/AuthContext';
+import { useChaveDaStore } from '../../auth/AuthContext';
 import { Fragment, useEffect, useId, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Callout, Card, ConfirmDialog, ErrorState, Field, FormActions, FormGrid, FormStack, Input, MediaDropzone, Modal, PageHeader, PageStack, Skeleton, StatusBadge } from '../../components/ds';
@@ -554,7 +554,8 @@ function AutomacaoPanel({
   recarregar: () => void;
 }) {
   // Loja da Organization ativa: o vínculo é sempre dela (o servidor decide o escopo).
-  const selectLoja = useLojaAtiva() ?? '';
+  // Chave dos vínculos desta Store (legada ou store_id): é sob ela que o servidor os guarda.
+  const selectLoja = useChaveDaStore();
   const [novoEvento, setNovoEvento] = useState('');
   const [novoVinculoAberto, setNovoVinculoAberto] = useState(false);
   const [vincularErro, setVincularErro] = useState('');

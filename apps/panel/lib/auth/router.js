@@ -92,7 +92,13 @@ function createAuthRouter(deps) {
       lista = r.memberships;
       // Só para exibição (nome/cor da loja no painel). Nenhuma rota lê isso do navegador.
       try {
-        ativa.loja = (await resolverStore(pool, ativa.id)).loja;
+        const st = await resolverStore(pool, ativa.id);
+        ativa.loja = st.loja;
+        // Identidade da Store para a tela: id, nome e a CHAVE de escopo dos mapas por loja (vínculos de
+        // automação, envios). A chave é a legada quando existe; a Store nativa usa o próprio store_id.
+        ativa.storeId = st.storeId;
+        ativa.storeNome = st.nome || null;
+        ativa.chaveEscopo = st.loja || st.storeId;
       } catch (err) {
         if (!(err instanceof TenantContextHttpError)) throw err;
         codigo = err.codigo;

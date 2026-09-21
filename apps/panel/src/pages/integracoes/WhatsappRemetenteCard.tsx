@@ -110,10 +110,16 @@ export function WhatsappRemetenteCard() {
         <>
           <div className="ad-integracao-item__topo">
             <StatusBadge
-              tone={conectado ? 'success' : 'warning'}
-              label={conectado ? `Token cadastrado${dados.token?.last4 ? ` · final ${dados.token.last4}` : ''}` : 'Número não configurado'}
+              tone={conectado && !dados.tokenInvalidoEm ? 'success' : 'warning'}
+              label={conectado ? `${dados.tokenInvalidoEm ? 'Token recusado pela Meta' : 'Token cadastrado'}${dados.token?.last4 ? ` · final ${dados.token.last4}` : ''}` : 'Número não configurado'}
             />
           </div>
+          {conectado && dados.tokenInvalidoEm && (
+            <p className="ds-form-error" role="alert">
+              A Meta recusou o token do WhatsApp (expirado ou revogado). Cole um token novo em "Cadastro manual" ou reconecte com a Meta —
+              enquanto isso, templates e envios não funcionam. Token de teste da Meta dura 24 horas.
+            </p>
+          )}
           {conectado && dados.conectadoVia === 'embedded_signup' && (
             <dl className="pc-nota" aria-label="Conexão com a Meta">
               <div>{dados.nomeVerificado || 'Número conectado'}{dados.numeroExibido ? ` · ${dados.numeroExibido}` : ''}</div>
