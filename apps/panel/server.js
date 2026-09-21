@@ -14164,7 +14164,8 @@ async function clienteJaComprou(loja, registro, desdeIso) {
 
 // Regrava os itens do pedido numa transação (apaga e insere): item removido de um pedido editável
 // não pode sobrar contando lucro. Payload sem itens não toca em nada.
-async function upsertItensPedidoInkPostgres(loja, order) {
+async function upsertItensPedidoInkPostgres(lojaOuChave, order) {
+  const loja = lojaLegadaParaColuna(lojaOuChave);
   if (!pgPool || !order || !Array.isArray(order.items) || order.id == null) return;
   const itens = financeiroItensPedidoInk(order);
   const cliente = await pgPool.connect();
@@ -14192,7 +14193,15 @@ async function upsertItensPedidoInkPostgres(loja, order) {
   }
 }
 
-async function upsertPedidoInkPostgres(loja, order) {
+// `loja` que chega aqui pode ser a CHAVE de escopo da Store (`chaveDaStore()`: a chave legada OU o `store_id`
+// da Store nativa). Só a chave LEGADA pode ir para a coluna `loja`: gravar o `store_id` ali fazia a tela de
+// Clientes mostrar o UUID como nome de loja (achado do smoke pós-#10).
+function lojaLegadaParaColuna(loja) {
+  return loja && loja !== storeDoContexto() ? loja : null;
+}
+
+async function upsertPedidoInkPostgres(lojaOuChave, order) {
+  const loja = lojaLegadaParaColuna(lojaOuChave);
   if (!pgPool) return;
   const buyer = order.buyer || {};
   const fin = financeiroPedidoInk(order);

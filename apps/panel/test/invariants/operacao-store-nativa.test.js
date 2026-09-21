@@ -504,3 +504,30 @@ test('WhatsApp · token recusado pela Meta vira mensagem de produto, marca a int
   metaRecusaToken = false;
   await c.req('DELETE', '/api/admin/whatsapp/remetente');
 });
+
+// ── Pedidos: a chave de escopo da Store nunca vai para a coluna `loja` ────────────────────────
+
+test('Pedidos · vincular um pedido na Store nativa grava `loja` NULA (nunca o store_id como nome de loja)', async () => {
+  const c = await entrar('C');
+  const r = await c.req('POST', '/api/admin/pedidos/ink', { corpo: { inkOrderId: 1777 } });
+  assert.equal(r.status, 200, r.texto);
+  const { rows } = await sup.query('SELECT loja, store_id FROM pedidos_ink WHERE organization_id = $1 AND ink_order_id = 1777', [ORGS.C]);
+  assert.equal(rows.length, 1, 'o pedido foi gravado');
+  assert.equal(rows[0].store_id, store.C);
+  assert.equal(rows[0].loja, null, 'a coluna loja é só da chave LEGADA; o store_id nela virava "nome de loja" na tela de Clientes');
+  const { rows: itens } = await sup.query('SELECT loja FROM pedidos_ink_itens WHERE organization_id = $1 AND ink_order_id = 1777', [ORGS.C]);
+  assert.ok(itens.length > 0 && itens.every((i) => i.loja === null), 'os itens também');
+});
+
+test('Migração 0030 · desfaz o UUID já gravado em `loja` e não toca chave legada de verdade', async () => {
+  await sup.query("INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status) VALUES ($1, $2, $3, 424242, 'paid')", [ORGS.C, store.C, store.C]);
+  await sup.query("INSERT INTO pedidos_ink (organization_id, store_id, loja, ink_order_id, payment_status) VALUES ($1, $2, 'sul', 424243, 'paid')", [ORGS.A, store.A]);
+  const sql = fs.readFileSync(path.join(h.RAIZ_REPO, 'migrations', 'sql', '0030-reparar-loja-uuid-em-pedidos.up.sql'), 'utf8');
+  await sup.query(sql);
+  await sup.query(sql); // idempotente
+  const c = (await sup.query('SELECT loja FROM pedidos_ink WHERE ink_order_id = 424242')).rows[0];
+  const a = (await sup.query('SELECT loja FROM pedidos_ink WHERE ink_order_id = 424243')).rows[0];
+  assert.equal(c.loja, null, 'o UUID em loja foi desfeito');
+  assert.equal(a.loja, 'sul', 'a chave legada verdadeira não é tocada');
+  await sup.query('DELETE FROM pedidos_ink WHERE ink_order_id IN (424242, 424243)');
+});

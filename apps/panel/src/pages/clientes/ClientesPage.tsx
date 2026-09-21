@@ -3,6 +3,7 @@ import { DataTable, EmptyState, ErrorState, PageHeader, PageStack, SearchInput, 
 import { formatData, formatValor, plural } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { adminStores } from '../../state/adminStores';
+import { useNomeDaStore } from '../../auth/AuthContext';
 import { getComprasOpcional, getCustomers, type ClienteCompra, type ClienteInk } from '../../api/clientes';
 
 import '../../pedidos-central.css';
@@ -67,6 +68,7 @@ function cruzarComCompras(clientes: ClienteInk[], compras: ClienteCompra[]): Cli
 type Ordem = 'compras_desc' | 'lucro_desc' | 'inativos_primeiro' | 'nome';
 
 export function ClientesPage() {
+  const nomeStore = useNomeDaStore();
   const escopo = useLojaAtiva() ?? '';
   const [dados, setDados] = useState<ClienteCruzado[] | null>(null);
   const [erro, setErro] = useState('');
@@ -159,7 +161,7 @@ export function ClientesPage() {
               rowKey={(c, i) => c.loja + ':' + (c.documento || c.telefone || i)}
               columns={[
                 { key: 'nome', label: 'Nome', truncate: true, width: 240, render: (c) => c.nome || 'Sem nome', sortValue: (c) => c.nome },
-                { key: 'loja', priority: 'low', label: 'Loja', muted: true, render: (c) => adminStores.name(c.loja), sortValue: (c) => adminStores.name(c.loja) },
+                { key: 'loja', priority: 'low', label: 'Loja', muted: true, render: (c) => adminStores.nameOr(c.loja, nomeStore), sortValue: (c) => adminStores.nameOr(c.loja, nomeStore) },
                 {
                   key: 'contato',
                   priority: 'low',

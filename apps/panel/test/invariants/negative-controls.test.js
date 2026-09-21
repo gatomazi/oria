@@ -1215,6 +1215,15 @@ const VIOLACOES = [
     de: '      const resposta = await chamar(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });',
     para: '      const resposta = await chamar(url, { ...init }); // VIOLAÇÃO DELIBERADA (negative control)',
   },
+  {
+    classe: 'pedidos/loja-recebe-store-id',
+    invariant: 'PED-01',
+    teste: 'operacao-store-nativa.test.js',
+    arquivo: 'server.js',
+    descricao: 'o upsert de pedidos volta a gravar o store_id (a chave de escopo) na coluna `loja`: a tela mostra o UUID como nome de loja',
+    de: '  return loja && loja !== storeDoContexto() ? loja : null;',
+    para: '  return loja || null; // VIOLAÇÃO DELIBERADA (negative control)',
+  },
 ];
 
 // ── Execução ───────────────────────────────────────────────────────────────────────────────────
@@ -1338,8 +1347,8 @@ test('negative control · cobre as classes críticas das Fases 0 a 5c e da const
       'onboarding/segunda-fonte', 'operacao/auditoria-com-id-nulo', 'operacao/automacoes-so-chave-legada',
       'operacao/campanha-sem-store-id', 'operacao/escopo-exige-chave-legada', 'operacao/job-ignora-store-nativa',
       'operacao/promocoes-exigem-chave-legada', 'operacao/sessao-sem-chave-de-escopo',
-      'operacao/trocas-exige-chave-legada', 'recuperacao/escopo', 'secrets', 'secrets/log', 'secrets/resposta',
-      'store-nativa/clientes-exige-loja-legada', 'store-nativa/financeiro-exige-loja-legada',
+      'operacao/trocas-exige-chave-legada', 'pedidos/loja-recebe-store-id', 'recuperacao/escopo', 'secrets', 'secrets/log',
+      'secrets/resposta', 'store-nativa/clientes-exige-loja-legada', 'store-nativa/financeiro-exige-loja-legada',
       'store-nativa/lucro-produtos-join-por-loja', 'tenancy/agregacao-lojas', 'tenancy/candidato-unico',
       'tenancy/loja-do-request', 'tenancy/mapping', 'tenancy/ownership', 'tenancy/ownership-id', 'tenancy/rls-context',
       'utm/exige-loja-legada', 'webhook', 'webhook/ink-segredo-de-outra-org', 'webhook/ink-segredo-do-ambiente',

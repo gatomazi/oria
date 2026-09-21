@@ -30,7 +30,7 @@ const FASE1 = 8;
 // (platform-admin), o aceite do convite (0020), o `store_id` do Connector Ink (0021), a
 // reclassificação de features (0022) e o entitlement canônico (0023) vêm depois; o rollback da
 // Fase 1 desce todas.
-const DEPOIS_DA_FASE1 = 17;
+const DEPOIS_DA_FASE1 = 18;
 
 const lerJson = (arquivo) => JSON.parse(fs.readFileSync(arquivo, 'utf8'));
 
