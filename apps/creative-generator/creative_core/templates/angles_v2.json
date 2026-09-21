@@ -1,5 +1,5 @@
 {
-  "_doc": "PROMPT_VERSION=2 scene templates for the angles that put people in the frame. Only these four angles change under v2; every other angle keeps its v1 prompt byte for byte. PORTED = wording taken from the internal generator's tested templates (ads/templates/angulos_limpos_feed.json, lojas/entre_nos/), adapted to product-agnostic placeholders. AUTHORED = written for v2 (see _authored). Placeholders: {persona} {pessoa_a} {pessoa_b} {pessoas} {produto} {produtos} {n} {cenario} {uso} plus the pools of each angle. Each pool entry is picked deterministically from the plan seed (never by the image model) and is rendered with the same placeholders.",
+  "_doc": "PROMPT_VERSION=2 scene templates for the angles that put people in the frame. Only these four angles change under v2; every other angle keeps its v1 prompt byte for byte. PORTED = wording taken from the internal generator's tested templates (ads/templates/angulos_limpos_feed.json, lojas/entre_nos/), adapted to product-agnostic placeholders. AUTHORED = written for v2 (see _authored). Placeholders: {persona} {pessoa_a} {pessoa_b} {pessoas} {produto} {produtos} {n} {cenario} {uso} plus the pools of each angle. Each pool entry is picked deterministically from the plan seed (never by the image model) and is rendered with the same placeholders. Persona vs angle: the persona complements the angle only with compatible attributes. A persona BEHAVIOR clause that directly contradicts an explicit instruction of the angle (e.g. 'em movimento' under CAIMENTO's 'pessoa parada') is dropped at compile time (behavior_drop, accent-insensitive prefix match per comma/semicolon clause) instead of being stated with a caveat; if nothing is left, the 'Jeito natural' sentence is omitted.",
   "_authored": {
     "LIFESTYLE_COTIDIANO": "the hand/arm clause appended to each situation; 'apenas essa pessoa em quadro; no maximo um objeto simples' ; the multi scene's 'bracos soltos' clause",
     "CAIMENTO": "'e sem objetos nas maos'; 'ninguem segurando nada' in the multi scene",
@@ -19,12 +19,35 @@
           "chegando a um ambiente, cruzando a entrada com os braços soltos ao lado do corpo",
           "de pé ao balcão de uma loja, uma das mãos apoiada no balcão e a outra solta"
         ]
-      }
+      },
+      "behavior_drop": [
+        "parado",
+        "parada",
+        "estático",
+        "estática",
+        "imóvel",
+        "posando"
+      ]
     },
     "CAIMENTO": {
       "scene": "ÂNGULO CAIMENTO (registro quase técnico de vestibilidade — 'como esta peça fica vestida', não uma foto de moda genérica): {persona} em pé, corpo inteiro ou da cabeça até pelo menos a metade das coxas, posição frontal ou 3/4 muito leve, braços em posição natural e relaxada ao lado do corpo (NUNCA cruzados), {uso} {produto} completamente visível — barra da peça claramente visível e NÃO enfiada dentro da calça, sem jaqueta, mochila ou bolsa cobrindo a peça. Fundo simples e neutro inspirado em {cenario}, sem competir com a informação de caimento. PRIORIDADE VISUAL ESTRITA nesta ordem: 1) silhueta da peça no corpo, 2) largura, 3) comprimento, 4) comprimento de manga, 5) gola, 6) queda do tecido, 7) estampa. A pessoa está parada em pose natural — NÃO mostrar a pessoa mexendo, ajeitando, puxando ou segurando qualquer parte da peça, e sem objetos nas mãos. SEM óculos escuros, sem pose editorial, sem cenário dramático, sem acessórios chamativos, sem composição cinematográfica. Preservar rigorosamente o tipo de peça (manga, gola, comprimento) conforme especificado.",
       "scene_multi": "ÂNGULO CAIMENTO (GRUPO): {pessoas}, lado a lado e relativamente próximas entre si, cada uma {uso} um produto diferente — {produtos} — em enquadramento fechado que prioriza as peças como protagonistas (medium shot, closer framing, t-shirt as main subject): do topo da cabeça até a cintura ou o quadril de cada pessoa, no máximo até a metade da coxa quando necessário; evitar corpo inteiro e enquadramento aberto demais (avoid full-body framing unless explicitly requested). Braços em posição natural e relaxada ao lado do corpo (NUNCA cruzados), ninguém segurando nada, barra de cada peça visível e NÃO enfiada dentro da calça. Fundo simples e neutro inspirado em {cenario}, sem competir com a leitura das peças. Cada peça ocupa área significativa do quadro, com foco no torso e na estampa (focus on torso and print), nenhuma pessoa cobrindo a peça da pessoa ao lado. SEM óculos escuros, sem pose editorial, sem cenário dramático. EVITAR: pessoas se sobrepondo, quantidade de pessoas diferente de {n}, pessoa com mais de 1 peça ao mesmo tempo, enquadramento distante que deixe as peças pequenas. IMPORTANTE: EXATAMENTE {n} pessoas, cada uma com exatamente 1 peça, com enquadramento fechado priorizando a peça.",
-      "pools": {}
+      "pools": {},
+      "behavior_drop": [
+        "movimento",
+        "caminh",
+        "andando",
+        "correndo",
+        "pulando",
+        "dança",
+        "dançando",
+        "gesto",
+        "gesticul",
+        "mexendo",
+        "ajeitando",
+        "segurando",
+        "brincando"
+      ]
     },
     "CREATOR_STYLE": {
       "scene": "ÂNGULO CREATOR-STYLE (conteúdo social espontâneo, SEM fingir depoimento real de cliente): {persona} {uso} {produto}. Formato da foto: {formato} Luz doméstica (nunca de estúdio), ambiente cotidiano ({cenario}: quarto, corredor, sala ou similar). Apenas essa pessoa em quadro. PROIBIDO: qualquer elemento visual que sugira review, depoimento, avaliação por estrelas, embalagem sendo aberta como 'unboxing de cliente satisfeito' ou cenário que simule prova social de compra real — é uma FOTO ESTÉTICA no estilo criador de conteúdo, não a encenação de uma experiência de compra. Produto legível.",
@@ -49,7 +72,10 @@
           "foto tirada por um amigo (quem fotografa não aparece, nem o celular dele), em ambiente casual, com enquadramento levemente desalinhado; a pessoa com os braços soltos ao lado do corpo ou uma mão no bolso, sem segurar nada.",
           "braço estendido segurando o celular ({celular}), ângulo levemente inclinado, típico de conteúdo social: só o braço que segura o celular aparece esticado e a outra mão fica relaxada ao lado do corpo."
         ]
-      }
+      },
+      "behavior_drop": [
+        "posando"
+      ]
     },
     "PRESENTE_AFETO": {
       "scene": "ÂNGULO PRESENTE (valor emocional da peça como presente, sem nenhum texto): EXATAMENTE 2 pessoas em quadro, em {cenario}. Pessoa A: {pessoa_a}. Pessoa B: {pessoa_b}. {cena} Afeto genuíno e contido: gesto real, olhar natural, nenhum sorriso escancarado de banco de imagem, ninguém posando em fileira olhando para a câmera. Produto claramente visível.",
@@ -59,13 +85,25 @@
           "Cena: Pessoa A entrega {produto} a Pessoa B, que o recebe; NINGUÉM veste a peça nesta versão. A peça aparece dobrada, com a estampa visível, num embrulho simples e afetivo (tecido, papel kraft ou fita de algodão fina — sem caixa comercial genérica, sem laço enorme, sem estética de Natal). Ação principal: a entrega. Mãos: A segura a peça dobrada com as duas mãos, por baixo, à altura do peito; B a recebe com as duas mãos; nenhuma mão cruza o corpo de outra pessoa. Expressão calorosa e contato visual entre A e B.",
           "Cena: Pessoa A VESTE {produto}; Pessoa B NÃO veste a peça e usa roupa lisa e neutra, sem estampa. Ação principal: as duas convivem de forma natural, lado a lado, numa conversa leve. Mãos: as de A ficam relaxadas ao lado do corpo; as de B relaxadas ou apoiadas numa superfície do ambiente; nenhuma das duas segura o produto e nenhuma mão cruza o corpo da outra pessoa. Expressão calorosa e contato visual entre A e B."
         ]
-      }
+      },
+      "behavior_drop": [
+        "movimento",
+        "caminh",
+        "andando",
+        "correndo",
+        "pulando",
+        "dança",
+        "dançando",
+        "gesto",
+        "gesticul",
+        "mexendo"
+      ]
     }
   },
   "persona": {
     "single": "PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): {identidade}.{comportamento} Aparência natural, sem rosto padrão de banco de imagem.",
     "group": "PESSOAS (cada uma com 1 produto, na ordem dos produtos; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem):",
     "pair": "PESSOAS (os papéis de cada uma estão definidos na cena; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem):",
-    "behavior": " Jeito natural: {comportamento} — só se não contrariar a ação ou a pose pedida pelo ângulo."
+    "behavior": " Jeito natural: {comportamento}."
   }
 }

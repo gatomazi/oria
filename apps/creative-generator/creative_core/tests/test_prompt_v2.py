@@ -158,14 +158,68 @@ def test_given_multi_product_gift_then_it_is_a_kit_with_nobody_in_the_frame():
     assert "ATMOSFERA" in text, "context block switches to the person-less form"
 
 
-def test_given_v2_person_angles_then_persona_refines_and_the_angle_wins_the_conflict():
+def _persona_request(angle: str, behavior: str, **extra) -> dict:
+    return _request(angle=angle, persona_mode="custom", persona={"label": "Menina 6 anos", "behavior": behavior}, **extra)
+
+
+def test_given_v2_person_angles_then_persona_states_that_the_angle_wins_the_conflict():
     for angle in ("CAIMENTO", "LIFESTYLE_COTIDIANO", "CREATOR_STYLE"):
         persona = _sections(_plan(angle=angle, prompt_version=2))["persona"]
-        assert "SEMPRE vencem" in persona
-        assert "só se não contrariar a ação ou a pose pedida pelo ângulo" in persona
-        assert persona.count("gestos naturais, em movimento") == 1
-    v1_persona = _sections(_plan(angle="CAIMENTO", prompt_version=1))["persona"]
-    assert "SEMPRE vencem" not in v1_persona, "v1 has no precedence rule"
+        assert "SEMPRE vencem" in persona, angle
+        assert "só se não contrariar" not in persona, "no caveated behavior anywhere in v2"
+    assert "SEMPRE vencem" not in _sections(_plan(angle="CAIMENTO", prompt_version=1))["persona"], "v1 has no precedence rule"
+
+
+def test_given_caimento_v2_when_persona_behavior_is_movement_then_it_is_omitted_not_caveated():
+    default = _sections(_plan(angle="CAIMENTO", prompt_version=2))["persona"]  # niche persona: "gestos naturais, em movimento"
+    for forbidden in ("movimento", "gestos", "Jeito natural", "só se não contrariar"):
+        assert forbidden not in default, forbidden
+    assert default.startswith("PERSONA (refina quem é a pessoa;") and "Mulher 30 anos, estilo casual urbano; cabelo preso" in default
+    assert default.endswith("Aparência natural, sem rosto padrão de banco de imagem.")
+    assert "gestos naturais, em movimento" not in _plan(angle="CAIMENTO", prompt_version=2)["prompt"]["text"]
+
+
+def test_given_conflicting_and_compatible_clauses_then_only_the_compatible_ones_are_kept():
+    mixed = _sections(plan_creative(_persona_request("CAIMENTO", "postura relaxada, em movimento, olhar fora da câmera", prompt_version=2), router=ROUTER))["persona"]
+    assert "Jeito natural: postura relaxada, olhar fora da câmera." in mixed and "movimento" not in mixed
+    compatible = _sections(plan_creative(_persona_request("CAIMENTO", "postura relaxada, olhar fora da câmera", prompt_version=2), router=ROUTER))["persona"]
+    assert "Jeito natural: postura relaxada, olhar fora da câmera." in compatible
+    assert "Jeito natural" not in _sections(plan_creative(_persona_request("CAIMENTO", "", prompt_version=2), router=ROUTER))["persona"]
+
+
+def test_given_the_same_persona_then_v1_still_carries_the_movement_behavior_byte_for_byte():
+    v1 = _sections(_plan(angle="CAIMENTO", prompt_version=1))["persona"]
+    assert v1 == ("PERSONA: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, "
+                  "jeans e tênis; gestos naturais, em movimento. Aparência natural, sem rosto padrão de banco de imagem.")
+    # The whole matrix is asserted in test_prompt_v1_golden.py; this pins the exact case of this change.
+    assert _plan(angle="CAIMENTO", prompt_version=1)["prompt"]["sha256"] == GOLDEN_V1["fixture-clean-single/CAIMENTO/FEED_4X5/seed+0"]["sha256"]
+
+
+def test_given_other_angles_then_compatible_behaviors_are_preserved():
+    for angle in ("LIFESTYLE_COTIDIANO", "CREATOR_STYLE"):
+        persona = _sections(_plan(angle=angle, prompt_version=2))["persona"]
+        assert "Jeito natural: gestos naturais, em movimento." in persona, angle
+    laughing = _sections(plan_creative(_persona_request("CAIMENTO", "espontâneo, rindo", prompt_version=2), router=ROUTER))["persona"]
+    assert "Jeito natural: espontâneo, rindo." in laughing, "a compatible behavior survives even under CAIMENTO"
+    gift = _sections(_plan(angle="PRESENTE_AFETO", prompt_version=2))["persona"]
+    assert "Pessoa A: Mulher 30 anos" in gift and "Jeito natural: gestos naturais" not in gift and "em movimento" not in gift
+    assert "Jeito natural: espontâneo, rindo." in gift, "Pessoa B keeps its compatible behavior"
+    assert "Jeito natural: gestos naturais, em movimento." not in _sections(_plan(angle="CAIMENTO", prompt_version=2))["persona"]
+
+
+def test_given_a_still_angle_then_behavior_filter_is_accent_insensitive_and_matches_word_starts_only():
+    keep = prompt_v2.compatible_behavior
+    assert keep("CAIMENTO", "Dançando, correto, ANDANDO rápido; Caminhando") == "correto"
+    assert keep("CAIMENTO", "danca") == "" and keep("CAIMENTO", "corrente") == "corrente"
+    assert keep("CAIMENTO", "  ") == "" and keep("LIFESTYLE_COTIDIANO", "gestos naturais, em movimento") == "gestos naturais, em movimento"
+    assert keep("LIFESTYLE_COTIDIANO", "postura parada, sorridente") == "sorridente", "the action angle drops what contradicts action"
+
+
+def test_given_group_scenes_then_each_person_is_filtered_by_the_same_rule():
+    people = [{"label": "P1", "behavior": "gestos naturais, em movimento"}, {"label": "P2", "behavior": "postura relaxada"}]
+    block = prompt_v2.persona_block("CAIMENTO", 2, people[0], people, lambda p: p["label"])
+    assert "Pessoa 1: P1." in block and "Jeito natural" in block.split("Pessoa 2")[1]
+    assert "movimento" not in block and "Jeito natural: postura relaxada." in block
 
 
 def test_given_caimento_v2_then_arms_and_hands_are_placed_and_the_technical_priority_is_kept():

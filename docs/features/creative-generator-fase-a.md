@@ -114,7 +114,7 @@ O que o V2 faz, sem regra negativa genérica de anatomia (há teste proibindo "d
 - **uma ação por cena**, escolhida no plano (determinística, pela seed), não pelo modelo de imagem;
 - **onde ficam braços e mãos**, dito como o que está visível ("relaxados ao lado do corpo", "uma mão apoiada no balcão"), não como proibição;
 - **papel de cada pessoa**: nenhum template diz "duas pessoas" e deixa uma implícita;
-- **precedência**: o bloco de persona diz que pose, ação e enquadramento do ângulo sempre vencem, e que o `behavior` da persona só vale se não contrariar o ângulo.
+- **precedência**: o bloco de persona diz que pose, ação e enquadramento do ângulo sempre vencem. Além disso, a persona complementa o ângulo **somente com atributos compatíveis**: cláusulas de `behavior` que contradizem uma instrução explícita do ângulo (ex.: "em movimento" sob a pose parada do CAIMENTO) são **omitidas na compilação** (`behavior_drop` em `angles_v2.json`, casamento sem acento e por início de palavra, por cláusula), não ressalvadas com "só se não contrariar". Se não sobra nada, a frase "Jeito natural" some. Só o `behavior` é filtrado; aparência, estilo e notas da persona não.
 
 ### Portado × redigido
 

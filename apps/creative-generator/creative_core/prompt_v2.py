@@ -10,7 +10,8 @@ What v2 does instead of adding "no extra fingers" text:
   * one action per scene, chosen in the plan (deterministically, from the seed) rather than left to the model;
   * where the arms and hands are, stated as what is visible (relaxed at the sides, one hand on X), not as a ban;
   * every person in the frame has a role — no template mentions "two people" and leaves one implicit;
-  * the persona refines WHO the person is; the angle decides pose, action and framing (precedence stated).
+  * the persona refines WHO the person is; the angle decides pose, action and framing (precedence stated), and a
+    persona behavior that directly contradicts the angle is filtered out at compile time (compatible_behavior).
 
 Pure and deterministic: no randomness, no I/O beyond loading the template file once.
 """
@@ -18,6 +19,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
 from pathlib import Path
 
 from .context_intelligence import deterministic_pick
@@ -97,9 +100,30 @@ def angle_block(
     return template.format(**variables)
 
 
-def _identity_and_behavior(person: dict, describe_identity) -> tuple[str, str]:
-    behavior = person.get("behavior") or ""
-    return describe_identity(person), behavior
+def _fold(text: str) -> str:
+    """Lowercase without accents, so 'Dança' and 'danca' match the same drop term."""
+    return "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
+
+
+def compatible_behavior(angle_id: str, behavior: str) -> str:
+    """The persona behavior clauses that do not contradict the angle.
+
+    The persona complements the angle only with compatible attributes. A clause that directly contradicts an
+    explicit instruction of the angle ('em movimento' under CAIMENTO, which asks for a still person) is dropped
+    here, at compile time — not stated with an "only if it does not contradict" caveat. The behavior is split
+    into its comma/semicolon clauses and each is tested against the angle's `behavior_drop` terms (accent-
+    insensitive, matched at the start of a word: 'caminh' drops 'caminhando' but 'corre' does not touch 'correto').
+    Returns "" when nothing compatible is left."""
+    terms = [_fold(t) for t in ANGLES[angle_id].get("behavior_drop", [])]
+    if not terms:
+        return behavior.strip()
+    conflict = re.compile(r"(?<!\w)(?:" + "|".join(re.escape(t) for t in terms) + ")")
+    kept = [c.strip() for c in re.split(r"[;,]", behavior) if c.strip() and not conflict.search(_fold(c))]
+    return ", ".join(kept)
+
+
+def _identity_and_behavior(angle_id: str, person: dict, describe_identity) -> tuple[str, str]:
+    return describe_identity(person), compatible_behavior(angle_id, person.get("behavior") or "")
 
 
 def persona_block(angle_id: str, count: int, persona: dict | None, people: list, describe_identity) -> str:
@@ -112,12 +136,12 @@ def persona_block(angle_id: str, count: int, persona: dict | None, people: list,
         lines = []
         for i, person in enumerate(people, 1):
             name = ("Pessoa A", "Pessoa B")[i - 1] if angle_id == GIFT_ANGLE and i <= 2 else f"Pessoa {i}"
-            identity, behavior = _identity_and_behavior(person, describe_identity)
+            identity, behavior = _identity_and_behavior(angle_id, person, describe_identity)
             extra = PERSONA["behavior"].format(comportamento=behavior) if behavior else ""
             lines.append(f"  · {name}: {identity}.{extra}")
         return head + "\n" + "\n".join(lines)
     if persona:
-        identity, behavior = _identity_and_behavior(persona, describe_identity)
+        identity, behavior = _identity_and_behavior(angle_id, persona, describe_identity)
         extra = PERSONA["behavior"].format(comportamento=behavior) if behavior else ""
         return PERSONA["single"].format(identidade=identity, comportamento=extra)
     return ""

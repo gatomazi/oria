@@ -6,7 +6,7 @@ só muda `prompt_version`. As seções que diferem estão marcadas com ◀ (toda
 ## CAIMENTO
 
 - V1: 4118 caracteres · sha256 `35aa24026c10dbbf…` · prompt_version 1
-- V2: 5160 caracteres · sha256 `1a992e48bc694266…` · prompt_version 2
+- V2: 5055 caracteres · sha256 `07e40672c02b7b52…` · prompt_version 2
 - Seções que diferem: angle, persona
 
 ### CAIMENTO — V1 (prompt completo)
@@ -80,7 +80,7 @@ PRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = "Camiseta B
 
 ÂNGULO CAIMENTO (registro quase técnico de vestibilidade — 'como esta peça fica vestida', não uma foto de moda genérica): Mulher 30 anos, estilo casual urbano em pé, corpo inteiro ou da cabeça até pelo menos a metade das coxas, posição frontal ou 3/4 muito leve, braços em posição natural e relaxada ao lado do corpo (NUNCA cruzados), vestindo "Camiseta Blumenau" (camiseta) completamente visível — barra da peça claramente visível e NÃO enfiada dentro da calça, sem jaqueta, mochila ou bolsa cobrindo a peça. Fundo simples e neutro inspirado em café ou ambiente contemporâneo de cidade de médio porte, sem competir com a informação de caimento. PRIORIDADE VISUAL ESTRITA nesta ordem: 1) silhueta da peça no corpo, 2) largura, 3) comprimento, 4) comprimento de manga, 5) gola, 6) queda do tecido, 7) estampa. A pessoa está parada em pose natural — NÃO mostrar a pessoa mexendo, ajeitando, puxando ou segurando qualquer parte da peça, e sem objetos nas mãos. SEM óculos escuros, sem pose editorial, sem cenário dramático, sem acessórios chamativos, sem composição cinematográfica. Preservar rigorosamente o tipo de peça (manga, gola, comprimento) conforme especificado.
 
-PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento — só se não contrariar a ação ou a pose pedida pelo ângulo. Aparência natural, sem rosto padrão de banco de imagem.
+PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Aparência natural, sem rosto padrão de banco de imagem.
 
 FORMATO: Feed 4:5 vertical (1080×1350).
 
@@ -110,13 +110,13 @@ PERSONA: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traço
 **persona · V2** ◀
 
 ```text
-PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento — só se não contrariar a ação ou a pose pedida pelo ângulo. Aparência natural, sem rosto padrão de banco de imagem.
+PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Aparência natural, sem rosto padrão de banco de imagem.
 ```
 
 ## PRESENTE_AFETO
 
 - V1: 4064 caracteres · sha256 `b3e8b35eced767b7…` · prompt_version 1
-- V2: 5037 caracteres · sha256 `8cb26f34a1c70c25…` · prompt_version 2
+- V2: 4873 caracteres · sha256 `d5bf6562f4a2bb45…` · prompt_version 2
 - Seções que diferem: angle, persona
 
 ### PRESENTE_AFETO — V1 (prompt completo)
@@ -191,8 +191,8 @@ PRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = "Camiseta B
 ÂNGULO PRESENTE (valor emocional da peça como presente, sem nenhum texto): EXATAMENTE 2 pessoas em quadro, em café ou ambiente contemporâneo de cidade de médio porte. Pessoa A: Mulher 30 anos, estilo casual urbano. Pessoa B: Jovem 22 anos, estilo streetwear leve. Cena: Pessoa A VESTE "Camiseta Blumenau" (camiseta); Pessoa B NÃO veste a peça e usa roupa lisa e neutra, sem estampa. Ação principal: as duas convivem de forma natural, lado a lado, numa conversa leve. Mãos: as de A ficam relaxadas ao lado do corpo; as de B relaxadas ou apoiadas numa superfície do ambiente; nenhuma das duas segura o produto e nenhuma mão cruza o corpo da outra pessoa. Expressão calorosa e contato visual entre A e B. Afeto genuíno e contido: gesto real, olhar natural, nenhum sorriso escancarado de banco de imagem, ninguém posando em fileira olhando para a câmera. Produto claramente visível.
 
 PESSOAS (os papéis de cada uma estão definidos na cena; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem):
-  · Pessoa A: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento — só se não contrariar a ação ou a pose pedida pelo ângulo.
-  · Pessoa B: Jovem 22 anos, estilo streetwear leve; cabelo cacheado curto; streetwear leve. Jeito natural: espontâneo, rindo — só se não contrariar a ação ou a pose pedida pelo ângulo.
+  · Pessoa A: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis.
+  · Pessoa B: Jovem 22 anos, estilo streetwear leve; cabelo cacheado curto; streetwear leve. Jeito natural: espontâneo, rindo.
 
 FORMATO: Feed 4:5 vertical (1080×1350).
 
@@ -223,14 +223,14 @@ PERSONA: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traço
 
 ```text
 PESSOAS (os papéis de cada uma estão definidos na cena; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem):
-  · Pessoa A: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento — só se não contrariar a ação ou a pose pedida pelo ângulo.
-  · Pessoa B: Jovem 22 anos, estilo streetwear leve; cabelo cacheado curto; streetwear leve. Jeito natural: espontâneo, rindo — só se não contrariar a ação ou a pose pedida pelo ângulo.
+  · Pessoa A: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis.
+  · Pessoa B: Jovem 22 anos, estilo streetwear leve; cabelo cacheado curto; streetwear leve. Jeito natural: espontâneo, rindo.
 ```
 
 ## CREATOR_STYLE
 
 - V1: 4105 caracteres · sha256 `358883449cb1703f…` · prompt_version 1
-- V2: 4884 caracteres · sha256 `9503d0e2fc234e0b…` · prompt_version 2
+- V2: 4825 caracteres · sha256 `c83199de03c6c885…` · prompt_version 2
 - Seções que diferem: angle, persona
 
 ### CREATOR_STYLE — V1 (prompt completo)
@@ -304,7 +304,7 @@ PRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = "Camiseta B
 
 ÂNGULO CREATOR-STYLE (conteúdo social espontâneo, SEM fingir depoimento real de cliente): Mulher 30 anos, estilo casual urbano vestindo "Camiseta Blumenau" (camiseta). Formato da foto: selfie de espelho: a pessoa segura o celular (celular com capinha rosa-claro fosca, nenhum logotipo de marca visível) com UMA mão, à altura do peito, visível no reflexo; a outra mão fica relaxada ao lado do corpo. Luz doméstica (nunca de estúdio), ambiente cotidiano (café ou ambiente contemporâneo de cidade de médio porte: quarto, corredor, sala ou similar). Apenas essa pessoa em quadro. PROIBIDO: qualquer elemento visual que sugira review, depoimento, avaliação por estrelas, embalagem sendo aberta como 'unboxing de cliente satisfeito' ou cenário que simule prova social de compra real — é uma FOTO ESTÉTICA no estilo criador de conteúdo, não a encenação de uma experiência de compra. Produto legível.
 
-PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento — só se não contrariar a ação ou a pose pedida pelo ângulo. Aparência natural, sem rosto padrão de banco de imagem.
+PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento. Aparência natural, sem rosto padrão de banco de imagem.
 
 FORMATO: Feed 4:5 vertical (1080×1350).
 
@@ -334,13 +334,13 @@ PERSONA: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traço
 **persona · V2** ◀
 
 ```text
-PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento — só se não contrariar a ação ou a pose pedida pelo ângulo. Aparência natural, sem rosto padrão de banco de imagem.
+PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento. Aparência natural, sem rosto padrão de banco de imagem.
 ```
 
 ## LIFESTYLE_COTIDIANO
 
 - V1: 4070 caracteres · sha256 `7a5c5ca7c156bc1d…` · prompt_version 1
-- V2: 4664 caracteres · sha256 `a7835658dc0d81f0…` · prompt_version 2
+- V2: 4605 caracteres · sha256 `968027161ac542f5…` · prompt_version 2
 - Seções que diferem: angle, persona
 
 ### LIFESTYLE_COTIDIANO — V1 (prompt completo)
@@ -414,7 +414,7 @@ PRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = "Camiseta B
 
 ÂNGULO LIFESTYLE (a peça sendo VIVIDA no dia a dia, sem texto): Mulher 30 anos, estilo casual urbano vestindo "Camiseta Blumenau" (camiseta), EM AÇÃO, numa única situação: de pé ao balcão de uma loja, uma das mãos apoiada no balcão e a outra solta. Cenário: café ou ambiente contemporâneo de cidade de médio porte. A câmera registra um momento em andamento, levemente desalinhada, como capturado de relance — NÃO é ensaio de estúdio nem pose de catálogo, e a pessoa não fica parada olhando para um ponto fixo sem nenhuma ação. Apenas essa pessoa em quadro; no máximo um objeto simples, sem marca, nas mãos dela. Produto nítido e legível apesar do enquadramento espontâneo.
 
-PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento — só se não contrariar a ação ou a pose pedida pelo ângulo. Aparência natural, sem rosto padrão de banco de imagem.
+PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento. Aparência natural, sem rosto padrão de banco de imagem.
 
 FORMATO: Feed 4:5 vertical (1080×1350).
 
@@ -444,6 +444,6 @@ PERSONA: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traço
 **persona · V2** ◀
 
 ```text
-PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento — só se não contrariar a ação ou a pose pedida pelo ângulo. Aparência natural, sem rosto padrão de banco de imagem.
+PERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis. Jeito natural: gestos naturais, em movimento. Aparência natural, sem rosto padrão de banco de imagem.
 ```
 
