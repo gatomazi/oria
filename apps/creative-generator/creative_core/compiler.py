@@ -127,7 +127,8 @@ def _people(plan: dict) -> tuple[str, str, str]:
     apparel_persona = (prompt_v2.persona_block(plan["angle"]["id"], len(plan["products"]), persona, people, describe_identity)
                        if plan["scene"]["prompt_version"] == 2 else _persona_block(persona, people))
     text = contract + ("\n\n" + apparel_persona if apparel_persona else "")
-    return text, plan["provenance"].get("subjects", "planner_default"), str(len(subjects))
+    origin = plan["provenance"].get("subjects", "planner_default")
+    return text, origin, str(len(subjects)), (plan.get("provenance_sources") or {}).get("subjects")
 
 
 def _gaze(plan: dict) -> tuple[str, str, str]:
@@ -150,6 +151,9 @@ def _scene(plan: dict) -> tuple[str, str, str]:
             picks=plan["scene"]["picks"])
     else:
         text = _angle_block(angle_id, products, persona, people, plan["context"]["scene"], apparel)
+    # The angle's text and the picks the planner made for it (action, photo format, gift scenario) are two origins.
+    if plan["scene"]["picks"]:
+        return text, "mixed", angle_id, ["angle", "planner_default"]
     return text, "angle", angle_id
 
 
@@ -199,11 +203,14 @@ def compile_prompt(plan: dict) -> dict:
     }
     sections, texts = [], []
     for name in SECTION_ORDER:
-        text, source, value = builders[name]()
+        text, source, value, *parts = builders[name]()
         if not text:
             continue
         texts.append(text)
-        sections.append({"section": name, "source": source, "value": value, "length": len(text)})
+        section = {"section": name, "source": source, "value": value, "length": len(text)}
+        if source == "mixed" and parts and parts[0]:
+            section["sources"] = list(parts[0])
+        sections.append(section)
     text = "\n\n".join(texts)
     return {
         "text": text, "sections": sections, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
@@ -217,6 +224,6 @@ def prompt_info(compiled: dict) -> dict:
     return {
         "text": compiled["text"],
         "sections": [{"name": s["section"], "length": s["length"], "source": s["source"], "value": s["value"]}
-                     for s in compiled["sections"]],
+                     for s in compiled["sections"]],  # `sources` of a mixed section lives in plan.compiler.sections
         "sha256": compiled["sha256"], "prompt_version": compiled["prompt_version"],
     }

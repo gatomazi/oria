@@ -57,6 +57,8 @@ GAZE_MODES = ("camera", "interaction", "off_camera", "product", "auto")
 GAZE_RESOLVED = ("camera", "interaction", "off_camera", "product", "none")
 # Where the value of a plan field came from (see plan_sources.py for the field -> origin map).
 VALUE_ORIGINS = ("user", "product", "product_enrichment", "brand", "niche", "persona", "angle", "planner_default", "safety_policy")
+# Aggregate marker for a composed section whose parts come from different origins (never a leaf origin).
+MIXED_ORIGIN = "mixed"
 AGE_BANDS = ("baby", "child", "teen", "adult", "unknown")
 LEGS_COVERAGES = ("full", "knee", "default")
 POSE_RISKS = ("low", "medium", "high")
@@ -378,6 +380,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "age_band": S(required=True, enum=AGE_BANDS),
         "is_minor": B(required=True),
         "minor_source": S(nullable=True),
+        "age_source": S(nullable=True),  # where the age band was read from (any age, not only minors)
         "product_use": S(required=True, enum=PRODUCT_USES),
         "product_id": S(nullable=True),
         "role_hint": S(nullable=True),
@@ -420,7 +423,8 @@ CONTRACTS: dict[str, dict[str, F]] = {
     },
     "CompilerSection": {
         "section": S(required=True),
-        "source": S(required=True),
+        "source": S(required=True),  # an origin, or `mixed` when `sources` lists the parts
+        "sources": A(S()),  # only for a `mixed` section: the distinct origins behind it
         "value": S(required=True),
         "length": I(required=True, minimum=0),
     },
@@ -461,7 +465,8 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "composition": R("PlanComposition"),
         "minor_safety": R("MinorSafety"),
         "semantics": R("PlanSemantics"),
-        "provenance": M(),  # plan field -> origin (VALUE_ORIGINS)
+        "provenance": M(),  # plan field -> origin (VALUE_ORIGINS, or `mixed` for a composed section)
+        "provenance_sources": O(),  # aggregate field -> the distinct origins behind it, e.g. {"subjects": ["persona", "product"]}
         "resolved_inputs": R("ResolvedInputs"),
         "compiler": R("CompilerInfo"),
         "seed": I(nullable=True, minimum=0),  # the seed the plan was built with: same request + seed = same plan

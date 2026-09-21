@@ -88,7 +88,8 @@ def role_hint(label: str) -> str | None:
 # ------------------------------------------------------------------ subjects (legacy adapter, Fase C replaces it)
 def derive_subjects(
     *, angle_id: str, products: list, persona: dict | None, people: list, people_needed: int, prompt_version: int,
-    apparel: bool, picks: dict, persona_source: str,
+    apparel: bool, picks: dict, persona_source: str, pool_source: str = "planner_default",
+    supporting_source: str | None = None,
 ) -> list[dict]:
     """Who is in the frame, from what the v1 core already knows (persona + people). `relation_to_primary` and
     `interaction` are left null: they are the slots Fase C (Subjects/Relations) fills."""
@@ -108,11 +109,14 @@ def derive_subjects(
         subjects.append({
             "id": f"s{i + 1}", "role": "primary" if i == 0 else "supporting",
             "label": person.get("label") or "uma pessoa", "persona": dict(person) if person.get("label") else None,
-            "age_band": band, "is_minor": band in ("baby", "child", "teen"), "minor_source": source if band in ("baby", "child", "teen") else None,
+            "age_band": band, "is_minor": band in ("baby", "child", "teen"), "age_source": source,
+            "minor_source": source if band in ("baby", "child", "teen") else None,
             "product_use": use_verb if uses else "none", "product_id": product.get("id") if uses else None,
             "role_hint": role_hint(person.get("label") or ""), "relation_to_primary": None,
             "prominence": "hero" if i == 0 else "secondary",
-            "source": persona_source if i == 0 else "planner_default",
+            # Each subject carries the origin of ITS OWN cast: the supporting person recast from the product's
+            # semantics is `product`, not whatever gave the primary. The aggregate (`mixed`) is built from these.
+            "source": persona_source if i == 0 else (supporting_source or pool_source),
         })
     return subjects
 
@@ -255,12 +259,46 @@ def _persona_origin(request: dict, brand: dict, niche: dict) -> str:
     return "planner_default"
 
 
+def _pool_origin(brand: dict, niche: dict) -> str:
+    """Where a persona drawn from the automatic pool comes from (independent of the persona mode of the primary)."""
+    return "brand" if brand.get("suggestedPersonas") else "niche" if niche.get("suggestedPersonas") else "planner_default"
+
+
 def persona_origin(request: dict, brand: dict, niche: dict) -> str:
     return _persona_origin(request, brand, niche)
 
 
-def build_provenance(*, request: dict, plan: dict, brand: dict, niche: dict, semantics_source: str | None) -> dict:
-    """plan field -> origin. Fields the user must actually supply are the ones marked `user`."""
+MIXED = "mixed"
+
+
+def _aggregate(origins: list[str]) -> str:
+    """One origin when every leaf agrees, `mixed` when they do not. Never collapses a composed section into the
+    origin of a single part (a supporting subject cast from the product must not be attributed to the user)."""
+    unique = sorted(set(origins))
+    return unique[0] if len(unique) == 1 else (MIXED if unique else "planner_default")
+
+
+def _age_origin(subject: dict) -> str:
+    """Origin of the age evidence. Age read from a persona label the USER or the brand provided is `persona`; age
+    read from a label the planner itself generated (a supporting person cast from the product) follows that person."""
+    source = subject.get("age_source") or ""
+    if source.startswith(("subject.", "request.")):
+        return "user"
+    if source.startswith("persona."):
+        return "persona" if subject["source"] in ("user", "brand", "niche", "persona") else subject["source"]
+    if source.startswith("product."):
+        return "product"
+    return "planner_default"
+
+
+def build_provenance(*, request: dict, plan: dict, brand: dict, niche: dict, semantics_source: str | None) -> tuple[dict, dict]:
+    """(provenance, provenance_sources).
+
+    `provenance` maps each plan field to ONE origin — a leaf when the field has a single source, `mixed` when a
+    composed section (subjects, scene) has parts from different sources. The parts stay as their own leaf entries
+    (`subjects.s1`, `subjects.s2`, `subjects.s2.age_band`, `scene.gaze`, `scene.picks`), so nothing is lost by the
+    aggregate. `provenance_sources` lists, for each aggregate, the distinct origins behind it — what feedback,
+    "Copiar Dados" and any future recommender read to tell what the user chose from what was inferred."""
     context_mode = (request.get("context") or {"mode": "automatic"}).get("mode", "automatic")
     provider = plan["context"]["provider"]
     out = {
@@ -271,16 +309,23 @@ def build_provenance(*, request: dict, plan: dict, brand: dict, niche: dict, sem
         "context": "user" if context_mode != "automatic" else ("brand" if provider == "geographic" else "niche"),
         "references": "product", "model": "planner_default",
         "scene.gaze": plan["scene"]["gaze"]["source"], "scene.picks": "planner_default", "scene.prompt_version": "planner_default",
-        "subjects": _persona_origin(request, brand, niche) if plan["subjects"] else "planner_default",
         "composition": "planner_default", "minor_safety.global": "safety_policy",
         "minor_safety.brand": "brand" if plan["minor_safety"]["brand"] else "planner_default",
         "semantics": semantics_source or "planner_default",
         "resolved_inputs": "brand", "compiler": "planner_default",
     }
-    supporting = (plan.get("semantics") or {}).get("supporting")
-    if supporting and supporting.get("source") == "product":
-        out["subjects.supporting"] = semantics_source or "product"
-    return dict(sorted(out.items()))
+    sources: dict[str, list[str]] = {}
+    for subject in plan["subjects"]:
+        out[f"subjects.{subject['id']}"] = subject["source"]
+        out[f"subjects.{subject['id']}.age_band"] = _age_origin(subject)
+    subject_origins = [s["source"] for s in plan["subjects"]]
+    out["subjects"] = _aggregate(subject_origins)
+    if subject_origins:
+        sources["subjects"] = sorted(set(subject_origins))
+    scene_parts = [plan["scene"]["gaze"]["source"]] + (["planner_default"] if plan["scene"]["picks"] else [])
+    out["scene"] = _aggregate(scene_parts)
+    sources["scene"] = sorted(set(scene_parts))
+    return dict(sorted(out.items())), dict(sorted(sources.items()))
 
 
 def objective_for(strategy: str) -> str:
@@ -298,14 +343,16 @@ def build(
     if prompt_version == 2 and angle_id == GIFT_ANGLE:
         people, supporting = cast_supporting(people=people, pool=pool, products=products, seed=seed)
     persona_source = _persona_origin(request, brand, niche)
+    semantic = _semantic_of(products)
+    semantic_origin = None if not semantic else ("product_enrichment" if semantic.get("source") == "enrichment" else "product")
     subjects = derive_subjects(angle_id=angle_id, products=products, persona=persona, people=people,
                                people_needed=people_needed, prompt_version=prompt_version, apparel=apparel, picks=picks,
-                               persona_source=persona_source)
+                               persona_source=persona_source, pool_source=_pool_origin(brand, niche),
+                               supporting_source=semantic_origin if supporting and supporting.get("source") == "product" else None)
     gaze = resolve_gaze(request.get("gaze_mode"), angle_id, len(subjects), picks)
     safety, safety_warnings = minor_safety(subjects, brand.get("minorWardrobePolicy"), products)
     semantic_products = [{"product_id": p.get("id"), "semantic_context": p.get("semantic_context")} for p in products]
     warnings = semantic_warnings(products, subjects)
-    semantic = _semantic_of(products)
     return {
         "people": people, "supporting": supporting,
         "fields": {
@@ -322,5 +369,5 @@ def build(
         },
         "warnings": [f"{w['code']}:{w['theme']}:{w['supporting_role']}" for w in warnings] + safety_warnings
         + ([f"people_count_risk:{len(subjects)}"] if len(subjects) >= 3 else []),
-        "semantics_source": None if not semantic else ("product_enrichment" if semantic.get("source") == "enrichment" else "product"),
+        "semantics_source": semantic_origin,
     }

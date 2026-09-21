@@ -49,6 +49,12 @@
         "source": {
           "type": "string"
         },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "value": {
           "type": "string"
         },

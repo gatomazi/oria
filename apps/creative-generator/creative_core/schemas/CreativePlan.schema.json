@@ -202,6 +202,10 @@
         "type": "string"
       }
     },
+    "provenance_sources": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "resolved_inputs": {
       "$ref": "#/$defs/ResolvedInputs"
     },
@@ -303,6 +307,12 @@
         },
         "source": {
           "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "value": {
           "type": "string"
@@ -850,6 +860,16 @@
           "type": "boolean"
         },
         "minor_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "age_source": {
           "anyOf": [
             {
               "type": "string"

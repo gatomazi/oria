@@ -276,6 +276,7 @@ export interface PlanSubject {
   age_band: "baby" | "child" | "teen" | "adult" | "unknown";
   is_minor: boolean;
   minor_source?: string | null;
+  age_source?: string | null;
   product_use: "wears" | "uses" | "none";
   product_id?: string | null;
   role_hint?: string | null;
@@ -326,6 +327,7 @@ export interface ResolvedInputs {
 export interface CompilerSection {
   section: string;
   source: string;
+  sources?: Array<string>;
   value: string;
   length: number;
 }
@@ -368,6 +370,7 @@ export interface CreativePlan {
   minor_safety?: MinorSafety;
   semantics?: PlanSemantics;
   provenance?: Record<string, string>;
+  provenance_sources?: Record<string, unknown>;
   resolved_inputs?: ResolvedInputs;
   compiler?: CompilerInfo;
   seed?: number | null;

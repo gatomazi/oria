@@ -290,6 +290,16 @@
             }
           ]
         },
+        "age_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "product_use": {
           "type": "string",
           "enum": [

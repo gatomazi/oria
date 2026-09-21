@@ -357,6 +357,45 @@ def test_given_a_plan_then_provenance_names_the_origin_of_the_resolved_fields_fr
     assert enriched["provenance"]["semantics"] == "product_enrichment"
 
 
+def test_given_a_composed_subjects_section_then_provenance_is_mixed_and_the_leaves_keep_their_own_origin():
+    pool = [{"label": "menina 6 anos"}, {"label": "mulher 35 anos, mãe da menina"}]
+    plan = plan_creative(_child_request("PRESENTE_AFETO", semantic=SEMANTIC_FATHER, pool=pool, seed=100), router=ROUTER)
+    prov, sources = plan["provenance"], plan["provenance_sources"]
+    assert prov["subjects"] == "mixed" and sources["subjects"] == ["product", "user"]
+    assert (prov["subjects.s1"], prov["subjects.s2"]) == ("user", "product"), "the father cast from the product is not the user's decision"
+    assert plan["subjects"][0]["source"] == "user" and plan["subjects"][1]["source"] == "product"
+    assert prov["subjects.s1.age_band"] == "persona", "age read from the persona the user gave"
+    assert prov["subjects.s2.age_band"] == "product", "age read from a label the planner generated from the product's semantics"
+    section = _sections(plan)["people_composition_contract"]
+    assert section["source"] == "mixed" and section["sources"] == ["product", "user"]
+    assert contracts.validate("CreativePlan", plan) == []
+    assert (set(prov.values()) - set(contracts.VALUE_ORIGINS)) <= {contracts.MIXED_ORIGIN}
+
+
+def test_given_a_single_source_then_the_aggregate_is_that_source_and_the_section_carries_no_sources():
+    plan = plan_creative(_child_request("CAIMENTO"), router=ROUTER)
+    assert plan["provenance"]["subjects"] == "user" and plan["provenance_sources"]["subjects"] == ["user"]
+    assert "sources" not in _sections(plan)["people_composition_contract"]
+    explicit = plan_creative(_child_request("CAIMENTO", gaze_mode="product"), router=ROUTER)
+    assert explicit["provenance"]["scene"] == "user" and "scene_action" in _sections(explicit) and _sections(explicit)["scene_action"]["source"] == "angle"
+
+
+def test_given_scene_picks_then_the_scene_section_is_mixed_between_the_angle_and_the_planner():
+    plan = _plan(angle="LIFESTYLE_COTIDIANO", prompt_version=2, seed=4)
+    scene = _sections(plan)["scene_action"]
+    assert scene["source"] == "mixed" and scene["sources"] == ["angle", "planner_default"]
+    assert plan["provenance"]["scene"] == "mixed" and plan["provenance_sources"]["scene"] == ["angle", "planner_default"]
+    assert _sections(_plan(angle="CAIMENTO"))["scene_action"]["source"] == "angle", "no picks, single origin"
+
+
+def test_given_where_the_supporting_person_came_from_then_the_subject_says_so():
+    pool = [{"label": "menina 6 anos"}, {"label": "mulher 35 anos, mãe da menina"}]
+    from_pool = plan_creative(_child_request("PRESENTE_AFETO", pool=pool, seed=100), router=ROUTER)
+    assert from_pool["subjects"][1]["source"] == "brand"
+    enriched = plan_creative(_child_request("PRESENTE_AFETO", semantic={**SEMANTIC_FATHER, "source": "enrichment"}, pool=pool, seed=100), router=ROUTER)
+    assert enriched["subjects"][1]["source"] == "product_enrichment" and enriched["provenance"]["subjects.s2"] == "product_enrichment"
+
+
 def test_given_the_field_source_map_then_only_strategy_and_products_are_required_from_the_user():
     assert required_user_fields() == ["strategy / objective", "products"]
     origins = {o for entry in FIELD_SOURCES.values() for o in entry["origins"]}
@@ -369,7 +408,7 @@ def test_given_the_field_source_map_then_only_strategy_and_products_are_required
 def test_given_a_v2_plan_then_every_top_level_field_is_covered_by_the_source_map_or_is_bookkeeping():
     bookkeeping = {"plan_id", "creative_id", "schema_version", "internal_strategy_id", "product_mode", "funnel_stage",
                    "remarketing_intent", "layout", "overlay", "copy", "prompt", "versions", "validations", "warnings",
-                   "provenance", "resolved_inputs", "semantics", "mode", "objective"}
+                   "provenance", "provenance_sources", "resolved_inputs", "semantics", "mode", "objective"}
     covered = {key.split(" ")[0].split(".")[0].split("[")[0] for key in FIELD_SOURCES}
     covered |= {"strategy", "products", "references", "angle", "placement", "quality", "persona", "subjects", "scene", "composition",
                 "minor_safety", "context", "model", "seed", "compiler", "brand_kit", "niche_kit"}

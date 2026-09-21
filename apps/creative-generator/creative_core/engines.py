@@ -337,11 +337,11 @@ def plan_creative(
             "products": products, "references": roles, "angle": angle, "context": context,
             "placement": placement_descriptor(request["placement_id"]), "persona": persona, **planned["fields"],
         }
-        view["provenance"] = planner_v2.build_provenance(
+        view["provenance"], view["provenance_sources"] = planner_v2.build_provenance(
             request=request, plan=view, brand=brand, niche=niche, semantics_source=planned["semantics_source"])
         compiled = compile_prompt(view)
         prompt = prompt_info(compiled)
-        v2_extra = {**planned["fields"], "provenance": view["provenance"], "seed": seed,
+        v2_extra = {**planned["fields"], "provenance": view["provenance"], "provenance_sources": view["provenance_sources"], "seed": seed,
                     "compiler": {"version": COMPILER_VERSION, "sections": compiled["sections"]}}
     else:
         builder = PromptBuilder(ordered=True, separator="\n\n")
