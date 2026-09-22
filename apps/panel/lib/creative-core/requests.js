@@ -25,7 +25,13 @@ const INPUT_KEYS = new Set([
   // Fase C · composição da cena e reprodução (vêm de "Copiar dados" / "Gerar assim"; o core valida o conteúdo).
   'subjects', 'interaction', 'gaze_mode', 'seed', 'scene_picks',
   // Fase D.1 · ângulo personalizado (substitui angle_ids: um lote usa ângulos legados OU um ângulo customizado, nunca os dois).
-  'custom_angle_id', 'custom_angle',
+  // D.1.1 (auditoria do limite de confiança): `custom_angle` (o objeto inteiro, cru do navegador) foi REMOVIDO da
+  // entrada aceita — nada aqui validava que ele pertencia à Organization/Store de quem chamou, nem que correspondia a
+  // um plano real já gerado; um cliente podia mandar qualquer id/scope/definition e o servidor repassava como se fosse
+  // um snapshot histórico autorizado. `custom_angle_replay_of` substitui esse caminho: é o id do CRIATIVO ORIGINAL (já
+  // gerado, já autorizado), e o servidor busca o snapshot no PLANO PERSISTIDO (buildRequests), nunca no corpo do
+  // request — ver docs/features/creative-generator-fase-d1-1.md.
+  'custom_angle_id', 'custom_angle_replay_of',
 ]);
 const GAZE_MODES = ['auto', 'camera', 'off_camera', 'product', 'interaction'];
 const INTERACTION_RE = /^[a-z_]{2,40}$/;
@@ -63,9 +69,9 @@ function normalizeJobInput(raw) {
   exigir(objetoSimples(raw), 'corpo inválido');
   for (const key of Object.keys(raw)) exigir(INPUT_KEYS.has(key), `campo desconhecido: ${key}`);
   // Ângulo personalizado (Fase D.1): substitui a lista de ângulos legados por um único slot "auto" — o core
-  // resolve o ângulo real a partir de `custom_angle`/`custom_angle_id`, nunca dos 13 ids.
-  exigir(raw.custom_angle_id === undefined || raw.custom_angle === undefined, 'ângulo personalizado: informe custom_angle_id OU custom_angle, não os dois');
-  const usaAnguloCustomizado = raw.custom_angle_id !== undefined || raw.custom_angle !== undefined;
+  // resolve o ângulo real a partir de `custom_angle_id`/`custom_angle_replay_of`, nunca dos 13 ids.
+  exigir(raw.custom_angle_id === undefined || raw.custom_angle_replay_of === undefined, 'ângulo personalizado: informe custom_angle_id OU custom_angle_replay_of, não os dois');
+  const usaAnguloCustomizado = raw.custom_angle_id !== undefined || raw.custom_angle_replay_of !== undefined;
   const input = {
     engine: raw.engine,
     product_mode: raw.product_mode,
@@ -79,11 +85,12 @@ function normalizeJobInput(raw) {
     exigir(UUID_RE.test(raw.custom_angle_id), 'ângulo personalizado: id inválido');
     input.custom_angle_id = raw.custom_angle_id; // resolvido do banco em buildRequests (precisa checar "active")
   }
-  if (raw.custom_angle !== undefined) {
-    // Réplica de um draft ("de novo"/"variação"): já é o CustomAngle inteiro, resolvido no momento da geração
-    // original — não é revalidado contra o banco (autossuficiente, §3 da Fase D.1; "active" não se aplica aqui).
-    exigir(objetoSimples(raw.custom_angle) && typeof raw.custom_angle.id === 'string' && typeof raw.custom_angle.family === 'string', 'custom_angle: formato inválido');
-    input.custom_angle = raw.custom_angle;
+  if (raw.custom_angle_replay_of !== undefined) {
+    // Réplica de um draft ("de novo"/"variação"): o cliente manda o id do CRIATIVO ORIGINAL, nunca o CustomAngle em
+    // si — o snapshot vem do plano persistido (buildRequests), então "active" não se aplica aqui (autossuficiente,
+    // §3 da Fase D.1) e nada que o navegador mande sobre o ângulo é usado como prova de autorização.
+    exigir(UUID_RE.test(raw.custom_angle_replay_of), 'custom_angle_replay_of: id inválido');
+    input.custom_angle_replay_of = raw.custom_angle_replay_of;
   }
   exigir(ENGINES.includes(input.engine), 'motor inválido');
   exigir(PRODUCT_MODES.includes(input.product_mode), 'modo de produto inválido');
@@ -275,15 +282,28 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, pla
   if (input.gaze_mode && input.gaze_mode !== 'auto') base.gaze_mode = input.gaze_mode;
   if (input.scene_picks) base.scene_picks = input.scene_picks;
 
-  // Ângulo personalizado (Fase D.1): resolve do banco (fresh pick) OU repassa o CustomAngle inteiro (replay de um
-  // draft — "de novo"/"variação"). O core recebe o payload já pronto e nunca consulta creative_angles.
+  // Ângulo personalizado (Fase D.1 + D.1.1): duas escolhas, nunca o objeto cru do navegador.
+  //   - `custom_angle_id`: ESCOLHA NOVA — busca no banco, escopada ao tenant, e exige `active`.
+  //   - `custom_angle_replay_of`: REUTILIZAÇÃO HISTÓRICA — o cliente manda o id do CRIATIVO ORIGINAL (já gerado,
+  //     já autorizado); o servidor busca esse item ESCOPADO AO TENANT (`store.getItem`, a mesma consulta tenant-
+  //     scoped que "Copiar dados" usa) e lê o snapshot do PLANO PERSISTIDO — nunca do corpo do request. Isso é o
+  //     que impede um cliente de fingir ser outra Organization/Store ou adulterar id/scope/version/definition: o
+  //     que ele manda (um id de criativo) não carrega nenhum desses campos, só uma referência que só resolve para
+  //     algo se já pertencer ao tenant da sessão. `active` não entra aqui de propósito — "Gerar de novo" e
+  //     "Gerar variação" continuam funcionando com um ângulo já desativado, porque o snapshot é do momento em que
+  //     ele foi usado, não do estado atual da linha em creative_angles.
   if (input.custom_angle_id) {
     const linha = await store.getAngle(tenantId, input.custom_angle_id);
     exigir(linha, 'ângulo personalizado não encontrado');
     exigir(linha.active, 'este ângulo personalizado está desativado — escolha outro ou reative-o antes de gerar');
     base.custom_angle = angleForCore(linha);
-  } else if (input.custom_angle) {
-    base.custom_angle = input.custom_angle;
+  } else if (input.custom_angle_replay_of) {
+    const original = await store.getItem(tenantId, input.custom_angle_replay_of);
+    exigir(original, 'criativo original não encontrado');
+    exigir(original.plan, 'criativo original ainda não tem plano');
+    const snapshot = original.plan.angle_recommendation && original.plan.angle_recommendation.custom_angle;
+    exigir(snapshot, 'este criativo não usou um ângulo personalizado');
+    base.custom_angle = snapshot;
   }
   // Cena com pessoas/interação só existe no plano v2 (o core recusa no v1). Diga antes de enfileirar, em português.
   if ((input.subjects || input.interaction || input.scene_picks || base.custom_angle) && planSchemaVersion !== 2) {

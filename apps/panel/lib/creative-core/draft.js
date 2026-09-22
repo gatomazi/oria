@@ -102,10 +102,16 @@ async function mapDraftToForm(draft, { store, tenantId, jobInput = null }) {
   // /jobs — copiar dados não perde pessoa, relação nem interação em silêncio.
   if (Array.isArray(draft.subjects) && draft.subjects.length) form.subjects = draft.subjects;
   if (draft.interaction) form.interaction = draft.interaction;
-  // Ângulo personalizado (Fase D.1): "de novo"/"variação" reproduzem o MESMO ângulo, não um recálculo pela família —
-  // autossuficiente, como o plano que o gerou. `angle_ids` (legado, um id só) não se aplica mais nesse caso.
+  // Ângulo personalizado (Fase D.1 + D.1.1): "de novo"/"variação" reproduzem o MESMO ângulo, não um recálculo pela
+  // família — autossuficiente, como o plano que o gerou. `angle_ids` (legado, um id só) não se aplica mais nesse caso.
+  //
+  // `custom_angle_preview` é só para a TELA mostrar nome/família/definição (por isso não está em INPUT_KEYS de
+  // requests.js — postar de volta é rejeitado como campo desconhecido). O que de fato volta no POST /jobs é
+  // `custom_angle_replay_of`, o id DESTE criativo: o servidor busca o snapshot no plano persistido (nunca confia no
+  // objeto que a tela devolveria) — é o mesmo id que `source.creative_id` já trazia para o histórico.
   if (draft.custom_angle) {
-    form.custom_angle = draft.custom_angle;
+    form.custom_angle_preview = draft.custom_angle;
+    if (draft.source && draft.source.creative_id) form.custom_angle_replay_of = draft.source.creative_id;
     form.angle_ids = ['auto'];
   }
 

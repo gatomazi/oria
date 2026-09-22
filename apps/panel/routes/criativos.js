@@ -582,9 +582,10 @@ function criarRouterCriativos(deps) {
       delete form.subjects;
       delete form.interaction;
     }
-    if (form.custom_angle && planSchemaVersionFor(env, req.creativeTenant) !== 2) {
-      unavailable.push({ field: 'custom_angle', id: form.custom_angle.id, reason: 'plan_v2_not_enabled' });
-      delete form.custom_angle;
+    if (form.custom_angle_preview && planSchemaVersionFor(env, req.creativeTenant) !== 2) {
+      unavailable.push({ field: 'custom_angle', id: form.custom_angle_preview.id, reason: 'plan_v2_not_enabled' });
+      delete form.custom_angle_preview;
+      delete form.custom_angle_replay_of;
       form.angle_ids = [draft.angle_id];
     }
     if ((actions.again.scene_picks) && (promptVersionFor(env, req.creativeTenant) !== 2 || planSchemaVersionFor(env, req.creativeTenant) !== 2)) {
