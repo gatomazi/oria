@@ -1,8 +1,9 @@
 'use strict';
 
 // Fase G · ProductPerformanceService — une catálogo canônico + métricas de analytics + Product
-// Identity, SEM reconciliação com pedidos Commerce ainda (§6.1/§6.13 do comando: CommerceConnector
-// ainda não tem `orders` no contrato novo; reconciliação fica para quando existir).
+// Identity, SEM reconciliação com pedidos Commerce (ver reconciliation.js — Etapa 3 da rodada
+// G.1/Orders/Reconciliação: comparação com pedidos confirmados é uma camada À PARTE, opcional, que
+// consome a saída deste service — este service nunca conhece `commerce_orders`).
 //
 //   Commerce catalog repository (Fase D, lib/product-analytics/commerce-catalog-repository.js)
 //   AnalyticsConnector          (registry.resolve('analytics', provider, ctx) — Fase B/E)
@@ -14,11 +15,27 @@
 //
 // 1 (ou poucas, já paginadas dentro do connector) chamada ao AnalyticsConnector para o PERÍODO
 // INTEIRO — nunca uma por produto (§6.10), mesmo com 100/1000/85000 produtos no catálogo.
+//
+// Rodada G.1 (consolidação): `itemRatios` (antes `rates`) são razões entre CONTAGENS DE ITEM
+// (quantos itens visualizados/adicionados/finalizados/comprados) — nunca taxa de conversão de
+// usuário ou de sessão; o GA4 Data API mede eventos de item, não sessões. Nomeado
+// `<numerador>PerItem<denominador>` para deixar essa base explícita no próprio campo.
 
 const { resolveAndPersist } = require('./product-identity-resolver');
 
 const METRICAS = Object.freeze(['itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue']);
 const CAMPOS_CATALOGO = Object.freeze(['name', 'price', 'created_at', 'updated_at']);
+
+// Cada razão é sobre as MESMAS unidades (contagem de item) nos dois lados — nunca item/sessão ou
+// item/usuário, que o GA4 Data API (escopo item, não sessão) não sustentaria.
+const CAMPOS_RATIO = Object.freeze({
+  itemsAddedToCartPerItemViewed: (m) => taxa(m.itemsAddedToCart, m.itemsViewed),
+  itemsCheckedOutPerItemViewed: (m) => taxa(m.itemsCheckedOut, m.itemsViewed),
+  itemsCheckedOutPerItemAddedToCart: (m) => taxa(m.itemsCheckedOut, m.itemsAddedToCart),
+  itemsPurchasedPerItemViewed: (m) => taxa(m.itemsPurchased, m.itemsViewed),
+});
+const RATIOS_VAZIOS = Object.freeze(Object.fromEntries(Object.keys(CAMPOS_RATIO).map((k) => [k, null])));
+const CAMPOS_ORDENAVEIS_METRICA = Object.freeze([...METRICAS, ...Object.keys(CAMPOS_RATIO)]);
 
 function metricasZeradas() {
   return { itemsViewed: 0, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0, itemRevenue: 0 };
@@ -47,10 +64,32 @@ function validarEntrada({ organizationId, storeId, analyticsProvider, startDate,
   if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new TypeError('pagination.limit deve ser um inteiro entre 1 e 500');
 }
 
+// Produtos com identity JÁ resolvida no namespace de analytics (persistida agora ou em período
+// anterior — §6.8: essa é a diferença entre "zero real" e "sem evidência de coleta"). `apenasIds`
+// restringe a um conjunto de commerce_product_id conhecido (uso: página já paginada pelo catálogo —
+// evita carregar o conjunto elegível da Store inteira quando só a página interessa); sem ele, é o
+// conjunto elegível DA STORE inteira (uso: ordenar por métrica/ratio, que precisa do total antes de
+// paginar — nunca o catálogo inteiro em memória, só os ids com identity resolvida, §6.10).
+async function idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, provider, apenasIds }) {
+  if (apenasIds && !apenasIds.length) return [];
+  const condicoes = ['pei.organization_id = $1', 'pei.store_id = $2', 'pei.namespace = $3', 'cp.is_active'];
+  const params = [organizationId, storeId, namespace];
+  if (provider) { params.push(provider); condicoes.push(`cp.provider = $${params.length}`); }
+  if (apenasIds) { params.push(apenasIds); condicoes.push(`pei.commerce_product_id = ANY($${params.length}::uuid[])`); }
+  const { rows } = await pool.query(
+    `SELECT DISTINCT pei.commerce_product_id AS id
+       FROM product_external_identities pei
+       JOIN commerce_products cp ON cp.id = pei.commerce_product_id AND cp.organization_id = pei.organization_id
+      WHERE ${condicoes.join(' AND ')}`,
+    params
+  );
+  return rows.map((r) => r.id);
+}
+
 /**
- * @param {{pool, registry, catalogRepository}} deps
+ * @param {{pool, registry, catalogRepository, reportCache?}} deps
  */
-function createProductPerformanceService({ pool, registry, catalogRepository }) {
+function createProductPerformanceService({ pool, registry, catalogRepository, reportCache = createReportCache() }) {
   if (!pool) throw new Error('createProductPerformanceService exige pool');
   if (!registry || typeof registry.resolve !== 'function') throw new Error('createProductPerformanceService exige registry');
   if (!catalogRepository || typeof catalogRepository.listPage !== 'function') throw new Error('createProductPerformanceService exige catalogRepository');
@@ -60,10 +99,14 @@ function createProductPerformanceService({ pool, registry, catalogRepository }) 
     const { organizationId, storeId, analyticsProvider, startDate, endDate, filters = {}, sort = null, pagination = {} } = entrada;
     const namespace = `${analyticsProvider}.item_id`;
 
-    // 1 (poucas, já paginadas dentro do connector) chamada de analytics para o período inteiro.
-    const resolvido = registry.resolve('analytics', analyticsProvider, { organizationId, storeId });
-    resolvido.require('productMetrics');
-    const linhasAnalytics = await resolvido.connector.getProductPerformance({ startDate, endDate });
+    // 1 (poucas, já paginadas dentro do connector) chamada de analytics para o período inteiro —
+    // com ou sem cache, sempre uma chamada de DADOS por invocação do service (o cache, quando
+    // usado, fica no ReportCache abaixo — nunca aqui um "if já busquei antes" ad hoc).
+    const linhasAnalytics = await reportCache.obter({ organizationId, storeId, analyticsProvider, startDate, endDate }, async () => {
+      const resolvido = registry.resolve('analytics', analyticsProvider, { organizationId, storeId });
+      resolvido.require('productMetrics');
+      return resolvido.connector.getProductPerformance({ startDate, endDate });
+    });
 
     if (!linhasAnalytics.length) {
       // Sem NENHUMA linha no período: não dá pra distinguir "zero de verdade" de "sem cobertura" —
@@ -88,24 +131,37 @@ function createProductPerformanceService({ pool, registry, catalogRepository }) 
     // Agrega por commerce_product_id — nunca por external id solto (§6.5: soma os que apontam pro
     // MESMO produto; sem informação para deduplicar entre ids diferentes, então soma e sinaliza).
     const metricasPorProduto = new Map(); // commerceProductId -> { metrics, externalIds: Set }
+    const linhaZerada = (id) => {
+      if (!metricasPorProduto.has(id)) metricasPorProduto.set(id, { metrics: metricasZeradas(), externalIds: new Set() });
+      return metricasPorProduto.get(id);
+    };
     for (const linha of linhasAnalytics) {
       const commerceProductId = produtoPorExternalId.get(linha.externalProductId);
       if (!commerceProductId) continue; // id observado sem produto canônico — não é problema do PRODUTO, é do id (coverage cobre isso)
-      if (!metricasPorProduto.has(commerceProductId)) metricasPorProduto.set(commerceProductId, { metrics: metricasZeradas(), externalIds: new Set() });
-      const acc = metricasPorProduto.get(commerceProductId);
+      const acc = linhaZerada(commerceProductId);
       acc.externalIds.add(linha.externalProductId);
       for (const nome of METRICAS) acc.metrics[nome] = somarMetrica(acc.metrics[nome], linha[nome]);
     }
 
-    // ── Escolha da página: catálogo (DB pagina) ou métrica (conjunto bounded pelos produtos com
-    // alguma identity — nunca o catálogo inteiro em memória, §6.10). ──
-    const ordenarPorMetrica = sort && !CAMPOS_CATALOGO.includes(sort.field);
+    // Métrica indisponível na propriedade inteira: se NENHUMA linha observada trouxe valor para
+    // ela, é a propriedade que não suporta — não o produto individual (Fase E já nunca inventa 0
+    // aqui). Nula em TODO produto do map, matched-zero incluído (nunca "0 travestido de sem suporte").
+    const metricasIndisponiveis = METRICAS.filter((nome) => linhasAnalytics.every((l) => l[nome] === null));
+    const aplicarIndisponiveis = () => { for (const rec of metricasPorProduto.values()) for (const nome of metricasIndisponiveis) rec.metrics[nome] = null; };
+
+    // ── Escolha da página: catálogo (DB pagina, caminho comum de navegação — barato mesmo com um
+    // catálogo grande) ou métrica/ratio (conjunto elegível DA STORE inteira, ordenado e paginado em
+    // memória ANTES do corte de página — nunca só a página do catálogo: um produto de alto
+    // desempenho fora da primeira página por nome tem que aparecer no topo ao ordenar por receita). ──
+    const ordenarPorMetrica = sort && CAMPOS_ORDENAVEIS_METRICA.includes(sort.field);
     let produtosDaPagina;
     let nextCursor = null;
     let totalCount;
     if (ordenarPorMetrica) {
-      const idsComMetrica = [...metricasPorProduto.keys()];
-      const todos = await catalogRepository.getByIds({ organizationId, storeId, ids: idsComMetrica });
+      const idsElegiveis = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, provider: filters.provider });
+      for (const id of idsElegiveis) linhaZerada(id);
+      aplicarIndisponiveis();
+      const todos = await catalogRepository.getByIds({ organizationId, storeId, ids: [...metricasPorProduto.keys()] });
       const valorDeOrdenacao = (produto) => valorDoCampo(metricasPorProduto.get(produto.id), sort.field);
       todos.sort((a, b) => compararComNullPorUltimo(valorDeOrdenacao(a), valorDeOrdenacao(b), sort.direction));
       totalCount = todos.length;
@@ -122,22 +178,14 @@ function createProductPerformanceService({ pool, registry, catalogRepository }) 
       produtosDaPagina = pagina.items;
       nextCursor = pagina.nextCursor;
       totalCount = pagina.totalCount;
+      // Identity conhecida só para ESTA página (nunca a Store inteira neste ramo — é o caminho
+      // comum de navegação por catálogo, tem que ficar barato mesmo com um catálogo grande).
+      const idsDaPagina = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, apenasIds: produtosDaPagina.map((p) => p.id) });
+      for (const id of idsDaPagina) linhaZerada(id);
+      aplicarIndisponiveis();
     }
 
-    // Quais produtos da página JÁ têm identity conhecida (mesmo sem atividade no período — §6.8:
-    // zero observado ≠ dado ausente). Um produto sem NENHUMA identity é `unmatched_identity`.
-    const { rows: identidadesConhecidas } = await pool.query(
-      `SELECT DISTINCT commerce_product_id FROM product_external_identities
-        WHERE organization_id = $1 AND store_id = $2 AND namespace = $3 AND commerce_product_id = ANY($4::uuid[])`,
-      [organizationId, storeId, namespace, produtosDaPagina.map((p) => p.id)]
-    );
-    const comIdentityConhecida = new Set(identidadesConhecidas.map((r) => r.commerce_product_id));
-
-    // Métrica indisponível na propriedade: se NENHUMA linha observada trouxe valor para ela, é a
-    // propriedade que não suporta — não o produto individual (Fase E já nunca inventa 0 aqui).
-    const metricasIndisponiveis = METRICAS.filter((nome) => linhasAnalytics.every((l) => l[nome] === null));
-
-    const items = produtosDaPagina.map((produto) => montarLinha(produto, metricasPorProduto.get(produto.id), comIdentityConhecida.has(produto.id), metricasIndisponiveis));
+    const items = produtosDaPagina.map((produto) => montarLinha(produto, metricasPorProduto.get(produto.id)));
 
     return {
       items, nextCursor, totalCount,
@@ -159,56 +207,46 @@ function linhaSemAnalytics(produto, diagnostico) {
   return Object.freeze({
     product: produto,
     metrics: null,
-    rates: { addToCartRate: null, checkoutFromViewRate: null, cartToCheckoutRate: null, purchaseFromViewRate: null },
+    itemRatios: RATIOS_VAZIOS,
     identity: { matchedAnalyticsIds: [], status: 'unmatched' },
     diagnostics: [diagnostico],
   });
 }
 
-function montarLinha(produto, acumulado, temIdentityConhecida, metricasIndisponiveis) {
+function montarLinha(produto, acumulado) {
+  if (!acumulado) {
+    return Object.freeze({
+      product: produto,
+      metrics: null,
+      itemRatios: RATIOS_VAZIOS,
+      identity: Object.freeze({ matchedAnalyticsIds: [], status: 'unmatched' }),
+      diagnostics: Object.freeze(['unmatched_identity']),
+    });
+  }
+
   const diagnostics = [];
-  let metrics;
-  let identityStatus;
-  let matchedAnalyticsIds = [];
+  const metrics = { ...acumulado.metrics };
+  const matchedAnalyticsIds = [...acumulado.externalIds];
+  if (acumulado.externalIds.size > 1) diagnostics.push('multiple_analytics_identities');
+  if (METRICAS.some((nome) => metrics[nome] === null)) diagnostics.push('metric_unavailable');
 
-  if (acumulado) {
-    metrics = { ...acumulado.metrics };
-    matchedAnalyticsIds = [...acumulado.externalIds];
-    identityStatus = 'matched';
-    if (acumulado.externalIds.size > 1) diagnostics.push('multiple_analytics_identities');
-  } else if (temIdentityConhecida) {
-    // Identity conhecida, mas o id não apareceu em NENHUMA linha do período inteiro: zero real,
-    // não ausência de dado (§6.8) — a Data API cobre a propriedade inteira, não filtra por item.
-    metrics = metricasZeradas();
-    identityStatus = 'matched';
-  } else {
-    metrics = null;
-    identityStatus = 'unmatched';
-    diagnostics.push('unmatched_identity');
-  }
-
-  if (metrics && metricasIndisponiveis.length) {
-    for (const nome of metricasIndisponiveis) metrics[nome] = null;
-    diagnostics.push('metric_unavailable');
-  }
+  const itemRatios = {};
+  for (const [nome, calc] of Object.entries(CAMPOS_RATIO)) itemRatios[nome] = calc(metrics);
 
   return Object.freeze({
     product: produto,
-    metrics: metrics ? Object.freeze(metrics) : null,
-    rates: Object.freeze({
-      addToCartRate: metrics ? taxa(metrics.itemsAddedToCart, metrics.itemsViewed) : null,
-      checkoutFromViewRate: metrics ? taxa(metrics.itemsCheckedOut, metrics.itemsViewed) : null,
-      cartToCheckoutRate: metrics ? taxa(metrics.itemsCheckedOut, metrics.itemsAddedToCart) : null,
-      purchaseFromViewRate: metrics ? taxa(metrics.itemsPurchased, metrics.itemsViewed) : null,
-    }),
-    identity: Object.freeze({ matchedAnalyticsIds, status: identityStatus }),
+    metrics: Object.freeze(metrics),
+    itemRatios: Object.freeze(itemRatios),
+    identity: Object.freeze({ matchedAnalyticsIds, status: 'matched' }),
     diagnostics: Object.freeze(diagnostics),
   });
 }
 
 function valorDoCampo(acumulado, campo) {
-  if (METRICAS.includes(campo)) return acumulado ? acumulado.metrics[campo] : null;
-  return null; // rates não são ordenáveis nesta fase (derivadas; ordenar por elas é UI futura)
+  if (!acumulado) return null; // sem identity resolvida: fora do conjunto ordenável (nunca chega aqui hoje, defensivo)
+  if (METRICAS.includes(campo)) return acumulado.metrics[campo];
+  if (CAMPOS_RATIO[campo]) return CAMPOS_RATIO[campo](acumulado.metrics);
+  return null;
 }
 
 function compararComNullPorUltimo(a, b, direcao) {
@@ -218,4 +256,34 @@ function compararComNullPorUltimo(a, b, direcao) {
   return direcao === 'desc' ? b - a : a - b;
 }
 
-module.exports = { createProductPerformanceService, METRICAS };
+// ── Cache tenant-safe de relatório GA4 (Etapa 1/escalabilidade) ────────────────────────────────
+// Repetir um relatório completo do AnalyticsConnector a cada PÁGINA do ProductPerformanceService
+// seria 1 chamada de analytics por página — o mesmo N+1 que §6.10 proíbe por produto, só que por
+// página. Chave: (organizationId, storeId, analyticsProvider, startDate, endDate) — período e
+// escopo tenant exatos, nunca cruza Organization/Store (resolveria ERRADO se cruzasse: dado de uma
+// Organization nunca pode vazar pro cache-hit de outra). TTL curto (15 min por padrão) porque o
+// relatório é "quase real-time" do GA4, não um snapshot histórico — sem Redis: um Map isolado por
+// INSTÂNCIA do service (nunca uma variável de módulo/global — cada `createProductPerformanceService`
+// tem o seu, criado aqui só se o chamador não injetar um próprio para compartilhar entre requests
+// no `cmd/`). Pior caso de cache frio é idêntico a não ter cache nenhum; nunca inventa dado.
+function createReportCache({ ttlMs = 15 * 60 * 1000 } = {}) {
+  const cache = new Map(); // chave -> { linhas, expiraEm }
+  const chaveDe = ({ organizationId, storeId, analyticsProvider, startDate, endDate }) =>
+    [organizationId, storeId, analyticsProvider, startDate, endDate].join('\u0000');
+
+  async function obter(escopo, buscar) {
+    const chave = chaveDe(escopo);
+    const agora = Date.now();
+    const emCache = cache.get(chave);
+    if (emCache && emCache.expiraEm > agora) return emCache.linhas;
+    const linhas = await buscar();
+    cache.set(chave, { linhas, expiraEm: agora + ttlMs });
+    return linhas;
+  }
+
+  function limpar() { cache.clear(); }
+
+  return Object.freeze({ obter, limpar });
+}
+
+module.exports = { createProductPerformanceService, createReportCache, METRICAS };
