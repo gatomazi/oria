@@ -3,19 +3,59 @@
 Branch `feature/creative-fase-c`, worktree `oria-creative-fase-a`. Sem push, sem merge, sem deploy, sem chamada à OpenAI.
 Exemplos completos (request, plano, prompt, snapshot, draft de cada caso): [`creative-generator-fase-c-examples.md`](creative-generator-fase-c-examples.md).
 
+**Status**: fechada tecnicamente — gate da suíte fechou verde (§0), a contradição do wearer infantil foi corrigida (§2.1) e `scene_picks` × `interaction` foi revisado (§2.2). A validação visual das 8 imagens reais (§21) ainda depende de autorização explícita para gastar com a OpenAI.
+
+## 0. Gate da suíte (resultado final)
+
+Primeira suíte completa do painel no HEAD, antes desta correção: **1296/1300**, 4 falhas. Investigadas uma a uma, nenhuma foi atribuída a "carga da máquina" sem prova:
+
+- **2 falhas em `tenancy-upsert`**: reais, minhas. O invariante liga cada `ON CONFLICT` à tabela do `INSERT INTO` mais próximo no arquivo; o upsert de `creative_feedback` estava dentro de `pgStore.js`, perto do `INSERT` de `creative_assets`, e foi contado para a tabela errada. Corrigido movendo as queries de feedback para `lib/creative-core/pgFeedback.js` (módulo próprio); contagem de alvos `ON CONFLICT` tenant-owned atualizada de 34 para 35 (commit `646acd7`).
+- **2 falhas em `negative-controls` (STORE-01, STORE-04)**: investigadas com evidência, não descartadas por suposição. `ps aux` encontrou um `server.js` **órfão** (PID 68703, `PPID 1`, rodando desde as 17:21, **213 minutos de CPU**) — um servidor de um `subirApp()` de teste anterior que não foi encerrado, consumindo um núcleo inteiro continuamente. Isso degradava exatamente os testes sensíveis a tempo (o ciclo violação→restauração dos negative controls tem esperas fixas). Matei o processo (`kill 68703`), reexecutei `negative-controls.test.js` sozinho → **120/120**, sem alterar nenhum código de produto.
+
+Suíte completa reexecutada do zero, máquina limpa, HEAD final (commit `8a07e4e`): **1301/1301, 0 falhas** (1 teste a mais que a rodada anterior porque a correção do §2 adicionou o teste "wearer_rules" na malha de invariantes indiretamente contado). Core: **17/17 suítes**, golden V1 intacto (546/546).
+
 ## 1. Commits
 
 | Commit | O que entrega |
 |---|---|
-| `e00c2d0` | §2.1 proveniência: seção composta não é atribuída a uma origem só (`mixed` + `provenance_sources`) |
+| `e00c2d0` | §2.1 (Fase B) proveniência: seção composta não é atribuída a uma origem só (`mixed` + `provenance_sources`) |
 | `b4c752d` | C1: subjects, relações e interações; compiler v2 (v1 congelado); 5 fixtures; catálogo de interações como dado |
 | `c3d3f6a` | `POST /v1/draft` e `POST /v1/feedback-snapshot` no core (puros); "de novo" e "variação" no draft |
 | `2c13035` | migration 0033 `creative_feedback`; rotas de feedback, draft e consulta; UI mínima |
 | `e399cd8`, `e733162` | ajustes do resumo de cena na UI (nomes em minúsculas, sem faixa etária) |
+| `646acd7` | feedback SQL isolado em `pgFeedback.js` (corrige a contagem do invariante `tenancy-upsert`); relatório e exemplos |
+| `8a07e4e` | **correção crítica**: wearer da peça infantil precisa ser criança (estrutural, não só string); `scene_picks` descartados numa cena `frame` |
 
 ## 2. Migrations
 
 Uma só: **0033 `creative_feedback`** (`migrations/1790001800000_creative-feedback.js` + `sql/0033-creative-feedback.{up,down}.sql`). Aditiva e reversível (`DROP TABLE`). Subjects, relações e interações **ficam no JSONB `plan`**; nenhuma coluna nova em `creative_generations`. Não houve dúvida de tenancy que exigisse proposta antes: a tabela segue o padrão das tabelas de plataforma da 0018 (`organization_id` NOT NULL, RLS + FORCE, policy canônica, entrada em `TABELAS_PLATAFORMA`), e o `store_id` o padrão 0025–0029 (FK composta).
+
+## 2.1 Correção crítica — peça infantil ≠ cena composta só por crianças
+
+**O problema.** O bloco de fidelidade (v1, `products.py`) tem, para toda peça infantil, uma frase absoluta: *"O MODELO da cena é SEMPRE uma criança, NUNCA um adulto."* Essa frase descreve o modelo **da cena inteira** — fazia sentido quando a cena só podia ter uma pessoa. Com Subjects (C1), uma cena pode ser criança+pai, criança+mãe, família de 4, etc., e a frase passou a contradizer o próprio plano: o prompt dizia "o modelo é sempre uma criança" na mesma respiração em que o contrato de pessoas descrevia um adulto de apoio na cena.
+
+**A correção não foi só trocar a frase.** Duas camadas:
+
+1. **Estrutural, no plano** (`composition.enforce_infant_wearers`, `composition.py`): quem **veste** a peça infantil (`subject.wears_product_id` apontando pra um produto onde `infant_product()` é verdadeiro) precisa estar numa faixa etária compatível com o tipo da peça (dado em `planner_v2.json → minor.infant_wearer_bands`; `camiseta infantil` aceita `baby..child_10_12`, `body infantil` só `baby..child_3_5`). A validação roda **por subject e por produto** (multi-product: cada atribuição é checada isoladamente — um adulto pode vestir a peça adulta na mesma cena que a criança veste a infantil).
+   - **Escolha do usuário** (subject explícito ou persona custom) que não cabe → `INVALID_INPUT` nomeando o subject (`subjects[1]: … is an infant garment and can only be worn by a child, but this subject is adult; an adult may be in the scene as support without wearing it`), **antes de montar qualquer prompt**. Nenhum prompt contraditório chega a ser gerado.
+   - **Escolha do planner** (elenco `legacy`/`recommended`) que não cabe é **corrigida**, não rejeitada: a principal é re-sorteada do pool de personas que cabem na faixa (ou a persona neutra do papel — "criança de 6 a 9 anos"/"bebê"); um apoio simplesmente deixa de vestir. Ambas registradas como aviso (`infant_wearer_recast:<id>` / `infant_wearer_removed:<id>`), nunca em silêncio.
+   - Idade `unknown` num wearer de peça infantil é lida como criança (era só para a principal; agora vale para qualquer subject).
+   - Peça **adulta**: nenhuma restrição — qualquer idade veste.
+2. **Wording, só no compiler v2** (`compiler._fidelity_v2`, dados em `templates/compiler_v2.json → wearer_rules`): a frase antiga é substituída pela nova, por peça — *"Qualquer pessoa que VESTE esta peça deve ser uma criança compatível com a faixa do produto. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil."* (variante para `body infantil`: "bebê ou criança pequena"). Um **guard** garante que a frase antiga (`"O MODELO da cena é SEMPRE"`) nunca sobrevive no texto do compiler v2 — se alguém cadastrar uma peça nova com essa frase e esquecer de mapear a substituição, `compile_prompt` **recusa** (`ValueError`) em vez de deixar a ideia velha voltar disfarçada.
+
+**V1 não foi tocado.** `compile_prompt(plan, version=1)` continua produzindo a frase antiga, exatamente como os 546 casos golden e os 18 planos congelados da Fase B esperam (teste dedicado prova isso). A frase nova só existe no compiler v2, e só nele.
+
+Testes novos: `creative_core/tests/test_infant_wearer.py` (15 casos) — 4 elencos válidos (criança+pai, criança+mãe, duas crianças cada uma com sua peça, família de 4 com as 2 crianças vestindo e os 2 adultos não), 2 elencos inválidos (adulto veste peça infantil explicitamente; troca de produto que entrega a peça infantil a um adulto — cada atribuição validada por si), faixas por tipo de peça (`camiseta infantil` × `body infantil`; teen não cabe em nenhuma), idade desconhecida virando criança em qualquer subject, correção silenciosa-com-aviso quando é o planner que escolhe × recusa quando é o usuário, a frase nova em cada um dos 5 casos + o guard do compiler, e a frase antiga preservada no compile v1.
+
+## 2.2 Revisão — `scene_picks` × `interaction`
+
+**O problema apontado.** Nos exemplos, um plano podia ter `scene_picks.acao` = "saindo de um café com um copo descartável…" ao mesmo tempo em que a `interaction` estruturada era `playing`/`reading_together` — dois textos de ação diferentes coexistindo, um deles sem efeito nenhum no prompt (o `scene_action` de uma cena `frame` usa o ângulo + a interação, nunca os pools). Herança do fluxo v1, nunca revisada depois que Subjects passou a existir.
+
+**Decisão adotada** (regra pedida no §6 da direção): quando `scene_mode = frame` (há subjects + interação), os `scene_picks` do ângulo **não são mais persistidos como decisão ativa**. Eles continuam existindo só onde ainda fazem sentido: derivar o elenco de um cenário legado como o do PRESENTE_AFETO (`cena` decide quem veste o presente) — usados durante essa derivação e depois descartados, nunca gravados no plano. Um `scene_picks` enviado no request junto com uma cena `frame` é **ignorado, com aviso explícito** (`scene_picks_ignored:frame_scene`), não descartado em silêncio; o prompt sai idêntico ao de um request sem esse campo (mesmo `sha256`). Uma cena `template` (sem subjects/interação — o comportamento antigo, intacto) continua usando seus picks exatamente como antes: eles entram no `scene_action`, movem o `gaze` (`pool:<nome>:<índice>`) e o risco de pose (`held_object`/`contact`).
+
+**Por que importava**: `Gerar de novo` preserva `scene_picks`, `Copiar Dados` os carrega, e o histórico/feedback podia interpretar um pick sem efeito como parte da cena. Com a mudança: `scene["picks"]` de uma cena `frame` é sempre `{}`; o `GenerationDraft.scene_picks` e `actions.again.scene_picks` saem `null`/ausentes para ela (nada a repetir); o `FeedbackSnapshot` nunca carrega `scene_picks`. Uma cena `template` continua exportando os picks normalmente em ambos.
+
+Testes novos em `test_subjects_c1.py`: cena `frame` não persiste picks e eles não movem gaze/risco (5 casos); cena `template` continua usando os seus; pick enviado com cena `frame` é ignorado com aviso e o prompt não muda; draft/snapshot de um elenco recomendado ou explícito não carregam `scene_picks`.
 
 ## 3. Contratos
 
@@ -179,14 +219,14 @@ Verificação visual: harness com backend simulado (fora do repositório) no Chr
 
 ## 16. Suíte completa
 
-- Core: `python3 run_tests.py` → **16/16 suítes** (inclui `test_subjects_c1.py` 30 casos, `test_drafts.py` 15, `test_service.py` 16).
-- Painel: novos `creative-feedback.test.js` (22) e `creative-feedback-pg.test.js` (Postgres real, inclusive `TEST_APP_ROLE=1`); invariantes de migração e o isolamento `tenancy-isolation` cobrem `creative_feedback`. Suíte inteira: ver §21.
+- Core: `python3 run_tests.py` → **17/17 suítes** (inclui `test_subjects_c1.py` 34 casos, `test_infant_wearer.py` 15, `test_drafts.py` 15, `test_service.py` 16); golden V1 546/546 intacto.
+- Painel: `creative-feedback.test.js` (23) e `creative-feedback-pg.test.js` (Postgres real, inclusive `TEST_APP_ROLE=1`); invariantes de migração e o isolamento `tenancy-isolation` cobrem `creative_feedback`; `tenancy-upsert` conta 35 alvos `ON CONFLICT`. **Suíte completa (painel), HEAD final, máquina limpa: 1301/1301, 0 falhas** — ver §0 para o histórico do gate (4 falhas → causa raiz investigada e corrigida → verde).
 
 ## 17. Riscos
 
 1. **Recomendação por `semantic_context` depende de dado que hoje só entra manualmente** (a proposta por GPT é da Fase F): sem `semantic_context` nada é recomendado, tudo continua `legacy`.
 2. **Rótulos do planner** ("criança de 6 a 9 anos", "homem adulto") são neutros por desenho; o resumo da UI não diz "Menina" sem um gênero declarado. Persona/subject com rótulo do usuário resolve.
-3. **Cena com 3–4 pessoas** é a mais sujeita a anatomia/mãos; o core avisa e simplifica a pose, mas **não foi validada visualmente** (nenhuma imagem foi gerada nesta fase). Antes de liberar, rodar um lote real pequeno com os casos B–E.
+3. **Cena com 2–4 pessoas** é a mais sujeita a anatomia/mãos; o core avisa e simplifica a pose, mas **não foi validada visualmente** (nenhuma imagem foi gerada nesta fase). A validação real (8 imagens, casos B–E) está desenhada em §21 e depende de autorização explícita para usar a chave OpenAI — ainda não executada.
 4. **Compiler v2 muda o prompt** de planos v2 novos (seção `interaction`, cena `frame`). Só valem para contas em `CREATIVE_PLAN_V2_ORGS`.
 5. `GET /items/:id/draft` para contexto geográfico depende do `input` do lote original (cidade/UF não são fato do plano).
 6. Feedback grava `store_id` da Store do contexto; V1 tem uma Store por Organization, então na prática é sempre a dela. Se um dia houver várias, veredito de uma Store conta como "compartilhado" nas outras só se gravado sem Store.
@@ -206,3 +246,16 @@ Nenhuma chamada nesta fase. Nenhuma imagem gerada. A chave da rodada A/B não fo
 ## 20. Push / deploy
 
 Nenhum push, merge, deploy ou `gh`. Nada além de commits locais na branch `feature/creative-fase-c`. **A próxima fase não foi iniciada**: fica para o senhor revisar Subjects + Feedback + Copiar Dados antes de UI V2, Mockups ou Connector.
+
+## 21. Validação visual real — pendente de autorização
+
+Desenhada, **não executada**. Antes de gastar com a OpenAI preciso de confirmação explícita sobre a chave/autorização (na Rodada 1 da Fase A o senhor autorizou ler do `.env` do projeto Streamlit local — não presumo que a mesma autorização se estende automaticamente a esta rodada).
+
+Plano, como pedido:
+
+- **8 imagens**: 2 por caso × B (menino+mãe lendo), C (duas irmãs), D (casal), E (família de 4).
+- Parâmetros: quality `medium`, Feed 4:5, `gpt-image-2`, **sem retry automático**.
+- Avaliação humana (anatomia, contagem/idade/relação de pessoas, produto certo em cada um sem troca, peça infantil só em criança, interação, gaze, vestuário infantil, qualidade comercial); caso E é o stress test principal.
+- Sem QA automático, sem juiz por IA, sem ML — como nas rodadas anteriores.
+- Se o resultado vier ruim: reportar o problema primeiro, **não corrigir com "mais prompt"** na mesma rodada.
+- Entrega ao final: as 8 imagens separadas por caso, quantidade exata de chamadas, custo/usage, modelo pedido × servido, resumo objetivo dos problemas por caso — sem nenhuma correção automática baseada nas imagens.

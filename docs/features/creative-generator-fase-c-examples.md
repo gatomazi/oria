@@ -216,11 +216,11 @@ Gerado por `apps/creative-generator/scripts/render_fase_c_examples.py`, sem rede
     ]
   },
   "prompt": {
-    "text": "<5869 caracteres; ver abaixo>",
+    "text": "<5996 caracteres; ver abaixo>",
     "sections": [
       {
         "name": "fidelity_rules",
-        "length": 1301,
+        "length": 1428,
         "source": "product",
         "value": "8"
       },
@@ -309,7 +309,7 @@ Gerado por `apps/creative-generator/scripts/render_fase_c_examples.py`, sem rede
         "value": "FEED_4X5"
       }
     ],
-    "sha256": "440bc5e589f5a8042463c658a00c7fc4434b49a05fc77652e140463fb9cb1643",
+    "sha256": "dca44e43bb4388e63b812e42556f1e616016eec0f476bd8f4b54408c5904093f",
     "prompt_version": 2
   },
   "model": {
@@ -369,12 +369,7 @@ Gerado por `apps/creative-generator/scripts/render_fase_c_examples.py`, sem rede
       "source": "planner_default",
       "reason": "interaction:playing"
     },
-    "picks": {
-      "acao": {
-        "index": 4,
-        "text": "chegando a um ambiente, cruzando a entrada com os braços soltos ao lado do corpo"
-      }
-    },
+    "picks": {},
     "prompt_version": 2,
     "interaction": "playing",
     "interaction_detail": {
@@ -580,7 +575,7 @@ Gerado por `apps/creative-generator/scripts/render_fase_c_examples.py`, sem rede
       {
         "section": "fidelity_rules",
         "source": "product",
-        "length": 1301
+        "length": 1428
       },
       {
         "section": "text_rules",
@@ -705,7 +700,7 @@ REGRAS OBRIGATÓRIAS (nunca ignore):
 - Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.
 - Sem urgência falsa ("Só hoje", "Estoque limitado") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).
 - Fotografia realista, alta qualidade, formato vertical.
-- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. O MODELO da cena é SEMPRE uma criança, NUNCA um adulto. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
+- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. Qualquer pessoa que VESTE esta peça deve ser uma criança compatível com a faixa do produto. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
 - A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.
 - Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.
 
@@ -758,7 +753,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "plan_schema_version": 2,
   "compiler_version": 2,
   "prompt_version": 2,
-  "prompt_sha256": "440bc5e589f5a8042463c658a00c7fc4434b49a05fc77652e140463fb9cb1643",
+  "prompt_sha256": "dca44e43bb4388e63b812e42556f1e616016eec0f476bd8f4b54408c5904093f",
   "mode": "creative",
   "objective": "clean_creative",
   "strategy": "CLEAN_ANGLES",
@@ -863,9 +858,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     }
   ],
   "interaction": "playing",
-  "scene_picks": {
-    "acao": 4
-  },
+  "scene_picks": null,
   "context": {
     "mode": "custom",
     "context_id": "entre_nos_sala",
@@ -891,9 +884,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "actions": {
     "again": {
       "seed": 100,
-      "scene_picks": {
-        "acao": 4
-      },
+      "scene_picks": null,
       "gaze_mode": "interaction"
     },
     "variation": {
@@ -922,7 +913,6 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     "context",
     "copy",
     "gaze_mode",
-    "scene_picks",
     "seed"
   ]
 }
@@ -1160,11 +1150,11 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     ]
   },
   "prompt": {
-    "text": "<5751 caracteres; ver abaixo>",
+    "text": "<5878 caracteres; ver abaixo>",
     "sections": [
       {
         "name": "fidelity_rules",
-        "length": 1301,
+        "length": 1428,
         "source": "product",
         "value": "8"
       },
@@ -1253,7 +1243,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
         "value": "FEED_4X5"
       }
     ],
-    "sha256": "5f4780dc13eb757baff507ef49c75e67533f554b6b40698e0a47bbfbed5711a3",
+    "sha256": "5952093352043288d0ac7c7e7c5519042d552ba484eb66a24c4ddc0203d11565",
     "prompt_version": 2
   },
   "model": {
@@ -1313,12 +1303,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
       "source": "planner_default",
       "reason": "interaction:reading_together"
     },
-    "picks": {
-      "acao": {
-        "index": 4,
-        "text": "chegando a um ambiente, cruzando a entrada com os braços soltos ao lado do corpo"
-      }
-    },
+    "picks": {},
     "prompt_version": 2,
     "interaction": "reading_together",
     "interaction_detail": {
@@ -1515,7 +1500,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
       {
         "section": "fidelity_rules",
         "source": "product",
-        "length": 1301
+        "length": 1428
       },
       {
         "section": "text_rules",
@@ -1640,7 +1625,7 @@ REGRAS OBRIGATÓRIAS (nunca ignore):
 - Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.
 - Sem urgência falsa ("Só hoje", "Estoque limitado") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).
 - Fotografia realista, alta qualidade, formato vertical.
-- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. O MODELO da cena é SEMPRE uma criança, NUNCA um adulto. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
+- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. Qualquer pessoa que VESTE esta peça deve ser uma criança compatível com a faixa do produto. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
 - A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.
 - Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.
 
@@ -1693,7 +1678,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "plan_schema_version": 2,
   "compiler_version": 2,
   "prompt_version": 2,
-  "prompt_sha256": "5f4780dc13eb757baff507ef49c75e67533f554b6b40698e0a47bbfbed5711a3",
+  "prompt_sha256": "5952093352043288d0ac7c7e7c5519042d552ba484eb66a24c4ddc0203d11565",
   "mode": "creative",
   "objective": "clean_creative",
   "strategy": "CLEAN_ANGLES",
@@ -1798,9 +1783,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     }
   ],
   "interaction": "reading_together",
-  "scene_picks": {
-    "acao": 4
-  },
+  "scene_picks": null,
   "context": {
     "mode": "custom",
     "context_id": "entre_nos_sala",
@@ -1826,9 +1809,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "actions": {
     "again": {
       "seed": 100,
-      "scene_picks": {
-        "acao": 4
-      },
+      "scene_picks": null,
       "gaze_mode": "interaction"
     },
     "variation": {
@@ -1857,7 +1838,6 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     "context",
     "copy",
     "gaze_mode",
-    "scene_picks",
     "seed"
   ]
 }
@@ -2122,11 +2102,11 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     ]
   },
   "prompt": {
-    "text": "<6166 caracteres; ver abaixo>",
+    "text": "<6293 caracteres; ver abaixo>",
     "sections": [
       {
         "name": "fidelity_rules",
-        "length": 1301,
+        "length": 1428,
         "source": "product",
         "value": "8"
       },
@@ -2215,7 +2195,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
         "value": "FEED_4X5"
       }
     ],
-    "sha256": "2c6f03366ded731828d7f32b86eae4c7b6b28e5391dfafca0c8d4c38a58c828a",
+    "sha256": "2fa127c6a667f5c3bcec40ed529f1c83bc054c087675eb93f554fa3a8446514d",
     "prompt_version": 2
   },
   "model": {
@@ -2275,12 +2255,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
       "source": "planner_default",
       "reason": "interaction:candid"
     },
-    "picks": {
-      "acao": {
-        "index": 4,
-        "text": "chegando a um ambiente, cruzando a entrada com os braços soltos ao lado do corpo"
-      }
-    },
+    "picks": {},
     "prompt_version": 2,
     "interaction": "candid",
     "interaction_detail": {
@@ -2492,7 +2467,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
       {
         "section": "fidelity_rules",
         "source": "product",
-        "length": 1301
+        "length": 1428
       },
       {
         "section": "text_rules",
@@ -2617,7 +2592,7 @@ REGRAS OBRIGATÓRIAS (nunca ignore):
 - Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.
 - Sem urgência falsa ("Só hoje", "Estoque limitado") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).
 - Fotografia realista, alta qualidade, formato vertical.
-- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. O MODELO da cena é SEMPRE uma criança, NUNCA um adulto. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
+- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. Qualquer pessoa que VESTE esta peça deve ser uma criança compatível com a faixa do produto. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
 - A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.
 - Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.
 
@@ -2674,7 +2649,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "plan_schema_version": 2,
   "compiler_version": 2,
   "prompt_version": 2,
-  "prompt_sha256": "2c6f03366ded731828d7f32b86eae4c7b6b28e5391dfafca0c8d4c38a58c828a",
+  "prompt_sha256": "2fa127c6a667f5c3bcec40ed529f1c83bc054c087675eb93f554fa3a8446514d",
   "mode": "creative",
   "objective": "clean_creative",
   "strategy": "CLEAN_ANGLES",
@@ -2781,9 +2756,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     }
   ],
   "interaction": "candid",
-  "scene_picks": {
-    "acao": 4
-  },
+  "scene_picks": null,
   "context": {
     "mode": "custom",
     "context_id": "entre_nos_sala",
@@ -2809,9 +2782,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "actions": {
     "again": {
       "seed": 100,
-      "scene_picks": {
-        "acao": 4
-      },
+      "scene_picks": null,
       "gaze_mode": "off_camera"
     },
     "variation": {
@@ -2840,7 +2811,6 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     "context",
     "copy",
     "gaze_mode",
-    "scene_picks",
     "seed"
   ]
 }
@@ -3208,12 +3178,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
       "source": "planner_default",
       "reason": "interaction:looking_at_each_other"
     },
-    "picks": {
-      "acao": {
-        "index": 4,
-        "text": "chegando a um ambiente, cruzando a entrada com os braços soltos ao lado do corpo"
-      }
-    },
+    "picks": {},
     "prompt_version": 2,
     "interaction": "looking_at_each_other",
     "interaction_detail": {
@@ -3635,9 +3600,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     }
   ],
   "interaction": "looking_at_each_other",
-  "scene_picks": {
-    "acao": 4
-  },
+  "scene_picks": null,
   "context": {
     "mode": "custom",
     "context_id": "entre_nos_sala",
@@ -3663,9 +3626,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "actions": {
     "again": {
       "seed": 100,
-      "scene_picks": {
-        "acao": 4
-      },
+      "scene_picks": null,
       "gaze_mode": "interaction"
     },
     "variation": {
@@ -3694,7 +3655,6 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     "context",
     "copy",
     "gaze_mode",
-    "scene_picks",
     "seed"
   ]
 }
@@ -3947,11 +3907,11 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     ]
   },
   "prompt": {
-    "text": "<5945 caracteres; ver abaixo>",
+    "text": "<6072 caracteres; ver abaixo>",
     "sections": [
       {
         "name": "fidelity_rules",
-        "length": 1301,
+        "length": 1428,
         "source": "product",
         "value": "8"
       },
@@ -4034,7 +3994,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
         "value": "FEED_4X5"
       }
     ],
-    "sha256": "7ff0cac79c7b87e7479b7ef734a19a6bf3f82d0c23cf93d9ec17332d9a9628d7",
+    "sha256": "78d9dfbd82985fbfb3b80907130291afca7b271b72487d8f24c6efb8fc1b74aa",
     "prompt_version": 2
   },
   "model": {
@@ -4134,12 +4094,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
       "source": "planner_default",
       "reason": "interaction:group_photo"
     },
-    "picks": {
-      "acao": {
-        "index": 4,
-        "text": "chegando a um ambiente, cruzando a entrada com os braços soltos ao lado do corpo"
-      }
-    },
+    "picks": {},
     "prompt_version": 2,
     "interaction": "group_photo",
     "interaction_detail": {
@@ -4326,7 +4281,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
       {
         "section": "fidelity_rules",
         "source": "product",
-        "length": 1301
+        "length": 1428
       },
       {
         "section": "text_rules",
@@ -4448,7 +4403,7 @@ REGRAS OBRIGATÓRIAS (nunca ignore):
 - Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.
 - Sem urgência falsa ("Só hoje", "Estoque limitado") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).
 - Fotografia realista, alta qualidade, formato vertical.
-- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. O MODELO da cena é SEMPRE uma criança, NUNCA um adulto. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
+- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. Qualquer pessoa que VESTE esta peça deve ser uma criança compatível com a faixa do produto. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
 - A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.
 - Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.
 
@@ -4503,7 +4458,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "plan_schema_version": 2,
   "compiler_version": 2,
   "prompt_version": 2,
-  "prompt_sha256": "7ff0cac79c7b87e7479b7ef734a19a6bf3f82d0c23cf93d9ec17332d9a9628d7",
+  "prompt_sha256": "78d9dfbd82985fbfb3b80907130291afca7b271b72487d8f24c6efb8fc1b74aa",
   "mode": "creative",
   "objective": "clean_creative",
   "strategy": "CLEAN_ANGLES",
@@ -4654,9 +4609,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     }
   ],
   "interaction": "group_photo",
-  "scene_picks": {
-    "acao": 4
-  },
+  "scene_picks": null,
   "context": {
     "mode": "custom",
     "context_id": "entre_nos_sala",
@@ -4684,9 +4637,7 @@ FORMATO: Feed 4:5 vertical (1080×1350).
   "actions": {
     "again": {
       "seed": 100,
-      "scene_picks": {
-        "acao": 4
-      },
+      "scene_picks": null,
       "gaze_mode": "camera"
     },
     "variation": {
@@ -4712,6 +4663,782 @@ FORMATO: Feed 4:5 vertical (1080×1350).
     "niche_kit",
     "subjects",
     "interaction",
+    "context",
+    "copy",
+    "gaze_mode",
+    "seed"
+  ]
+}
+```
+
+## Caso F — Sem pessoas no request e sem contexto semântico: cena própria do ângulo (template) com os sorteios da cena
+
+### Request
+
+```json
+{
+  "creative_id": "33333333-3333-4333-8333-333333333333",
+  "strategy": "CLEAN_ANGLES",
+  "product_mode": "single_product",
+  "products": [
+    {
+      "id": "abelhinhas-leitura",
+      "name": "Abelhinhas — Hora da Leitura",
+      "type": "camiseta infantil",
+      "description": "camiseta infantil com abelhinhas lendo",
+      "referenceImages": [
+        "tenant-demo/products/abelhinhas-leitura/front.webp"
+      ]
+    }
+  ],
+  "brand_kit": {
+    "id": "entre_nos_ab",
+    "name": "Entre Nós",
+    "schemaVersion": 1,
+    "version": 1,
+    "positioning": [
+      "camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa"
+    ],
+    "visualStyle": [
+      "editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo",
+      "luz natural quente e suave, hora dourada ou luz de janela",
+      "materiais tácteis e domésticos: tecidos, madeira, linho, papel"
+    ],
+    "colors": [
+      "creme e bege quente",
+      "bordô/vinho profundo",
+      "marrom terroso",
+      "navy",
+      "off-white"
+    ],
+    "manualNotes": [
+      "Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.",
+      "Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.",
+      "Crianças em cena sempre à vontade e em interação real com o adulto."
+    ],
+    "avoid": [
+      "estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans)",
+      "clima de propaganda de margarina",
+      "cenário de imobiliária sem sinal de uso"
+    ],
+    "suggestedPersonas": [
+      {
+        "label": "menina 6 anos",
+        "source": "automatic"
+      },
+      {
+        "label": "mulher 35 anos, mãe da menina",
+        "source": "automatic"
+      }
+    ],
+    "minorWardrobePolicy": {
+      "enabled": true,
+      "legs_coverage": "full",
+      "allow_short_shorts": false,
+      "allow_short_skirts": false,
+      "allow_revealing_clothing": false,
+      "style": "casual_age_appropriate"
+    }
+  },
+  "niche_kit_id": "fashion",
+  "angle_id": "LIFESTYLE_COTIDIANO",
+  "placement_id": "FEED_4X5",
+  "persona_mode": "automatic",
+  "context": {
+    "mode": "custom",
+    "profile": {
+      "contextId": "entre_nos_sala",
+      "contextType": "custom",
+      "subject": {
+        "name": "Sala de estar acolhedora"
+      },
+      "summary": "Rotina dentro de casa",
+      "sceneContexts": [
+        "sala de estar acolhedora com sofá, manta e luz natural lateral"
+      ],
+      "domainElements": [
+        "manta de tricô jogada no encosto"
+      ],
+      "avoid": [
+        "qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado"
+      ],
+      "status": "approved",
+      "schemaVersion": 1,
+      "promptVersion": 1,
+      "profileVersion": 1
+    }
+  },
+  "quality": "medium",
+  "seed": 4,
+  "plan_schema_version": 2,
+  "prompt_version": 2
+}
+```
+
+### CreativePlan
+
+```json
+{
+  "plan_id": "plan_9dfc10261c3cc5d280ff4423",
+  "creative_id": "33333333-3333-4333-8333-333333333333",
+  "schema_version": 2,
+  "strategy": "CLEAN_ANGLES",
+  "internal_strategy_id": "ANGULOS_LIMPOS",
+  "product_mode": "single_product",
+  "products": [
+    {
+      "id": "abelhinhas-leitura",
+      "name": "Abelhinhas — Hora da Leitura",
+      "type": "camiseta infantil"
+    }
+  ],
+  "angle": {
+    "id": "LIFESTYLE_COTIDIANO",
+    "label": "Lifestyle cotidiano",
+    "description": "Pessoa em ação no dia a dia com o produto — nunca parada olhando para o nada.",
+    "uses_person": true,
+    "apparel_only": false,
+    "multi_product_limit": 4
+  },
+  "placement": {
+    "id": "FEED_4X5",
+    "label": "Feed (4:5 — 1080×1350)",
+    "width": 1080,
+    "height": 1350,
+    "api_size": "1088x1360"
+  },
+  "persona": {
+    "label": "menina 6 anos",
+    "source": "automatic"
+  },
+  "context": {
+    "context_id": "entre_nos_sala",
+    "context_type": "custom",
+    "provider": "custom",
+    "scene": "sala de estar acolhedora com sofá, manta e luz natural lateral",
+    "supporting_element": "manta de tricô jogada no encosto",
+    "avoid": [
+      "qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado",
+      "estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans)",
+      "clima de propaganda de margarina",
+      "cenário de imobiliária sem sinal de uso",
+      "peça deformada ou com proporção irreal",
+      "tecido liso como vetor, sem trama",
+      "produto parecendo adesivo colado na foto"
+    ],
+    "status": "approved",
+    "profile_version": 1
+  },
+  "brand_kit": {
+    "id": "entre_nos_ab",
+    "version": 1
+  },
+  "niche_kit": {
+    "id": "fashion",
+    "version": 1
+  },
+  "funnel_stage": null,
+  "remarketing_intent": null,
+  "layout": null,
+  "overlay": {
+    "allowed": false,
+    "headline": null,
+    "subheadline": null,
+    "cta": null,
+    "badges": [],
+    "benefits": [],
+    "search_bar_text": null,
+    "chips": [],
+    "text_density": null,
+    "cta_emphasis": null,
+    "clean": true
+  },
+  "copy": {
+    "generate": false,
+    "funnel_stages": [
+      "TOFU",
+      "MOFU",
+      "BOFU"
+    ]
+  },
+  "prompt": {
+    "text": "<5578 caracteres; ver abaixo>",
+    "sections": [
+      {
+        "name": "fidelity_rules",
+        "length": 1428,
+        "source": "product",
+        "value": "8"
+      },
+      {
+        "name": "text_rules",
+        "length": 509,
+        "source": "user",
+        "value": "clean_creative"
+      },
+      {
+        "name": "minor_safety",
+        "length": 361,
+        "source": "safety_policy",
+        "value": "minors:s1"
+      },
+      {
+        "name": "reference_roles",
+        "length": 161,
+        "source": "product",
+        "value": "refs:1"
+      },
+      {
+        "name": "people_composition_contract",
+        "length": 187,
+        "source": "brand",
+        "value": "1"
+      },
+      {
+        "name": "gaze",
+        "length": 70,
+        "source": "angle",
+        "value": "camera"
+      },
+      {
+        "name": "scene_action",
+        "length": 700,
+        "source": "mixed",
+        "value": "LIFESTYLE_COTIDIANO"
+      },
+      {
+        "name": "minor_wardrobe_policy",
+        "length": 273,
+        "source": "brand",
+        "value": "full"
+      },
+      {
+        "name": "brand",
+        "length": 827,
+        "source": "brand",
+        "value": "Entre Nós"
+      },
+      {
+        "name": "niche",
+        "length": 301,
+        "source": "niche",
+        "value": "Moda / Vestuário"
+      },
+      {
+        "name": "context",
+        "length": 223,
+        "source": "user",
+        "value": "entre_nos_sala"
+      },
+      {
+        "name": "avoid",
+        "length": 475,
+        "source": "brand",
+        "value": "7"
+      },
+      {
+        "name": "output_format",
+        "length": 39,
+        "source": "user",
+        "value": "FEED_4X5"
+      }
+    ],
+    "sha256": "b01b003c5c08bb7b02fdf37af4a87288895a7e679a5349c0451487ae19a6c34e",
+    "prompt_version": 2
+  },
+  "model": {
+    "task": "image_generation",
+    "model": "gpt-image-2",
+    "quality": "medium",
+    "size": "1088x1360"
+  },
+  "mode": "creative",
+  "objective": "clean_creative",
+  "subjects": [
+    {
+      "id": "s1",
+      "role": "primary",
+      "label": "menina 6 anos",
+      "persona": {
+        "label": "menina 6 anos",
+        "source": "automatic"
+      },
+      "age_band": "child_6_9",
+      "is_minor": true,
+      "age_source": "persona.label",
+      "minor_source": "persona.label",
+      "product_use": "wears",
+      "product_id": "abelhinhas-leitura",
+      "role_hint": null,
+      "relation_to_primary": null,
+      "relation_label": null,
+      "prominence": "hero",
+      "source": "brand"
+    }
+  ],
+  "scene": {
+    "gaze": {
+      "mode": "camera",
+      "requested": "auto",
+      "source": "angle",
+      "reason": "pool:acao:1"
+    },
+    "picks": {
+      "acao": {
+        "index": 1,
+        "text": "saindo de um café com um copo descartável simples numa das mãos, a outra mão solta ao lado do corpo"
+      }
+    },
+    "prompt_version": 2,
+    "interaction": null,
+    "interaction_detail": null,
+    "interaction_source": null,
+    "scene_mode": "template",
+    "composition_source": "legacy"
+  },
+  "composition": {
+    "people_count": 1,
+    "pose_risk": "low",
+    "risk_reasons": [
+      "held_object:acao"
+    ]
+  },
+  "minor_safety": {
+    "applies": true,
+    "minor_subject_ids": [
+      "s1"
+    ],
+    "global": {
+      "policy": "global_minor_safety_policy",
+      "version": 1,
+      "rules": [
+        "age_appropriate_clothing",
+        "nothing_revealing",
+        "not_sexualized",
+        "no_adult_aesthetic",
+        "age_appropriate_poses",
+        "normal_fit_no_body_focus",
+        "commercial_family_context"
+      ],
+      "adult_child_rule": null
+    },
+    "brand": {
+      "policy": "brand_minor_wardrobe_policy",
+      "source": "brand",
+      "requested": {
+        "enabled": true,
+        "legs_coverage": "full",
+        "allow_short_shorts": false,
+        "allow_short_skirts": false,
+        "allow_revealing_clothing": false,
+        "style": "casual_age_appropriate"
+      },
+      "effective": {
+        "enabled": true,
+        "legs_coverage": "full",
+        "allow_short_shorts": false,
+        "allow_short_skirts": false,
+        "allow_revealing_clothing": false,
+        "style": "casual_age_appropriate"
+      },
+      "ignored": []
+    },
+    "basis": {
+      "explicit": [],
+      "heuristic": [
+        "s1"
+      ]
+    }
+  },
+  "semantics": {
+    "products": [
+      {
+        "product_id": "abelhinhas-leitura",
+        "semantic_context": null
+      }
+    ],
+    "supporting": null,
+    "warnings": []
+  },
+  "resolved_inputs": {
+    "brand": {
+      "name": "Entre Nós",
+      "positioning": [
+        "camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa"
+      ],
+      "visualStyle": [
+        "editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo",
+        "luz natural quente e suave, hora dourada ou luz de janela",
+        "materiais tácteis e domésticos: tecidos, madeira, linho, papel"
+      ],
+      "colors": [
+        "creme e bege quente",
+        "bordô/vinho profundo",
+        "marrom terroso",
+        "navy",
+        "off-white"
+      ],
+      "manualNotes": [
+        "Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.",
+        "Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.",
+        "Crianças em cena sempre à vontade e em interação real com o adulto."
+      ]
+    },
+    "niche": {
+      "name": "Moda / Vestuário",
+      "materials": [
+        "algodão",
+        "trama de tecido visível",
+        "costuras e acabamento",
+        "etiqueta discreta"
+      ],
+      "audienceBehaviors": [
+        "compra pelo caimento e pelo estilo, não só pela estampa",
+        "quer ver a peça vestida em corpo real",
+        "compara tecido, acabamento e tamanho antes de decidir"
+      ]
+    },
+    "strategy": {
+      "text_rule": "MODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.",
+      "communication": ""
+    }
+  },
+  "provenance": {
+    "angle": "user",
+    "brand_kit": "user",
+    "compiler": "planner_default",
+    "composition": "planner_default",
+    "context": "user",
+    "minor_safety.brand": "brand",
+    "minor_safety.global": "safety_policy",
+    "mode": "planner_default",
+    "model": "planner_default",
+    "niche_kit": "user",
+    "objective": "user",
+    "persona": "brand",
+    "placement": "user",
+    "products": "user",
+    "quality": "user",
+    "references": "product",
+    "resolved_inputs": "brand",
+    "scene": "mixed",
+    "scene.gaze": "angle",
+    "scene.picks": "planner_default",
+    "scene.prompt_version": "planner_default",
+    "semantics": "planner_default",
+    "strategy": "user",
+    "subjects": "brand",
+    "subjects.s1": "brand",
+    "subjects.s1.age_band": "persona"
+  },
+  "provenance_sources": {
+    "scene": [
+      "angle",
+      "planner_default"
+    ],
+    "subjects": [
+      "brand"
+    ]
+  },
+  "seed": 4,
+  "compiler": {
+    "version": 2,
+    "sections": [
+      {
+        "section": "fidelity_rules",
+        "source": "product",
+        "length": 1428
+      },
+      {
+        "section": "text_rules",
+        "source": "user",
+        "length": 509
+      },
+      {
+        "section": "minor_safety",
+        "source": "safety_policy",
+        "length": 361
+      },
+      {
+        "section": "reference_roles",
+        "source": "product",
+        "length": 161
+      },
+      {
+        "section": "people_composition_contract",
+        "source": "brand",
+        "length": 187
+      },
+      {
+        "section": "gaze",
+        "source": "angle",
+        "length": 70
+      },
+      {
+        "section": "scene_action",
+        "source": "mixed",
+        "sources": [
+          "angle",
+          "planner_default"
+        ],
+        "length": 700
+      },
+      {
+        "section": "minor_wardrobe_policy",
+        "source": "brand",
+        "length": 273
+      },
+      {
+        "section": "brand",
+        "source": "brand",
+        "length": 827
+      },
+      {
+        "section": "niche",
+        "source": "niche",
+        "length": 301
+      },
+      {
+        "section": "context",
+        "source": "user",
+        "length": 223
+      },
+      {
+        "section": "avoid",
+        "source": "brand",
+        "length": 475
+      },
+      {
+        "section": "output_format",
+        "source": "user",
+        "length": 39
+      }
+    ]
+  },
+  "versions": {
+    "core_version": "1.1.0",
+    "schema_version": 1,
+    "prompt_version": 2,
+    "brand_kit_schema_version": 1,
+    "niche_kit_schema_version": 1,
+    "context_profile_schema_version": 1,
+    "clean_angles_version": 1,
+    "remarketing_version": 1,
+    "funnel_visual_version": 1,
+    "strategy_version": 1,
+    "compiler_version": 2,
+    "brand_kit_version": 1,
+    "niche_kit_version": 1,
+    "context_profile_version": 1
+  },
+  "validations": [
+    {
+      "rule": "product_count_within_limits",
+      "passed": true
+    },
+    {
+      "rule": "angle_available_for_brand_and_niche",
+      "passed": true
+    },
+    {
+      "rule": "context_profile_approved",
+      "passed": true
+    },
+    {
+      "rule": "references_are_product_art_only",
+      "passed": true
+    },
+    {
+      "rule": "clean_angles_has_no_overlay",
+      "passed": true
+    }
+  ],
+  "warnings": []
+}
+```
+
+### Prompt compilado
+
+```text
+REGRAS OBRIGATÓRIAS (nunca ignore):
+- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.
+- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.
+- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.
+- Sem urgência falsa ("Só hoje", "Estoque limitado") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).
+- Fotografia realista, alta qualidade, formato vertical.
+- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. Qualquer pessoa que VESTE esta peça deve ser uma criança compatível com a faixa do produto. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.
+- A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.
+- Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.
+
+MODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.
+
+PROTEÇÃO DE MENORES (regra absoluta, não negociável): há criança ou adolescente em cena. Sempre: roupa apropriada para a idade; nada revelador; nada sexualizado; nenhuma estética adulta (maquiagem, figurino ou pose de adulto); poses naturais e apropriadas à idade; peças com caimento normal, sem foco no corpo; contexto comercial, familiar e cotidiano coerente.
+
+PRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = "Abelhinhas — Hora da Leitura" (camiseta infantil) — camiseta infantil com abelhinhas lendo.
+
+COMPOSIÇÃO DE PESSOAS (contrato): exatamente 1 pessoa em quadro.
+  · Pessoa 1 (principal): menina 6 anos, criança de 6 a 9 anos — veste "Abelhinhas — Hora da Leitura" (camiseta infantil).
+
+OLHAR: a pessoa olha diretamente para a câmera, com expressão natural.
+
+ÂNGULO LIFESTYLE (a peça sendo VIVIDA no dia a dia, sem texto): menina 6 anos vestindo "Abelhinhas — Hora da Leitura" (camiseta infantil), EM AÇÃO, numa única situação: saindo de um café com um copo descartável simples numa das mãos, a outra mão solta ao lado do corpo. Cenário: sala de estar acolhedora com sofá, manta e luz natural lateral. A câmera registra um momento em andamento, levemente desalinhada, como capturado de relance — NÃO é ensaio de estúdio nem pose de catálogo, e a pessoa não fica parada olhando para um ponto fixo sem nenhuma ação. Apenas essa pessoa em quadro; no máximo um objeto simples, sem marca, nas mãos dela. Produto nítido e legível apesar do enquadramento espontâneo.
+
+VESTUÁRIO DAS CRIANÇAS (política da marca): pernas totalmente cobertas — preferir calça, jeans, sarja, legging apropriada ou peças compridas; nenhuma composição que exponha demais as pernas; sem shorts curtos; sem saias curtas; roupas casuais infantis, apropriadas à idade.
+
+MARCA (Entre Nós):
+  · Posicionamento: camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa.
+  · Linguagem visual: editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo, luz natural quente e suave, hora dourada ou luz de janela, materiais tácteis e domésticos: tecidos, madeira, linho, papel.
+  · Paleta da marca (guia de cor da CENA, nunca do produto): creme e bege quente; bordô/vinho profundo; marrom terroso; navy; off-white.
+  · Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.
+  · Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.
+  · Crianças em cena sempre à vontade e em interação real com o adulto.
+
+NICHO (Moda / Vestuário):
+  · Materiais e sinais de uso real: algodão, trama de tecido visível, costuras e acabamento, etiqueta discreta.
+  · Público: compra pelo caimento e pelo estilo, não só pela estampa; quer ver a peça vestida em corpo real; compara tecido, acabamento e tamanho antes de decidir.
+
+CONTEXTO DA CENA: sala de estar acolhedora com sofá, manta e luz natural lateral. Elemento de apoio, discreto: manta de tricô jogada no encosto. Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.
+
+EVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado; estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans); clima de propaganda de margarina; cenário de imobiliária sem sinal de uso; peça deformada ou com proporção irreal; tecido liso como vetor, sem trama; produto parecendo adesivo colado na foto.
+
+FORMATO: Feed 4:5 vertical (1080×1350).
+```
+
+### FeedbackSnapshot
+
+```json
+{
+  "creative_id": "33333333-3333-4333-8333-333333333333",
+  "plan_id": "plan_9dfc10261c3cc5d280ff4423",
+  "plan_schema_version": 2,
+  "compiler_version": 2,
+  "prompt_version": 2,
+  "prompt_sha256": "b01b003c5c08bb7b02fdf37af4a87288895a7e679a5349c0451487ae19a6c34e",
+  "mode": "creative",
+  "objective": "clean_creative",
+  "strategy": "CLEAN_ANGLES",
+  "angle": "LIFESTYLE_COTIDIANO",
+  "product_ids": [
+    "abelhinhas-leitura"
+  ],
+  "subjects": [
+    {
+      "role": "primary",
+      "label": "menina 6 anos",
+      "age_band": "child_6_9",
+      "is_minor": true,
+      "product_use": "wears",
+      "role_hint": null,
+      "relation_to_primary": null
+    }
+  ],
+  "people_count": 1,
+  "interaction": null,
+  "composition_source": "legacy",
+  "composition_key": "p1|child_6_9|-",
+  "pose_risk": "low",
+  "warnings": [],
+  "context": {
+    "context_id": "entre_nos_sala",
+    "context_type": "custom",
+    "provider": "custom",
+    "scene": "sala de estar acolhedora com sofá, manta e luz natural lateral"
+  },
+  "placement": "FEED_4X5",
+  "quality": "medium",
+  "gaze_mode": "camera",
+  "minor_safety_applied": true,
+  "flags": {
+    "normalize_references": null
+  },
+  "model": {
+    "requested": "gpt-image-2",
+    "served": null
+  },
+  "asset_sha256": null
+}
+```
+
+### GenerationDraft
+
+```json
+{
+  "mode": "creative",
+  "objective": "clean_creative",
+  "strategy": "CLEAN_ANGLES",
+  "product_mode": "single_product",
+  "product_ids": [
+    "abelhinhas-leitura"
+  ],
+  "angle_id": "LIFESTYLE_COTIDIANO",
+  "placement_id": "FEED_4X5",
+  "quality": "medium",
+  "brand_kit": {
+    "id": "entre_nos_ab",
+    "version": 1
+  },
+  "niche_kit": {
+    "id": "fashion",
+    "version": 1
+  },
+  "persona_mode": "automatic",
+  "persona": null,
+  "subjects": [],
+  "interaction": null,
+  "scene_picks": {
+    "acao": 1
+  },
+  "context": {
+    "mode": "custom",
+    "context_id": "entre_nos_sala",
+    "provider": "custom",
+    "scene": "sala de estar acolhedora com sofá, manta e luz natural lateral"
+  },
+  "funnel_stage": null,
+  "remarketing": null,
+  "funnel": null,
+  "copy": {
+    "generate": false,
+    "funnel_stages": [
+      "TOFU",
+      "MOFU",
+      "BOFU"
+    ]
+  },
+  "gaze_mode": "camera",
+  "plan_schema_version": 2,
+  "prompt_version": 2,
+  "seed": 4,
+  "plan_warnings": [],
+  "actions": {
+    "again": {
+      "seed": 4,
+      "scene_picks": {
+        "acao": 1
+      },
+      "gaze_mode": "camera"
+    },
+    "variation": {
+      "seed": null,
+      "scene_picks": null,
+      "gaze_mode": "auto"
+    }
+  },
+  "source": {
+    "creative_id": "33333333-3333-4333-8333-333333333333",
+    "plan_id": "plan_9dfc10261c3cc5d280ff4423",
+    "plan_schema_version": 2,
+    "compiler_version": 2
+  },
+  "carried": [
+    "mode",
+    "objective",
+    "product_ids",
+    "angle_id",
+    "placement_id",
+    "quality",
+    "brand_kit",
+    "niche_kit",
     "context",
     "copy",
     "gaze_mode",
