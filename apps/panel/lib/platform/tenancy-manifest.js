@@ -303,6 +303,9 @@ const TABELAS_PLATAFORMA = Object.freeze([
   Object.freeze({ tabela: 'commerce_products', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'commerce_product_variants', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'commerce_catalog_sync_logs', colunaTenant: 'organization_id' }),
+  // Fase F · Product Identity (lib/product-analytics/product-identity-resolver.js). Mesmo motivo:
+  // nasce com organization_id/store_id explícitos, filha de commerce_products só por FK composta.
+  Object.freeze({ tabela: 'product_external_identities', colunaTenant: 'organization_id' }),
 ]);
 
 // Globais DECLARADAS. Não recebem RLS. A role da aplicação acessa só as de identidade

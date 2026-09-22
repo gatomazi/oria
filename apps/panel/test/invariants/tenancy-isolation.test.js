@@ -86,10 +86,18 @@ async function valoresPara(tabela, chave) {
   if (tabela === 'onboarding_steps') Object.assign(v, { step_id: 'owner', requirement: 'required' });
   // Fase D: store_id é NOT NULL nas três tabelas do catálogo canônico — a Store REAL da
   // Organization, nunca um UUID aleatório (que quebraria a FK composta para `stores`).
-  if (['commerce_products', 'commerce_product_variants', 'commerce_catalog_sync_logs'].includes(tabela)) {
+  if (['commerce_products', 'commerce_product_variants', 'commerce_catalog_sync_logs', 'product_external_identities'].includes(tabela)) {
     v.store_id = o.storeId;
   }
   if (tabela === 'commerce_product_variants') v.commerce_product_id = linhas[chave].get('commerce_products').id;
+  // Fase F: colunas com CHECK de vocabulário fechado — o preenchedor genérico (`coluna-N`) violaria
+  // namespace/source/confidence. Valores válidos e explícitos, como onboarding_steps acima.
+  if (tabela === 'product_external_identities') {
+    Object.assign(v, {
+      commerce_product_id: linhas[chave].get('commerce_products').id,
+      namespace: 'sku', external_id: `sku-${chave}`, source: 'manual', confidence: 'exact',
+    });
+  }
   const decl = manifesto.porTabela(tabela);
   if (decl && decl.pai) v[decl.pai.coluna] = linhas[chave].get(decl.pai.tabela).id;
   return v;
