@@ -3,7 +3,7 @@
 Branch `feature/creative-fase-c`, worktree `oria-creative-fase-a`. Sem push, sem merge, sem deploy, sem chamada à OpenAI.
 Exemplos completos (request, plano, prompt, snapshot, draft de cada caso): [`creative-generator-fase-c-examples.md`](creative-generator-fase-c-examples.md).
 
-**Status**: fechada tecnicamente — gate da suíte fechou verde (§0), a contradição do wearer infantil foi corrigida (§2.1) e `scene_picks` × `interaction` foi revisado (§2.2). A validação visual das 8 imagens reais (§21) ainda depende de autorização explícita para gastar com a OpenAI.
+**Status**: fechada — gate da suíte fechou verde (§0), a contradição do wearer infantil foi corrigida (§2.1), `scene_picks` × `interaction` foi revisado (§2.2), e a validação visual das 8 imagens reais fechou sem achado (§21). Próxima fase não iniciada.
 
 ## 0. Gate da suíte (resultado final)
 
