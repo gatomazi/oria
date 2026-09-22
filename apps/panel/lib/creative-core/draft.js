@@ -102,6 +102,12 @@ async function mapDraftToForm(draft, { store, tenantId, jobInput = null }) {
   // /jobs — copiar dados não perde pessoa, relação nem interação em silêncio.
   if (Array.isArray(draft.subjects) && draft.subjects.length) form.subjects = draft.subjects;
   if (draft.interaction) form.interaction = draft.interaction;
+  // Ângulo personalizado (Fase D.1): "de novo"/"variação" reproduzem o MESMO ângulo, não um recálculo pela família —
+  // autossuficiente, como o plano que o gerou. `angle_ids` (legado, um id só) não se aplica mais nesse caso.
+  if (draft.custom_angle) {
+    form.custom_angle = draft.custom_angle;
+    form.angle_ids = ['auto'];
+  }
 
   const actions = {
     again: patchValido(draft.actions && draft.actions.again),

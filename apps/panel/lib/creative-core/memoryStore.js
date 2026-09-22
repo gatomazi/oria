@@ -229,15 +229,17 @@ function createMemoryStore() {
       const row = angles.get(id);
       return row && row.organizationId === tenantId ? clone(row) : null;
     },
-    async createAngle(tenantId, { storeId = null, slug, name, description, family, peopleMode, preset, definition, createdBy }) {
+    async createAngle(tenantId, { storeId = null, slug, name, description, family, peopleMode, preset, definition,
+      allowedInteractions, allowedProductModes, defaultGaze, createdBy }) {
       const scope = storeId ? 'store' : 'organization';
       const clash = [...angles.values()].some((a) => a.organizationId === tenantId && a.storeId === storeId && a.slug === slug);
       if (clash) throw Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
       const id = crypto.randomUUID();
       const row = {
         id, organizationId: tenantId, storeId, scope, slug, name, description: description || null, family,
-        peopleMode, preset: preset || null, definition: definition || {}, active: true, version: 1,
-        createdBy: createdBy || null, createdAt: now(), updatedAt: now(),
+        peopleMode, preset: preset || null, definition: definition || {},
+        allowedInteractions: allowedInteractions || null, allowedProductModes: allowedProductModes || null, defaultGaze: defaultGaze || null,
+        active: true, version: 1, createdBy: createdBy || null, createdAt: now(), updatedAt: now(),
       };
       angles.set(id, row);
       return clone(row);
@@ -245,7 +247,7 @@ function createMemoryStore() {
     async updateAngle(tenantId, id, patch) {
       const row = angles.get(id);
       if (!row || row.organizationId !== tenantId) return null;
-      for (const key of ['name', 'description', 'family', 'peopleMode', 'preset', 'definition', 'active']) {
+      for (const key of ['name', 'description', 'family', 'peopleMode', 'preset', 'definition', 'allowedInteractions', 'allowedProductModes', 'defaultGaze', 'active']) {
         if (patch[key] !== undefined) row[key] = patch[key];
       }
       row.version += 1;

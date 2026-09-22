@@ -36,6 +36,10 @@ const PREVIEW_CONCORRENCIA = 4;
 const FEEDBACK_VERDICTS = ['liked', 'disliked'];
 const FEEDBACK_DIMENSIONS = ['angle', 'objective', 'context', 'interaction', 'composition', 'product'];
 const ANGLE_SLUG_RE = /^[a-z0-9][a-z0-9_-]{1,59}$/;
+const ANGLE_INTERACTION_RE = /^[a-z_]{2,40}$/;
+const ANGLE_PRODUCT_MODES = ['single_product', 'multi_product'];
+const ANGLE_GAZE_MODES = ['camera', 'interaction', 'off_camera', 'product'];
+const ANGLE_DEFINITION_TEXT_FIELDS = ['framing', 'photographic_direction', 'lighting', 'composition'];
 
 function responderErro(res, err, logger) {
   if (err instanceof CoreUnavailableError) {
@@ -213,7 +217,8 @@ function criarRouterCriativos(deps) {
   // ── Angles V2 (Fase D): ângulos customizados de Organization/Store ───────────────────────────────────────────
   // System fica no catálogo do core (GET /catalog → catalog.angleFamilies); aqui só a metade tenant-owned.
   function angleForm(body, { parcial = false } = {}) {
-    const campos = ['scope', 'slug', 'name', 'description', 'family', 'peopleMode', 'preset', 'definition'];
+    const campos = ['scope', 'slug', 'name', 'description', 'family', 'peopleMode', 'preset', 'definition',
+      'allowedInteractions', 'allowedProductModes', 'defaultGaze'];
     for (const key of Object.keys(body || {})) if (!campos.includes(key)) throw new InputError(`campo desconhecido: ${key}`);
     const out = {};
     if (!parcial || body.slug !== undefined) {
@@ -242,7 +247,41 @@ function criarRouterCriativos(deps) {
     }
     if (body.definition !== undefined) {
       if (typeof body.definition !== 'object' || body.definition === null || Array.isArray(body.definition)) throw new InputError('definition: objeto');
+      // Estruturado de propósito (§2 da Fase D.1): campos conhecidos, cada um curto — nunca um prompt livre disfarçado de objeto.
+      for (const key of Object.keys(body.definition)) {
+        if (![...ANGLE_DEFINITION_TEXT_FIELDS, 'visual_notes'].includes(key)) throw new InputError(`definition: campo desconhecido: ${key}`);
+      }
+      for (const campo of ANGLE_DEFINITION_TEXT_FIELDS) {
+        const v = body.definition[campo];
+        if (v !== undefined && (typeof v !== 'string' || v.length > 200)) throw new InputError(`definition.${campo}: até 200 caracteres`);
+      }
+      if (body.definition.visual_notes !== undefined) {
+        const notas = body.definition.visual_notes;
+        if (!Array.isArray(notas) || notas.length > 6 || notas.some((n) => typeof n !== 'string' || n.length > 140)) {
+          throw new InputError('definition.visual_notes: até 6 notas, cada uma até 140 caracteres');
+        }
+      }
       out.definition = body.definition;
+    }
+    if (body.allowedInteractions !== undefined) {
+      if (body.allowedInteractions !== null) {
+        if (!Array.isArray(body.allowedInteractions) || !body.allowedInteractions.every((i) => ANGLE_INTERACTION_RE.test(i))) {
+          throw new InputError('allowedInteractions: lista de ids de interação');
+        }
+      }
+      out.allowedInteractions = body.allowedInteractions;
+    }
+    if (body.allowedProductModes !== undefined) {
+      if (body.allowedProductModes !== null) {
+        if (!Array.isArray(body.allowedProductModes) || !body.allowedProductModes.every((m) => ANGLE_PRODUCT_MODES.includes(m))) {
+          throw new InputError(`allowedProductModes: use ${ANGLE_PRODUCT_MODES.join(', ')}`);
+        }
+      }
+      out.allowedProductModes = body.allowedProductModes;
+    }
+    if (body.defaultGaze !== undefined) {
+      if (body.defaultGaze !== null && !ANGLE_GAZE_MODES.includes(body.defaultGaze)) throw new InputError(`defaultGaze: use ${ANGLE_GAZE_MODES.join(', ')}`);
+      out.defaultGaze = body.defaultGaze;
     }
     return out;
   }
@@ -542,6 +581,11 @@ function criarRouterCriativos(deps) {
       unavailable.push({ field: 'subjects', id: null, reason: 'plan_v2_not_enabled' });
       delete form.subjects;
       delete form.interaction;
+    }
+    if (form.custom_angle && planSchemaVersionFor(env, req.creativeTenant) !== 2) {
+      unavailable.push({ field: 'custom_angle', id: form.custom_angle.id, reason: 'plan_v2_not_enabled' });
+      delete form.custom_angle;
+      form.angle_ids = [draft.angle_id];
     }
     if ((actions.again.scene_picks) && (promptVersionFor(env, req.creativeTenant) !== 2 || planSchemaVersionFor(env, req.creativeTenant) !== 2)) {
       unavailable.push({ field: 'scene_picks', id: null, reason: 'prompt_v2_not_enabled' });

@@ -6,6 +6,7 @@
 
 const crypto = require('crypto');
 const { UUID_RE } = require('./storage');
+const { angleForCore } = require('./pgAngles');
 
 const ENGINES = ['CLEAN_ANGLES', 'REMARKETING', 'FUNNEL_VISUAL'];
 const PRODUCT_MODES = ['single_product', 'multi_product'];
@@ -23,6 +24,8 @@ const INPUT_KEYS = new Set([
   'context', 'funnel_stage', 'funnel', 'remarketing', 'copy', 'quality',
   // Fase C · composição da cena e reprodução (vêm de "Copiar dados" / "Gerar assim"; o core valida o conteúdo).
   'subjects', 'interaction', 'gaze_mode', 'seed', 'scene_picks',
+  // Fase D.1 · ângulo personalizado (substitui angle_ids: um lote usa ângulos legados OU um ângulo customizado, nunca os dois).
+  'custom_angle_id', 'custom_angle',
 ]);
 const GAZE_MODES = ['auto', 'camera', 'off_camera', 'product', 'interaction'];
 const INTERACTION_RE = /^[a-z_]{2,40}$/;
@@ -59,15 +62,29 @@ function objetoSimples(v) {
 function normalizeJobInput(raw) {
   exigir(objetoSimples(raw), 'corpo inválido');
   for (const key of Object.keys(raw)) exigir(INPUT_KEYS.has(key), `campo desconhecido: ${key}`);
+  // Ângulo personalizado (Fase D.1): substitui a lista de ângulos legados por um único slot "auto" — o core
+  // resolve o ângulo real a partir de `custom_angle`/`custom_angle_id`, nunca dos 13 ids.
+  exigir(raw.custom_angle_id === undefined || raw.custom_angle === undefined, 'ângulo personalizado: informe custom_angle_id OU custom_angle, não os dois');
+  const usaAnguloCustomizado = raw.custom_angle_id !== undefined || raw.custom_angle !== undefined;
   const input = {
     engine: raw.engine,
     product_mode: raw.product_mode,
     product_ids: listaDe(raw.product_ids, { min: 1, max: 6, validar: (v) => UUID_RE.test(v) }, 'produtos'),
-    angle_ids: listaDe(raw.angle_ids, { min: 1, max: 13, validar: (v) => ANGLE_RE.test(v) }, 'ângulos'),
+    angle_ids: usaAnguloCustomizado ? ['auto'] : listaDe(raw.angle_ids, { min: 1, max: 13, validar: (v) => ANGLE_RE.test(v) }, 'ângulos'),
     placements: listaDe(raw.placements, { min: 1, max: 2, validar: (v) => PLACEMENTS.includes(v) }, 'formatos'),
     quantity: raw.quantity === undefined ? 1 : raw.quantity,
     quality: raw.quality || 'medium',
   };
+  if (raw.custom_angle_id !== undefined) {
+    exigir(UUID_RE.test(raw.custom_angle_id), 'ângulo personalizado: id inválido');
+    input.custom_angle_id = raw.custom_angle_id; // resolvido do banco em buildRequests (precisa checar "active")
+  }
+  if (raw.custom_angle !== undefined) {
+    // Réplica de um draft ("de novo"/"variação"): já é o CustomAngle inteiro, resolvido no momento da geração
+    // original — não é revalidado contra o banco (autossuficiente, §3 da Fase D.1; "active" não se aplica aqui).
+    exigir(objetoSimples(raw.custom_angle) && typeof raw.custom_angle.id === 'string' && typeof raw.custom_angle.family === 'string', 'custom_angle: formato inválido');
+    input.custom_angle = raw.custom_angle;
+  }
   exigir(ENGINES.includes(input.engine), 'motor inválido');
   exigir(PRODUCT_MODES.includes(input.product_mode), 'modo de produto inválido');
   exigir(Number.isInteger(input.quantity) && input.quantity >= 1 && input.quantity <= 5, 'quantidade: 1 a 5');
@@ -257,9 +274,20 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, pla
   if (input.interaction) base.interaction = input.interaction;
   if (input.gaze_mode && input.gaze_mode !== 'auto') base.gaze_mode = input.gaze_mode;
   if (input.scene_picks) base.scene_picks = input.scene_picks;
+
+  // Ângulo personalizado (Fase D.1): resolve do banco (fresh pick) OU repassa o CustomAngle inteiro (replay de um
+  // draft — "de novo"/"variação"). O core recebe o payload já pronto e nunca consulta creative_angles.
+  if (input.custom_angle_id) {
+    const linha = await store.getAngle(tenantId, input.custom_angle_id);
+    exigir(linha, 'ângulo personalizado não encontrado');
+    exigir(linha.active, 'este ângulo personalizado está desativado — escolha outro ou reative-o antes de gerar');
+    base.custom_angle = angleForCore(linha);
+  } else if (input.custom_angle) {
+    base.custom_angle = input.custom_angle;
+  }
   // Cena com pessoas/interação só existe no plano v2 (o core recusa no v1). Diga antes de enfileirar, em português.
-  if ((input.subjects || input.interaction || input.scene_picks) && planSchemaVersion !== 2) {
-    throw new InputError('a composição de cena (pessoas, interação) exige o plano v2, que ainda não está habilitado nesta conta');
+  if ((input.subjects || input.interaction || input.scene_picks || base.custom_angle) && planSchemaVersion !== 2) {
+    throw new InputError('a composição de cena (pessoas, interação, ângulo personalizado) exige o plano v2, que ainda não está habilitado nesta conta');
   }
   if (input.scene_picks && promptVersion !== 2) {
     throw new InputError('reproduzir os sorteios da cena exige o prompt v2, que ainda não está habilitado nesta conta');

@@ -91,6 +91,20 @@ test('pgStore dos ângulos: identidade por escopo, CHECK, FK da Store, RLS e ver
       `INSERT INTO creative_angles (organization_id, scope, slug, name, family, people_mode) VALUES ($1, 'organization', 'w', 'W', 'lifestyle', 'sempre')`,
       [TENANT]), /creative_angles_people_mode_check/);
 
+    // ── Fase D.1: compatibilidade tipada (migration 0035) ──
+    const comCompat = await store.createAngle(TENANT, {
+      slug: 'com-compat', name: 'Com compat', family: 'connection', peopleMode: 'required',
+      definition: { framing: 'plano médio' }, allowedInteractions: ['gifting'], allowedProductModes: ['single_product'], defaultGaze: 'camera',
+    });
+    assert.deepEqual([comCompat.allowedInteractions, comCompat.allowedProductModes, comCompat.defaultGaze],
+      [['gifting'], ['single_product'], 'camera']);
+    await assert.rejects(dono.query(
+      `UPDATE creative_angles SET allowed_product_modes = ARRAY['modo_invalido'] WHERE id = $1`, [comCompat.id]),
+      /creative_angles_allowed_product_modes_check/);
+    await assert.rejects(dono.query(
+      `UPDATE creative_angles SET default_gaze = 'giratorio' WHERE id = $1`, [comCompat.id]),
+      /creative_angles_default_gaze_check/);
+
     // ── versionamento: UPDATE incrementa, nunca reescreve em outra linha ──
     const editado = await store.updateAngle(TENANT, org1.id, { name: 'Campanha Anual 2026' });
     assert.deepEqual([editado.id, editado.version, editado.name], [org1.id, 2, 'Campanha Anual 2026']);

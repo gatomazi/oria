@@ -129,6 +129,30 @@ test('atualizar id inválido ou inexistente, e apagar com id inválido', async (
   } finally { server.close(); }
 });
 
+test('Fase D.1: definition estruturado e compatibilidade (allowedInteractions/allowedProductModes/defaultGaze) persistem', async () => {
+  const { server, call } = await subirApp();
+  try {
+    const criado = await call('POST', '/angles', angleBody({
+      definition: { framing: 'plano médio', photographic_direction: 'sentada', visual_notes: ['nota 1', 'nota 2'] },
+      allowedInteractions: ['reading_together', 'playing'], allowedProductModes: ['single_product'], defaultGaze: 'camera',
+    }));
+    assert.equal(criado.status, 201);
+    assert.deepEqual(criado.body.definition, { framing: 'plano médio', photographic_direction: 'sentada', visual_notes: ['nota 1', 'nota 2'] });
+    assert.deepEqual([criado.body.allowedInteractions, criado.body.allowedProductModes, criado.body.defaultGaze],
+      [['reading_together', 'playing'], ['single_product'], 'camera']);
+
+    assert.equal((await call('POST', '/angles', angleBody({ slug: 'y', definition: { campo_invalido: 'x' } }))).status, 400);
+    assert.equal((await call('POST', '/angles', angleBody({ slug: 'y', definition: { framing: 'x'.repeat(201) } }))).status, 400);
+    assert.equal((await call('POST', '/angles', angleBody({ slug: 'y', definition: { visual_notes: Array(7).fill('x') } }))).status, 400);
+    assert.equal((await call('POST', '/angles', angleBody({ slug: 'y', allowedInteractions: ['Não Minúsculo'] }))).status, 400);
+    assert.equal((await call('POST', '/angles', angleBody({ slug: 'y', allowedProductModes: ['multi_product_errado'] }))).status, 400);
+    assert.equal((await call('POST', '/angles', angleBody({ slug: 'y', defaultGaze: 'giratorio' }))).status, 400);
+
+    const atualizado = await call('PUT', `/angles/${criado.body.id}`, { defaultGaze: 'product' });
+    assert.deepEqual([atualizado.body.defaultGaze, atualizado.body.allowedInteractions], ['product', ['reading_together', 'playing']]);
+  } finally { server.close(); }
+});
+
 // ------------------------------------------------------------------ Caso 6: ângulo de Store só aparece naquela Store
 test('caso 6 — ângulo de Store aparece só naquela Store, não na Organization nem em outra Store', async () => {
   let storeAtiva = STORE_1;
