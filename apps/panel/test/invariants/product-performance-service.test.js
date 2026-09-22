@@ -92,9 +92,12 @@ const item = (externalProductId, over = {}) => ({
 });
 
 // Registry com um AnalyticsConnector FAKE controlável: `linhas` (array) ou função(chamadas) → array.
-function registryComAnalytics(linhas, { capabilities } = {}) {
+// `cacheScope`: quando informado (valor fixo ou função(chamadas) → valor), o fake ganha
+// `getCacheScope()` — simula GA4 com propriedade configurada, pra testar invalidação por escopo.
+function registryComAnalytics(linhas, { capabilities, cacheScope } = {}) {
   const registry = createConnectorRegistry();
   let chamadas = 0;
+  let chamadasDeEscopo = 0;
   registry.register({
     domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
     capabilities: { productMetrics: true, eventMetrics: false, realtime: false, ...capabilities },
@@ -103,9 +106,15 @@ function registryComAnalytics(linhas, { capabilities } = {}) {
         chamadas += 1;
         return typeof linhas === 'function' ? linhas(chamadas) : linhas;
       },
+      ...(cacheScope !== undefined ? {
+        getCacheScope: async () => {
+          chamadasDeEscopo += 1;
+          return typeof cacheScope === 'function' ? cacheScope(chamadasDeEscopo) : cacheScope;
+        },
+      } : {}),
     }),
   });
-  return { registry, chamadasFeitas: () => chamadas };
+  return { registry, chamadasFeitas: () => chamadas, chamadasDeEscopoFeitas: () => chamadasDeEscopo };
 }
 
 function montarServico(registry, poolFacade = pool()) {
@@ -402,6 +411,91 @@ test('G · provider isolation: filters.provider restringe ao catálogo daquele p
   const svc = montarServico(registry);
   const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'prov_x' }, ...PERIODO });
   assert.deepEqual(r.items.map((i) => i.product.providerProductId), ['px1']);
+}));
+
+// ── H · getProductPerformanceById (detalhe do produto) ───────────────────────────────────────────
+
+test('H · getProductPerformanceById devolve a MESMA linha que apareceria na listagem, sem chamada de analytics extra', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'detail_provider', [{ providerProductId: 'd1' }, { providerProductId: 'd2' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'detail_provider' });
+  const { registry, chamadasFeitas } = registryComAnalytics([item('d1', { itemsViewed: 40, itemsAddedToCart: 8 })]);
+  const svc = montarServico(registry);
+  const lista = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'detail_provider' }, ...PERIODO });
+  const detalhe = await svc.getProductPerformanceById({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, productId: ids.get('d1'), ...PERIODO });
+  assert.equal(chamadasFeitas(), 1); // cache reaproveitado — nunca 1 relatório a mais pro detalhe
+  const daLista = lista.items.find((i) => i.product.id === ids.get('d1'));
+  assert.deepEqual({ ...detalhe.metrics }, { ...daLista.metrics });
+  assert.deepEqual({ ...detalhe.itemRatios }, { ...daLista.itemRatios });
+  assert.equal(detalhe.identity.status, 'matched');
+}));
+
+test('H · getProductPerformanceById: produto inexistente na Store devolve null (a rota decide o 404)', () => em(ORG_A, STORE_A, async () => {
+  const { registry } = registryComAnalytics([]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceById({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, productId: 'ab000000-0000-4000-8000-000000000999', ...PERIODO });
+  assert.equal(r, null);
+}));
+
+test('H · getProductPerformanceById: sem identity resolvida vira unmatched_identity (nunca erro)', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'detail_unm_provider', [{ providerProductId: 'du1' }]);
+  const { registry } = registryComAnalytics([item('id-nao-relacionado')]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceById({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, productId: ids.get('du1'), ...PERIODO });
+  assert.equal(r.identity.status, 'unmatched');
+  assert.deepEqual(r.diagnostics, ['unmatched_identity']);
+}));
+
+test('H · getProductPerformanceById: período sem nenhum dado de analytics vira insufficient_data', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'detail_vazio_provider', [{ providerProductId: 'dv1' }]);
+  const { registry } = registryComAnalytics([]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceById({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, productId: ids.get('dv1'), ...PERIODO });
+  assert.deepEqual(r.diagnostics, ['insufficient_data']);
+}));
+
+test('H · getProductPerformanceById: identity resolvida mas zero atividade no período é zero real', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'detail_zero_provider', [{ providerProductId: 'dz1' }]);
+  await sup.query(
+    `INSERT INTO product_external_identities (organization_id, store_id, commerce_product_id, namespace, external_id, source, confidence)
+     VALUES ($1, $2, $3, $4, 'dz1-anterior', 'rule', 'exact')`,
+    [ORG_A, STORE_A, ids.get('dz1'), `${ANALYTICS_PROVIDER}.item_id`]
+  );
+  const { registry } = registryComAnalytics([item('outro-id-qualquer')]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceById({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, productId: ids.get('dz1'), ...PERIODO });
+  assert.deepEqual({ ...r.metrics }, { itemsViewed: 0, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0, itemRevenue: 0 });
+  assert.equal(r.identity.status, 'matched');
+}));
+
+test('H · getProductPerformanceById: Organization isolation — produto de outra Organization não é encontrado', async () => {
+  const idsB = await em(ORG_B, STORE_B, () => semearCatalogo(ORG_B, STORE_B, 'detail_iso_provider', [{ providerProductId: 'di1' }]));
+  const { registry } = registryComAnalytics([]);
+  const svc = montarServico(registry, pool());
+  const r = await em(ORG_A, STORE_A, () => svc.getProductPerformanceById({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, productId: idsB.get('di1'), ...PERIODO }));
+  assert.equal(r, null);
+});
+
+// ── H · ReportCache invalidado por escopo (ex.: propriedade GA4 trocada) ─────────────────────────
+
+test('H · ReportCache: escopo (ex.: property) diferente busca de novo, mesmo com org/store/provider/período iguais', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'escopo_provider', [{ providerProductId: 'e1' }]);
+  const { registry, chamadasFeitas, chamadasDeEscopoFeitas } = registryComAnalytics([item('e1')], { cacheScope: (n) => (n <= 1 ? 'property-A' : 'property-B') });
+  const svc = montarServico(registry);
+  const entrada = { organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'escopo_provider' }, ...PERIODO };
+  await svc.getProductPerformance(entrada);
+  await svc.getProductPerformance(entrada);
+  assert.equal(chamadasDeEscopoFeitas(), 2); // getCacheScope é barato e roda em toda chamada, hit ou miss
+  assert.equal(chamadasFeitas(), 2); // escopo mudou (property-A → property-B): nunca reaproveita
+}));
+
+test('H · ReportCache: MESMO escopo reaproveita normalmente (getCacheScope não desliga o cache)', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'escopo_fixo_provider', [{ providerProductId: 'ef1' }]);
+  const { registry, chamadasFeitas } = registryComAnalytics([item('ef1')], { cacheScope: 'property-fixa' });
+  const svc = montarServico(registry);
+  const entrada = { organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'escopo_fixo_provider' }, ...PERIODO };
+  await svc.getProductPerformance(entrada);
+  await svc.getProductPerformance(entrada);
+  assert.equal(chamadasFeitas(), 1);
 }));
 
 // ── Guardas estáticas: nenhum import de Ink, GA4 concreto ou pedidos_ink ────────────────────────

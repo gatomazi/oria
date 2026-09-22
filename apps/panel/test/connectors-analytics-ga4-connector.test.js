@@ -228,6 +228,24 @@ test('E · a query do report usa itemId como dimensão de identidade e itemName 
   assert.deepEqual(corpoDoReport.dateRanges, [{ startDate: '2026-09-01', endDate: '2026-09-20' }]);
 }));
 
+// ── H (rodada H→I): getCacheScope — discriminador barato pra quem cacheia por fora ──────────────
+
+test('H · getCacheScope devolve o propertyId, sem chamar a API do Google (só leitura local)', () => emA(async () => {
+  let chamouGoogle = false;
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(async () => { chamouGoogle = true; throw new Error('getCacheScope não deveria bater na API do Google'); });
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  const escopo = await r.connector.getCacheScope();
+  assert.equal(escopo, PROPERTY_ID);
+  assert.equal(chamouGoogle, false);
+}));
+
+test('H · getCacheScope sem propriedade configurada lança INTEGRATION_NOT_CONNECTED (o mesmo erro que getProductPerformance lançaria)', () => emA(async () => {
+  const { registry } = await montarAmbiente({ comPropriedade: false });
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  await assert.rejects(r.connector.getCacheScope(), (err) => err.codigo === CODIGOS.INTEGRATION_NOT_CONNECTED);
+}));
+
 test('E · getProductPerformance exige startDate/endDate e startDate <= endDate', () => emA(async () => {
   const { registry } = await montarAmbiente();
   const r = registry.resolve('analytics', 'ga4', ctxA);

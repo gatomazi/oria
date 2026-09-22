@@ -111,6 +111,23 @@ function createGa4AnalyticsConnector({ context, resolveIntegration, secretPort, 
   }
 
   /**
+   * Rodada H (cache HTTP) · discriminador barato (só leitura de `google_analytics_connections`,
+   * nenhuma chamada à API do Google) pra quem cacheia `getProductPerformance` por fora nunca
+   * reaproveitar o relatório de uma propriedade TROCADA dentro do mesmo TTL — reconectar a Store a
+   * outra property (ou trocar de conta) precisa invalidar o cache mesmo sem o período mudar. Não é
+   * parte do contrato `AnalyticsConnector` genérico (nenhum outro provider precisa disto pra ser
+   * válido); quem cacheia trata a ausência do método como "sem discriminador extra, cache só por
+   * escopo/período" (lib/product-analytics/product-performance-service.js).
+   */
+  async function getCacheScope() {
+    // Sem propriedade configurada, `propriedadeDaChamada()` lança INTEGRATION_NOT_CONNECTED — o
+    // MESMO erro que `getProductPerformance()` lançaria de qualquer forma; deixa propagar em vez de
+    // mascarar com null (null pareceria "sem discriminador", não "sem conexão").
+    const propriedade = await propriedadeDaChamada();
+    return propriedade.propertyId;
+  }
+
+  /**
    * 1 (ou poucas, paginadas) chamada(s) `runReport` para o PERÍODO inteiro — nunca 1 por produto
    * (§4.9). `startDate`/`endDate` são ISO puro: a conversão para o formato da Data API (que aqui é
    * o mesmo ISO — GA4 aceita `YYYY-MM-DD` direto) fica só neste arquivo.
@@ -147,7 +164,7 @@ function createGa4AnalyticsConnector({ context, resolveIntegration, secretPort, 
     return linhas;
   }
 
-  return Object.freeze({ getProductPerformance, getProductMetricCapabilities });
+  return Object.freeze({ getProductPerformance, getProductMetricCapabilities, getCacheScope });
 }
 
 module.exports = { createGa4AnalyticsConnector, CAPABILITIES };

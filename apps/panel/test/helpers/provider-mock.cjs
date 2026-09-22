@@ -226,12 +226,44 @@ function responder(url, metodo, corpo, auth) {
       return json({ accountSummaries: props.length ? [{ displayName: 'Conta GA', propertySummaries: props.map((i) => ({ property: `properties/${id(i)}`, displayName: `Site ${i}` })) }] : [] });
     }
     case 'analyticsdata.googleapis.com': {
-      // runReport: UMA combinação de UTM, com números proporcionais ao id da propriedade — prova de
-      // qual propriedade foi consultada (e, portanto, de qual Store).
-      const m = p.match(/properties\/(\d+):runReport/);
-      const escala = m ? Number(m[1].slice(-3)) : 1;
-      const linha = { dimensionValues: ['instagram', 'paid_social', 'bf26', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala, escala - 1, 5, escala * 10].map((value) => ({ value: String(value) })) };
-      return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
+      // ── Product Analytics (rodada H→I, lib/connectors/analytics/ga4/) ──────────────────────────
+      // GET properties/{id}/metadata: item-scoped completo (itemId/itemName + as 5 métricas de
+      // item) — nenhum teste legado chama este endpoint, então não há comportamento a preservar.
+      if (metodo === 'GET' && /\/properties\/\d+\/metadata$/.test(p)) {
+        return json({
+          dimensions: [{ apiName: 'itemId' }, { apiName: 'itemName' }],
+          metrics: ['itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue'].map((apiName) => ({ apiName })),
+        });
+      }
+      // POST properties/{id}:checkCompatibility: tudo compatível (o mock não simula propriedade
+      // incompatível — isso já tem cobertura própria em test/connectors-analytics-ga4-*.test.js).
+      if (metodo === 'POST' && /:checkCompatibility$/.test(p)) {
+        return json({
+          dimensionCompatibilities: [{ dimensionMetadata: { apiName: 'itemId' }, compatibility: 'COMPATIBLE' }, { dimensionMetadata: { apiName: 'itemName' }, compatibility: 'COMPATIBLE' }],
+          metricCompatibilities: ['itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue'].map((apiName) => ({ metricMetadata: { apiName }, compatibility: 'COMPATIBLE' })),
+        });
+      }
+      const m = p.match(/properties\/(\d+):runReport$/);
+      if (m) {
+        const propertyId = m[1];
+        const escala = Number(propertyId.slice(-3)) || 1;
+        // O corpo decide o formato: dimensão `itemId` = Product Analytics; senão, o runReport
+        // legado (UTM/consolidado) — comportamento ORIGINAL, intocado, pra não quebrar teste nenhum.
+        let itemScoped = false;
+        try { itemScoped = JSON.parse(corpo || '{}').dimensions?.some((d) => d.name === 'itemId'); } catch { /* corpo não é JSON: trata como legado */ }
+        if (itemScoped) {
+          // Números proporcionais ao id da propriedade — mesma prova de "qual property foi
+          // consultada" que o runReport legado já usa (escala vem do id).
+          const linha = {
+            dimensionValues: [{ value: `sku-mock-${propertyId}` }, { value: `Produto Mock ${propertyId}` }],
+            metricValues: [escala * 10, escala * 2, escala, Math.max(1, Math.floor(escala / 2)), escala * 9.9].map((value) => ({ value: String(value) })),
+          };
+          return json({ rows: [linha], rowCount: 1 });
+        }
+        const linha = { dimensionValues: ['instagram', 'paid_social', 'bf26', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala, escala - 1, 5, escala * 10].map((value) => ({ value: String(value) })) };
+        return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
+      }
+      return json({}, 404);
     }
     case 'api.openai.com':
       // Chave "inválida" (o texto contém `invalid`): a OpenAI a recusa com 401, como faria de verdade.

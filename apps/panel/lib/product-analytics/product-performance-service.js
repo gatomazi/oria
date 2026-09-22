@@ -94,6 +94,21 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
   if (!registry || typeof registry.resolve !== 'function') throw new Error('createProductPerformanceService exige registry');
   if (!catalogRepository || typeof catalogRepository.listPage !== 'function') throw new Error('createProductPerformanceService exige catalogRepository');
 
+  // Resolve o connector, calcula o discriminador de cache (barato — sem chamada à API do provider,
+  // ver ga4/connector.js `getCacheScope`) ANTES de consultar o ReportCache, e busca o relatório
+  // (cache hit ou miss). Único ponto que fala com o AnalyticsConnector — getProductPerformance e
+  // getProductPerformanceById passam pelo mesmo caminho, nunca duplicam a chamada.
+  async function obterRelatorio({ organizationId, storeId, analyticsProvider, startDate, endDate }) {
+    const resolvido = registry.resolve('analytics', analyticsProvider, { organizationId, storeId });
+    resolvido.require('productMetrics');
+    // Rodada H (cache HTTP §H.4): sem isto, reconectar a Store a OUTRA propriedade/conta dentro do
+    // mesmo TTL reaproveitaria o relatório da propriedade antiga — a chave org/store/provider/período
+    // sozinha não veria a troca. Opcional: um provider sem o conceito de "propriedade" (ou sem o
+    // método) simplesmente não teria mais essa dimensão na chave.
+    const escopoCache = typeof resolvido.connector.getCacheScope === 'function' ? await resolvido.connector.getCacheScope() : null;
+    return reportCache.obter({ organizationId, storeId, analyticsProvider, startDate, endDate, escopoCache }, () => resolvido.connector.getProductPerformance({ startDate, endDate }));
+  }
+
   async function getProductPerformance(entrada) {
     validarEntrada(entrada);
     const { organizationId, storeId, analyticsProvider, startDate, endDate, filters = {}, sort = null, pagination = {} } = entrada;
@@ -102,11 +117,7 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     // 1 (poucas, já paginadas dentro do connector) chamada de analytics para o período inteiro —
     // com ou sem cache, sempre uma chamada de DADOS por invocação do service (o cache, quando
     // usado, fica no ReportCache abaixo — nunca aqui um "if já busquei antes" ad hoc).
-    const linhasAnalytics = await reportCache.obter({ organizationId, storeId, analyticsProvider, startDate, endDate }, async () => {
-      const resolvido = registry.resolve('analytics', analyticsProvider, { organizationId, storeId });
-      resolvido.require('productMetrics');
-      return resolvido.connector.getProductPerformance({ startDate, endDate });
-    });
+    const linhasAnalytics = await obterRelatorio({ organizationId, storeId, analyticsProvider, startDate, endDate });
 
     if (!linhasAnalytics.length) {
       // Sem NENHUMA linha no período: não dá pra distinguir "zero de verdade" de "sem cobertura" —
@@ -200,7 +211,43 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     };
   }
 
-  return Object.freeze({ getProductPerformance });
+  // Rodada H (detalhe do produto, GET /products/:productId) · MESMO relatório (mesma chave de
+  // cache — nunca uma chamada de analytics extra só porque é 1 produto) e MESMA linha que
+  // apareceria em getProductPerformance para este produto no mesmo período; devolve `null` quando o
+  // produto não existe nesta Store/Organization (a rota decide o 404 — o service não inventa erro
+  // HTTP nenhum).
+  async function getProductPerformanceById({ organizationId, storeId, analyticsProvider, startDate, endDate, productId }) {
+    validarEntrada({ organizationId, storeId, analyticsProvider, startDate, endDate });
+    if (!productId) throw new TypeError('productId é obrigatório');
+    const namespace = `${analyticsProvider}.item_id`;
+
+    const produtos = await catalogRepository.getByIds({ organizationId, storeId, ids: [productId] });
+    if (!produtos.length) return null;
+    const produto = produtos[0];
+
+    const linhasAnalytics = await obterRelatorio({ organizationId, storeId, analyticsProvider, startDate, endDate });
+    if (!linhasAnalytics.length) return linhaSemAnalytics(produto, 'insufficient_data');
+
+    const idsObservados = [...new Set(linhasAnalytics.map((l) => l.externalProductId))];
+    const resolucao = await resolveAndPersist({ pool }, { organizationId, storeId, namespace, externalIds: idsObservados });
+    const produtoPorExternalId = new Map(resolucao.resolved.map((r) => [r.externalId, r.commerceProductId]));
+
+    const idsElegiveis = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, apenasIds: [productId] });
+    if (!idsElegiveis.length) return montarLinha(produto, null); // unmatched_identity
+
+    const acumulado = { metrics: metricasZeradas(), externalIds: new Set() };
+    for (const linha of linhasAnalytics) {
+      if (produtoPorExternalId.get(linha.externalProductId) !== productId) continue;
+      acumulado.externalIds.add(linha.externalProductId);
+      for (const nome of METRICAS) acumulado.metrics[nome] = somarMetrica(acumulado.metrics[nome], linha[nome]);
+    }
+    const metricasIndisponiveis = METRICAS.filter((nome) => linhasAnalytics.every((l) => l[nome] === null));
+    for (const nome of metricasIndisponiveis) acumulado.metrics[nome] = null;
+
+    return montarLinha(produto, acumulado);
+  }
+
+  return Object.freeze({ getProductPerformance, getProductPerformanceById });
 }
 
 function linhaSemAnalytics(produto, diagnostico) {
@@ -268,8 +315,11 @@ function compararComNullPorUltimo(a, b, direcao) {
 // no `cmd/`). Pior caso de cache frio é idêntico a não ter cache nenhum; nunca inventa dado.
 function createReportCache({ ttlMs = 15 * 60 * 1000 } = {}) {
   const cache = new Map(); // chave -> { linhas, expiraEm }
-  const chaveDe = ({ organizationId, storeId, analyticsProvider, startDate, endDate }) =>
-    [organizationId, storeId, analyticsProvider, startDate, endDate].join('\u0000');
+  // `escopoCache` (opcional, ver ga4/connector.js `getCacheScope`) entra na chave: property/conta
+  // trocada dentro do TTL nunca reaproveita o relatório da anterior, mesmo com
+  // organization/store/provider/período idênticos.
+  const chaveDe = ({ organizationId, storeId, analyticsProvider, startDate, endDate, escopoCache }) =>
+    [organizationId, storeId, analyticsProvider, startDate, endDate, escopoCache ?? ''].join('\u0000');
 
   async function obter(escopo, buscar) {
     const chave = chaveDe(escopo);
