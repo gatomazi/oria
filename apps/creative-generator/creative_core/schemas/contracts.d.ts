@@ -137,6 +137,7 @@ export interface AngleRecommendation {
   version: number;
   reason?: Array<string>;
   source: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy";
+  custom_angle?: CustomAngle | null;
 }
 
 export interface CustomAngle {
@@ -146,11 +147,14 @@ export interface CustomAngle {
   store_id?: string | null;
   slug: string;
   name: string;
-  description?: string;
+  description?: string | null;
   family: "lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social";
   people_mode: "none" | "optional" | "required";
   preset?: string | null;
   definition?: Record<string, unknown>;
+  allowed_interactions?: Array<string> | null;
+  allowed_product_modes?: Array<"single_product" | "multi_product"> | null;
+  default_gaze?: "camera" | "interaction" | "off_camera" | "product" | "none" | null;
   active: boolean;
   version: number;
   created_by?: string | null;
@@ -249,6 +253,7 @@ export interface CreativeRequest {
   interaction?: string;
   scene_picks?: Record<string, unknown>;
   angle_family_hint?: Record<string, unknown> | null;
+  custom_angle?: CustomAngle | null;
   angle_intent_hint?: string;
 }
 
@@ -445,6 +450,7 @@ export interface GenerationDraft {
   product_mode: "single_product" | "multi_product";
   product_ids: Array<string>;
   angle_id: string;
+  custom_angle?: CustomAngle | null;
   placement_id: string;
   quality: "low" | "medium" | "high";
   brand_kit: KitRef;
@@ -484,6 +490,9 @@ export interface FeedbackSnapshot {
   angle_preset?: string | null;
   angle_scope?: "system" | "organization" | "store" | null;
   angle_version?: number | null;
+  angle_custom_id?: string | null;
+  angle_custom_slug?: string | null;
+  angle_custom_name?: string | null;
   product_ids: Array<string>;
   subjects: Array<Record<string, unknown>>;
   people_count: number;

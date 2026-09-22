@@ -265,7 +265,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
     # Fase D: the family/preset this angle_id resolves to, and how it got there. Additive — a v1 plan and an
     # older v2 plan simply have no `angle_recommendation`; the compiler/prompt never read this.
     "AngleRecommendation": {
-        "angle_id": S(required=True),
+        "angle_id": S(required=True),  # always a legacy id — what actually drove the compiler
         "family": S(required=True, enum=ANGLE_FAMILIES),
         "preset": S(nullable=True),
         "objective_hints": A(S()),
@@ -273,6 +273,9 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "version": I(required=True, minimum=1),
         "reason": A(S()),
         "source": S(required=True, enum=VALUE_ORIGINS),
+        # Fase D.1: the full custom angle used, if any — verbatim what the request carried, so recompiling this
+        # plan later never needs to read creative_angles again (self-sufficient, §3 of the direction).
+        "custom_angle": R("CustomAngle", nullable=True),
     },
     # Organization/store custom angle (Fase D §5/§12) — the shape the panel's `creative_angles` table and its
     # CRUD exchange; minimal by design (no 20-field form). `definition` carries the richer, still-evolving
@@ -285,11 +288,19 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "store_id": S(nullable=True),
         "slug": S(required=True, min_length=1, max_length=60),
         "name": S(required=True, min_length=1, max_length=120),
-        "description": S(max_length=2000),
+        "description": S(nullable=True, max_length=2000),
         "family": S(required=True, enum=ANGLE_FAMILIES),
         "people_mode": S(required=True, enum=("none", "optional", "required")),
         "preset": S(nullable=True, max_length=60),
-        "definition": O(),
+        # Fase D.1: what actually makes two custom angles of the same family compile to different prompts —
+        # read by the compiler's `custom_angle_direction` section (composition.py has no say in framing/light/
+        # camera direction, only in who is in frame and what they do). Free short text per field, on purpose:
+        # structured FIELDS, not one big free prompt — each one becomes its own labeled line.
+        "definition": O(),  # {framing?, photographic_direction?, lighting?, composition?, visual_notes?: [str]}
+        # Compatibility the planner now actually enforces (not just informative) — see angle_catalog.py.
+        "allowed_interactions": A(S(), nullable=True),  # null = no restriction; a mismatch with the resolved interaction is a warning, never a block
+        "allowed_product_modes": A(S(enum=PRODUCT_MODES), nullable=True),  # null = no restriction; a mismatch is refused (UNSUPPORTED_ANGLE)
+        "default_gaze": S(nullable=True, enum=GAZE_RESOLVED),  # the angle-tier default in resolve_gaze, when set — still below interaction/user
         "active": B(required=True),
         "version": I(required=True, minimum=1),
         "created_by": S(nullable=True),
@@ -389,6 +400,10 @@ CONTRACTS: dict[str, dict[str, F]] = {
         # (skipping the heuristic) instead of naming one of the 13 legacy ids. How a custom organization/store
         # angle (resolved by the panel from `creative_angles`) or a family/preset picker reaches the core.
         "angle_family_hint": O(nullable=True),  # {family (required, one of ANGLE_FAMILIES), preset?}
+        # Fase D.1: the FULL resolved row the panel read from creative_angles at the moment of generation — the
+        # core never queries the database. Only meaningful with angle_id "auto"; supersedes angle_family_hint
+        # when both are given (a custom angle already names its own family/preset).
+        "custom_angle": R("CustomAngle", nullable=True),
         "angle_intent_hint": S(max_length=40),  # seam for a future GPT-authored brief (Fase D §5) — today a plain literal like "creator", never inferred
     },
     "KitRef": {
@@ -569,6 +584,8 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "product_mode": S(required=True, enum=PRODUCT_MODES),
         "product_ids": A(S(), required=True),
         "angle_id": S(required=True),
+        # Fase D.1: "de novo"/"Copiar dados" reproduce the SAME custom angle, not just the legacy id it routed to.
+        "custom_angle": R("CustomAngle", nullable=True),
         "placement_id": S(required=True),
         "quality": S(required=True, enum=QUALITIES),
         "brand_kit": R("KitRef", required=True),
@@ -610,6 +627,11 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "angle_preset": S(nullable=True),
         "angle_scope": S(nullable=True, enum=ANGLE_SCOPES),
         "angle_version": I(nullable=True, minimum=1),
+        # Fase D.1: the custom angle's OWN identity, not just the legacy id it routed to — "connection" +
+        # version 3 says which family/version; this says WHICH one, by id/slug/name.
+        "angle_custom_id": S(nullable=True),
+        "angle_custom_slug": S(nullable=True),
+        "angle_custom_name": S(nullable=True),
         "product_ids": A(S(), required=True),
         "subjects": A(O(), required=True),  # [{role, label, age_band, is_minor, product_use, role_hint}]
         "people_count": I(required=True, minimum=0),

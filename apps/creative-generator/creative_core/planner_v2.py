@@ -129,11 +129,13 @@ def semantic_warnings(products: list, subjects: list) -> list[dict]:
 
 # ------------------------------------------------------------------ gaze
 def resolve_gaze(requested: str | None, angle_id: str, people_count: int, picks: dict,
-                 interaction: dict | None = None) -> dict:
+                 interaction: dict | None = None, custom_angle: dict | None = None) -> dict:
     """`auto` (or absent) becomes a concrete mode here — the compiler never sees `auto`.
 
     Precedence: nobody in frame (none) > the caller's explicit mode > the gaze the chosen interaction implies >
-    the preset the plan picked (lifestyle action, creator format) > the angle's default for one / several people."""
+    a custom angle's OWN default (Fase D.1 — still below interaction/user, but ahead of the legacy angle it
+    routes to) > the preset the plan picked (lifestyle action, creator format) > the angle's default for one /
+    several people."""
     requested = requested or "auto"
     if people_count == 0:
         return {"mode": "none", "requested": requested, "source": "angle", "reason": "no_people_in_frame"}
@@ -142,6 +144,9 @@ def resolve_gaze(requested: str | None, angle_id: str, people_count: int, picks:
     if interaction:
         return {"mode": interaction["gaze_default"], "requested": "auto", "source": "planner_default",
                 "reason": f"interaction:{interaction['id']}"}
+    if custom_angle and custom_angle.get("default_gaze"):
+        return {"mode": custom_angle["default_gaze"], "requested": "auto", "source": "angle",
+                "reason": f"custom_angle:{custom_angle['id']}"}
     if people_count == 1:
         for pool, index_entry in picks.items():
             table = DATA["pool_gaze"].get(angle_id, {}).get(pool)
@@ -325,6 +330,7 @@ def _picks(angle_id: str, seed: int, replay: dict | None) -> dict:
 def build(
     *, request: dict, angle_id: str, strategy: str, products: list, brand: dict, niche: dict, persona: dict | None,
     people: list, people_needed: int, prompt_version: int, seed: int, apparel: bool, pool: list, engine: dict,
+    custom_angle: dict | None = None,
 ) -> dict:
     """All the v2-only plan fields (everything except the prompt and the compiler record, which need the assembled
     plan).
@@ -387,7 +393,16 @@ def build(
     count = len(subjects)
     if source != "legacy" and count and not limits.get("min", 1) <= count <= limits.get("max", 4):
         warnings.append(f"angle_people_mismatch:{angle_id}:{count}")
-    gaze = resolve_gaze(request.get("gaze_mode"), angle_id, count, picks, interaction)
+    if custom_angle:
+        # Compatibility the planner now actually enforces (Fase D.1 §4). allowed_interactions is a recommendation:
+        # the explicit choice (or the one the product/interaction machinery already resolved) always wins, this
+        # only warns. people_mode is checked the same way — Subjects/interaction still own who is in the scene.
+        if custom_angle.get("allowed_interactions") and interaction_id and interaction_id not in custom_angle["allowed_interactions"]:
+            warnings.append(f"angle_interaction_mismatch:{custom_angle['id']}:{interaction_id}")
+        expected_people = custom_angle.get("people_mode")
+        if (expected_people == "none" and count > 0) or (expected_people == "required" and count == 0):
+            warnings.append(f"angle_people_mode_mismatch:{expected_people}:{count}")
+    gaze = resolve_gaze(request.get("gaze_mode"), angle_id, count, picks, interaction, custom_angle)
     safety, safety_warnings = minor_safety(subjects, brand.get("minorWardrobePolicy"), products)
     semantic_products = [{"product_id": p.get("id"), "semantic_context": p.get("semantic_context")} for p in products]
     structured_warnings = semantic_warnings(products, subjects)

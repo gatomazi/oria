@@ -84,7 +84,10 @@ def generation_draft_from_plan(plan: dict, result_metadata: dict | None = None) 
     draft = {
         "mode": plan.get("mode", "creative"), "objective": plan.get("objective") or objective_for(strategy), "strategy": strategy,
         "product_mode": plan["product_mode"], "product_ids": [p["id"] for p in plan["products"]],
-        "angle_id": plan["angle"]["id"], "placement_id": plan["placement"]["id"], "quality": plan["model"]["quality"],
+        "angle_id": plan["angle"]["id"],
+        # Fase D.1: "de novo"/"variação" reproduce the SAME custom angle, not just the legacy id it routed to.
+        "custom_angle": (plan.get("angle_recommendation") or {}).get("custom_angle"),
+        "placement_id": plan["placement"]["id"], "quality": plan["model"]["quality"],
         "brand_kit": dict(plan["brand_kit"]), "niche_kit": dict(plan["niche_kit"]),
         "persona_mode": persona_mode, "persona": persona, "subjects": subjects, "interaction": interaction, "scene_picks": picks,
         "context": _context(plan), "funnel_stage": plan.get("funnel_stage"), "remarketing": remarketing, "funnel": funnel,
@@ -142,6 +145,10 @@ def feedback_snapshot(plan: dict, result_metadata: dict | None = None, asset_sha
         "angle_preset": (plan.get("angle_recommendation") or {}).get("preset"),
         "angle_scope": (plan.get("angle_recommendation") or {}).get("scope"),
         "angle_version": (plan.get("angle_recommendation") or {}).get("version"),
+        # Fase D.1: the custom angle's OWN identity, not just the family/version it shares with siblings.
+        "angle_custom_id": ((plan.get("angle_recommendation") or {}).get("custom_angle") or {}).get("id"),
+        "angle_custom_slug": ((plan.get("angle_recommendation") or {}).get("custom_angle") or {}).get("slug"),
+        "angle_custom_name": ((plan.get("angle_recommendation") or {}).get("custom_angle") or {}).get("name"),
         "people_count": len(subjects) if v2 else (1 if plan.get("persona") else 0),
         "interaction": interaction, "composition_source": scene.get("composition_source"),
         "composition_key": composition_key(plan) if v2 else None,

@@ -60,6 +60,33 @@ SECTION_ORDER_V2 = (
     "people_composition_contract", "gaze", "interaction", "scene_action", "minor_wardrobe_policy",
     "strategy_communication", "brand", "niche", "context", "avoid", "output_format",
 )
+# Version 3 (Fase D.1) adds custom_angle_direction, right after scene_action: the legacy angle's own frame text
+# stays the base (compatibility, §1 of the direction), a custom angle's structured definition COMPLEMENTS it —
+# never replaces fidelity_rules/text_rules/minor_safety, which stay first as in every version.
+SECTION_ORDER_V3 = (
+    "fidelity_rules", "text_rules", "minor_safety", "reference_roles", "product_semantic_context",
+    "people_composition_contract", "gaze", "interaction", "scene_action", "custom_angle_direction",
+    "minor_wardrobe_policy", "strategy_communication", "brand", "niche", "context", "avoid", "output_format",
+)
+
+
+def _custom_angle_direction(plan: dict) -> tuple[str, str, str]:
+    """Structured `definition` fields of a custom angle, each its own labeled line, in a fixed order — never a
+    free block the model could read as overriding the obligatory rules above it. Empty (no section at all) for
+    a system angle or a custom angle with no fields set; NEVER touches fidelity/minor_safety/text_rules, which
+    are compiled earlier and are the ones `_core_rules` marks "REGRAS OBRIGATÓRIAS (nunca ignore)"."""
+    custom = (plan.get("angle_recommendation") or {}).get("custom_angle")
+    if not custom:
+        return "", "planner_default", ""
+    cfg = TEXT["custom_angle"]
+    definition = custom.get("definition") or {}
+    lines = [f"{cfg['labels'][field]}: {definition[field]}" for field in
+             ("framing", "photographic_direction", "lighting", "composition") if definition.get(field)]
+    lines += [f"- {note}" for note in (definition.get("visual_notes") or [])[:6] if note]
+    if not lines:
+        return "", "planner_default", ""
+    text = cfg["header"].format(name=custom["name"]) + "\n" + "\n".join(lines)
+    return text, custom["scope"], custom["id"]
 
 
 def _label_list(values: list, table: dict) -> str:
@@ -297,6 +324,8 @@ def _builders(plan: dict, version: int) -> dict:
         builders["people_composition_contract"] = lambda: _people_v2(plan)
         builders["interaction"] = lambda: _interaction(plan)
         builders["scene_action"] = lambda: _scene_v2(plan)
+    if version >= 3:
+        builders["custom_angle_direction"] = lambda: _custom_angle_direction(plan)
     return builders
 
 
@@ -311,7 +340,7 @@ def compile_prompt(plan: dict, version: int | None = None) -> dict:
     if version not in SUPPORTED_COMPILER_VERSIONS:
         raise ValueError(f"unknown compiler version {version}")
     builders = _builders(plan, version)
-    order = SECTION_ORDER_V2 if version >= 2 else SECTION_ORDER
+    order = SECTION_ORDER_V3 if version >= 3 else (SECTION_ORDER_V2 if version >= 2 else SECTION_ORDER)
     sections, texts = [], []
     for name in order:
         text, source, value, *parts = builders[name]()

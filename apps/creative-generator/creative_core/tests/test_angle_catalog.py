@@ -77,7 +77,7 @@ def test_given_a_v2_plan_with_an_explicit_legacy_angle_then_the_recommendation_s
     plan = _plan(angle_id="LIFESTYLE_COTIDIANO", plan_schema_version=2)
     assert plan["angle_recommendation"] == {
         "angle_id": "LIFESTYLE_COTIDIANO", "family": "lifestyle", "preset": None, "objective_hints": ["daily_life"],
-        "scope": "system", "version": 1, "reason": [], "source": "user",
+        "scope": "system", "version": 1, "reason": [], "source": "user", "custom_angle": None,
     }
     assert plan["provenance"]["angle"] == "user"
 
@@ -148,7 +148,7 @@ def test_given_an_angle_family_hint_then_it_is_used_directly_with_source_user_no
     assert plan["angle_recommendation"] == {
         "angle_id": "CLOSE_ESTAMPA", "family": "product_focus", "preset": "print_closeup",
         "objective_hints": ["print_detail"], "scope": "system", "version": 1,
-        "reason": ["angle_family_hint:product_focus"], "source": "user",
+        "reason": ["angle_family_hint:product_focus"], "source": "user", "custom_angle": None,
     }
     assert plan["provenance"]["angle"] == "user"
 

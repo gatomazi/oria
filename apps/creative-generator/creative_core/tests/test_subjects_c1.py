@@ -116,7 +116,7 @@ def test_given_the_five_fixtures_then_each_plan_is_valid_recompiles_and_lists_th
         names = [s["section"] for s in plan["compiler"]["sections"]]
         assert names == [n for n in SECTION_ORDER_V2 if n in names] and "interaction" in names, path
         assert names.index("gaze") + 1 == names.index("interaction") < names.index("scene_action")
-        assert plan["compiler"]["version"] == 2 and plan["scene"]["scene_mode"] == "frame"
+        assert plan["compiler"]["version"] == 3 and plan["scene"]["scene_mode"] == "frame"  # Fase D.1 bumped the default
 
 
 # ------------------------------------------------------------------ explicit subjects: validation
@@ -361,7 +361,7 @@ def test_given_the_frozen_fase_b_plans_then_the_versioned_compiler_recompiles_ea
     from test_plan_v2 import _plan as legacy_plan
 
     fresh = legacy_plan(angle="LIFESTYLE_COTIDIANO", prompt_version=2, seed=4)
-    assert compile_prompt(fresh, version=1)["compiler_version"] == 1 and compile_prompt(fresh)["compiler_version"] == 2
+    assert compile_prompt(fresh, version=1)["compiler_version"] == 1 and compile_prompt(fresh)["compiler_version"] == 3
 
 
 def test_given_an_unknown_compiler_version_then_the_compiler_refuses_it():

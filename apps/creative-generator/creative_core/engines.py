@@ -230,13 +230,29 @@ def _funnel_parts(request: dict, products: list):
 
 
 # ------------------------------------------------------------------ plan
-def _resolve_angle_id(request: dict, products: list) -> tuple[str, str, list[str]]:
+def _resolve_angle_id(request: dict, products: list, product_mode: str) -> tuple[str, str, list[str]]:
     """(angle_id, provenance source, reason). `angle_id: "auto"` asks the planner to recommend one (Fase D);
     any of the 13 legacy ids is used as named, exactly like before this phase. `angle_family_hint` (also only
-    meaningful with "auto") steers straight to a family — how a custom organization/store angle, resolved by
-    the panel from `creative_angles`, or an explicit family/preset picker reaches the core without needing its
-    own legacy id: the human already chose a family, so the source is "user", not "planner_default"."""
+    meaningful with "auto") steers straight to a family — how an explicit family/preset picker reaches the core
+    without needing its own legacy id: the human already chose a family, so the source is "user", not
+    "planner_default". `custom_angle` (Fase D.1, also "auto"-only) is the FULL resolved row the panel read from
+    `creative_angles` — it supersedes angle_family_hint and additionally enforces `allowed_product_modes` as a
+    hard compatibility check (an interaction/people_mode mismatch is only a warning, built downstream in
+    planner_v2.build, because Subjects/Interaction — not the angle — own who is in the scene and what they do)."""
     requested = request.get("angle_id")
+    custom = request.get("custom_angle")
+    if custom:
+        if requested != "auto":
+            raise GenerationError("INVALID_INPUT", {"errors": ["custom_angle: requires angle_id \"auto\""]})
+        allowed_modes = custom.get("allowed_product_modes")
+        if allowed_modes and product_mode not in allowed_modes:
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "custom_angle_id": custom["id"],
+                                                         "reason": f"product_mode {product_mode} not allowed for this custom angle"})
+        legacy_id = canonical_legacy_angle_id(custom["family"], custom.get("preset"))
+        if legacy_id is None:
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": custom["family"],
+                                                         "reason": "family has no generation route yet"})
+        return legacy_id, "user", [f"custom_angle:{custom['id']}"]
     if requested != "auto":
         return requested, "user", []
     hint = request.get("angle_family_hint")
@@ -292,16 +308,26 @@ def plan_creative(
     if len(roles) > MAX_REFERENCE_IMAGES:
         raise GenerationError("INVALID_REFERENCE", {"reason": "too_many_reference_images", "max": MAX_REFERENCE_IMAGES})
 
-    angle_id, angle_source, angle_reason = _resolve_angle_id(request, products)
+    custom_angle = request.get("custom_angle")
+    angle_id, angle_source, angle_reason = _resolve_angle_id(request, products, product_mode)
     if not angle_is_available(angle_id, brand, niche):
         raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": angle_id, "brand_kit": brand["id"], "niche_kit": niche["id"]})
     angle = angle_descriptor(angle_id, brand, niche)
     angle_meta = resolve_angle_meta(angle_id)
-    angle_recommendation = {
-        "angle_id": angle_id, "family": angle_meta["family"], "preset": angle_meta["preset"],
-        "objective_hints": angle_meta["objective_hints"], "scope": angle_meta["scope"], "version": angle_meta["version"],
-        "reason": angle_reason, "source": angle_source,
-    } if angle_meta["family"] else None
+    if custom_angle:
+        # The custom angle's OWN identity (Fase D.1 §3) — not the legacy entry it routes to. `angle_id` above
+        # still names the legacy id, because that alone is what the compiler/prompt actually need.
+        angle_recommendation = {
+            "angle_id": angle_id, "family": custom_angle["family"], "preset": custom_angle.get("preset"),
+            "objective_hints": angle_meta["objective_hints"], "scope": custom_angle["scope"], "version": custom_angle["version"],
+            "reason": angle_reason, "source": angle_source, "custom_angle": custom_angle,
+        }
+    else:
+        angle_recommendation = {
+            "angle_id": angle_id, "family": angle_meta["family"], "preset": angle_meta["preset"],
+            "objective_hints": angle_meta["objective_hints"], "scope": angle_meta["scope"], "version": angle_meta["version"],
+            "reason": angle_reason, "source": angle_source, "custom_angle": None,
+        } if angle_meta["family"] else None
     if product_mode == "multi_product" and len(products) > angle["multi_product_limit"]:
         warnings.append(f"above_recommended_products_for_angle:{angle['multi_product_limit']}")
 
@@ -373,7 +399,7 @@ def plan_creative(
         planned = planner_v2.build(
             request=request, angle_id=angle_id, strategy=strategy, products=products, brand=brand, niche=niche,
             persona=persona, people=people, people_needed=people_needed, prompt_version=prompt_version, seed=seed,
-            apparel=apparel, pool=persona_pool(brand, niche), engine=engine)
+            apparel=apparel, pool=persona_pool(brand, niche), engine=engine, custom_angle=custom_angle)
         warnings.extend(planned["warnings"])
         plan_persona = planned["persona"]
         view = {
