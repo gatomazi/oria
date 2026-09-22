@@ -11,8 +11,12 @@
 
 const { createReservaInkCommerceConnector, CAPABILITIES } = require('./connector');
 
-function createReservaInkCommerceDescriptor({ secretPort, fetchImpl } = {}) {
+function createReservaInkCommerceDescriptor({ secretPort, fetchImpl, ordersRepository } = {}) {
   if (!secretPort) throw new Error('createReservaInkCommerceDescriptor exige secretPort');
+  // ordersRepository: instância de createInkOrdersRepository (Etapa 2/rodada G.1) — lê
+  // pedidos_ink/pedidos_ink_itens locais; exigido aqui pelo mesmo motivo que secretPort: a
+  // dependência concreta (Postgres) fica FORA do connector, montada uma vez no bootstrap.
+  if (!ordersRepository) throw new Error('createReservaInkCommerceDescriptor exige ordersRepository (capability orders)');
   return {
     domain: 'commerce',
     provider: 'reserva_ink',
@@ -20,7 +24,7 @@ function createReservaInkCommerceDescriptor({ secretPort, fetchImpl } = {}) {
     requiresStoreContext: true,
     capabilities: CAPABILITIES,
     label: 'Reserva Ink',
-    create: ({ context, resolveIntegration }) => createReservaInkCommerceConnector({ context, resolveIntegration, secretPort, fetchImpl }),
+    create: ({ context, resolveIntegration }) => createReservaInkCommerceConnector({ context, resolveIntegration, secretPort, fetchImpl, ordersRepository }),
   };
 }
 

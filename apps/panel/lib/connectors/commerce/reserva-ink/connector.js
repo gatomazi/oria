@@ -12,7 +12,7 @@
 // nenhuma regra de "loja piloto", nenhum `if (store nativa)`, nenhum caminho especial.
 
 const { createInkClient, InkApiError } = require('./client');
-const { mapProduct, mapVariants } = require('./mapper');
+const { mapProduct, mapVariants, mapOrder } = require('./mapper');
 
 // §9: capability true só quando o método correspondente está implementado de verdade.
 //   products              → listProducts, getProduct            implementados
@@ -20,9 +20,13 @@ const { mapProduct, mapVariants } = require('./mapper');
 //   productsWithVariants  → listProductsWithVariants (Fase D)    a MESMA chamada de listProducts: a
 //                           Ink já manda `product_variants[]` dentro de cada produto da listagem —
 //                           nunca 1 chamada de variantes por produto
-//   orders, refunds, productCosts → fora desta fase
+//   orders                → listOrders, getOrder (Etapa 2/rodada G.1) lê o cache local
+//                           (pedidos_ink/pedidos_ink_itens — orders-repository.js), nunca a API
+//   refunds, productCosts → fora desta rodada (reembolso itemizado exigiria 1 chamada de API por
+//                           pedido; sem cache local para isso — ver mapper.js `isRefunded`, que só
+//                           reporta O ESTADO, nunca o valor)
 const CAPABILITIES = Object.freeze({
-  products: true, variants: true, productsWithVariants: true, orders: false, refunds: false, productCosts: false,
+  products: true, variants: true, productsWithVariants: true, orders: true, refunds: false, productCosts: false,
 });
 const MAX_PER_PAGE = 100;
 const PROVIDER_PRODUCT_ID_RE = /^[0-9]+$/; // a Ink usa inteiro; o connector aceita a forma texto do contrato canônico
@@ -40,15 +44,18 @@ function validarProviderProductId(valor, quem) {
 }
 
 /**
- * @param {{context: Object, resolveIntegration: Function, secretPort: Object, fetchImpl?: Function}} deps
+ * @param {{context: Object, resolveIntegration: Function, secretPort: Object, fetchImpl?: Function, ordersRepository: Object}} deps
  *   `secretPort`: instância de `createConnectorSecretPort` (Fase C) — NÃO ligada ainda; o connector
  *   liga em cada chamada (`secretPort.forIntegration(context, integration)`) porque a integração só
  *   é conhecida depois de `resolveIntegration()`.
+ *   `ordersRepository`: instância de `createInkOrdersRepository` (orders-repository.js) — lê o cache
+ *   local de pedidos; a capability `orders` não usa `secretPort`/API da Ink (não precisa de token).
  * @returns {import('../../types').CommerceConnector}
  */
-function createReservaInkCommerceConnector({ context, resolveIntegration, secretPort, fetchImpl }) {
+function createReservaInkCommerceConnector({ context, resolveIntegration, secretPort, fetchImpl, ordersRepository }) {
   if (typeof resolveIntegration !== 'function') throw new Error('createReservaInkCommerceConnector exige resolveIntegration');
   if (!secretPort || typeof secretPort.forIntegration !== 'function') throw new Error('createReservaInkCommerceConnector exige secretPort');
+  if (!ordersRepository || typeof ordersRepository.listOrders !== 'function') throw new Error('createReservaInkCommerceConnector exige ordersRepository (capability orders)');
 
   // Uma chamada Ink por invocação de método: resolve a integração e o token na hora, nunca guarda
   // token em variável do módulo/closure de longa duração.
@@ -121,7 +128,22 @@ function createReservaInkCommerceConnector({ context, resolveIntegration, secret
     return Object.freeze({ items: mapVariants(data.product, context), nextCursor: null });
   }
 
-  return Object.freeze({ listProducts, getProduct, listProductVariants, listProductsWithVariants });
+  // Cache local (pedidos_ink/pedidos_ink_itens) — nunca a API da Ink: sem `clienteDaChamada()`,
+  // sem token, sem `normalizarErro`. `startDate`/`endDate` são obrigatórios (mesma convenção ISO
+  // puro do resto da Fase E/G) para nunca varrer o histórico inteiro por engano.
+  async function listOrders({ startDate, endDate, cursor, limit } = {}) {
+    if (!startDate || !endDate) throw new TypeError('listOrders exige startDate e endDate');
+    const pagina = await ordersRepository.listOrders({ organizationId: context.organizationId, storeId: context.storeId, startDate, endDate, cursor, limit });
+    return Object.freeze({ items: pagina.items.map((registro) => mapOrder(registro, context)), nextCursor: pagina.nextCursor });
+  }
+
+  async function getOrder({ providerOrderId } = {}) {
+    if (!providerOrderId) throw new TypeError('getOrder exige providerOrderId');
+    const registro = await ordersRepository.getOrder({ organizationId: context.organizationId, storeId: context.storeId, providerOrderId });
+    return registro ? mapOrder(registro, context) : null;
+  }
+
+  return Object.freeze({ listProducts, getProduct, listProductVariants, listProductsWithVariants, listOrders, getOrder });
 }
 
 module.exports = { createReservaInkCommerceConnector, CAPABILITIES };

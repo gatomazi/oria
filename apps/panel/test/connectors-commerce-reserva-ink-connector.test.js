@@ -57,7 +57,27 @@ function poolCompleto({ lojas, integracoes, segredos = [] }) {
   };
 }
 
-async function montarAmbiente({ comSegredo = true } = {}) {
+// Fake mínimo de ordersRepository (Etapa 2/rodada G.1): este arquivo testa products/variants/erros
+// de credencial — orders tem cobertura própria (real Postgres) em
+// test/invariants/ink-orders-repository.test.js e test/invariants/reconciliation.test.js. Aqui só o
+// suficiente pra provar que o connector delega certo e mapeia certo (ver seção "Etapa 2" abaixo).
+function ordersRepositoryFake({ pedidos = [] } = {}) {
+  const chamadas = [];
+  return {
+    chamadas,
+    async listOrders(entrada) {
+      chamadas.push({ metodo: 'listOrders', entrada });
+      return { items: pedidos.map((p) => ({ pedido: p.pedido, itens: p.itens || [] })), nextCursor: null, totalCount: pedidos.length };
+    },
+    async getOrder(entrada) {
+      chamadas.push({ metodo: 'getOrder', entrada });
+      const achado = pedidos.find((p) => String(p.pedido.ink_order_id) === String(entrada.providerOrderId));
+      return achado ? { pedido: achado.pedido, itens: achado.itens || [] } : null;
+    },
+  };
+}
+
+async function montarAmbiente({ comSegredo = true, ordersRepository = ordersRepositoryFake() } = {}) {
   const pool = poolCompleto({
     lojas: [{ id: F.STORE_A, organization_id: F.ORG_A }],
     integracoes: [{ id: F.INT_INK_A, organization_id: F.ORG_A, provider: 'ink', escopo: null, status: 'connected' }],
@@ -69,8 +89,8 @@ async function montarAmbiente({ comSegredo = true } = {}) {
   const secretPort = createConnectorSecretPort({ pool, keyring: kr });
   const registry = createConnectorRegistry({ integrations: createConnectorIntegrationPort({ pool }) });
   let fetchImpl;
-  registry.register(createReservaInkCommerceDescriptor({ secretPort, fetchImpl: (...a) => fetchImpl(...a) }));
-  return { pool, registry, definirFetch: (fn) => { fetchImpl = fn; } };
+  registry.register(createReservaInkCommerceDescriptor({ secretPort, fetchImpl: (...a) => fetchImpl(...a), ordersRepository }));
+  return { pool, registry, definirFetch: (fn) => { fetchImpl = fn; }, ordersRepository };
 }
 
 const jsonRes = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
@@ -99,14 +119,14 @@ test('C · resolve commerce/reserva_ink pelo registry, ligado à Organization/St
 test('C · capabilities verdadeiras correspondem exatamente aos métodos implementados', () => emA(async () => {
   const { registry } = await montarAmbiente();
   const r = registry.resolve('commerce', 'reserva_ink', ctxA);
-  assert.deepEqual({ ...r.capabilities }, { products: true, variants: true, productsWithVariants: true, orders: false, refunds: false, productCosts: false });
+  assert.deepEqual({ ...r.capabilities }, { products: true, variants: true, productsWithVariants: true, orders: true, refunds: false, productCosts: false });
   assert.equal(typeof r.connector.listProducts, 'function');
   assert.equal(typeof r.connector.getProduct, 'function');
   assert.equal(typeof r.connector.listProductVariants, 'function');
   assert.equal(typeof r.connector.listProductsWithVariants, 'function');
+  assert.equal(typeof r.connector.listOrders, 'function');
+  assert.equal(typeof r.connector.getOrder, 'function');
   // Nada implementado além do que foi declarado true.
-  assert.equal(r.connector.listOrders, undefined);
-  assert.equal(r.connector.getOrder, undefined);
   assert.equal(r.connector.getProductCost, undefined);
 }));
 
@@ -141,7 +161,7 @@ test('C · secret de outra Organization nunca é acessível: contexto de B não 
   });
   const secretPort = createConnectorSecretPort({ pool: poolB, keyring: keyring() });
   const registry = createConnectorRegistry({ integrations: createConnectorIntegrationPort({ pool: poolB }) });
-  registry.register(createReservaInkCommerceDescriptor({ secretPort, fetchImpl: async () => jsonRes(200, {}) }));
+  registry.register(createReservaInkCommerceDescriptor({ secretPort, fetchImpl: async () => jsonRes(200, {}), ordersRepository: ordersRepositoryFake() }));
   const r = registry.resolve('commerce', 'reserva_ink', { organizationId: F.ORG_B, storeId: F.STORE_B });
   await assert.rejects(r.connector.listProducts({}), (err) => err.codigo === 'INTEGRATION_NOT_CONNECTED');
 }));
@@ -304,6 +324,52 @@ test('D · listProductsWithVariants: produto sem product_variants devolve varian
   definirFetch(async () => jsonRes(200, { products: [semVariantes], page: 1, per_page: 100, total_pages: 1, total_count: 1 }));
   const r = registry.resolve('commerce', 'reserva_ink', ctxA);
   assert.deepEqual((await r.connector.listProductsWithVariants({})).items[0].variants, []);
+}));
+
+// ── Etapa 2 (rodada G.1/Orders): listOrders/getOrder — cache local, nunca a API da Ink ──────────
+
+test('G.1 · createReservaInkCommerceDescriptor exige ordersRepository (capability orders)', () => {
+  assert.throws(() => createReservaInkCommerceDescriptor({ secretPort: {} }), /ordersRepository/);
+});
+
+test('G.1 · listOrders delega ao ordersRepository (nunca ao fetch/API da Ink) e mapeia os pedidos', () => emA(async () => {
+  let fetchChamado = false;
+  const ordersRepository = ordersRepositoryFake({
+    pedidos: [{
+      pedido: { id: '9', ink_order_id: 555, payment_status: 'paid', order_status: 'delivered', total_value: '50', criado_em: new Date('2026-09-05'), is_troca: false },
+      itens: [{ ink_order_id: 555, produto_id: 1, quantidade: 1, valor_venda: '50', commerce_product_id: null }],
+    }],
+  });
+  const { registry, definirFetch } = await montarAmbiente({ ordersRepository });
+  definirFetch(async () => { fetchChamado = true; throw new Error('listOrders não deveria bater na API da Ink'); });
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  const pagina = await r.connector.listOrders({ startDate: '2026-09-01', endDate: '2026-09-30' });
+  assert.equal(fetchChamado, false);
+  assert.equal(pagina.items.length, 1);
+  assert.equal(pagina.items[0].providerOrderId, '555');
+  assert.equal(pagina.items[0].isPaid, true);
+  assert.equal(pagina.items[0].items[0].totalValue, 50);
+  assert.equal(ordersRepository.chamadas[0].entrada.organizationId, F.ORG_A);
+  assert.equal(ordersRepository.chamadas[0].entrada.storeId, F.STORE_A);
+}));
+
+test('G.1 · listOrders exige startDate e endDate', () => emA(async () => {
+  const { registry } = await montarAmbiente();
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  await assert.rejects(r.connector.listOrders({}), TypeError);
+  await assert.rejects(r.connector.listOrders({ startDate: '2026-09-01' }), TypeError);
+}));
+
+test('G.1 · getOrder devolve null quando o pedido não existe no cache local (nunca busca na API)', () => emA(async () => {
+  const { registry } = await montarAmbiente();
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  assert.equal(await r.connector.getOrder({ providerOrderId: '999999' }), null);
+}));
+
+test('G.1 · getOrder exige providerOrderId', () => emA(async () => {
+  const { registry } = await montarAmbiente();
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  await assert.rejects(r.connector.getOrder({}), TypeError);
 }));
 
 // ── Erros normalizados ─────────────────────────────────────────────────────────────────────────

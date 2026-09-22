@@ -112,4 +112,76 @@ function mapVariants(produtoInk, contexto) {
   return (produtoInk.product_variants || []).map((v) => mapVariant(v, { ...contexto, commerceProductId: undefined }));
 }
 
-module.exports = { PROVIDER, mapProduct, mapVariant, mapVariants, paraIdExterno, ExternalIdUnsafeError };
+// ── Etapa 2 (rodada G.1/Orders) · pedidos_ink/pedidos_ink_itens (repositório local) → CommerceOrder ──
+//
+// Diferente de mapProduct/mapVariant (payload CRU da API da Ink), a entrada aqui já vem do
+// orders-repository.js: uma linha de `pedidos_ink` + as linhas de `pedidos_ink_itens` do mesmo
+// pedido — nunca a API da Ink diretamente (Etapa 2 lê só o cache local sincronizado).
+//
+// Mesmo vocabulário de `PAYMENT_STATUSES_CONVERTIDO`/`normalizarPaymentStatusInk` do server.js
+// (INTOCÁVEL — nunca importado aqui): duplicado deliberadamente, coberto por um teste comparativo
+// contra o server.js real (mesmo padrão já usado pelo mapper de produto na Fase C) para nunca
+// divergir em silêncio.
+const PAGAMENTOS_CONVERTIDOS_INK = Object.freeze(new Set(['paid', 'succeeded', 'free']));
+const PAGAMENTOS_REEMBOLSO_INK = Object.freeze(new Set(['refunded', 'refund_requested']));
+
+/**
+ * @param {Object} linha  uma linha de `pedidos_ink_itens`, com `commerce_product_id` já resolvido
+ *   por JOIN (orders-repository.js) — `null` quando o produto nunca passou por um catalog sync.
+ * @returns {import('../../types').CommerceOrderItem}
+ */
+function mapOrderItem(linha) {
+  const quantidade = Number(linha.quantidade) || 0;
+  const venda = linha.valor_venda === null || linha.valor_venda === undefined ? 0 : Number(linha.valor_venda);
+  return Object.freeze({
+    commerceProductId: linha.commerce_product_id || null,
+    // pedidos_ink_itens não guarda o id de variante da Ink (só sku/modelo/cor/tamanho soltos) — sem
+    // provider_variant_id não há como casar com commerce_product_variants sem ambiguidade; nunca
+    // inferido por sku (poderia casar errado quando o mesmo SKU aparece em mais de uma variante
+    // histórica). Reportado null, explícito, nunca chutado.
+    commerceVariantId: null,
+    quantity: quantidade,
+    // valor_venda é o TOTAL da linha (financeiroItensPedidoInk usa it.total_value, já quantidade ×
+    // preço unitário — ver lib/ink/financeiro.js), não o preço unitário: unitValue é derivado.
+    unitValue: quantidade > 0 ? venda / quantidade : venda,
+    totalValue: venda,
+  });
+}
+
+/**
+ * @param {{pedido: Object, itens: Object[]}} registro  devolvido por orders-repository.js
+ * @param {{organizationId: string, storeId: string}} contexto
+ * @returns {import('../../types').CommerceOrder}
+ */
+function mapOrder({ pedido, itens }, { organizationId, storeId }) {
+  if (!pedido) throw new TypeError('mapOrder exige o pedido');
+  const paymentStatus = pedido.payment_status || null;
+  // is_troca: uma troca nunca conta como venda confirmada, mesmo com payment_status "pago" — mesma
+  // regra de `pagosSemTroca`/`is_troca IS NOT TRUE` já aplicada em todo lugar do server.js.
+  const isPaid = PAGAMENTOS_CONVERTIDOS_INK.has(paymentStatus) && pedido.is_troca !== true;
+  const isRefunded = PAGAMENTOS_REEMBOLSO_INK.has(paymentStatus);
+  return Object.freeze({
+    id: String(pedido.id),
+    organizationId,
+    storeId,
+    provider: PROVIDER,
+    providerOrderId: String(pedido.ink_order_id),
+    status: pedido.order_status || null,
+    paymentStatus,
+    isPaid,
+    isRefunded,
+    totalValue: pedido.total_value === null || pedido.total_value === undefined ? 0 : Number(pedido.total_value),
+    createdAt: pedido.criado_em,
+    // pedidos_ink não tem uma coluna própria de "pago em" (só `criado_em`, a criação, e
+    // `atualizado_em`, o último toque de sync/webhook — nem um nem outro é o instante do pagamento).
+    // Reportar null é mais honesto que aproximar por criado_em: quem precisar de "quando pagou" tem
+    // que buscar na API da Ink, não aqui — ver reconciliation.js sobre a consequência disso.
+    paidAt: null,
+    items: itens.map(mapOrderItem),
+  });
+}
+
+module.exports = {
+  PROVIDER, mapProduct, mapVariant, mapVariants, paraIdExterno, ExternalIdUnsafeError,
+  mapOrder, mapOrderItem, PAGAMENTOS_CONVERTIDOS_INK, PAGAMENTOS_REEMBOLSO_INK,
+};

@@ -94,8 +94,12 @@
  */
 
 /**
+ * Etapa 2 (rodada G.1/Orders) · `commerceProductId` é `string|null`, não sempre resolvível: um item
+ * de um pedido antigo pode referenciar um produto que nunca passou por um catalog sync (Fase D) —
+ * o adapter reporta `null` em vez de inventar um id ou descartar o item silenciosamente.
+ *
  * @typedef {Object} CommerceOrderItem
- * @property {string} commerceProductId
+ * @property {string|null} commerceProductId
  * @property {string|null} [commerceVariantId]
  * @property {number} quantity
  * @property {number} unitValue
@@ -103,14 +107,21 @@
  */
 
 /**
+ * `status`/`paymentStatus` são o vocabulário CRU do provider (diagnóstico — nunca comparados por
+ * quem lê fora do adapter). `isPaid`/`isRefunded` são o que o adapter normaliza a partir desse
+ * vocabulário próprio (cada provider tem o seu) para um sinal provider-agnostic que uma camada como
+ * `lib/product-analytics/reconciliation.js` pode usar sem conhecer nenhum status de nenhum provider.
+ *
  * @typedef {Object} CommerceOrder
  * @property {string} id
  * @property {string} organizationId
  * @property {string} storeId
  * @property {string} provider
  * @property {string} providerOrderId
- * @property {string} status
+ * @property {string|null} status
  * @property {string|null} [paymentStatus]
+ * @property {boolean} isPaid
+ * @property {boolean} isRefunded
  * @property {number} totalValue
  * @property {Date} createdAt
  * @property {Date|null} [paidAt]
