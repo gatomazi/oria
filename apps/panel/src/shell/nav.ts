@@ -1,6 +1,8 @@
 // Única fonte de verdade da navegação do painel (sidebar, título da aba, breadcrumb da topbar).
 // Itens `comingSoon` ficam declarados aqui mas NÃO aparecem na sidebar (decisão D2 — funcionalidade
 // inexistente não ocupa a navegação); voltam a aparecer quando ganharem `href`.
+import type { Entitlements } from '../state/entitlements';
+
 export interface NavItem {
   key: string;
   label: string;
@@ -9,6 +11,11 @@ export interface NavItem {
   // Só aparece quando o envio do WhatsApp está nesse modo (Integrações → WhatsApp). Sem o campo,
   // aparece sempre.
   provider?: 'meta_api' | 'whatsapp_web';
+  // Rodada H→I: item some da sidebar sem a feature — o guard de verdade continua sendo o backend
+  // (H.1: "esconder navegação não é mecanismo de autorização"); isto é só a navegação respeitando
+  // o que o servidor já nega. Opcional — itens existentes não usam isto ainda (ver
+  // docs/architecture/features-vs-connectors.md sobre o resto do vocabulário).
+  feature?: keyof Entitlements;
 }
 
 export interface NavGroup {
@@ -84,6 +91,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'pix-ferramenta', label: 'PIX', href: '/admin/pix' },
       { key: 'utm-tracker', label: 'UTM Tracker', href: '/admin/utm' },
       { key: 'analytics-ga4', label: 'Analytics GA4', href: '/admin/analytics' },
+      { key: 'desempenho-produtos', label: 'Desempenho de produtos', href: '/admin/desempenho-produtos', feature: 'analytics_product_performance' },
       { key: 'meta-ads', label: 'Meta Ads', href: '/admin/meta-ads' },
       { key: 'google-ads', label: 'Google Ads', href: '/admin/google-ads' },
       { key: 'criativos', label: 'Gerador de criativos', href: '/admin/criativos' },
@@ -133,6 +141,7 @@ export const PAGE_TITLES: Record<string, string> = {
   'campanhas-segmentos': 'Segmentos',
   'utm-tracker': 'UTM Tracker',
   'analytics-ga4': 'Analytics GA4',
+  'desempenho-produtos': 'Desempenho de produtos',
   'meta-ads': 'Meta Ads',
   'google-ads': 'Google Ads',
   criativos: 'Gerador de criativos',

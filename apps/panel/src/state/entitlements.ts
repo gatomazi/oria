@@ -16,6 +16,9 @@ export interface Entitlements {
   refunds: boolean;
   financial: boolean;
   creative_generator: boolean;
+  // Rodada H→I: Desempenho de Produtos (GA4 + Commerce reconciliado) — guard real desde o início
+  // (lib/platform/feature-routes.js), diferente de meta_ads/google_ads/analytics_ga4 (sem_guard).
+  analytics_product_performance: boolean;
 }
 
 const NADA: Entitlements = {
@@ -27,6 +30,7 @@ const NADA: Entitlements = {
   refunds: false,
   financial: false,
   creative_generator: false,
+  analytics_product_performance: false,
 };
 
 let cache: Entitlements | null = null;

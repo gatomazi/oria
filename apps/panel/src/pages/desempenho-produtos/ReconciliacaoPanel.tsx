@@ -1,0 +1,97 @@
+import { useEffect, useState } from 'react';
+import { Callout, DataTable, EmptyState, ErrorState, Skeleton, StatusBadge } from '../../components/ds';
+import { formatValor } from '../../lib/format';
+import { getReconciliation, type ReconciliationItem, type ReconciliationResponse, type ReconciliationStatus } from '../../api/productAnalytics';
+
+// I.4 — Reconciliação indicativa: Analytics (observado) versus Commerce (confirmado), lado a lado.
+// `aligned`/`divergent` é SÓ diagnóstico com tolerância inicial de 10% — nunca prova de
+// rastreamento correto nem de erro confirmado. `itemsPurchased` NUNCA é chamado de "pedidos pagos"
+// aqui: são unidades observadas pelo Analytics, comparadas com unidades EM pedidos pagos.
+
+const STATUS_LABEL: Record<ReconciliationStatus, string> = {
+  aligned: 'Alinhado (dentro da tolerância)',
+  divergent: 'Divergente (fora da tolerância)',
+  insufficient_identity: 'Identidade insuficiente',
+  insufficient_data: 'Sem dado suficiente',
+};
+
+function toneDoStatus(status: ReconciliationStatus): 'success' | 'warning' | 'neutral' {
+  if (status === 'aligned') return 'success';
+  if (status === 'divergent') return 'warning';
+  return 'neutral';
+}
+
+export function ReconciliacaoPanel({ periodo }: { periodo: { startDate: string; endDate: string } }) {
+  const [data, setData] = useState<ReconciliationResponse | null>(null);
+  const [erro, setErro] = useState('');
+
+  function carregar() {
+    setErro('');
+    setData(null);
+    getReconciliation(periodo).then(setData).catch((err: Error) => setErro(err.message));
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(carregar, [periodo.startDate, periodo.endDate]);
+
+  if (erro) return <ErrorState description={erro} onRetry={carregar} />;
+  if (!data) return <Skeleton variant="table" rows={5} />;
+
+  if (data.status === 'insufficient_data') {
+    return (
+      <Callout tone="info" title="Sem cobertura suficiente para reconciliar">
+        {data.reason === 'LOCAL_ORDERS_HISTORY_STARTS_LATER'
+          ? `O histórico local de pedidos só tem cobertura confiável a partir de ${data.historyStartsAt}. Escolha um período que comece nessa data ou depois.`
+          : 'Não há dado suficiente para comparar Analytics e Commerce neste período.'}
+      </Callout>
+    );
+  }
+
+  return (
+    <div className="ds-stack">
+      <Callout tone="info" title="Ressalvas — leia antes de interpretar os números">
+        <ul className="pa-caveats">
+          {data.caveats.map((c) => <li key={c}>{c}</li>)}
+        </ul>
+      </Callout>
+
+      {data.items.length === 0 ? (
+        <EmptyState title="Nada para reconciliar" description="Nenhum produto observado pelo Analytics neste período." />
+      ) : (
+        <DataTable
+          label="Reconciliação Analytics × Commerce"
+          rows={data.items}
+          sortable={false}
+          rowKey={(it: ReconciliationItem) => it.product.id}
+          columns={[
+            { key: 'produto', label: 'Produto', truncate: true, render: (it) => it.product.name },
+            {
+              key: 'analytics', label: 'Analytics: itens comprados observados', align: 'right', priority: 'low',
+              render: (it) => it.analyticsUnits ?? '—',
+            },
+            {
+              key: 'commerce', label: 'Commerce: unidades em pedidos pagos', align: 'right', priority: 'low',
+              render: (it) => it.commerceUnits ?? '—',
+            },
+            {
+              key: 'receita-analytics', label: 'itemRevenue (GA4)', align: 'right', priority: 'low',
+              render: (it) => (it.analyticsRevenue != null ? formatValor(it.analyticsRevenue) : '—'),
+            },
+            {
+              key: 'receita-commerce', label: 'Receita operacional de itens', align: 'right', priority: 'low',
+              render: (it) => (it.commerceRevenue != null ? formatValor(it.commerceRevenue) : '—'),
+            },
+            {
+              key: 'pedidos', label: 'Pedidos pagos distintos', align: 'right', priority: 'low',
+              render: (it) => it.paidOrdersDistinct,
+            },
+            {
+              key: 'status', label: 'Diagnóstico',
+              render: (it) => <StatusBadge tone={toneDoStatus(it.status)} label={STATUS_LABEL[it.status]} />,
+            },
+          ]}
+        />
+      )}
+    </div>
+  );
+}
