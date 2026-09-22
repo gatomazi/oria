@@ -226,7 +226,7 @@ Verificação visual: harness com backend simulado (fora do repositório) no Chr
 
 1. **Recomendação por `semantic_context` depende de dado que hoje só entra manualmente** (a proposta por GPT é da Fase F): sem `semantic_context` nada é recomendado, tudo continua `legacy`.
 2. **Rótulos do planner** ("criança de 6 a 9 anos", "homem adulto") são neutros por desenho; o resumo da UI não diz "Menina" sem um gênero declarado. Persona/subject com rótulo do usuário resolve.
-3. **Cena com 2–4 pessoas** é a mais sujeita a anatomia/mãos; o core avisa e simplifica a pose, mas **não foi validada visualmente** (nenhuma imagem foi gerada nesta fase). A validação real (8 imagens, casos B–E) está desenhada em §21 e depende de autorização explícita para usar a chave OpenAI — ainda não executada.
+3. **Cena com 2–4 pessoas** é a mais sujeita a anatomia/mãos; o core avisa e simplifica a pose, mas **não foi validada visualmente** (nenhuma imagem foi gerada nesta fase). A validação real (8 imagens, casos B–E) foi executada em §21: 8/8 utilizáveis, sem ajuste, incluindo o caso E (4 pessoas).
 4. **Compiler v2 muda o prompt** de planos v2 novos (seção `interaction`, cena `frame`). Só valem para contas em `CREATIVE_PLAN_V2_ORGS`.
 5. `GET /items/:id/draft` para contexto geográfico depende do `input` do lote original (cidade/UF não são fato do plano).
 6. Feedback grava `store_id` da Store do contexto; V1 tem uma Store por Organization, então na prática é sempre a dela. Se um dia houver várias, veredito de uma Store conta como "compartilhado" nas outras só se gravado sem Store.
@@ -247,15 +247,51 @@ Nenhuma chamada nesta fase. Nenhuma imagem gerada. A chave da rodada A/B não fo
 
 Nenhum push, merge, deploy ou `gh`. Nada além de commits locais na branch `feature/creative-fase-c`. **A próxima fase não foi iniciada**: fica para o senhor revisar Subjects + Feedback + Copiar Dados antes de UI V2, Mockups ou Connector.
 
-## 21. Validação visual real — pendente de autorização
+## 21. Validação visual real — executada
 
-Desenhada, **não executada**. Antes de gastar com a OpenAI preciso de confirmação explícita sobre a chave/autorização (na Rodada 1 da Fase A o senhor autorizou ler do `.env` do projeto Streamlit local — não presumo que a mesma autorização se estende automaticamente a esta rodada).
+Autorizado pelo senhor a usar a mesma fonte de chave da Rodada 1 (`.env` do projeto Streamlit local, lida em memória, nunca impressa/logada/commitada). **8/8 imagens geradas**, avaliação humana abaixo.
 
-Plano, como pedido:
+### 21.1 Como foi feita
 
-- **8 imagens**: 2 por caso × B (menino+mãe lendo), C (duas irmãs), D (casal), E (família de 4).
-- Parâmetros: quality `medium`, Feed 4:5, `gpt-image-2`, **sem retry automático**.
-- Avaliação humana (anatomia, contagem/idade/relação de pessoas, produto certo em cada um sem troca, peça infantil só em criança, interação, gaze, vestuário infantil, qualidade comercial); caso E é o stress test principal.
-- Sem QA automático, sem juiz por IA, sem ML — como nas rodadas anteriores.
-- Se o resultado vier ruim: reportar o problema primeiro, **não corrigir com "mais prompt"** na mesma rodada.
-- Entrega ao final: as 8 imagens separadas por caso, quantidade exata de chamadas, custo/usage, modelo pedido × servido, resumo objetivo dos problemas por caso — sem nenhuma correção automática baseada nas imagens.
+Sem o pacote `openai`: este sandbox não alcança o PyPI (só um mirror privado Fury e uma lista curta de hosts, incluindo `api.openai.com`). Em vez de contornar isso, implementei a chamada HTTPS diretamente com a stdlib (`urllib`), conferindo o contrato exato (nome do campo multipart, formato da resposta, campos de `usage`) contra o código-fonte real do SDK `openai-python` no GitHub — não adivinhado. Script em `scripts/render_fase_c_examples.py`-adjacente, fora do repositório (não commitado; é execução única, não infraestrutura nova do produto): monta o `CreativePlan` de cada caso pelo `plan_creative` de produção, chama `generate_creative` (o mesmo caminho de produção, cliente real no lugar do fake dos testes), sem retry (uma tentativa por imagem, falha ou sucesso, segue pra próxima). Cada chamada é registrada num ledger **antes** de disparar, para nenhuma tentativa ficar sem rastro.
+
+**Referências reais**, não os placeholders fictícios dos fixtures C1: usei fotos de produto reais da linha Entre Nós (pasta local do senhor, adicionada durante a sessão) — "Abelhinhas — Hora da Leitura" (B), "Irmãs em União" (C, o mesmo print real para as duas irmãs — só existe uma cor), "Minha Pessoa Favorita Me Chama de Vida" + "Pato da Vida" (D, par de casal), e a combinação Abelhinhas + Irmãs em União para as duas crianças do caso E (conforme sua escolha). Caso D não tinha produto de casal nos fixtures nem na pasta original; o senhor adicionou duas peças reais durante a sessão.
+
+**Um bug meu, achado e corrigido no meio da rodada**: as 4 primeiras tentativas de D e E (2 referências diferentes cada) voltaram HTTP 400 `duplicate_parameter` — eu mandava o campo `image` repetido; a API exige `image[]` quando há mais de uma referência (confirmado no texto exato do erro, não suposição). Corrigido, as 4 foram refeitas com sucesso. Essas 4 tentativas que falharam **não geraram nem cobraram nada** (erro de validação antes de qualquer geração) — não contam como retry automático (foi uma correção de bug de infraestrutura minha, autorizada por você via pergunta explícita antes de eu continuar, não um ajuste de prompt por causa de qualidade de imagem).
+
+### 21.2 Chamadas, custo e modelo
+
+| | Valor |
+|---|---|
+| Chamadas HTTP à OpenAI | **12** (8 bem-sucedidas + 4 que falharam por bug meu de encoding, sem geração nem cobrança) |
+| Imagens geradas (cobradas) | **8/8** |
+| Modelo pedido | `gpt-image-2` (default do core) em todas as 12 |
+| Modelo servido | `gpt-image-2` nas 8 bem-sucedidas — **nenhum fallback** |
+| Quality / formato | `medium` / Feed 4:5 (1088×1360) em todas |
+| Duração por imagem | 34–39s |
+| Custo total (tabela publicada em `apps/panel/lib/custos/precos.js`, conferida 2026-09-15) | **US$ 0,537** |
+
+| Caso | Tokens entrada (texto+imagem) | Tokens saída | Custo/imagem | 2 imagens |
+|---|---|---|---|---|
+| B (1 referência) | 1488 + 1024 | 1587 | US$ 0,0632 | US$ 0,1265 |
+| C (1 referência, mesmo print p/ as 2) | 1491 + 1024 | 1587 | US$ 0,0633 | US$ 0,1265 |
+| D (2 referências) | 1293 + 2048 | 1587 | US$ 0,0705 | US$ 0,1409 |
+| E (2 referências) | 1549 + 2048 | 1587 | US$ 0,0717 | US$ 0,1435 |
+
+Manifesto completo (por imagem: plan_id, sha256 do prompt, trace, usage) e as 8 imagens em `~/Desktop/fase-c-visual-8-imagens/` (fora do repositório).
+
+### 21.3 Avaliação por caso
+
+**Caso B — menino + mãe lendo** (2 imagens, seeds 100/201): contagem e papéis corretos (menino veste a peça, mãe não veste); estampa reproduzida com fidelidade alta (abelhas, texto, posição); interação `reading_together` plausível (os dois olhando o livro, mãe apontando uma página); mãos naturais nas duas imagens, sem fusão nem dedo a mais; luz e cenário batem com o brand kit (sala aconchegante, luz lateral quente). **Utilizável, sem ajuste.**
+
+**Caso C — duas irmãs** (seeds 100/202): 2 crianças, diferença de idade plausível (mais alta/mais nova, batendo com `child_6_9`/`child_3_5`); as duas vestem o mesmo print real (única cor disponível — ver §21.1), fiel à referência; interação `candid` natural (um braço no ombro, sorrindo, não olhando fixo pra câmera as duas); mãos visíveis sem deformação. **Utilizável, sem ajuste.**
+
+**Caso D — casal** (seeds 100/203): 2 adultos, cada um vestindo o produto certo (ela "minha pessoa…", ele "pato da vida") sem troca; `looking_at_each_other` renderizado corretamente (as duas imagens têm o casal se olhando, não pra câmera); nenhuma criança na cena (correto — bloco de proteção de menores ausente no prompt, como esperado); mãos parcialmente ocultas pela pose mas nenhuma malformação visível onde aparecem. **Utilizável, sem ajuste.**
+
+**Caso E — família de 4 (stress test principal)** (seeds 100/204): **contagem certa de 4 pessoas** nas duas imagens; as duas crianças vestem prints infantis **diferentes e corretos** (menino=abelhinhas, menina=irmãs-em-união); os dois adultos **não vestem nenhuma peça infantil** (camisetas lisas — a regra estrutural do §2.1 funcionando visivelmente: nada os impede de aparecer, e nada os veste); `group_photo` com todos olhando a câmera, pose simples (abraço/aconchego, não empilhados nem em fileira robótica); sem troca de produto entre as crianças; mãos nas duas imagens sem fusão, sem dedo extra, contáveis. **Utilizável, sem ajuste** — nenhum dos riscos do aviso `people_count_risk:4` se concretizou visualmente nestas 2 amostras.
+
+### 21.4 Resumo objetivo
+
+Nenhuma das 8 imagens apresentou problema de anatomia (mãos, dedos, membros, fusão), contagem de pessoas, troca de produto ou peça infantil em adulto. As 4 interações estruturadas (`reading_together`, `candid`, `looking_at_each_other`, `group_photo`) e os gazes correspondentes se manifestaram de forma reconhecível e coerente com o plano. **Nenhuma correção foi feita com base nas imagens** — a rodada terminou sem achado que pedisse ajuste de prompt; o único bug encontrado (§21.1) era de infraestrutura da minha chamada HTTP, corrigido antes de qualquer avaliação visual, não depois. Amostra pequena (2 por caso): não é validação estatística, é o que foi pedido — um primeiro olhar real antes de decidir sobre rollout mais amplo.
+
+Sem push, sem merge, sem deploy nesta etapa. **Próxima fase não iniciada.**
