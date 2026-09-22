@@ -38,7 +38,7 @@ const PERFIL_TENANT1 = path.join(h.RAIZ_REPO, 'config', 'entitlements', 'tenant1
 // O que o Oria vende hoje. Sobrevive à troca do fornecedor — é esse o critério (§2).
 const FEATURES_COMERCIAIS = [
   'whatsapp', 'instagram', 'advancedAutomations', 'financial', 'creative_generator',
-  'meta_ads', 'google_ads', 'analytics_ga4',
+  'meta_ads', 'google_ads', 'analytics_ga4', 'analytics_product_performance',
 ];
 // Já classificadas como capacidade do connector, ainda no vocabulário porque o runtime confere.
 const EM_TRANSICAO = ['catalog', 'exchanges', 'refunds'];

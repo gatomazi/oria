@@ -29,9 +29,9 @@ const FASE1 = 8;
 // Fases 2 (auth), 3 (tenant context), 4 (integrações), 5c, 7 (onboarding), o control plane
 // (platform-admin), o aceite do convite (0020), o `store_id` do Connector Ink (0021), a
 // reclassificação de features (0022), o entitlement canônico (0023), o catálogo canônico de
-// Commerce da Fase D (0031) e o Product Identity da Fase F (0032) vêm depois; o rollback da
-// Fase 1 desce todas.
-const DEPOIS_DA_FASE1 = 20;
+// Commerce da Fase D (0031), o Product Identity da Fase F (0032) e o entitlement de Product
+// Performance da rodada H (0033) vêm depois; o rollback da Fase 1 desce todas.
+const DEPOIS_DA_FASE1 = 21;
 
 const lerJson = (arquivo) => JSON.parse(fs.readFileSync(arquivo, 'utf8'));
 
