@@ -7,12 +7,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
-  DOMAINS, INTEGRATION_SCOPES, CONTRACTS, contractOf, requiredMethods,
+  DOMAINS, CONTRACTS, contractOf, requiredMethods,
   createConnectorContext, withIntegrationId, validateDescriptor, assertConnectorShape,
 } = require('../lib/connectors/contracts');
 const { ConnectorError, CODIGOS } = require('../lib/connectors/errors');
 const {
-  ORG_A, STORE_A1, STORE_A2, INT_INK_A1, INT_GA4_A1,
+  ORG_A, STORE_A, STORE_B, INT_INK_A, INT_GA4_A,
   descritorReservaInk, descritorGa4, descritorMetaAds, descritorMetaEvents,
 } = require('./helpers/connector-fakes');
 
@@ -31,8 +31,8 @@ test('Fase B · os quatro domains abertos têm contrato; messaging e ai estão r
   rejeita(() => contractOf('shipping'), CODIGOS.DOMAIN_UNKNOWN);
 });
 
-test('Fase B · contratos, domains e escopos são imutáveis', () => {
-  assert.ok(Object.isFrozen(DOMAINS) && Object.isFrozen(INTEGRATION_SCOPES) && Object.isFrozen(CONTRACTS));
+test('Fase B · contratos e domains são imutáveis', () => {
+  assert.ok(Object.isFrozen(DOMAINS) && Object.isFrozen(CONTRACTS));
   assert.ok(Object.isFrozen(CONTRACTS.commerce.capabilities) && Object.isFrozen(CONTRACTS.commerce.capabilities.products));
   assert.throws(() => { 'use strict'; CONTRACTS.commerce.capabilities.products.push('deleteEverything'); }, TypeError);
 });
@@ -54,21 +54,21 @@ test('Fase B · requiredMethods segue as capabilities true e ignora as false', (
 // ── ConnectorContext ────────────────────────────────────────────────────────────────────────────
 
 test('Fase B · o contexto carrega organizationId, storeId e integrationId (null até ser resolvido)', () => {
-  const ctx = createConnectorContext({ organizationId: ORG_A, storeId: STORE_A1 });
-  assert.deepEqual({ ...ctx }, { organizationId: ORG_A, storeId: STORE_A1, integrationId: null });
+  const ctx = createConnectorContext({ organizationId: ORG_A, storeId: STORE_A });
+  assert.deepEqual({ ...ctx }, { organizationId: ORG_A, storeId: STORE_A, integrationId: null });
   assert.ok(Object.isFrozen(ctx));
 
-  const comIntegracao = createConnectorContext({ organizationId: ORG_A, storeId: STORE_A1, integrationId: INT_INK_A1 });
-  assert.equal(comIntegracao.integrationId, INT_INK_A1);
+  const comIntegracao = createConnectorContext({ organizationId: ORG_A, storeId: STORE_A, integrationId: INT_INK_A });
+  assert.equal(comIntegracao.integrationId, INT_INK_A);
 });
 
-test('Fase B · storeId é opcional no contexto (integração da Organization) e vira null explícito', () => {
+test('Fase B · storeId é opcional no contexto e vira null explícito', () => {
   assert.equal(createConnectorContext({ organizationId: ORG_A }).storeId, null);
   assert.equal(createConnectorContext({ organizationId: ORG_A, storeId: null }).storeId, null);
 });
 
 test('Fase B · o contexto reprova organização ausente, id que não é uuid e tipos errados', () => {
-  rejeita(() => createConnectorContext({ storeId: STORE_A1 }), CODIGOS.CONTEXT_INVALID);
+  rejeita(() => createConnectorContext({ storeId: STORE_A }), CODIGOS.CONTEXT_INVALID);
   rejeita(() => createConnectorContext({ organizationId: '1' }), CODIGOS.CONTEXT_INVALID);
   rejeita(() => createConnectorContext({ organizationId: ORG_A, storeId: 'sul' }), CODIGOS.CONTEXT_INVALID);
   rejeita(() => createConnectorContext({ organizationId: ORG_A, storeId: 42 }), CODIGOS.CONTEXT_INVALID);
@@ -80,36 +80,36 @@ test('Fase B · o contexto reprova organização ausente, id que não é uuid e 
 
 test('Fase B · campo desconhecido no contexto reprova: token, loja legada e URL não entram por engano', () => {
   for (const campo of ['token', 'inkToken', 'accessToken', 'loja', 'feedUrl']) {
-    rejeita(() => createConnectorContext({ organizationId: ORG_A, storeId: STORE_A1, [campo]: 'x' }), CODIGOS.CONTEXT_INVALID);
+    rejeita(() => createConnectorContext({ organizationId: ORG_A, storeId: STORE_A, [campo]: 'x' }), CODIGOS.CONTEXT_INVALID);
   }
 });
 
 test('Fase B · o contexto é uma cópia: mudar a entrada depois não altera o contexto', () => {
-  const entrada = { organizationId: ORG_A, storeId: STORE_A1 };
+  const entrada = { organizationId: ORG_A, storeId: STORE_A };
   const ctx = createConnectorContext(entrada);
-  entrada.storeId = STORE_A2;
-  assert.equal(ctx.storeId, STORE_A1);
-  assert.throws(() => { 'use strict'; ctx.storeId = STORE_A2; }, TypeError);
+  entrada.storeId = STORE_B;
+  assert.equal(ctx.storeId, STORE_A);
+  assert.throws(() => { 'use strict'; ctx.storeId = STORE_B; }, TypeError);
 });
 
 test('Fase B · integrationId é opaco: aceita id numérico (BIGSERIAL de hoje) e uuid; rejeita number e o que escapa de um id', () => {
   for (const ok of ['42', '101', 'c1000000-0000-4000-8000-0000000000a1', 'int_A-1']) {
-    assert.equal(createConnectorContext({ organizationId: ORG_A, storeId: STORE_A1, integrationId: ok }).integrationId, ok);
+    assert.equal(createConnectorContext({ organizationId: ORG_A, storeId: STORE_A, integrationId: ok }).integrationId, ok);
   }
   for (const ruim of [42, '', ' ', '../etc', "1'; DROP TABLE integrations;--", 'a b', 'x'.repeat(65), {}, []]) {
-    rejeita(() => createConnectorContext({ organizationId: ORG_A, storeId: STORE_A1, integrationId: ruim }), CODIGOS.CONTEXT_INVALID);
+    rejeita(() => createConnectorContext({ organizationId: ORG_A, storeId: STORE_A, integrationId: ruim }), CODIGOS.CONTEXT_INVALID);
   }
   // Organization e Store, ao contrário, continuam UUID (organizations.id e stores.id são UUID).
-  rejeita(() => createConnectorContext({ organizationId: '42', storeId: STORE_A1 }), CODIGOS.CONTEXT_INVALID);
+  rejeita(() => createConnectorContext({ organizationId: '42', storeId: STORE_A }), CODIGOS.CONTEXT_INVALID);
 });
 
 test('Fase B · withIntegrationId liga a integração e não reaponta uma integração já definida', () => {
-  const base = createConnectorContext({ organizationId: ORG_A, storeId: STORE_A1 });
-  const ligado = withIntegrationId(base, INT_INK_A1);
-  assert.equal(ligado.integrationId, INT_INK_A1);
+  const base = createConnectorContext({ organizationId: ORG_A, storeId: STORE_A });
+  const ligado = withIntegrationId(base, INT_INK_A);
+  assert.equal(ligado.integrationId, INT_INK_A);
   assert.equal(base.integrationId, null);
-  assert.equal(withIntegrationId(ligado, INT_INK_A1).integrationId, INT_INK_A1);
-  rejeita(() => withIntegrationId(ligado, INT_GA4_A1), CODIGOS.CONTEXT_INVALID);
+  assert.equal(withIntegrationId(ligado, INT_INK_A).integrationId, INT_INK_A);
+  rejeita(() => withIntegrationId(ligado, INT_GA4_A), CODIGOS.CONTEXT_INVALID);
   rejeita(() => withIntegrationId(base, 'com espaço'), CODIGOS.CONTEXT_INVALID);
 });
 
@@ -128,15 +128,38 @@ test('Fase B · integrationProvider assume o provider por padrão; reserva_ink a
   assert.equal(validateDescriptor(descritorReservaInk()).integrationProvider, 'ink');
 });
 
-test('Fase B · o descritor reprova domain sem contrato, escopo inválido e create ausente', () => {
+test('Fase B · o descritor reprova domain sem contrato, integrationScope (removido) e create ausente', () => {
   rejeita(() => validateDescriptor({ ...descritorGa4(), domain: 'messaging' }), CODIGOS.DOMAIN_WITHOUT_CONTRACT);
   rejeita(() => validateDescriptor({ ...descritorGa4(), domain: 'nope' }), CODIGOS.DOMAIN_UNKNOWN);
-  rejeita(() => validateDescriptor(descritorGa4({ integrationScope: 'global' })), CODIGOS.DESCRIPTOR_INVALID);
-  rejeita(() => validateDescriptor(descritorGa4({ integrationScope: undefined })), CODIGOS.DESCRIPTOR_INVALID);
+  // O conceito de escopo de integração não existe mais: integração é da Organization.
+  rejeita(() => validateDescriptor({ ...descritorGa4(), integrationScope: 'store' }), CODIGOS.DESCRIPTOR_INVALID);
   rejeita(() => validateDescriptor(descritorGa4({ create: 'nao-e-funcao' })), CODIGOS.DESCRIPTOR_INVALID);
   rejeita(() => validateDescriptor(descritorGa4({ provider: 'GA4 Prod' })), CODIGOS.DESCRIPTOR_INVALID);
   rejeita(() => validateDescriptor(descritorGa4({ integrationProvider: 'ga4/../x' })), CODIGOS.DESCRIPTOR_INVALID);
   rejeita(() => validateDescriptor(null), CODIGOS.DESCRIPTOR_INVALID);
+});
+
+test('Fase B · requiresStoreContext é obrigatório e booleano, sem default implícito', () => {
+  rejeita(() => validateDescriptor(descritorGa4({ requiresStoreContext: undefined })), CODIGOS.DESCRIPTOR_INVALID);
+  rejeita(() => validateDescriptor(descritorGa4({ requiresStoreContext: 'true' })), CODIGOS.DESCRIPTOR_INVALID);
+  rejeita(() => validateDescriptor(descritorGa4({ requiresStoreContext: 1 })), CODIGOS.DESCRIPTOR_INVALID);
+  rejeita(() => validateDescriptor(descritorGa4({ requiresStoreContext: null })), CODIGOS.DESCRIPTOR_INVALID);
+  const { requiresStoreContext, ...semCampo } = descritorGa4();
+  assert.equal(requiresStoreContext, true);
+  rejeita(() => validateDescriptor(semCampo), CODIGOS.DESCRIPTOR_INVALID);
+});
+
+test('Fase B · piso por domain: commerce e analytics sempre exigem Store; ads e event_analytics escolhem', () => {
+  assert.deepEqual(
+    Object.fromEntries([DOMAINS.COMMERCE, DOMAINS.ANALYTICS, DOMAINS.EVENT_ANALYTICS, DOMAINS.ADS].map((d) => [d, contractOf(d).storeContext])),
+    { commerce: 'required', analytics: 'required', event_analytics: 'optional', ads: 'optional' },
+  );
+  rejeita(() => validateDescriptor(descritorReservaInk({ requiresStoreContext: false })), CODIGOS.DESCRIPTOR_INVALID);
+  rejeita(() => validateDescriptor(descritorGa4({ requiresStoreContext: false })), CODIGOS.DESCRIPTOR_INVALID);
+  for (const requiresStoreContext of [true, false]) {
+    assert.equal(validateDescriptor(descritorMetaAds({ requiresStoreContext })).requiresStoreContext, requiresStoreContext);
+    assert.equal(validateDescriptor(descritorMetaEvents({ requiresStoreContext })).requiresStoreContext, requiresStoreContext);
+  }
 });
 
 test('Fase B · o descritor reprova campo desconhecido, como um token embutido', () => {

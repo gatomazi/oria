@@ -16,7 +16,7 @@ Somente leitura: nenhum arquivo de código foi alterado. Base: `main` + branch `
   testes (`tenancy-isolation`, negative controls), não exercido em produção (checkpoint 2026-09-21 §4).
   → Pré-condição §2 do doc só parcialmente comprovada.
 - **Integrações**: tabela `integrations` é por `(organization_id, provider, escopo)` — **uma por Organization e
-  provider**, sem `store_id` nem `domain`. Segredos em `integration_secrets` via keyring (`lib/platform/integrations.js`).
+  provider**, sem `store_id` nem `domain` (correto: a integração é da Organization; ver PD-002/`ORIA-TENANCY-STORE-01`). Segredos em `integration_secrets` via keyring (`lib/platform/integrations.js`).
   Providers hoje: `ink`, `ga4`, `meta`, `google_ads`, `openai`, `whatsapp`.
 - **Registry de capabilities** existe (`lib/platform/connector-capabilities.js`) mas só conhece `ink`
   (`ink.orders`, `ink.products`…). Não há registry de connectors por domínio.
@@ -89,7 +89,7 @@ apps/panel/lib/product-analytics/
 ```
 
 - Connector recebe `{ organizationId, storeId }` e resolve segredo via `createIntegrationResolver`; nunca recebe token.
-- Cada connector declara `capabilities` (§43). GA4: `{ productMetrics: true, eventLevel: false, realtime: false }`.
+- Cada connector declara `capabilities` (§43). GA4: `{ productMetrics: true, eventMetrics: false, realtime: false }`.
 - Eventos normalizados: `product_view | add_to_cart | checkout_started | purchase | refund` (§13).
 - `ProductPerformanceService` consome só interfaces + `product_external_identities`; nunca `inkApiRequestDaStore`.
 
@@ -119,9 +119,10 @@ precisar ser lido), navegação SPA (Marketing & Dados).
 
 ## 9. Riscos
 
-1. **`integrations` é 1 por (Organization, provider)**, sem `store_id`/`domain`. Organization com 2 Stores e GA4/Ink
-   distintos por Store não cabe hoje. GA4 já é por Store (`google_analytics_connections`); Ink token ainda é por Organization
-   no resolver. Decidir se o V1 assume "1 Store analisada por request, connector resolvido pela Store" sem migrar `integrations`.
+1. ~~`integrations` é 1 por (Organization, provider), sem `store_id`.~~ **Superado (2026-09-21):** `ORIA-TENANCY-STORE-01`
+   (`productization-decisions.md`, PD-002) — 1 Organization = 1 Store, definitivo. A integração é da Organization; a Store é
+   contexto operacional; `integrations` não ganha `store_id`. O GA4 continua com a credencial na Organization e o `property_id`
+   em `google_analytics_connections`.
 2. **Só uma Organization em produção**: isolamento é provado por teste. Exige controles negativos novos (tenant A não lê B).
 3. **`produto_id BIGINT`** herdado da Ink vs `provider_product_id TEXT` do canônico: mapper precisa converter sem perda.
 4. **Histórico local de pedidos só desde 2026-08-19** (checkpoint §7): reconciliação GA4 × Commerce fora dessa janela seria falsa
@@ -140,8 +141,9 @@ comportamento) → D. Migrations `commerce_*` + catalog sync tenant-aware → E.
 G. `ProductPerformanceService` + snapshots → H. UI (Desempenho de Produtos, detalhe, diagnóstico, mapping) → I. Reconciliação.
 Cada fase: commit pequeno, CI verde, negative controls tenant-scoped. UI só fecha com smoke no Claude in Chrome.
 
-## Decisões pedidas antes da Fase B
+## Decisões tomadas depois deste audit
 
-1. **Linguagem/local**: confirmar backend em JS/JSDoc em `apps/panel/lib/connectors/` (o doc sugere TS em `src/integrations/`, que é o SPA).
-2. **Store vs Organization no connector**: V1 resolve por `(organizationId, storeId)` sem alterar a tabela `integrations`? (recomendado)
-3. **Entitlement**: nome da chave (`analytics.product_performance` no doc vs convenção atual `analytics_ga4` com underscore).
+1. Backend em JS + JSDoc em `apps/panel/lib/connectors/` (sem TypeScript no backend).
+2. `ORIA-TENANCY-STORE-01`: 1 Organization = 1 Store, definitivo. Sem `store_id` em `integrations`; a Store é contexto operacional.
+3. Connector declara `requiresStoreContext` (boolean, sem default); commerce e analytics sempre `true`.
+4. Entitlement `analytics_product_performance` (underscore, como as demais chaves), ainda não criado.

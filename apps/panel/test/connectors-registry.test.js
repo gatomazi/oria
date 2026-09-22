@@ -1,7 +1,8 @@
 'use strict';
 
 // Fase B · registry de connectors (lib/connectors/registry.js): resolve por (domain, provider), o
-// mesmo provider em mais de um domain, escopo da integração e a porta do IntegrationResolver.
+// mesmo provider em mais de um domain, contexto de Store (requiresStoreContext) e a porta do
+// IntegrationResolver. Premissa: 1 Organization = 1 Store; a integração é sempre da Organization.
 // Sem banco, sem rede, sem provider real — os connectors são test doubles.
 
 const test = require('node:test');
@@ -13,7 +14,8 @@ const { createConnectorRegistry } = require('../lib/connectors/registry');
 const { ConnectorError, CODIGOS } = require('../lib/connectors/errors');
 const F = require('./helpers/connector-fakes');
 
-const rejeita = (fn, codigo) => assert.rejects(async () => fn(), (err) => err instanceof ConnectorError && err.codigo === codigo, `esperava ${codigo}`);
+// Erros da camada são ConnectorError; erros que vêm do resolvedor (ex.: INTEGRATION_NOT_CONNECTED) só têm `codigo`.
+const rejeita = (fn, codigo) => assert.rejects(async () => fn(), (err) => err.codigo === codigo && (!String(codigo).startsWith('CONNECTOR_') || err instanceof ConnectorError), `esperava ${codigo}`);
 const rejeitaSync = (fn, codigo) => assert.throws(fn, (err) => err instanceof ConnectorError && err.codigo === codigo, `esperava ${codigo}`);
 
 function registryCompleto(opcoes = {}) {
@@ -25,7 +27,8 @@ function registryCompleto(opcoes = {}) {
   registry.register(F.descritorMetaEvents());
   return { registry, porta };
 }
-const ctxA1 = { organizationId: F.ORG_A, storeId: F.STORE_A1 };
+const ctxA = { organizationId: F.ORG_A, storeId: F.STORE_A };
+const ctxB = { organizationId: F.ORG_B, storeId: F.STORE_B };
 
 // ── resolve por (domain, provider) ──────────────────────────────────────────────────────────────
 
@@ -33,11 +36,11 @@ test('Fase B · resolve dos quatro pares pedidos, sem if de provider no consumid
   const { registry } = registryCompleto();
   const pares = [['commerce', 'reserva_ink'], ['analytics', 'ga4'], ['event_analytics', 'meta'], ['ads', 'meta']];
   for (const [domain, provider] of pares) {
-    const r = registry.resolve(domain, provider, ctxA1);
+    const r = registry.resolve(domain, provider, ctxA);
     assert.equal(r.domain, domain);
     assert.equal(r.provider, provider);
     assert.equal(r.context.organizationId, F.ORG_A);
-    assert.equal(r.context.storeId, F.STORE_A1);
+    assert.equal(r.context.storeId, F.STORE_A);
   }
 });
 
@@ -52,7 +55,7 @@ test('Fase B · o mesmo código de consumo atende qualquer provider do domain', 
   }));
   // O "service": recebe o nome do provider como dado e nunca compara com literal.
   const consumir = (provider) => {
-    const r = registry.resolve('analytics', provider, ctxA1);
+    const r = registry.resolve('analytics', provider, ctxA);
     return r.supports('productMetrics') ? 'usa-produto' : 'usa-evento';
   };
   assert.deepEqual(registry.providersOf('analytics'), ['ga4', 'plausible']);
@@ -62,7 +65,7 @@ test('Fase B · o mesmo código de consumo atende qualquer provider do domain', 
 
 test('Fase B · o resultado expõe capabilities, supports() e require() com código estável', () => {
   const { registry } = registryCompleto();
-  const r = registry.resolve('commerce', 'reserva_ink', ctxA1);
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
   assert.equal(r.supports('orders'), true);
   assert.equal(r.supports('productCosts'), false);
   assert.equal(r.supports('inexistente'), false);
@@ -73,12 +76,12 @@ test('Fase B · o resultado expõe capabilities, supports() e require() com cód
 
 test('Fase B · par não registrado falha com código, inclusive provider registrado em outro domain', () => {
   const { registry } = registryCompleto();
-  rejeitaSync(() => registry.resolve('commerce', 'shopify', ctxA1), CODIGOS.NOT_REGISTERED);
-  rejeitaSync(() => registry.resolve('analytics', 'meta', ctxA1), CODIGOS.NOT_REGISTERED);
-  rejeitaSync(() => registry.resolve('commerce', 'ga4', ctxA1), CODIGOS.NOT_REGISTERED);
-  rejeitaSync(() => registry.resolve('messaging', 'whatsapp_meta', ctxA1), CODIGOS.NOT_REGISTERED);
+  rejeitaSync(() => registry.resolve('commerce', 'shopify', ctxA), CODIGOS.NOT_REGISTERED);
+  rejeitaSync(() => registry.resolve('analytics', 'meta', ctxA), CODIGOS.NOT_REGISTERED);
+  rejeitaSync(() => registry.resolve('commerce', 'ga4', ctxA), CODIGOS.NOT_REGISTERED);
+  rejeitaSync(() => registry.resolve('messaging', 'whatsapp_meta', ctxA), CODIGOS.NOT_REGISTERED);
   // Entrada hostil não vai inteira para a mensagem.
-  try { registry.resolve('x'.repeat(500), '<script>', ctxA1); } catch (err) { assert.ok(err.message.length < 120 && !err.message.includes('<')); }
+  try { registry.resolve('x'.repeat(500), '<script>', ctxA); } catch (err) { assert.ok(err.message.length < 120 && !err.message.includes('<')); }
 });
 
 test('Fase B · registro duplicado de (domain, provider) reprova; o mesmo provider em outro domain não', () => {
@@ -107,8 +110,8 @@ test('Fase B · registries são independentes e não há estado global', () => {
 
 test('Fase B · cada resolve cria um connector novo, ligado ao contexto da chamada', () => {
   const { registry } = registryCompleto();
-  const r1 = registry.resolve('analytics', 'ga4', ctxA1);
-  const r2 = registry.resolve('analytics', 'ga4', { organizationId: F.ORG_B, storeId: F.STORE_B1 });
+  const r1 = registry.resolve('analytics', 'ga4', ctxA);
+  const r2 = registry.resolve('analytics', 'ga4', ctxB);
   assert.notEqual(r1.connector, r2.connector);
   assert.equal(r1.context.organizationId, F.ORG_A);
   assert.equal(r2.context.organizationId, F.ORG_B);
@@ -117,7 +120,7 @@ test('Fase B · cada resolve cria um connector novo, ligado ao contexto da chama
 test('Fase B · describe/list não expõem create nem segredo', () => {
   const { registry } = registryCompleto();
   const d = registry.describe('commerce', 'reserva_ink');
-  assert.deepEqual(Object.keys(d).sort(), ['capabilities', 'domain', 'integrationProvider', 'integrationScope', 'label', 'provider']);
+  assert.deepEqual(Object.keys(d).sort(), ['capabilities', 'domain', 'integrationProvider', 'label', 'provider', 'requiresStoreContext']);
   assert.equal(registry.list().length, 4);
   assert.deepEqual(registry.list().map((x) => `${x.domain}/${x.provider}`), ['ads/meta', 'analytics/ga4', 'commerce/reserva_ink', 'event_analytics/meta']);
 });
@@ -129,8 +132,8 @@ test('Fase B · Meta implementa dois domains com contratos e capabilities indepe
   assert.deepEqual(registry.domainsOf('meta'), ['ads', 'event_analytics']);
   assert.deepEqual(registry.domainsOf('ga4'), ['analytics']);
 
-  const ads = registry.resolve('ads', 'meta', ctxA1);
-  const eventos = registry.resolve('event_analytics', 'meta', ctxA1);
+  const ads = registry.resolve('ads', 'meta', ctxA);
+  const eventos = registry.resolve('event_analytics', 'meta', ctxA);
   assert.notDeepEqual({ ...ads.capabilities }, { ...eventos.capabilities });
   assert.equal(ads.supports('campaignPerformance'), true);
   assert.equal(ads.supports('aggregatedProductEvents'), false);
@@ -146,8 +149,8 @@ test('Fase B · Meta implementa dois domains com contratos e capabilities indepe
 
 test('Fase B · Meta Ads e Meta Events compartilham a MESMA integração sem virarem o mesmo connector', async () => {
   const { registry, porta } = registryCompleto();
-  const ads = registry.resolve('ads', 'meta', ctxA1);
-  const eventos = registry.resolve('event_analytics', 'meta', ctxA1);
+  const ads = registry.resolve('ads', 'meta', ctxA);
+  const eventos = registry.resolve('event_analytics', 'meta', ctxA);
   assert.equal(ads.integrationProvider, 'meta');
   assert.equal(eventos.integrationProvider, 'meta');
   assert.notEqual(ads.connector, eventos.connector);
@@ -155,7 +158,7 @@ test('Fase B · Meta Ads e Meta Events compartilham a MESMA integração sem vir
   const daAds = await ads.connector.integracaoEmUso();
   const dosEventos = await eventos.connector.integracaoEmUso();
   assert.equal(daAds.integrationId, dosEventos.integrationId);
-  assert.equal(daAds.integrationId, F.INT_META_A_ORG);
+  assert.equal(daAds.integrationId, F.INT_META_A);
   // Mas a consulta de cada um carregou o próprio domain.
   assert.deepEqual(porta.consultas.map((c) => c.domain), ['ads', 'event_analytics']);
 });
@@ -167,21 +170,21 @@ test('Fase B · um provider pode ter capabilities diferentes por domain, inclusi
   assert.equal(registry.describe('event_analytics', 'meta').capabilities.aggregatedProductEvents, true);
 });
 
-// ── Escopo do contexto ──────────────────────────────────────────────────────────────────────────
+// ── Contexto de Store (requiresStoreContext) ────────────────────────────────────────────────────
 
-test('Fase B · connector de escopo store exige storeId; sem Store no contexto não há resolve', () => {
+test('Fase B · requiresStoreContext=true exige storeId: sem Store no contexto não há resolve', () => {
   const { registry } = registryCompleto();
   rejeitaSync(() => registry.resolve('commerce', 'reserva_ink', { organizationId: F.ORG_A }), CODIGOS.CONTEXT_INVALID);
   rejeitaSync(() => registry.resolve('analytics', 'ga4', { organizationId: F.ORG_A, storeId: null }), CODIGOS.CONTEXT_INVALID);
-  // store_or_organization também precisa da Store: o dado analisado é da Store.
-  rejeitaSync(() => registry.resolve('ads', 'meta', { organizationId: F.ORG_A }), CODIGOS.CONTEXT_INVALID);
+  rejeitaSync(() => registry.resolve('event_analytics', 'meta', { organizationId: F.ORG_A }), CODIGOS.CONTEXT_INVALID);
 });
 
-test('Fase B · connector de escopo organization aceita contexto sem Store', () => {
-  const registry = createConnectorRegistry();
-  registry.register(F.descritorGa4({ provider: 'ga4_org', integrationScope: 'organization' }));
-  const r = registry.resolve('analytics', 'ga4_org', { organizationId: F.ORG_A });
-  assert.equal(r.context.storeId, null);
+test('Fase B · requiresStoreContext=false aceita storeId nulo (e também aceita a Store, quando vier)', () => {
+  const { registry } = registryCompleto();
+  assert.equal(registry.describe('ads', 'meta').requiresStoreContext, false);
+  const semStore = registry.resolve('ads', 'meta', { organizationId: F.ORG_A });
+  assert.equal(semStore.context.storeId, null);
+  assert.equal(registry.resolve('ads', 'meta', ctxA).context.storeId, F.STORE_A);
 });
 
 test('Fase B · o contexto inválido é rejeitado no resolve, antes de criar o connector', () => {
@@ -189,131 +192,144 @@ test('Fase B · o contexto inválido é rejeitado no resolve, antes de criar o c
   const registry = createConnectorRegistry();
   registry.register(F.descritorGa4({ create: (deps) => { criados += 1; return F.descritorGa4().create(deps); } }));
   rejeitaSync(() => registry.resolve('analytics', 'ga4', { organizationId: F.ORG_A, storeId: 'sul' }), CODIGOS.CONTEXT_INVALID);
-  rejeitaSync(() => registry.resolve('analytics', 'ga4', { organizationId: F.ORG_A, storeId: F.STORE_A1, token: 'x' }), CODIGOS.CONTEXT_INVALID);
+  rejeitaSync(() => registry.resolve('analytics', 'ga4', { organizationId: F.ORG_A, storeId: F.STORE_A, token: 'x' }), CODIGOS.CONTEXT_INVALID);
   assert.equal(criados, 0);
 });
 
 test('Fase B · create que devolve um connector fora do contrato é barrado no resolve', () => {
   const registry = createConnectorRegistry();
   registry.register(F.descritorGa4({ create: () => ({}) }));
-  rejeitaSync(() => registry.resolve('analytics', 'ga4', ctxA1), CODIGOS.CONTRACT_VIOLATION);
+  rejeitaSync(() => registry.resolve('analytics', 'ga4', ctxA), CODIGOS.CONTRACT_VIOLATION);
 });
 
 test('Fase B · o connector recebe só { context, resolveIntegration }: nenhum token, env ou pool', () => {
   let recebido;
   const registry = createConnectorRegistry({ integrations: F.portaDeIntegracoes() });
   registry.register(F.descritorGa4({ create: (deps) => { recebido = deps; return F.descritorGa4().create(deps); } }));
-  registry.resolve('analytics', 'ga4', ctxA1);
+  registry.resolve('analytics', 'ga4', ctxA);
   assert.deepEqual(Object.keys(recebido).sort(), ['context', 'resolveIntegration']);
   assert.ok(Object.isFrozen(recebido) && Object.isFrozen(recebido.context));
 });
 
-// ── Porta do IntegrationResolver (preparo para integrationId e Fase B.1) ───────────────────────
+// ── Porta do IntegrationResolver (integração é sempre da Organization) ──────────────────────────
 
-test('Fase B · resolveIntegration consulta por organização + Store + provider da credencial, com o escopo do descritor', async () => {
+const resultadoOk = (extra = {}) => ({
+  integrationId: F.INT_INK_A, organizationId: F.ORG_A, storeId: F.STORE_A, integrationProvider: 'ink', ...extra,
+});
+
+function registryComResolvedor(resolve, descritor = F.descritorReservaInk(), contexto = ctxA) {
+  const registry = createConnectorRegistry({ integrations: { resolve } });
+  registry.register(descritor);
+  return registry.resolve(descritor.domain, descritor.provider, contexto);
+}
+
+test('Fase B · resolveIntegration consulta por organização + provider da credencial e leva o contexto e requiresStoreContext', async () => {
   const { registry, porta } = registryCompleto();
-  const r = await registry.resolve('commerce', 'reserva_ink', ctxA1).connector.integracaoEmUso();
-  assert.equal(r.integrationId, F.INT_INK_A1);
-  assert.equal(r.storeId, F.STORE_A1);
+  const r = await registry.resolve('commerce', 'reserva_ink', ctxA).connector.integracaoEmUso();
+  assert.equal(r.integrationId, F.INT_INK_A);
+  assert.equal(r.organizationId, F.ORG_A);
+  assert.equal(r.storeId, F.STORE_A);
   assert.equal(porta.consultas.length, 1);
   const consulta = porta.consultas[0];
   assert.equal(consulta.domain, 'commerce');
   assert.equal(consulta.provider, 'reserva_ink');
   assert.equal(consulta.integrationProvider, 'ink');
-  assert.equal(consulta.integrationScope, 'store');
-  assert.deepEqual({ ...consulta.context }, { organizationId: F.ORG_A, storeId: F.STORE_A1, integrationId: null });
+  assert.equal(consulta.requiresStoreContext, true);
+  assert.equal('integrationScope' in consulta, false);
+  assert.deepEqual({ ...consulta.context }, { organizationId: F.ORG_A, storeId: F.STORE_A, integrationId: null });
   assert.ok(Object.isFrozen(consulta) && Object.isFrozen(consulta.context));
 });
 
-test('Fase B · duas Stores da mesma Organization resolvem integrações diferentes (Store A → Ink A, Store B → Ink B)', async () => {
+test('Fase B · duas Organizations independentes não cruzam integração (A → Ink A, B → Ink B)', async () => {
   const { registry } = registryCompleto();
-  const daA1 = await registry.resolve('commerce', 'reserva_ink', ctxA1).connector.integracaoEmUso();
-  const daA2 = await registry.resolve('commerce', 'reserva_ink', { organizationId: F.ORG_A, storeId: F.STORE_A2 }).connector.integracaoEmUso();
-  assert.equal(daA1.integrationId, F.INT_INK_A1);
-  assert.equal(daA2.integrationId, F.INT_INK_A2);
+  const daA = await registry.resolve('commerce', 'reserva_ink', ctxA).connector.integracaoEmUso();
+  const daB = await registry.resolve('commerce', 'reserva_ink', ctxB).connector.integracaoEmUso();
+  assert.equal(daA.integrationId, F.INT_INK_A);
+  assert.equal(daB.integrationId, F.INT_INK_B);
+  assert.equal(daB.organizationId, F.ORG_B);
+  // B não tem GA4 conectado: a GA4 da Organization A não é candidata.
+  await rejeita(() => registry.resolve('analytics', 'ga4', ctxB).connector.integracaoEmUso(), 'INTEGRATION_NOT_CONNECTED');
 });
 
 test('Fase B · o connector não escolhe Organization, Store nem provider da credencial: resolveIntegration ignora argumentos', async () => {
-  const { registry, porta } = registryCompleto();
-  const r = registry.resolve('commerce', 'reserva_ink', ctxA1);
-  const depsEspiao = { resolveIntegration: null };
-  const registryEspiao = createConnectorRegistry({ integrations: porta });
-  registryEspiao.register(F.descritorReservaInk({ create: (deps) => { depsEspiao.resolveIntegration = deps.resolveIntegration; return F.descritorReservaInk().create(deps); } }));
-  registryEspiao.resolve('commerce', 'reserva_ink', ctxA1);
-  const r2 = await depsEspiao.resolveIntegration({ organizationId: F.ORG_B, storeId: F.STORE_B1, integrationProvider: 'meta' });
-  assert.equal(r2.integrationId, F.INT_INK_A1);
-  assert.equal(r.context.storeId, F.STORE_A1);
+  const { porta } = registryCompleto();
+  let resolveIntegration;
+  const registry = createConnectorRegistry({ integrations: porta });
+  registry.register(F.descritorReservaInk({ create: (deps) => { resolveIntegration = deps.resolveIntegration; return F.descritorReservaInk().create(deps); } }));
+  registry.resolve('commerce', 'reserva_ink', ctxA);
+  const r = await resolveIntegration({ organizationId: F.ORG_B, storeId: F.STORE_B, integrationProvider: 'meta', integrationId: F.INT_INK_B });
+  assert.equal(r.integrationId, F.INT_INK_A);
+  assert.equal(r.organizationId, F.ORG_A);
 });
 
-test('Fase B · integrationId do contexto é conferido: a integração devolvida tem de ser a mesma', async () => {
+test('Fase B · integrationId do contexto pertence à Organization: o certo passa, o de outra Organization é rejeitado', async () => {
   const { registry } = registryCompleto();
-  const certa = registry.resolve('commerce', 'reserva_ink', { ...ctxA1, integrationId: F.INT_INK_A1 });
-  assert.equal((await certa.connector.integracaoEmUso()).integrationId, F.INT_INK_A1);
-  const errada = registry.resolve('commerce', 'reserva_ink', { ...ctxA1, integrationId: F.INT_INK_A2 });
-  await rejeita(() => errada.connector.integracaoEmUso(), CODIGOS.INTEGRATION_SCOPE_MISMATCH);
+  const certa = registry.resolve('commerce', 'reserva_ink', { ...ctxA, integrationId: F.INT_INK_A });
+  assert.equal((await certa.connector.integracaoEmUso()).integrationId, F.INT_INK_A);
+  // Integração da Organization B, informada por um contexto da Organization A: a busca leva a
+  // Organization junto e não a encontra.
+  const alheia = registry.resolve('commerce', 'reserva_ink', { ...ctxA, integrationId: F.INT_INK_B });
+  await rejeita(() => alheia.connector.integracaoEmUso(), 'INTEGRATION_NOT_CONNECTED');
+});
+
+test('Fase B · integrationId de outro provider é rejeitado (id do GA4 num connector da Ink)', async () => {
+  const { registry } = registryCompleto();
+  const errada = registry.resolve('commerce', 'reserva_ink', { ...ctxA, integrationId: F.INT_GA4_A });
+  await rejeita(() => errada.connector.integracaoEmUso(), 'INTEGRATION_NOT_CONNECTED');
 });
 
 test('Fase B · sem porta de integrações, o registry resolve e o connector falha só ao pedir a credencial', async () => {
   const registry = createConnectorRegistry();
   registry.register(F.descritorGa4());
-  const r = registry.resolve('analytics', 'ga4', ctxA1);
+  const r = registry.resolve('analytics', 'ga4', ctxA);
   await rejeita(() => r.connector.integracaoEmUso(), CODIGOS.INTEGRATION_RESOLVER_MISSING);
   rejeitaSync(() => createConnectorRegistry({ integrations: {} }), CODIGOS.INTEGRATION_RESOLVER_MISSING);
 });
 
-test('Fase B · erro do resolvedor (ex.: integração não conectada) sobe como está, sem fallback', async () => {
+test('Fase B · Store de outra Organization: o resolvedor recusa e o erro sobe como está', async () => {
   const { registry } = registryCompleto();
-  // Store A2 não tem GA4 conectado; a GA4 da Store A1 não pode ser usada no lugar.
-  const r = registry.resolve('analytics', 'ga4', { organizationId: F.ORG_A, storeId: F.STORE_A2 });
-  await assert.rejects(() => r.connector.integracaoEmUso(), /não conectada/);
+  const r = registry.resolve('commerce', 'reserva_ink', { organizationId: F.ORG_A, storeId: F.STORE_B });
+  await rejeita(() => r.connector.integracaoEmUso(), 'STORE_NOT_IN_ORGANIZATION');
 });
 
-function registryComResolvedor(resolve, descritor = F.descritorReservaInk()) {
-  const registry = createConnectorRegistry({ integrations: { resolve } });
-  registry.register(descritor);
-  return registry.resolve(descritor.domain, descritor.provider, ctxA1);
-}
+test('Fase B · defesa em profundidade: resolvedor que valida OUTRA Store é barrado', async () => {
+  const r = registryComResolvedor(async () => resultadoOk({ storeId: F.STORE_B }));
+  await rejeita(() => r.connector.integracaoEmUso(), CODIGOS.INTEGRATION_TENANT_MISMATCH);
+});
 
-test('Fase B · defesa em profundidade: resolvedor que devolve integração de outra Store é barrado', async () => {
-  const r = registryComResolvedor(async () => ({ integrationId: F.INT_INK_A2, organizationId: F.ORG_A, storeId: F.STORE_A2 }));
-  await rejeita(() => r.connector.integracaoEmUso(), CODIGOS.INTEGRATION_SCOPE_MISMATCH);
+test('Fase B · defesa em profundidade: contexto com Store, resultado sem Store (ou o contrário) é barrado', async () => {
+  const semStore = registryComResolvedor(async () => resultadoOk({ storeId: null }));
+  await rejeita(() => semStore.connector.integracaoEmUso(), CODIGOS.INTEGRATION_TENANT_MISMATCH);
+  const contextoSemStore = registryComResolvedor(async () => resultadoOk({ integrationProvider: 'meta', storeId: F.STORE_A }), F.descritorMetaAds(), { organizationId: F.ORG_A });
+  await rejeita(() => contextoSemStore.connector.integracaoEmUso(), CODIGOS.INTEGRATION_TENANT_MISMATCH);
 });
 
 test('Fase B · resolvedor que devolve integração de outra Organization é barrado', async () => {
-  const r = registryComResolvedor(async () => ({ integrationId: F.INT_INK_B1, organizationId: F.ORG_B, storeId: F.STORE_A1 }));
-  await rejeita(() => r.connector.integracaoEmUso(), CODIGOS.INTEGRATION_SCOPE_MISMATCH);
+  const r = registryComResolvedor(async () => resultadoOk({ integrationId: F.INT_INK_B, organizationId: F.ORG_B }));
+  await rejeita(() => r.connector.integracaoEmUso(), CODIGOS.INTEGRATION_TENANT_MISMATCH);
 });
 
-test('Fase B · escopo store não aceita integração da Organization como fallback', async () => {
-  const r = registryComResolvedor(async () => ({ integrationId: F.INT_META_A_ORG, organizationId: F.ORG_A, storeId: null }));
-  await rejeita(() => r.connector.integracaoEmUso(), CODIGOS.INTEGRATION_SCOPE_MISMATCH);
+test('Fase B · resolvedor que devolve integração de outro provider é barrado', async () => {
+  const r = registryComResolvedor(async () => resultadoOk({ integrationId: F.INT_GA4_A, integrationProvider: 'ga4' }));
+  await rejeita(() => r.connector.integracaoEmUso(), CODIGOS.INTEGRATION_TENANT_MISMATCH);
 });
 
-test('Fase B · store_or_organization aceita a integração da Organization só porque o descritor permitiu', async () => {
-  const r = registryComResolvedor(async () => ({ integrationId: F.INT_META_A_ORG, organizationId: F.ORG_A, storeId: null }), F.descritorMetaAds());
-  const ok = await r.connector.integracaoEmUso();
-  assert.equal(ok.integrationId, F.INT_META_A_ORG);
-  assert.equal(ok.storeId, null);
-  // E mesmo assim não aceita a de outra Store.
-  const outra = registryComResolvedor(async () => ({ integrationId: F.INT_INK_A2, organizationId: F.ORG_A, storeId: F.STORE_A2 }), F.descritorMetaAds());
-  await rejeita(() => outra.connector.integracaoEmUso(), CODIGOS.INTEGRATION_SCOPE_MISMATCH);
+test('Fase B · resolvedor que ignora o integrationId do contexto é barrado', async () => {
+  const r = registryComResolvedor(async () => resultadoOk({ integrationId: F.INT_GA4_A }), F.descritorReservaInk(), { ...ctxA, integrationId: F.INT_INK_A });
+  await rejeita(() => r.connector.integracaoEmUso(), CODIGOS.INTEGRATION_TENANT_MISMATCH);
 });
 
-test('Fase B · escopo organization só aceita integração da Organization', async () => {
-  const d = F.descritorGa4({ provider: 'ga4_org', integrationScope: 'organization' });
-  const daStore = registryComResolvedor(async () => ({ integrationId: F.INT_GA4_A1, organizationId: F.ORG_A, storeId: F.STORE_A1 }), d);
-  await rejeita(() => daStore.connector.integracaoEmUso(), CODIGOS.INTEGRATION_SCOPE_MISMATCH);
-});
-
-test('Fase B · resultado do resolvedor malformado ou sem escopo explícito é rejeitado', async () => {
+test('Fase B · resultado do resolvedor malformado ou sem identidade explícita é rejeitado', async () => {
   const malformados = [
     null,
     'x',
-    { integrationId: 'com espaço', organizationId: F.ORG_A, storeId: F.STORE_A1 },
-    { integrationId: 101, organizationId: F.ORG_A, storeId: F.STORE_A1 },
-    { integrationId: F.INT_INK_A1 },
-    // storeId omitido não significa "qualquer Store"
-    { integrationId: F.INT_INK_A1, organizationId: F.ORG_A },
+    resultadoOk({ integrationId: 'com espaço' }),
+    resultadoOk({ integrationId: 101 }),
+    { integrationId: F.INT_INK_A },
+    // organizationId, storeId e provider omitidos não significam "qualquer um"
+    { integrationId: F.INT_INK_A, organizationId: F.ORG_A, integrationProvider: 'ink' },
+    { integrationId: F.INT_INK_A, storeId: F.STORE_A, integrationProvider: 'ink' },
+    { integrationId: F.INT_INK_A, organizationId: F.ORG_A, storeId: F.STORE_A },
   ];
   for (const resultado of malformados) {
     const r = registryComResolvedor(async () => resultado);
@@ -321,15 +337,20 @@ test('Fase B · resultado do resolvedor malformado ou sem escopo explícito é r
   }
 });
 
-test('Fase B · o resultado entregue ao connector é congelado e traz só integração, escopo, status e config', async () => {
-  const r = registryComResolvedor(async () => ({
-    integrationId: F.INT_INK_A1, organizationId: F.ORG_A, storeId: F.STORE_A1, status: 'connected', config: { propertyId: '123' }, apiToken: 'segredo',
-  }));
+test('Fase B · o resultado entregue ao connector é congelado e traz só integração, Store validada, status e config', async () => {
+  const r = registryComResolvedor(async () => resultadoOk({ status: 'connected', config: { propertyId: '123' }, apiToken: 'segredo' }));
   const ok = await r.connector.integracaoEmUso();
   assert.deepEqual(Object.keys(ok).sort(), ['config', 'integrationId', 'organizationId', 'status', 'storeId']);
   assert.equal(ok.apiToken, undefined);
   assert.deepEqual({ ...ok.config }, { propertyId: '123' });
   assert.ok(Object.isFrozen(ok) && Object.isFrozen(ok.config));
+});
+
+test('Fase B · o registry não interpreta status: devolve como veio (a política é do connector/service)', async () => {
+  for (const status of ['connected', 'pending', 'degraded', 'error', null]) {
+    const r = registryComResolvedor(async () => resultadoOk({ status }));
+    assert.equal((await r.connector.integracaoEmUso()).status, status);
+  }
 });
 
 // ── Guardas estáticas da camada ─────────────────────────────────────────────────────────────────

@@ -32,7 +32,7 @@ correção de amplitude no item 4 ("recurso", não "gasto"), está em
 | ID | Título | Status | Impacto |
 |---|---|---|---|
 | PD-001 | Escopo de providers de e-commerce na V1 | OPEN | CRITICAL |
-| PD-002 | Cardinalidade Organization ↔ Store | **CLOSED (V1)** | CRITICAL |
+| PD-002 | Cardinalidade Organization ↔ Store — invariante `ORIA-TENANCY-STORE-01`, definitiva (emenda 2026-09-21) | **CLOSED (V1)** · definitiva | CRITICAL |
 | PD-003 | Store pode ter múltiplos números de WhatsApp | OPEN (simplificada) | MEDIUM |
 | PD-004 | Múltiplos usuários por Organization | **PARCIAL** | HIGH |
 | PD-005 | Módulos do plano inicial | OPEN | HIGH |
@@ -177,7 +177,8 @@ necessidade**. Nada de rateio, consolidação, seletor ou escopo duplo "por via 
 
 **O que isso resolve da versão anterior desta decisão:** a tabela "por domínio, é Organization ou
 Store?" que estava aberta **deixa de ser uma pergunta de produto**. Com 1:1, os dois níveis contêm
-o mesmo conjunto de dados. A escolha passa a ser de modelagem, não de produto:
+o mesmo conjunto de dados. A escolha passa a ser de modelagem, não de produto
+(ver a emenda de 2026-09-21 no fim desta decisão: a cardinalidade 1:1 deixou de ser "da V1"):
 
 | Domínio | Nível |
 |---|---|
@@ -193,6 +194,37 @@ o mesmo conjunto de dados. A escolha passa a ser de modelagem, não de produto:
 deve suportar múltiplas Stores por Organization" / "pricing pode limitar `max_stores`"). A
 capacidade estrutural é preservada (as entidades continuam separadas), mas a V1 **não** implementa
 nem prepara UX/consolidação multi-store. O addendum continua valendo em tudo o mais.
+
+### Emenda de 2026-09-21 — invariante definitiva `ORIA-TENANCY-STORE-01`
+
+A cardinalidade 1:1 **não é limitação da V1 nem será evoluída para 1:N**. Decisão do usuário,
+definitiva. Ela **supera** os trechos acima que a tratavam como "V1" ou que preservavam "evolução
+futura" (a "capacidade estrutural" para múltiplas Stores, e a divergência com o addendum v2 §4).
+
+```text
+ORIA-TENANCY-STORE-01
+
+Cada Organization possui no máximo uma Store.
+Toda Store pertence exatamente a uma Organization.
+O Oria não suporta múltiplas Stores dentro da mesma Organization.
+```
+
+```text
+Cliente/Tenant = Organization  ── 1:1 ──  Store
+```
+
+Consequências de modelagem, todas já verdadeiras no código:
+
+- **Integração pertence à Organization** (`integrations`: `organization_id + provider + escopo`), assim como
+  seus segredos e entitlements. **`integrations` não ganha `store_id`** e não é preparada para múltiplas Stores.
+- **A Store é contexto operacional** (produtos, pedidos, catálogo, analytics, métricas). Configuração de
+  provider amarrada à Store fica na própria tabela do provider — por exemplo `google_analytics_connections`
+  (`property_id`) —, e a `integrations` guarda só credencial/autenticação.
+- Ao usar uma Store num fluxo de connector, valida-se `store.organization_id === organizationId`. Uma
+  integração nunca é resolvida só por `integrationId` nem só por provider: a Organization entra sempre.
+- **A constraint `uq_stores_organization` (`UNIQUE (organization_id)` em `stores`) é a invariante no banco**
+  e continua protegida (`tenancy-isolation` e o negative control em `tenancy-db-negative-controls`). Não se
+  cria teste, fixture ou cenário com duas Stores na mesma Organization.
 
 ---
 

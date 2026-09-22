@@ -10,25 +10,39 @@
 //   · o que sai é o modelo canônico do Oria. DTO de provider nunca atravessa o connector.
 
 /**
+ * Premissa do produto (ORIA-TENANCY-STORE-01): 1 Organization = 1 Store. A integração pertence à
+ * ORGANIZATION; a Store é contexto operacional.
+ *
  * @typedef {Object} ConnectorContext
- * @property {string} organizationId
- * @property {string|null} storeId       null só em connector de escopo `organization`
- * @property {string|null} integrationId null até a integração ser resolvida (ou informado por um job)
+ * @property {string} organizationId     tenant: dono das integrações, dos segredos e dos entitlements
+ * @property {string|null} storeId       contexto OPERACIONAL (produtos, pedidos, catálogo, analytics);
+ *                                       null só em connector com `requiresStoreContext: false`
+ * @property {string|null} integrationId integração explicitamente ligada, quando o chamador já sabe qual
+ *                                       (jobs); id opaco (hoje `integrations.id` é BIGSERIAL)
  */
 
 /**
- * @typedef {Object} ResolvedIntegration  Saída do IntegrationResolver, já conferida pelo registry.
+ * Saída do IntegrationResolver, já conferida pelo registry.
+ *
+ * ATENÇÃO: `storeId` NÃO é uma coluna `store_id` de `integrations` (ela não existe, e não vai existir:
+ * a integração é da Organization). É o "validated execution Store context": a Store que a porta
+ * validou como pertencente à Organization antes de resolver. Não leia este tipo como "a integração
+ * é da Store".
+ *
+ * @typedef {Object} ResolvedIntegration
  * @property {string} integrationId
- * @property {string} organizationId
- * @property {string|null} storeId       null = integração da Organization
- * @property {string|null} status
- * @property {Readonly<Object>} config   NUNCA contém segredo
+ * @property {string} organizationId          dono da integração
+ * @property {string|null} storeId            Store de execução validada (ver acima); null se o contexto não tinha
+ * @property {string} integrationProvider     `integrations.provider` da linha resolvida
+ * @property {string|null} status             devolvido como está; interpretar é do connector/service
+ * @property {Readonly<Object>} config        NUNCA contém segredo
  */
 
 /**
  * Porta que a camada de integrações implementa (Fase B.1). O registry entrega ao connector uma
  * função `resolveIntegration()` já ligada a (domain, provider, contexto); o connector não escolhe
- * organização, Store nem provider da credencial.
+ * organização, Store nem provider da credencial. Nenhuma busca pode ser só por `integrationId` ou só
+ * por provider: a Organization do contexto entra sempre.
  *
  * @typedef {Object} IntegrationResolver
  * @property {(consulta: IntegrationQuery) => Promise<ResolvedIntegration>} resolve
@@ -37,9 +51,9 @@
 /**
  * @typedef {Object} IntegrationQuery
  * @property {string} domain
- * @property {string} provider             chave no registry (ex.: `reserva_ink`)
- * @property {string} integrationProvider  chave em `integrations.provider` (ex.: `ink`)
- * @property {'store'|'organization'|'store_or_organization'} integrationScope
+ * @property {string} provider              chave no registry (ex.: `reserva_ink`)
+ * @property {string} integrationProvider   chave em `integrations.provider` (ex.: `ink`)
+ * @property {boolean} requiresStoreContext
  * @property {ConnectorContext} context
  */
 

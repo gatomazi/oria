@@ -14,41 +14,37 @@
 //
 // Credencial: o connector nunca recebe token nem lê ambiente. Recebe `resolveIntegration()`, uma
 // função já ligada a (domain, provider, contexto) — ele não escolhe Organization, Store nem
-// provider da credencial. O resultado é conferido aqui (defesa em profundidade) contra o escopo do
-// descritor: uma integração de outra Store, ou da Organization quando o descritor não permite,
-// vira CONNECTOR_INTEGRATION_SCOPE_MISMATCH em vez de ser usada em silêncio.
+// provider da credencial. A integração é sempre da ORGANIZATION (1 Organization = 1 Store); a Store
+// do contexto é só o contexto operacional, validado pela porta. O resultado é conferido aqui (defesa
+// em profundidade): integração de outra Organization, Store diferente da do contexto, provider
+// diferente do esperado ou id diferente do informado viram erro em vez de serem usados em silêncio.
 
 const { ConnectorError, CODIGOS, nomeSeguro } = require('./errors');
 const {
-  INTEGRATION_SCOPES,
   ehIdOpaco,
   createConnectorContext,
   validateDescriptor,
   assertConnectorShape,
 } = require('./contracts');
 
-const incompativel = (mensagem) => new ConnectorError(mensagem, CODIGOS.INTEGRATION_SCOPE_MISMATCH);
+const incompativel = (mensagem) => new ConnectorError(mensagem, CODIGOS.INTEGRATION_TENANT_MISMATCH);
 
-// Confere o que o IntegrationResolver devolveu contra o contexto e o escopo do descritor.
+// Confere o que o IntegrationResolver devolveu contra o contexto e o descritor.
 function conferirIntegracao(resultado, descritor, contexto) {
   if (resultado === null || typeof resultado !== 'object' || !ehIdOpaco(resultado.integrationId)) {
     throw new ConnectorError('o resolvedor de integrações devolveu um resultado inválido', CODIGOS.INTEGRATION_INVALID);
   }
-  // `storeId` precisa vir explícito (uuid ou null): omitir não vale como "qualquer Store".
-  if (resultado.organizationId === undefined || resultado.storeId === undefined) {
-    throw new ConnectorError('o resolvedor de integrações não informou organizationId/storeId', CODIGOS.INTEGRATION_INVALID);
+  // Campos de identidade precisam vir explícitos: omitir não vale como "qualquer um".
+  if (resultado.organizationId === undefined || resultado.storeId === undefined || typeof resultado.integrationProvider !== 'string') {
+    throw new ConnectorError('o resolvedor de integrações não informou organizationId/storeId/integrationProvider', CODIGOS.INTEGRATION_INVALID);
   }
   const mesmoId = (a, b) => typeof a === 'string' && a.toLowerCase() === b;
+  // Dono da integração: sempre a Organization do contexto.
   if (!mesmoId(resultado.organizationId, contexto.organizationId)) throw incompativel('a integração pertence a outra Organization');
-
-  const daOrganization = resultado.storeId === null;
-  if (!daOrganization && !mesmoId(resultado.storeId, contexto.storeId)) throw incompativel('a integração pertence a outra Store');
-  if (descritor.integrationScope === INTEGRATION_SCOPES.STORE && daOrganization) {
-    throw incompativel('este connector só aceita integração da Store; integração da Organization não é fallback');
-  }
-  if (descritor.integrationScope === INTEGRATION_SCOPES.ORGANIZATION && !daOrganization) {
-    throw incompativel('este connector só aceita integração da Organization');
-  }
+  // Store validada: exatamente a do contexto (ou nenhuma, quando o contexto não tem Store).
+  const storeOk = contexto.storeId === null ? resultado.storeId === null : mesmoId(resultado.storeId, contexto.storeId);
+  if (!storeOk) throw incompativel('a Store validada pelo resolvedor não é a do contexto');
+  if (resultado.integrationProvider !== descritor.integrationProvider) throw incompativel('a integração é de outro provider');
   if (contexto.integrationId && resultado.integrationId !== contexto.integrationId) {
     throw incompativel('o contexto aponta para outra integração');
   }
@@ -56,7 +52,7 @@ function conferirIntegracao(resultado, descritor, contexto) {
   return Object.freeze({
     integrationId: resultado.integrationId,
     organizationId: contexto.organizationId,
-    storeId: resultado.storeId === null ? null : contexto.storeId,
+    storeId: contexto.storeId,
     status: typeof resultado.status === 'string' ? resultado.status : null,
     config: Object.freeze({ ...(resultado.config && typeof resultado.config === 'object' ? resultado.config : {}) }),
   });
@@ -72,7 +68,7 @@ function ligarResolvedor(porta, descritor, contexto) {
       domain: descritor.domain,
       provider: descritor.provider,
       integrationProvider: descritor.integrationProvider,
-      integrationScope: descritor.integrationScope,
+      requiresStoreContext: descritor.requiresStoreContext,
       context: contexto,
     }));
     return conferirIntegracao(resultado, descritor, contexto);
@@ -82,8 +78,8 @@ function ligarResolvedor(porta, descritor, contexto) {
 const chaveDe = (domain, provider) => `${domain}:${provider}`;
 
 // Visão pública do descritor: sem `create`.
-const visaoPublica = ({ domain, provider, integrationProvider, integrationScope, label, capabilities }) => (
-  Object.freeze({ domain, provider, integrationProvider, integrationScope, label, capabilities })
+const visaoPublica = ({ domain, provider, integrationProvider, requiresStoreContext, label, capabilities }) => (
+  Object.freeze({ domain, provider, integrationProvider, requiresStoreContext, label, capabilities })
 );
 
 /**
@@ -115,13 +111,13 @@ function createConnectorRegistry({ integrations = null } = {}) {
     },
 
     /**
-     * Cria o connector de (domain, provider) ligado ao contexto. `storeId` é obrigatório, exceto em
-     * connector de escopo `organization`.
+     * Cria o connector de (domain, provider) ligado ao contexto. `storeId` é obrigatório quando o
+     * descritor declara `requiresStoreContext`.
      */
     resolve(domain, provider, contextoEntrada) {
       const descritor = obter(domain, provider);
       const contexto = createConnectorContext(contextoEntrada);
-      if (descritor.integrationScope !== INTEGRATION_SCOPES.ORGANIZATION && contexto.storeId === null) {
+      if (descritor.requiresStoreContext && contexto.storeId === null) {
         throw new ConnectorError(`${domain}/${provider} exige storeId no contexto`, CODIGOS.CONTEXT_INVALID);
       }
       const connector = descritor.create(Object.freeze({
@@ -135,7 +131,7 @@ function createConnectorRegistry({ integrations = null } = {}) {
         domain: descritor.domain,
         provider: descritor.provider,
         integrationProvider: descritor.integrationProvider,
-        integrationScope: descritor.integrationScope,
+        requiresStoreContext: descritor.requiresStoreContext,
         capabilities: descritor.capabilities,
         context: contexto,
         connector,

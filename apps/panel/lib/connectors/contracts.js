@@ -7,6 +7,10 @@
 //
 //   Domain Contract  →  ConnectorContext  →  IntegrationResolver (porta; Fase B.1)
 //
+// Premissa do produto (ORIA-TENANCY-STORE-01): 1 Organization = 1 Store. Toda integração pertence à
+// ORGANIZATION; a Store é só o contexto operacional (produtos, pedidos, catálogo, analytics). Por isso
+// não existe "escopo de integração": o que um connector declara é se precisa do contexto de Store.
+//
 // O que mora aqui:
 //   · DOMAINS e o contrato de cada um (métodos + capabilities);
 //   · o ConnectorContext (organizationId + storeId + integrationId opcional);
@@ -28,18 +32,6 @@ const DOMAINS = Object.freeze({
   AI: 'ai',
 });
 
-// Onde a integração do connector pode morar. É a resposta, no código, para "quando é legítimo usar
-// uma integração da Organization em vez da da Store":
-//   store                  a integração é da Store; storeId obrigatório; NUNCA cai para a Organization
-//   organization           a integração é da Organization (storeId pode ser null)
-//   store_or_organization  prefere a da Store; a da Organization só entra porque o descritor
-//                          declarou isso — nunca por omissão nem por "a única que existe"
-const INTEGRATION_SCOPES = Object.freeze({
-  STORE: 'store',
-  ORGANIZATION: 'organization',
-  STORE_OR_ORGANIZATION: 'store_or_organization',
-});
-
 // Vocabulário de evento do Oria (§13). O provider mapeia o nome dele para estes no adapter.
 const NORMALIZED_EVENT_TYPES = Object.freeze(['product_view', 'add_to_cart', 'checkout_started', 'purchase', 'refund']);
 
@@ -52,6 +44,8 @@ function congelar(valor) {
 }
 
 // Contrato por domain.
+//   storeContext    'required': todo connector do domain trabalha sobre dados da Store, então declarar
+//                   `requiresStoreContext: false` é inválido; 'optional': o connector decide
 //   alwaysRequired  métodos que todo connector do domain tem, com qualquer capability
 //   minimumOneOf    ao menos uma destas capabilities é true (connector que não faz nada não existe)
 //   capabilities    nome → métodos que ela EXIGE quando true ([] = capability informativa, sem método)
@@ -60,6 +54,7 @@ function congelar(valor) {
 // provider realmente oferece (§43).
 const CONTRACTS = congelar({
   [DOMAINS.COMMERCE]: {
+    storeContext: 'required',
     alwaysRequired: [],
     minimumOneOf: ['products'],
     capabilities: {
@@ -71,6 +66,7 @@ const CONTRACTS = congelar({
     },
   },
   [DOMAINS.ANALYTICS]: {
+    storeContext: 'required',
     alwaysRequired: [],
     minimumOneOf: ['productMetrics', 'eventMetrics'],
     capabilities: {
@@ -80,6 +76,7 @@ const CONTRACTS = congelar({
     },
   },
   [DOMAINS.EVENT_ANALYTICS]: {
+    storeContext: 'optional',
     alwaysRequired: ['getEventCoverage'],
     // §14.20: um provider pode só expor agregados; outro expõe evento a evento. Ao menos um dos dois.
     minimumOneOf: ['aggregatedProductEvents', 'eventLevel'],
@@ -91,6 +88,7 @@ const CONTRACTS = congelar({
     },
   },
   [DOMAINS.ADS]: {
+    storeContext: 'optional',
     alwaysRequired: [],
     minimumOneOf: ['campaignPerformance', 'adPerformance', 'creativePerformance'],
     capabilities: {
@@ -148,7 +146,10 @@ function integrationIdOpcional(valor) {
 }
 
 /**
- * Contexto de um connector: a quem (Organization + Store) a chamada pertence.
+ * Contexto de um connector.
+ *   organizationId  o tenant: dono das integrações, dos segredos e dos entitlements
+ *   storeId         contexto OPERACIONAL (produtos, pedidos, catálogo, analytics); não é dono de integração
+ *   integrationId   integração explicitamente ligada, quando o chamador já sabe qual (jobs, §22)
  * `integrationId` é opcional: fica null até a integração ser resolvida, e um job que já sabe qual
  * integração usar (§22) pode informá-lo — o IntegrationResolver confere que ela pertence à
  * Organization/Store do contexto.
@@ -183,7 +184,7 @@ function withIntegrationId(contexto, integrationId) {
 // ── Descritor ───────────────────────────────────────────────────────────────────────────────────
 
 const IDENTIFICADOR = /^[a-z][a-z0-9_]{1,40}$/;
-const CAMPOS_DO_DESCRITOR = Object.freeze(['domain', 'provider', 'integrationProvider', 'integrationScope', 'capabilities', 'label', 'create']);
+const CAMPOS_DO_DESCRITOR = Object.freeze(['domain', 'provider', 'integrationProvider', 'requiresStoreContext', 'capabilities', 'label', 'create']);
 
 const descritorInvalido = (mensagem) => new ConnectorError(mensagem, CODIGOS.DESCRIPTOR_INVALID);
 
@@ -194,7 +195,8 @@ const descritorInvalido = (mensagem) => new ConnectorError(mensagem, CODIGOS.DES
  *
  * `provider` é a chave no registry (`reserva_ink`). `integrationProvider` é a chave da credencial em
  * `integrations.provider` (`ink`) — por padrão igual a `provider`. É por ela que dois domains
- * compartilham a MESMA integração sem virarem o mesmo connector.
+ * compartilham a MESMA integração (sempre da Organization) sem virarem o mesmo connector.
+ * `requiresStoreContext` diz se o connector só funciona com uma Store no contexto.
  *
  * @param {Object} descritor
  * @returns {Readonly<Object>} descritor normalizado e congelado
@@ -208,7 +210,11 @@ function validateDescriptor(descritor) {
   if (typeof descritor.provider !== 'string' || !IDENTIFICADOR.test(descritor.provider)) throw descritorInvalido('provider inválido');
   const integrationProvider = descritor.integrationProvider === undefined ? descritor.provider : descritor.integrationProvider;
   if (typeof integrationProvider !== 'string' || !IDENTIFICADOR.test(integrationProvider)) throw descritorInvalido('integrationProvider inválido');
-  if (!Object.values(INTEGRATION_SCOPES).includes(descritor.integrationScope)) throw descritorInvalido('integrationScope inválido');
+  // Sem default: quem escreve o connector decide, de propósito, se ele precisa do contexto de Store.
+  if (typeof descritor.requiresStoreContext !== 'boolean') throw descritorInvalido('requiresStoreContext deve ser boolean');
+  if (contract.storeContext === 'required' && descritor.requiresStoreContext !== true) {
+    throw descritorInvalido(`${descritor.domain} sempre exige contexto de Store: requiresStoreContext deve ser true`);
+  }
   if (typeof descritor.create !== 'function') throw descritorInvalido('create deve ser uma função');
   if (descritor.label !== undefined && (typeof descritor.label !== 'string' || !descritor.label.trim())) throw descritorInvalido('label inválido');
 
@@ -230,7 +236,7 @@ function validateDescriptor(descritor) {
     domain: descritor.domain,
     provider: descritor.provider,
     integrationProvider,
-    integrationScope: descritor.integrationScope,
+    requiresStoreContext: descritor.requiresStoreContext,
     label: descritor.label ? descritor.label.trim() : descritor.provider,
     capabilities: Object.freeze(Object.fromEntries(esperadas.map((nome) => [nome, declaradas[nome]]))),
     create: descritor.create,
@@ -254,7 +260,6 @@ function assertConnectorShape(descritor, connector) {
 
 module.exports = {
   DOMAINS,
-  INTEGRATION_SCOPES,
   NORMALIZED_EVENT_TYPES,
   CONTRACTS,
   contractOf,

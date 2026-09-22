@@ -6,40 +6,44 @@
 
 const ORG_A = 'a1000000-0000-4000-8000-00000000000a';
 const ORG_B = 'b2000000-0000-4000-8000-00000000000b';
-const STORE_A1 = 'a1a10000-0000-4000-8000-0000000000a1';
-const STORE_A2 = 'a1a20000-0000-4000-8000-0000000000a2';
-const STORE_B1 = 'b2b10000-0000-4000-8000-0000000000b1';
+// Uma Store por Organization (ORIA-TENANCY-STORE-01): não há cenário com duas Stores na mesma Organization.
+const STORE_A = 'a1a10000-0000-4000-8000-0000000000a1';
+const STORE_B = 'b2b10000-0000-4000-8000-0000000000b1';
+const LOJAS = Object.freeze({ [STORE_A]: ORG_A, [STORE_B]: ORG_B });
 // `integrations.id` hoje é BIGSERIAL: o pg entrega string numérica. O contrato trata o id como opaco.
-const INT_INK_A1 = '101';
-const INT_INK_A2 = '102';
-const INT_GA4_A1 = '201';
-const INT_META_A_ORG = '301';
-const INT_INK_B1 = '111';
+const INT_INK_A = '101';
+const INT_GA4_A = '201';
+const INT_META_A = '301';
+const INT_INK_B = '111';
 
-// Uma linha por integração, no formato que a camada de integrações devolverá na Fase B.1.
+// Uma linha por integração — sempre da Organization, sem Store.
 const INTEGRACOES = Object.freeze([
-  { integrationId: INT_INK_A1, organizationId: ORG_A, storeId: STORE_A1, integrationProvider: 'ink' },
-  { integrationId: INT_INK_A2, organizationId: ORG_A, storeId: STORE_A2, integrationProvider: 'ink' },
-  { integrationId: INT_GA4_A1, organizationId: ORG_A, storeId: STORE_A1, integrationProvider: 'ga4' },
-  { integrationId: INT_META_A_ORG, organizationId: ORG_A, storeId: null, integrationProvider: 'meta' },
-  { integrationId: INT_INK_B1, organizationId: ORG_B, storeId: STORE_B1, integrationProvider: 'ink' },
+  { integrationId: INT_INK_A, organizationId: ORG_A, integrationProvider: 'ink' },
+  { integrationId: INT_GA4_A, organizationId: ORG_A, integrationProvider: 'ga4' },
+  { integrationId: INT_META_A, organizationId: ORG_A, integrationProvider: 'meta' },
+  { integrationId: INT_INK_B, organizationId: ORG_B, integrationProvider: 'ink' },
 ]);
 
-// Resolvedor de referência: casa organizationId + storeId + integrationProvider e só devolve a
-// integração da Organization quando o escopo do connector permite. Registra as consultas.
+const erroComCodigo = (mensagem, codigo) => Object.assign(new Error(mensagem), { codigo });
+
+// Resolvedor de referência (o comportamento que o adaptador real da B.1 implementa): a Store, se
+// vier, tem de ser da Organization; a integração é achada por organização + provider (+ id, se vier).
+// `storeId` do resultado é a Store de execução validada — não uma propriedade da integração.
 function portaDeIntegracoes(linhas = INTEGRACOES) {
   const consultas = [];
   return {
     consultas,
     async resolve(consulta) {
       consultas.push(consulta);
-      const { context, integrationProvider, integrationScope } = consulta;
-      const candidatas = linhas.filter((l) => l.organizationId === context.organizationId && l.integrationProvider === integrationProvider);
-      const daStore = candidatas.find((l) => l.storeId === context.storeId);
-      const daOrganization = candidatas.find((l) => l.storeId === null);
-      const achada = daStore || (integrationScope !== 'store' ? daOrganization : null);
-      if (!achada) throw new Error('integração não conectada');
-      return { ...achada, status: 'connected', config: {} };
+      const { context, integrationProvider } = consulta;
+      if (context.storeId !== null && LOJAS[context.storeId] !== context.organizationId) {
+        throw erroComCodigo('Store não pertence à Organization', 'STORE_NOT_IN_ORGANIZATION');
+      }
+      const achada = linhas.find((l) => l.organizationId === context.organizationId
+        && l.integrationProvider === integrationProvider
+        && (context.integrationId === null || l.integrationId === context.integrationId));
+      if (!achada) throw erroComCodigo('integração não conectada', 'INTEGRATION_NOT_CONNECTED');
+      return { ...achada, storeId: context.storeId, status: 'connected', config: {} };
     },
   };
 }
@@ -51,7 +55,7 @@ function descritorReservaInk(extra = {}) {
     domain: 'commerce',
     provider: 'reserva_ink',
     integrationProvider: 'ink',
-    integrationScope: 'store',
+    requiresStoreContext: true,
     capabilities: { products: true, variants: true, orders: true, productCosts: false, refunds: true },
     create: (deps) => ({
       listProducts: async () => ({ items: [], nextCursor: null }),
@@ -69,7 +73,7 @@ function descritorGa4(extra = {}) {
   return {
     domain: 'analytics',
     provider: 'ga4',
-    integrationScope: 'store',
+    requiresStoreContext: true,
     capabilities: { productMetrics: true, eventMetrics: false, realtime: false },
     create: (deps) => ({
       getProductPerformance: async () => [],
@@ -83,7 +87,8 @@ function descritorMetaAds(extra = {}) {
   return {
     domain: 'ads',
     provider: 'meta',
-    integrationScope: 'store_or_organization',
+    // Performance de campanha é dado da conta de anúncios (Organization): não precisa de Store.
+    requiresStoreContext: false,
     capabilities: { campaignPerformance: true, adPerformance: true, creativePerformance: false },
     create: (deps) => ({
       getCampaignPerformance: async () => [],
@@ -98,7 +103,8 @@ function descritorMetaEvents(extra = {}) {
   return {
     domain: 'event_analytics',
     provider: 'meta',
-    integrationScope: 'store_or_organization',
+    // Evento de produto é dado da Store.
+    requiresStoreContext: true,
     capabilities: { aggregatedProductEvents: true, eventLevel: false, productIdentity: true, eventDedupKeys: false },
     create: (deps) => ({
       getEventCoverage: async () => ({ events: [] }),
@@ -110,8 +116,8 @@ function descritorMetaEvents(extra = {}) {
 }
 
 module.exports = {
-  ORG_A, ORG_B, STORE_A1, STORE_A2, STORE_B1,
-  INT_INK_A1, INT_INK_A2, INT_GA4_A1, INT_META_A_ORG, INT_INK_B1,
+  ORG_A, ORG_B, STORE_A, STORE_B,
+  INT_INK_A, INT_GA4_A, INT_META_A, INT_INK_B,
   INTEGRACOES,
   portaDeIntegracoes,
   descritorReservaInk, descritorGa4, descritorMetaAds, descritorMetaEvents,
