@@ -351,7 +351,8 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
       '1790001100000_catalogo-ink-store-id', '1790001200000_ga4-store-id', '1790001300000_oauth-state-whatsapp', '1790001400000_campanhas-store-id', '1790001500000_reparar-loja-uuid-em-pedidos',
       '1790001600000_creative-trace',
       '1790001700000_creative-plan-v2',
-      '1790001800000_creative-feedback'],
+      '1790001800000_creative-feedback',
+      '1790001900000_creative-angles'],
     'o pre-deploy da D\' aplicou um conjunto de migrations diferente do declarado'
   );
   semSegredo(pdD.saida, 'pre-deploy D\'');

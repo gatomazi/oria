@@ -104,6 +104,7 @@ test('migrations · do zero, num banco vazio, aplicam todas na ordem', async (t)
       '1790001600000_creative-trace',
       '1790001700000_creative-plan-v2',
       '1790001800000_creative-feedback',
+      '1790001900000_creative-angles',
     ]);
     assert.ok((await tabelas(pool)).includes('integration_secrets'));
   } finally { await pool.end(); }

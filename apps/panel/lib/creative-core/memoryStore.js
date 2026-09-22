@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 // Store em memória com o mesmo contrato do pgStore. Usado pelos testes (test/creative-core.test.js) — nunca em produção:
 // o módulo exige Postgres (sem DATABASE_URL as rotas respondem 503).
 
@@ -24,6 +26,7 @@ function createMemoryStore() {
   const items = new Map();
   const assets = new Map();
   const feedback = new Map();
+  const angles = new Map();
   const now = () => new Date().toISOString();
 
   function own(map, tenantId, id) {
@@ -213,6 +216,49 @@ function createMemoryStore() {
         }
       }
       return [...grupos.values()].sort((a, b) => b.total - a.total || (a.key < b.key ? -1 : 1));
+    },
+
+    // Ângulos customizados (Fase D) — mesmo contrato do pgStore.
+    async listAngles(tenantId, { storeId = null, includeInactive = false } = {}) {
+      return [...angles.values()]
+        .filter((a) => a.organizationId === tenantId && (includeInactive || a.active)
+          && (a.storeId === null || (storeId && a.storeId === storeId)))
+        .sort((a, b) => (a.name < b.name ? -1 : 1)).map(clone);
+    },
+    async getAngle(tenantId, id) {
+      const row = angles.get(id);
+      return row && row.organizationId === tenantId ? clone(row) : null;
+    },
+    async createAngle(tenantId, { storeId = null, slug, name, description, family, peopleMode, preset, definition, createdBy }) {
+      const scope = storeId ? 'store' : 'organization';
+      const clash = [...angles.values()].some((a) => a.organizationId === tenantId && a.storeId === storeId && a.slug === slug);
+      if (clash) throw Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
+      const id = crypto.randomUUID();
+      const row = {
+        id, organizationId: tenantId, storeId, scope, slug, name, description: description || null, family,
+        peopleMode, preset: preset || null, definition: definition || {}, active: true, version: 1,
+        createdBy: createdBy || null, createdAt: now(), updatedAt: now(),
+      };
+      angles.set(id, row);
+      return clone(row);
+    },
+    async updateAngle(tenantId, id, patch) {
+      const row = angles.get(id);
+      if (!row || row.organizationId !== tenantId) return null;
+      for (const key of ['name', 'description', 'family', 'peopleMode', 'preset', 'definition', 'active']) {
+        if (patch[key] !== undefined) row[key] = patch[key];
+      }
+      row.version += 1;
+      row.updatedAt = now();
+      return clone(row);
+    },
+    async archiveAngle(tenantId, id) {
+      const row = angles.get(id);
+      if (!row || row.organizationId !== tenantId || !row.active) return false;
+      row.active = false;
+      row.version += 1;
+      row.updatedAt = now();
+      return true;
     },
 
     async listHistory(tenantId, limit = 50) {

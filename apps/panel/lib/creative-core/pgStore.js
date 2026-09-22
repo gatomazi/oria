@@ -6,6 +6,7 @@
 
 const { aggregateJobStatus, FINAL_JOB } = require('./status');
 const { feedbackMethods } = require('./pgFeedback');
+const { angleMethods } = require('./pgAngles');
 
 const PROFILE_TABLE = Object.freeze({
   brand: 'creative_brand_profiles',
@@ -101,6 +102,8 @@ function createPgStore(pgPool) {
 
     // Gostei / Não gostei (Fase C): em módulo próprio, para o SQL do feedback não se misturar ao do resto do store.
     ...feedbackMethods(q),
+    // Ângulos customizados (Fase D): mesmo motivo.
+    ...angleMethods(q),
 
     // A OpenAI key não mora aqui desde a Fase 4: é a integração 'openai' da Organization
     // (integration_secrets). creative_settings.openai_key_* só é lida pelo import legado.

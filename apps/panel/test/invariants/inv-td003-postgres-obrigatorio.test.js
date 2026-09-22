@@ -139,6 +139,7 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       '1790001600000_creative-trace',
       '1790001700000_creative-plan-v2',
       '1790001800000_creative-feedback',
+      '1790001900000_creative-angles',
     ]);
   } finally {
     await pool.end();

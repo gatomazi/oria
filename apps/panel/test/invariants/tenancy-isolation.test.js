@@ -85,6 +85,10 @@ async function valoresPara(tabela, chave) {
     });
     delete v.tenant_id;
   }
+  // Fase D: ângulo customizado de escopo Organization — slug único por (organization_id) (índice parcial, store_id NULL).
+  if (tabela === 'creative_angles') {
+    Object.assign(v, { scope: 'organization', slug: `teste-${chave.toLowerCase()}`, name: 'Ângulo de teste', family: 'connection', people_mode: 'optional' });
+  }
   const decl = manifesto.porTabela(tabela);
   if (decl && decl.pai) v[decl.pai.coluna] = linhas[chave].get(decl.pai.tabela).id;
   return v;

@@ -25,6 +25,7 @@ const { createWorker } = require('../lib/creative-core/worker');
 const { progress } = require('../lib/creative-core/status');
 const { promptVersionFor, planSchemaVersionFor } = require('../lib/creative-core/rollout');
 const { mapDraftToForm } = require('../lib/creative-core/draft');
+const { FAMILIES: ANGLE_FAMILIES, PEOPLE_MODES: ANGLE_PEOPLE_MODES } = require('../lib/creative-core/pgAngles');
 
 const PROFILE_CONTRACT = { brand: 'BrandKit', niche: 'NicheKit', context: 'ContextProfile', persona: 'Persona' };
 const PROFILE_PATH = { brand: 'brand-kits', niche: 'niche-kits', context: 'context-profiles', persona: 'personas' };
@@ -34,6 +35,7 @@ const PREVIEW_PROMPTS_MAX = 12;
 const PREVIEW_CONCORRENCIA = 4;
 const FEEDBACK_VERDICTS = ['liked', 'disliked'];
 const FEEDBACK_DIMENSIONS = ['angle', 'objective', 'context', 'interaction', 'composition', 'product'];
+const ANGLE_SLUG_RE = /^[a-z0-9][a-z0-9_-]{1,59}$/;
 
 function responderErro(res, err, logger) {
   if (err instanceof CoreUnavailableError) {
@@ -206,6 +208,92 @@ function criarRouterCriativos(deps) {
       catalog: contratos.catalog,
       versions: contratos.versions,
     });
+  }));
+
+  // ── Angles V2 (Fase D): ângulos customizados de Organization/Store ───────────────────────────────────────────
+  // System fica no catálogo do core (GET /catalog → catalog.angleFamilies); aqui só a metade tenant-owned.
+  function angleForm(body, { parcial = false } = {}) {
+    const campos = ['scope', 'slug', 'name', 'description', 'family', 'peopleMode', 'preset', 'definition'];
+    for (const key of Object.keys(body || {})) if (!campos.includes(key)) throw new InputError(`campo desconhecido: ${key}`);
+    const out = {};
+    if (!parcial || body.slug !== undefined) {
+      if (!ANGLE_SLUG_RE.test(body.slug || '')) throw new InputError('slug: minúsculas, números, - ou _, 2 a 60 caracteres');
+      out.slug = body.slug;
+    }
+    if (!parcial || body.name !== undefined) {
+      if (!body.name || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 120) throw new InputError('name: obrigatório (até 120 caracteres)');
+      out.name = body.name.trim();
+    }
+    if (body.description !== undefined) {
+      if (body.description !== null && (typeof body.description !== 'string' || body.description.length > 2000)) throw new InputError('description: até 2000 caracteres');
+      out.description = body.description;
+    }
+    if (!parcial || body.family !== undefined) {
+      if (!ANGLE_FAMILIES.includes(body.family)) throw new InputError(`family: use ${ANGLE_FAMILIES.join(', ')}`);
+      out.family = body.family;
+    }
+    if (!parcial || body.peopleMode !== undefined) {
+      if (!ANGLE_PEOPLE_MODES.includes(body.peopleMode)) throw new InputError(`peopleMode: use ${ANGLE_PEOPLE_MODES.join(', ')}`);
+      out.peopleMode = body.peopleMode;
+    }
+    if (body.preset !== undefined) {
+      if (body.preset !== null && (typeof body.preset !== 'string' || body.preset.length > 60)) throw new InputError('preset: até 60 caracteres');
+      out.preset = body.preset;
+    }
+    if (body.definition !== undefined) {
+      if (typeof body.definition !== 'object' || body.definition === null || Array.isArray(body.definition)) throw new InputError('definition: objeto');
+      out.definition = body.definition;
+    }
+    return out;
+  }
+
+  router.get('/angles', exigirStore, exigirModulo, rota(async (req, res) => {
+    const contratos = await core.contracts();
+    const storeId = storeAtual();
+    const todas = await store.listAngles(req.creativeTenant, { storeId });
+    res.json({
+      system: contratos.catalog.angle_families || [],
+      organization: todas.filter((a) => a.scope === 'organization'),
+      store: storeId ? todas.filter((a) => a.scope === 'store' && a.storeId === storeId) : [],
+    });
+  }));
+
+  router.post('/angles', exigirStore, exigirModulo, rota(async (req, res) => {
+    const corpo = req.body || {};
+    if (!['organization', 'store'].includes(corpo.scope)) throw new InputError('scope: use organization ou store');
+    const dados = angleForm(corpo);
+    let storeId = null;
+    if (corpo.scope === 'store') {
+      storeId = storeAtual();
+      if (!storeId) throw new InputError('scope store: nenhuma Store resolvida no contexto');
+    }
+    try {
+      const criado = await store.createAngle(req.creativeTenant, { ...dados, storeId, createdBy: usuarioDe(req) });
+      res.status(201).json(criado);
+    } catch (err) {
+      if (err && (err.code === '23505' || /unique constraint/i.test(err.message || ''))) {
+        throw new InputError(`slug já usado neste escopo: ${dados.slug}`);
+      }
+      throw err;
+    }
+  }));
+
+  router.put('/angles/:id', exigirStore, exigirModulo, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
+    const existente = await store.getAngle(req.creativeTenant, req.params.id);
+    if (!existente) return res.status(404).json({ error: 'ângulo não encontrado' });
+    const corpo = { ...(req.body || {}) };
+    delete corpo.scope; // escopo não muda depois de criado — outro ângulo, se for o caso
+    const dados = angleForm(corpo, { parcial: true });
+    const atualizado = await store.updateAngle(req.creativeTenant, req.params.id, dados);
+    res.json(atualizado);
+  }));
+
+  router.delete('/angles/:id', exigirStore, exigirModulo, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
+    const apagado = await store.archiveAngle(req.creativeTenant, req.params.id);
+    if (!apagado) return res.status(404).json({ error: 'ângulo não encontrado ou já inativo' });
+    res.json({ id: req.params.id, active: false });
   }));
 
   // ── BYOK ────────────────────────────────────────────────────────────────
