@@ -13,8 +13,32 @@
 
 const PROVIDER = 'reserva_ink';
 
-function paraTexto(valor) {
-  return valor === null || valor === undefined ? null : String(valor);
+// Fase D · §9: um id externo só vira TEXT com segurança se o parser do client já não tiver perdido
+// precisão. A Ink usa inteiro; `res.json()` (client.js) já entrega isso como Number — se esse Number
+// passou de Number.MAX_SAFE_INTEGER, o arredondamento já aconteceu ANTES de chegar aqui, e não tem
+// volta: convertê-lo para string produziria um id que parece exato e não é. Por isso falha explícito
+// em vez de persistir um id potencialmente errado. String já veio como veio (nunca perde precisão em
+// trânsito) e é aceita como está.
+class ExternalIdUnsafeError extends TypeError {
+  constructor(campo, valor) {
+    super(`${campo}: id numérico ${valor} não é um inteiro seguro em JS (> Number.MAX_SAFE_INTEGER) — não convertido para não persistir um id arredondado`);
+    this.name = 'ExternalIdUnsafeError';
+    this.codigo = 'EXTERNAL_ID_UNSAFE';
+  }
+}
+
+function paraIdExterno(valor, campo) {
+  if (typeof valor === 'string') {
+    const s = valor.trim();
+    if (!s) throw new TypeError(`${campo}: id vazio`);
+    return s;
+  }
+  if (typeof valor === 'number') {
+    if (!Number.isFinite(valor)) throw new TypeError(`${campo}: id não é um número finito (${valor})`);
+    if (!Number.isSafeInteger(valor)) throw new ExternalIdUnsafeError(campo, valor);
+    return String(valor);
+  }
+  throw new TypeError(`${campo}: id deve ser string ou number, recebi ${typeof valor}`);
 }
 
 /**
@@ -30,7 +54,7 @@ function mapProduct(produtoInk, { organizationId, storeId }) {
     organizationId,
     storeId,
     provider: PROVIDER,
-    providerProductId: String(produtoInk.id),
+    providerProductId: paraIdExterno(produtoInk.id, 'produto.id'),
     name: produtoInk.name ?? '',
     slug: produtoInk.slug ?? null,
     imageUrl: produtoInk.main_image_url ?? null,
@@ -67,7 +91,7 @@ function mapVariant(variantInk, { organizationId, storeId, commerceProductId }) 
     storeId,
     commerceProductId,
     provider: PROVIDER,
-    providerVariantId: String(variantInk.id),
+    providerVariantId: paraIdExterno(variantInk.id, 'variante.id'),
     sku: variantInk.sku ?? null,
     color: variantInk.color ?? null,
     size: variantInk.size ?? null,
@@ -88,4 +112,4 @@ function mapVariants(produtoInk, contexto) {
   return (produtoInk.product_variants || []).map((v) => mapVariant(v, { ...contexto, commerceProductId: undefined }));
 }
 
-module.exports = { PROVIDER, mapProduct, mapVariant, mapVariants, paraTexto };
+module.exports = { PROVIDER, mapProduct, mapVariant, mapVariants, paraIdExterno, ExternalIdUnsafeError };

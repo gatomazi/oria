@@ -56,7 +56,7 @@ function descritorReservaInk(extra = {}) {
     provider: 'reserva_ink',
     integrationProvider: 'ink',
     requiresStoreContext: true,
-    capabilities: { products: true, variants: true, orders: true, productCosts: false, refunds: true },
+    capabilities: { products: true, variants: true, productsWithVariants: false, orders: true, productCosts: false, refunds: true },
     create: (deps) => ({
       listProducts: async () => ({ items: [], nextCursor: null }),
       getProduct: async () => null,

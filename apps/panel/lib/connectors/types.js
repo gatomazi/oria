@@ -124,13 +124,25 @@
  */
 
 /**
+ * Fase D: produto + variantes do MESMO payload do provider — nunca uma composição feita por quem
+ * chama (`Page.items` aqui não é `CommerceProduct[]`; é este par). Existe para que um full catalog
+ * sync consiga persistir produto e variantes de uma página sem 1 chamada extra por produto.
+ *
+ * @typedef {Object} CommerceProductWithVariants
+ * @property {CommerceProduct} product
+ * @property {CommerceProductVariant[]} variants
+ */
+
+/**
  * Capabilities `products`: listProducts, getProduct · `variants`: listProductVariants ·
+ * `productsWithVariants`: listProductsWithVariants (produto+variantes em lote, sem N+1) ·
  * `orders`: listOrders, getOrder · `productCosts`: getProductCost · `refunds`: informativa.
  *
  * @typedef {Object} CommerceConnector
  * @property {(entrada: {cursor?: string|null, limit?: number, updatedSince?: string}) => Promise<Page>} [listProducts]
  * @property {(entrada: {providerProductId: string}) => Promise<CommerceProduct|null>} [getProduct]
  * @property {(entrada: {providerProductId?: string, cursor?: string|null, limit?: number}) => Promise<Page>} [listProductVariants]
+ * @property {(entrada: {cursor?: string|null, limit?: number}) => Promise<{items: CommerceProductWithVariants[], nextCursor: string|null}>} [listProductsWithVariants]
  * @property {(entrada: {startDate: string, endDate: string, cursor?: string|null, limit?: number}) => Promise<Page>} [listOrders]
  * @property {(entrada: {providerOrderId: string}) => Promise<CommerceOrder|null>} [getOrder]
  * @property {(entrada: {providerProductId: string}) => Promise<{cost: number, currency: string}|null>} [getProductCost]

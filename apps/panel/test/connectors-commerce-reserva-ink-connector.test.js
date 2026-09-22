@@ -99,10 +99,11 @@ test('C · resolve commerce/reserva_ink pelo registry, ligado à Organization/St
 test('C · capabilities verdadeiras correspondem exatamente aos métodos implementados', () => emA(async () => {
   const { registry } = await montarAmbiente();
   const r = registry.resolve('commerce', 'reserva_ink', ctxA);
-  assert.deepEqual({ ...r.capabilities }, { products: true, variants: true, orders: false, refunds: false, productCosts: false });
+  assert.deepEqual({ ...r.capabilities }, { products: true, variants: true, productsWithVariants: true, orders: false, refunds: false, productCosts: false });
   assert.equal(typeof r.connector.listProducts, 'function');
   assert.equal(typeof r.connector.getProduct, 'function');
   assert.equal(typeof r.connector.listProductVariants, 'function');
+  assert.equal(typeof r.connector.listProductsWithVariants, 'function');
   // Nada implementado além do que foi declarado true.
   assert.equal(r.connector.listOrders, undefined);
   assert.equal(r.connector.getOrder, undefined);
@@ -246,6 +247,63 @@ test('C · listProductVariants exige providerProductId (a Ink não lista variant
   const { registry } = await montarAmbiente();
   const r = registry.resolve('commerce', 'reserva_ink', ctxA);
   await assert.rejects(r.connector.listProductVariants({}), TypeError);
+}));
+
+// ── Fase D: listProductsWithVariants — sem N+1 ───────────────────────────────────────────────────
+
+test('D · productsWithVariants é true e listProductsWithVariants entrega produto+variantes juntos', () => emA(async () => {
+  const { registry } = await montarAmbiente();
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  assert.equal(r.capabilities.productsWithVariants, true);
+  assert.equal(typeof r.connector.listProductsWithVariants, 'function');
+}));
+
+test('D · listProductsWithVariants mapeia produto e variantes do MESMO payload, numa única chamada HTTP', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  let chamadas = 0;
+  definirFetch(async (url) => {
+    chamadas += 1;
+    assert.match(url, /\/v1\/stores\/products\?page=1&per_page=100$/); // listagem, não detalhe de produto
+    return jsonRes(200, { products: [PRODUTO_INK], page: 1, per_page: 100, total_pages: 1, total_count: 1 });
+  });
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  const pagina = await r.connector.listProductsWithVariants({});
+  assert.equal(chamadas, 1, 'listProductsWithVariants não pode fazer chamada extra por produto');
+  assert.equal(pagina.items.length, 1);
+  assert.equal(pagina.items[0].product.providerProductId, '386559');
+  assert.equal(pagina.items[0].variants.length, 1);
+  assert.equal(pagina.items[0].variants[0].providerVariantId, '9001');
+  assert.equal(pagina.items[0].variants[0].sku, 'CAM-GG-AZUL');
+}));
+
+test('D · listProductsWithVariants de uma página com N produtos faz exatamente 1 chamada HTTP (nunca 1 por produto)', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  let chamadas = 0;
+  const produtos = Array.from({ length: 25 }, (_, i) => ({
+    ...PRODUTO_INK, id: 400000 + i, product_variants: [{ id: 900000 + i, sku: `SKU-${i}` }],
+  }));
+  definirFetch(async () => { chamadas += 1; return jsonRes(200, { products: produtos, page: 1, per_page: 100, total_pages: 1, total_count: 25 }); });
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  const pagina = await r.connector.listProductsWithVariants({});
+  assert.equal(chamadas, 1);
+  assert.equal(pagina.items.length, 25);
+  assert.equal(pagina.items.reduce((n, it) => n + it.variants.length, 0), 25);
+  assert.deepEqual(pagina.items.map((it) => it.variants[0].sku), produtos.map((_, i) => `SKU-${i}`));
+}));
+
+test('D · listProductsWithVariants pagina como listProducts (mesmo nextCursor)', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(async () => jsonRes(200, { products: [PRODUTO_INK], page: 2, per_page: 100, total_pages: 5, total_count: 500 }));
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  assert.equal((await r.connector.listProductsWithVariants({ cursor: '2' })).nextCursor, '3');
+}));
+
+test('D · listProductsWithVariants: produto sem product_variants devolve variants: []', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  const { product_variants, ...semVariantes } = PRODUTO_INK;
+  definirFetch(async () => jsonRes(200, { products: [semVariantes], page: 1, per_page: 100, total_pages: 1, total_count: 1 }));
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  assert.deepEqual((await r.connector.listProductsWithVariants({})).items[0].variants, []);
 }));
 
 // ── Erros normalizados ─────────────────────────────────────────────────────────────────────────

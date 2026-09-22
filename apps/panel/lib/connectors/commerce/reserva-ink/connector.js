@@ -15,10 +15,15 @@ const { createInkClient, InkApiError } = require('./client');
 const { mapProduct, mapVariants } = require('./mapper');
 
 // §9: capability true só quando o método correspondente está implementado de verdade.
-//   products  → listProducts, getProduct           implementados
-//   variants  → listProductVariants                implementado (escopo: por produto — ver abaixo)
+//   products              → listProducts, getProduct            implementados
+//   variants              → listProductVariants                 implementado (escopo: por produto — ver abaixo)
+//   productsWithVariants  → listProductsWithVariants (Fase D)    a MESMA chamada de listProducts: a
+//                           Ink já manda `product_variants[]` dentro de cada produto da listagem —
+//                           nunca 1 chamada de variantes por produto
 //   orders, refunds, productCosts → fora desta fase
-const CAPABILITIES = Object.freeze({ products: true, variants: true, orders: false, refunds: false, productCosts: false });
+const CAPABILITIES = Object.freeze({
+  products: true, variants: true, productsWithVariants: true, orders: false, refunds: false, productCosts: false,
+});
 const MAX_PER_PAGE = 100;
 const PROVIDER_PRODUCT_ID_RE = /^[0-9]+$/; // a Ink usa inteiro; o connector aceita a forma texto do contrato canônico
 
@@ -53,7 +58,12 @@ function createReservaInkCommerceConnector({ context, resolveIntegration, secret
     return createInkClient({ obterToken: (usar) => secrets.use('api_token', usar), fetchImpl });
   }
 
-  async function listProducts({ cursor, limit } = {}) {
+  // Uma única chamada por página, compartilhada por listProducts e listProductsWithVariants: o
+  // payload de `GET /v1/stores/products` já traz `product_variants[]` em cada item — o que muda
+  // entre os dois métodos é só o que o mapper aproveita da MESMA resposta, nunca uma segunda
+  // chamada. É o que impede o full catalog sync (lib/product-analytics/catalog-sync.js) de fazer
+  // 1 GET de variantes por produto.
+  async function buscarPaginaDeProdutos({ cursor, limit } = {}) {
     const page = cursor === undefined || cursor === null ? 1 : Number(cursor);
     if (!Number.isInteger(page) || page < 1) throw new TypeError('cursor inválido');
     const perPage = Math.min(Math.max(Number.isFinite(Number(limit)) && limit ? Number(limit) : MAX_PER_PAGE, 1), MAX_PER_PAGE);
@@ -64,9 +74,20 @@ function createReservaInkCommerceConnector({ context, resolveIntegration, secret
     } catch (err) {
       throw normalizarErro(err);
     }
-    const items = (data.products || []).map((p) => mapProduct(p, context));
+    const produtosBrutos = data.products || [];
     const totalPages = data.total_pages || 1;
-    return Object.freeze({ items, nextCursor: page < totalPages ? String(page + 1) : null });
+    return { produtosBrutos, nextCursor: page < totalPages ? String(page + 1) : null };
+  }
+
+  async function listProducts(entrada = {}) {
+    const { produtosBrutos, nextCursor } = await buscarPaginaDeProdutos(entrada);
+    return Object.freeze({ items: produtosBrutos.map((p) => mapProduct(p, context)), nextCursor });
+  }
+
+  async function listProductsWithVariants(entrada = {}) {
+    const { produtosBrutos, nextCursor } = await buscarPaginaDeProdutos(entrada);
+    const items = produtosBrutos.map((p) => Object.freeze({ product: mapProduct(p, context), variants: mapVariants(p, context) }));
+    return Object.freeze({ items, nextCursor });
   }
 
   async function getProduct({ providerProductId } = {}) {
@@ -100,7 +121,7 @@ function createReservaInkCommerceConnector({ context, resolveIntegration, secret
     return Object.freeze({ items: mapVariants(data.product, context), nextCursor: null });
   }
 
-  return Object.freeze({ listProducts, getProduct, listProductVariants });
+  return Object.freeze({ listProducts, getProduct, listProductVariants, listProductsWithVariants });
 }
 
 module.exports = { createReservaInkCommerceConnector, CAPABILITIES };

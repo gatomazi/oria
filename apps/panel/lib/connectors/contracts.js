@@ -56,10 +56,18 @@ const CONTRACTS = congelar({
   [DOMAINS.COMMERCE]: {
     storeContext: 'required',
     alwaysRequired: [],
-    minimumOneOf: ['products'],
+    // `productsWithVariants` conta: um connector pode oferecer só o combinado em lote e nada de
+    // `listProducts` avulso — ainda assim "faz algo" no domain commerce.
+    minimumOneOf: ['products', 'productsWithVariants'],
     capabilities: {
       products: ['listProducts', 'getProduct'],
       variants: ['listProductVariants'],
+      // Fase D: produto + variantes num só payload, quando o provider já entrega assim (a Ink
+      // manda `product_variants[]` dentro de cada produto da listagem). Existe para que um full
+      // catalog sync NUNCA precise de 1 chamada de variantes por produto — ver
+      // lib/product-analytics/catalog-sync.js. Capability própria, não um efeito colateral de
+      // `products`+`variants`: um provider pode ter as duas sem entregar o combinado em lote.
+      productsWithVariants: ['listProductsWithVariants'],
       orders: ['listOrders', 'getOrder'],
       productCosts: ['getProductCost'],
       refunds: [],

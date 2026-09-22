@@ -7,7 +7,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { PROVIDER, mapProduct, mapVariant, mapVariants } = require('../lib/connectors/commerce/reserva-ink/mapper');
+const { PROVIDER, mapProduct, mapVariant, mapVariants, paraIdExterno, ExternalIdUnsafeError } = require('../lib/connectors/commerce/reserva-ink/mapper');
 
 const CTX = Object.freeze({ organizationId: 'a1000000-0000-4000-8000-00000000000a', storeId: 'a1a10000-0000-4000-8000-0000000000a1' });
 
@@ -136,4 +136,45 @@ test('C · mapVariants mapeia todas as variantes do produto, na ordem', () => {
 
 test('C · mapVariants de produto sem product_variants devolve lista vazia, não erro', () => {
   assert.deepEqual(mapVariants({ id: 1 }, CTX), []);
+});
+
+// ── Fase D §9: segurança numérica de IDs externos ──────────────────────────────────────────────
+
+test('D · paraIdExterno: string é aceita como está (nunca perde precisão em trânsito)', () => {
+  assert.equal(paraIdExterno('386559', 'x'), '386559');
+  assert.equal(paraIdExterno('9007199254740995123', 'x'), '9007199254740995123'); // 19 dígitos, só cabe como string
+});
+
+test('D · paraIdExterno: integer seguro vira string exata, sem notação científica', () => {
+  assert.equal(paraIdExterno(386559, 'x'), '386559');
+  assert.equal(paraIdExterno(Number.MAX_SAFE_INTEGER, 'x'), '9007199254740991');
+  assert.equal(paraIdExterno(0, 'x'), '0');
+});
+
+test('D · paraIdExterno: number > MAX_SAFE_INTEGER falha explícito, nunca converte arredondado', () => {
+  assert.throws(() => paraIdExterno(Number.MAX_SAFE_INTEGER + 2, 'produto.id'), (err) => {
+    assert.ok(err instanceof ExternalIdUnsafeError);
+    assert.equal(err.codigo, 'EXTERNAL_ID_UNSAFE');
+    assert.match(err.message, /produto\.id/);
+    return true;
+  });
+  assert.throws(() => paraIdExterno(1e21, 'x'), ExternalIdUnsafeError);
+});
+
+test('D · paraIdExterno: NaN/Infinity/vazio/tipo errado falham, nunca viram "undefined" ou "NaN" persistido', () => {
+  for (const ruim of [NaN, Infinity, -Infinity]) assert.throws(() => paraIdExterno(ruim, 'x'), TypeError);
+  assert.throws(() => paraIdExterno('', 'x'), TypeError);
+  assert.throws(() => paraIdExterno('   ', 'x'), TypeError);
+  assert.throws(() => paraIdExterno(null, 'x'), TypeError);
+  assert.throws(() => paraIdExterno(undefined, 'x'), TypeError);
+  assert.throws(() => paraIdExterno({}, 'x'), TypeError);
+  assert.throws(() => paraIdExterno([386559], 'x'), TypeError);
+});
+
+test('D · mapProduct propaga o erro de id inseguro em vez de persistir algo arredondado', () => {
+  assert.throws(() => mapProduct({ id: Number.MAX_SAFE_INTEGER + 10, name: 'x' }, CTX), ExternalIdUnsafeError);
+});
+
+test('D · mapVariant propaga o erro de id inseguro', () => {
+  assert.throws(() => mapVariant({ id: Number.MAX_SAFE_INTEGER + 10 }, { ...CTX, commerceProductId: null }), ExternalIdUnsafeError);
 });

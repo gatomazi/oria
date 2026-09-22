@@ -190,6 +190,16 @@ test('Fase B · connector que não faz nada não existe: exige ao menos uma capa
   validateDescriptor(descritorMetaEvents({ capabilities: { aggregatedProductEvents: false, eventLevel: true, productIdentity: false, eventDedupKeys: true } }));
 });
 
+test('Fase D · commerce aceita um connector que só implementa productsWithVariants, sem products avulso', () => {
+  const d = validateDescriptor(descritorReservaInk({
+    capabilities: { products: false, variants: false, productsWithVariants: true, orders: false, refunds: false, productCosts: false },
+  }));
+  assert.deepEqual(requiredMethods('commerce', d.capabilities), ['listProductsWithVariants']);
+  rejeita(() => validateDescriptor(descritorReservaInk({
+    capabilities: { products: false, variants: true, productsWithVariants: false, orders: false, refunds: false, productCosts: false },
+  })), CODIGOS.DESCRIPTOR_INVALID);
+});
+
 test('Fase B · o descritor não guarda referência às capabilities passadas: mutar a entrada não muda o registro', () => {
   const capabilities = { ...descritorGa4().capabilities };
   const v = validateDescriptor(descritorGa4({ capabilities }));
