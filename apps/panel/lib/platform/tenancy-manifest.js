@@ -296,6 +296,13 @@ const TABELAS_PLATAFORMA = Object.freeze([
   // Fase 7 · estado de onboarding (lib/platform/onboarding.js). Filho depois do pai.
   Object.freeze({ tabela: 'onboarding_sessions', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'onboarding_steps', colunaTenant: 'organization_id' }),
+  // Fase D · catálogo canônico de Commerce (lib/connectors/*, lib/product-analytics/catalog-sync.js).
+  // Nasce com organization_id/store_id explícitos — nunca teve `loja`. Ordem importa: variants e o
+  // log de sync são filhos de commerce_products só pela FK composta, não pela regra 'pai' (essa é
+  // exclusiva de TABELAS_TENANT — ver tenancy-schema.test.js).
+  Object.freeze({ tabela: 'commerce_products', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'commerce_product_variants', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'commerce_catalog_sync_logs', colunaTenant: 'organization_id' }),
 ]);
 
 // Globais DECLARADAS. Não recebem RLS. A role da aplicação acessa só as de identidade
