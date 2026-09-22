@@ -172,6 +172,42 @@ def test_given_a_default_gaze_then_it_wins_over_the_legacy_angles_own_default_bu
     assert with_interaction["scene"]["gaze"]["mode"] == "interaction", "interaction still wins over the custom default"
 
 
+# ------------------------------------------------------------------ D.1.1 §3: `definition` is advisory text only,
+# never a second authority — the warning below is the ONE narrow, best-effort exception (gaze wording only; see
+# `_definition_gaze_hint`'s docstring in planner_v2.py for exactly what it does and does not cover).
+def test_given_a_definition_that_reads_camera_but_the_resolved_gaze_is_forced_elsewhere_then_a_warning_is_emitted_and_gaze_is_unchanged():
+    # CAFE's definition (fixture at the top of this file) says "olhando para a câmera" — the exact wording the
+    # brief calls out. Forcing gaze_mode="off_camera" (the user's own explicit choice, highest precedence) creates
+    # a real mismatch between what the prose says and what the plan actually resolved.
+    plan = _plan(CAFE, gaze_mode="off_camera")
+    assert plan["scene"]["gaze"]["mode"] == "off_camera", "the warning never overrides the resolved gaze"
+    assert any(w.startswith("custom_angle_definition_gaze_conflict:") and "definition_suggests=camera" in w and "resolved=off_camera" in w
+               for w in plan["warnings"])
+
+
+def test_given_a_definition_that_matches_the_resolved_gaze_then_no_warning():
+    plan = _plan(CAFE, gaze_mode="camera")  # CAFE's own wording says "camera" too — no mismatch
+    assert not any(w.startswith("custom_angle_definition_gaze_conflict:") for w in plan["warnings"])
+
+
+def test_given_the_negated_off_camera_phrase_then_it_is_read_correctly_not_as_agreement_with_camera():
+    # URBANO's `visual_notes` says "não olha para a câmera" — folded, that STRING CONTAINS "olha para a camera" as
+    # a substring. If the negation were misread as agreement, forcing gaze_mode="camera" would wrongly look like
+    # a match (no warning). It must not: the negated phrase has to win the lexical check, so the conflict with
+    # the forced "camera" mode is caught.
+    plan = _plan(URBANO, gaze_mode="camera")
+    assert plan["scene"]["gaze"]["mode"] == "camera"
+    conflitos = [w for w in plan["warnings"] if w.startswith("custom_angle_definition_gaze_conflict:")]
+    assert conflitos and "definition_suggests=off_camera" in conflitos[0] and "resolved=camera" in conflitos[0]
+
+
+def test_given_definition_text_with_no_gaze_wording_then_no_warning_regardless_of_resolved_gaze():
+    sem_pista = custom_angle(definition={"lighting": "luz natural lateral, mesa de madeira"})
+    for modo in ("camera", "off_camera", "product"):
+        plan = _plan(sem_pista, gaze_mode=modo)
+        assert not any(w.startswith("custom_angle_definition_gaze_conflict:") for w in plan["warnings"]), modo
+
+
 def test_given_custom_angle_without_auto_then_the_request_is_refused():
     request = _req(angle_id="LIFESTYLE_COTIDIANO", plan_schema_version=2, custom_angle=CAFE)
     err = None

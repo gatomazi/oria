@@ -127,6 +127,58 @@ def semantic_warnings(products: list, subjects: list) -> list[dict]:
     return out + comp.wearer_warnings(products, subjects)
 
 
+# ------------------------------------------------------------------ custom angle definition vs. structured gaze
+#
+# D.1.1 §3: `definition` (free text a person typed when creating a Custom Angle — `photographic_direction`,
+# `framing`, `composition`, `visual_notes`) is NEVER a second authority. `resolve_gaze` above never reads it —
+# only `custom_angle["default_gaze"]` (a structured field) feeds gaze resolution, and only below `interaction`
+# and the user's own explicit choice. The same holds for people count, who wears the product, structured
+# action and context: all of those come exclusively from `subjects`/`interaction`/`context`/products, and
+# `definition` text is compiled into the prompt as photographic STYLE guidance only (framing/light/composition),
+# never parsed back into any of those decisions.
+#
+# What follows is the ONE narrow exception: a best-effort, purely advisory lexical check for the specific case
+# the brief calls out (a `definition` that talks about looking at/away from camera in words that read as the
+# opposite of the gaze this plan actually resolved to). It is intentionally NOT a general natural-language
+# contradiction detector — that would be a false sense of security (ReDoS-shaped regex, brittle keyword coverage,
+# no real language understanding) which is exactly what was asked not to build. Limits, explicit:
+#   - only covers gaze-related wording; people count / wearer / action / context / fidelity / safety have no
+#     text-based check at all, because nothing text-based ever influences them (there is no channel for a
+#     conflict to exist through);
+#   - a small, fixed Portuguese phrase list, folded (no accents/case) — anything phrased differently, in another
+#     language, or requiring real understanding is silently missed;
+#   - the result is a `warnings` entry the UI can surface as a human-readable heads-up — it NEVER blocks
+#     generation, never changes the resolved `gaze` field, and never rewrites `definition` (existing human
+#     decisions are never silently overridden; see docs/features/creative-generator-fase-d1-1.md).
+_GAZE_DEFINITION_HINTS: dict[str, tuple[str, ...]] = {
+    # Checked in THIS order: the negated/off-camera phrases are checked first because they contain the positive
+    # "olha(ndo) para a camera" wording as a substring ("nao olha para a camera") — checking camera first would
+    # misread a negation as agreement.
+    "off_camera": ("nao olha para a camera", "sem olhar para a camera", "longe da camera", "de costas para a camera",
+                   "de perfil", "olhando para longe", "sem contato visual com a camera"),
+    "product": ("olhando para o produto", "olha para o produto", "atencao no produto", "foco visual no produto"),
+    "interaction": ("olhando um para o outro", "se olhando", "trocando olhares", "olhar entre os dois"),
+    "camera": ("olha para a camera", "olhando para a camera", "olhar direto para a camera",
+               "contato visual com a camera", "encara a camera", "olhando direto para a camera"),
+}
+
+
+def _definition_gaze_hint(definition: dict | None) -> str | None:
+    if not definition:
+        return None
+    texto = " ".join(str(definition.get(campo) or "") for campo in ("photographic_direction", "framing", "composition"))
+    notas = definition.get("visual_notes")
+    if isinstance(notas, list):
+        texto += " " + " ".join(str(n) for n in notas)
+    texto = comp.fold(texto)
+    if not texto.strip():
+        return None
+    for mode, frases in _GAZE_DEFINITION_HINTS.items():
+        if any(frase in texto for frase in frases):
+            return mode
+    return None
+
+
 # ------------------------------------------------------------------ gaze
 def resolve_gaze(requested: str | None, angle_id: str, people_count: int, picks: dict,
                  interaction: dict | None = None, custom_angle: dict | None = None) -> dict:
@@ -403,6 +455,12 @@ def build(
         if (expected_people == "none" and count > 0) or (expected_people == "required" and count == 0):
             warnings.append(f"angle_people_mode_mismatch:{expected_people}:{count}")
     gaze = resolve_gaze(request.get("gaze_mode"), angle_id, count, picks, interaction, custom_angle)
+    if custom_angle:
+        # Advisory only — see _definition_gaze_hint's docstring above for exactly what this does and does not
+        # cover. Never changes `gaze`, never touches `definition`.
+        hint = _definition_gaze_hint(custom_angle.get("definition"))
+        if hint and hint != gaze["mode"]:
+            warnings.append(f"custom_angle_definition_gaze_conflict:{custom_angle['id']}:definition_suggests={hint}:resolved={gaze['mode']}")
     safety, safety_warnings = minor_safety(subjects, brand.get("minorWardrobePolicy"), products)
     semantic_products = [{"product_id": p.get("id"), "semantic_context": p.get("semantic_context")} for p in products]
     structured_warnings = semantic_warnings(products, subjects)
