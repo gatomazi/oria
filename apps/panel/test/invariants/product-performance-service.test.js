@@ -1,0 +1,336 @@
+'use strict';
+
+// Fase G · ProductPerformanceService contra Postgres real: catálogo + analytics (fake) + identity,
+// sem N+1, agregação por múltiplos ids, rates, zero vs ausente, coverage, isolamento, paginação e
+// ordenação. O connector de analytics é FAKE (não GA4 real — isso já está coberto em
+// test/connectors-analytics-ga4-connector.test.js); aqui o alvo é o que o SERVICE faz com o que o
+// connector devolve.
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const h = require('./harness');
+const { sqlProvisionarAppRole } = h.sujeito('lib/platform/app-role.js');
+const manifesto = h.sujeito('lib/platform/tenancy-manifest.js');
+const runtime = h.sujeito('lib/platform/tenant-runtime.js');
+const { createConnectorRegistry } = h.sujeito('lib/connectors/registry.js');
+const { createCommerceCatalogRepository } = h.sujeito('lib/product-analytics/commerce-catalog-repository.js');
+const { createProductPerformanceService } = h.sujeito('lib/product-analytics/product-performance-service.js');
+const { bootstrapCommerceIdentities } = h.sujeito('lib/product-analytics/product-identity-resolver.js');
+
+const ORG_A = 'ab000000-0000-4000-8000-000000000001';
+const ORG_B = 'ab000000-0000-4000-8000-000000000002';
+const STORE_A = 'ac000000-0000-4000-8000-000000000001';
+const STORE_B = 'ac000000-0000-4000-8000-000000000002';
+const ROLE = `oria_app_pps_${crypto.randomBytes(4).toString('hex')}`;
+const SENHA_ROLE = crypto.randomBytes(16).toString('hex');
+const PROVIDER = 'fake_commerce';
+const ANALYTICS_PROVIDER = 'fake_ga4';
+const RUN = crypto.randomUUID();
+const PERIODO = { startDate: '2026-09-01', endDate: '2026-09-20' };
+
+let db;
+let sup;
+let appPoolReal;
+
+const em = (org, store, fn) => runtime.comContexto({ organizationId: org, storeId: store, origem: 'teste' }, fn);
+const pool = () => runtime.criarPoolTenant(appPoolReal);
+
+test.before(async () => {
+  db = await h.criarBancoDescartavel('oria_pps');
+  const r = h.migrar(db.url);
+  assert.equal(r.status, 0, `${r.stdout.slice(-2000)}${r.stderr}`);
+  sup = h.abrirPoolDescartavel(db.url, { max: 4 });
+  for (const sql of sqlProvisionarAppRole({ role: ROLE, senha: SENHA_ROLE, tabelasSobRls: manifesto.nomesSobRls() })) {
+    await sup.query(sql);
+  }
+  appPoolReal = h.abrirPoolDescartavel(h.urlComUsuario(db.url, ROLE, SENHA_ROLE), { max: 6 });
+
+  for (const [org, store, nome] of [[ORG_A, STORE_A, 'Org A'], [ORG_B, STORE_B, 'Org B']]) {
+    await sup.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [org, nome]);
+    await sup.query('INSERT INTO stores (id, organization_id, nome, loja_legada) VALUES ($1, $2, $3, NULL)', [store, org, nome]);
+  }
+});
+
+test.after(async () => {
+  await appPoolReal?.end();
+  if (sup) {
+    await sup.query(`DROP OWNED BY ${ROLE}`).catch(() => {});
+    await sup.end();
+  }
+  await db?.destruir();
+  const admin = h.abrirPoolDescartavel(h.urlDoBanco(), { max: 1 });
+  try { await admin.query(`DROP ROLE IF EXISTS ${ROLE}`); } finally { await admin.end(); }
+});
+
+async function semearCatalogo(org, store, provider, produtos) {
+  const idsPorPid = new Map();
+  for (const p of produtos) {
+    const { rows: [{ id }] } = await sup.query(
+      `INSERT INTO commerce_products (organization_id, store_id, provider, provider_product_id, name, price, last_seen_sync_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [org, store, provider, p.providerProductId, p.name || `Produto ${p.providerProductId}`, p.price ?? null, RUN]
+    );
+    idsPorPid.set(p.providerProductId, id);
+    for (const v of p.variants || []) {
+      await sup.query(
+        `INSERT INTO commerce_product_variants (organization_id, store_id, commerce_product_id, provider, provider_variant_id, sku, last_seen_sync_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [org, store, id, provider, v.providerVariantId, v.sku || null, RUN]
+      );
+    }
+  }
+  return idsPorPid;
+}
+
+const item = (externalProductId, over = {}) => ({
+  externalProductId, externalProductName: null, itemsViewed: 10, itemsAddedToCart: 4, itemsCheckedOut: 2, itemsPurchased: 1, itemRevenue: 99.9,
+  analyticsProvider: ANALYTICS_PROVIDER, ...over,
+});
+
+// Registry com um AnalyticsConnector FAKE controlável: `linhas` (array) ou função(chamadas) → array.
+function registryComAnalytics(linhas, { capabilities } = {}) {
+  const registry = createConnectorRegistry();
+  let chamadas = 0;
+  registry.register({
+    domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
+    capabilities: { productMetrics: true, eventMetrics: false, realtime: false, ...capabilities },
+    create: () => ({
+      getProductPerformance: async () => {
+        chamadas += 1;
+        return typeof linhas === 'function' ? linhas(chamadas) : linhas;
+      },
+    }),
+  });
+  return { registry, chamadasFeitas: () => chamadas };
+}
+
+function montarServico(registry, poolFacade = pool()) {
+  return createProductPerformanceService({
+    pool: poolFacade, registry, catalogRepository: createCommerceCatalogRepository({ pool: poolFacade }),
+  });
+}
+
+// ── Tenant / período / validação ─────────────────────────────────────────────────────────────
+
+test('G · exige organizationId/storeId/analyticsProvider/startDate/endDate; startDate <= endDate', () => em(ORG_A, STORE_A, async () => {
+  const { registry } = registryComAnalytics([]);
+  const svc = montarServico(registry);
+  await assert.rejects(svc.getProductPerformance({ storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, ...PERIODO }), TypeError);
+  await assert.rejects(svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO }), TypeError);
+  await assert.rejects(svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER }), TypeError);
+  await assert.rejects(svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, startDate: '2026-09-20', endDate: '2026-09-01' }), TypeError);
+}));
+
+test('G · sem período com dados (dataset vazio): produtos aparecem com metrics=null, diagnóstico insufficient_data — nunca 0 inventado', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'empty_provider', [{ providerProductId: 'e1' }]);
+  const { registry } = registryComAnalytics([]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'empty_provider' }, ...PERIODO });
+  assert.equal(r.coverage.status, 'insufficient_data');
+  assert.equal(r.coverage.coverageRate, null);
+  assert.equal(r.items[0].metrics, null);
+  assert.deepEqual(r.items[0].diagnostics, ['insufficient_data']);
+}));
+
+// ── 1 query agregada / sem N+1 ────────────────────────────────────────────────────────────────
+
+test('G · 1 chamada ao AnalyticsConnector para o período inteiro, independente do número de produtos', () => em(ORG_A, STORE_A, async () => {
+  const N = 120;
+  const produtos = Array.from({ length: N }, (_, i) => ({ providerProductId: `n${i}` }));
+  await semearCatalogo(ORG_A, STORE_A, 'n_provider', produtos);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'n_provider' });
+  const { registry, chamadasFeitas } = registryComAnalytics(produtos.map((p) => item(p.providerProductId)));
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'n_provider' }, pagination: { limit: 500 }, ...PERIODO });
+  assert.equal(chamadasFeitas(), 1);
+  assert.equal(r.items.length, N);
+  assert.equal(r.items.every((it) => it.metrics.itemsViewed === 10), true);
+}));
+
+test('G · 1000 produtos: ainda 1 chamada de analytics e nenhuma query de catálogo por produto (paginado)', { timeout: 30000 }, () => em(ORG_A, STORE_A, async () => {
+  const N = 1000;
+  const produtos = Array.from({ length: N }, (_, i) => ({ providerProductId: `m${i}` }));
+  await semearCatalogo(ORG_A, STORE_A, 'mil_provider', produtos);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'mil_provider' });
+  const { registry, chamadasFeitas } = registryComAnalytics(produtos.map((p) => item(p.providerProductId)));
+  const svc = montarServico(registry);
+  const r1 = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'mil_provider' }, pagination: { limit: 50 }, ...PERIODO });
+  assert.equal(chamadasFeitas(), 1);
+  assert.equal(r1.items.length, 50);
+  assert.equal(r1.totalCount, N);
+  assert.ok(r1.nextCursor);
+  const r2 = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'mil_provider' }, pagination: { limit: 50, cursor: r1.nextCursor }, ...PERIODO });
+  assert.equal(chamadasFeitas(), 2); // 1 chamada de analytics por CHAMADA do serviço, nunca por produto
+  assert.equal(r2.items.length, 50);
+  assert.notDeepEqual(r2.items.map((i2) => i2.product.id), r1.items.map((i1) => i1.product.id));
+}));
+
+// ── Product exact / variant agrupado / SKU agrupado ──────────────────────────────────────────
+
+test('G · product id exact, variant ids agrupados e SKU agrupado no MESMO commerce_product_id (soma, não duplica)', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'grp_provider', [
+    { providerProductId: 'gp1', variants: [{ providerVariantId: 'gv1', sku: 'GSKU-1' }, { providerVariantId: 'gv2', sku: 'GSKU-2' }] },
+  ]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'grp_provider' });
+  // 3 ids diferentes (product, variant, sku) todos observados no analytics do MESMO produto.
+  const { registry } = registryComAnalytics([
+    item('gp1', { itemsViewed: 10, itemsAddedToCart: 2, itemsCheckedOut: 1, itemsPurchased: 0, itemRevenue: 0 }),
+    item('gv1', { itemsViewed: 5, itemsAddedToCart: 1, itemsCheckedOut: 1, itemsPurchased: 1, itemRevenue: 50 }),
+    item('GSKU-2', { itemsViewed: 3, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0, itemRevenue: 0 }),
+  ]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'grp_provider' }, ...PERIODO });
+  const linha = r.items.find((x) => x.product.id === ids.get('gp1'));
+  assert.equal(linha.metrics.itemsViewed, 18); // 10+5+3
+  assert.equal(linha.metrics.itemsPurchased, 1);
+  assert.equal(linha.identity.matchedAnalyticsIds.length, 3);
+  assert.deepEqual(linha.diagnostics, ['multiple_analytics_identities']);
+}));
+
+// ── Unmatched / conflito ──────────────────────────────────────────────────────────────────────
+
+test('G · id observado sem identity nenhuma: coverage conta como unmatched; produto sem esse id fica unmatched_identity', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'unm_provider', [{ providerProductId: 'u1' }]);
+  const { registry } = registryComAnalytics([item('id-orfao-sem-produto-nenhum')]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'unm_provider' }, ...PERIODO });
+  assert.equal(r.coverage.unmatchedAnalyticsIds, 1);
+  assert.equal(r.items[0].identity.status, 'unmatched');
+  assert.equal(r.items[0].metrics, null);
+  assert.deepEqual(r.items[0].diagnostics, ['unmatched_identity']);
+}));
+
+test('G · conflito de identity (mesmo external_id em dois namespaces de produtos diferentes) entra na coverage, nunca escolhe', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'cfl_provider', [{ providerProductId: 'cf1' }, { providerProductId: 'cf2' }]);
+  await sup.query(
+    `INSERT INTO product_external_identities (organization_id, store_id, commerce_product_id, namespace, external_id, source, confidence)
+     VALUES ($1,$2,$3,'a.product_id','ambiguo-g','manual','exact'), ($1,$2,$4,'b.product_id','ambiguo-g','manual','exact')`,
+    [ORG_A, STORE_A, ids.get('cf1'), ids.get('cf2')]
+  );
+  const { registry } = registryComAnalytics([item('ambiguo-g')]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'cfl_provider' }, ...PERIODO });
+  assert.equal(r.coverage.conflictedAnalyticsIds, 1);
+  for (const linha of r.items) assert.equal(linha.identity.matchedAnalyticsIds.includes('ambiguo-g'), false);
+}));
+
+// ── Zero vs ausente / rates / métrica ausente ────────────────────────────────────────────────
+
+test('G · produto com identity conhecida mas SEM linha no período: zero real (não null) — GA4 cobre a propriedade inteira', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'zero_provider', [{ providerProductId: 'z1' }, { providerProductId: 'z2' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'zero_provider' });
+  // "Identity conhecida" é uma resolução PRÉVIA (ex.: de um período anterior com atividade) — nunca
+  // se cria sozinha por z2 simplesmente existir no catálogo. Semeia essa resolução prévia direto.
+  await sup.query(
+    `INSERT INTO product_external_identities (organization_id, store_id, commerce_product_id, namespace, external_id, source, confidence)
+     VALUES ($1, $2, $3, $4, 'z2-em-periodo-anterior', 'rule', 'exact')`,
+    [ORG_A, STORE_A, ids.get('z2'), `${ANALYTICS_PROVIDER}.item_id`]
+  );
+  const { registry } = registryComAnalytics([item('z1')]); // z2 tem identity (de antes) mas não aparece NESTE período
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'zero_provider' }, ...PERIODO });
+  const z2 = r.items.find((x) => x.product.id === ids.get('z2'));
+  assert.deepEqual({ ...z2.metrics }, { itemsViewed: 0, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0, itemRevenue: 0 });
+  assert.equal(z2.identity.status, 'matched');
+  assert.deepEqual(z2.diagnostics, []);
+  assert.equal(z2.rates.addToCartRate, null); // denominator 0 → null, nunca Infinity/NaN
+}));
+
+test('G · rates: denominator > 0 calcula; denominator 0 vira null; nunca Infinity/NaN', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'rate_provider', [{ providerProductId: 'rt1' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'rate_provider' });
+  const { registry } = registryComAnalytics([item('rt1', { itemsViewed: 200, itemsAddedToCart: 40, itemsCheckedOut: 10, itemsPurchased: 2, itemRevenue: 500 })]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'rate_provider' }, ...PERIODO });
+  const l = r.items[0];
+  assert.equal(l.rates.addToCartRate, 40 / 200);
+  assert.equal(l.rates.checkoutFromViewRate, 10 / 200);
+  assert.equal(l.rates.cartToCheckoutRate, 10 / 40);
+  assert.equal(l.rates.purchaseFromViewRate, 2 / 200);
+  for (const v of Object.values(l.rates)) { assert.ok(Number.isFinite(v)); assert.notEqual(v, Infinity); }
+}));
+
+test('G · métrica indisponível na propriedade (todas as linhas null) vira null no produto, com diagnóstico metric_unavailable', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'unavail_provider', [{ providerProductId: 'ua1' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'unavail_provider' });
+  const { registry } = registryComAnalytics([item('ua1', { itemRevenue: null })]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'unavail_provider' }, ...PERIODO });
+  assert.equal(r.items[0].metrics.itemRevenue, null);
+  assert.equal(r.items[0].metrics.itemsViewed, 10);
+  assert.ok(r.items[0].diagnostics.includes('metric_unavailable'));
+}));
+
+test('G · nenhuma classificação opinativa (CAMPEÃ/OPORTUNIDADE/REVISAR/FRACA) em lugar nenhum da resposta', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'op_provider', [{ providerProductId: 'op1' }]);
+  const { registry } = registryComAnalytics([item('op1')]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'op_provider' }, ...PERIODO });
+  const texto = JSON.stringify(r);
+  for (const rotulo of ['CAMPEÃ', 'OPORTUNIDADE', 'REVISAR', 'FRACA', 'campeã', 'fraca']) assert.equal(texto.includes(rotulo), false);
+}));
+
+// ── Ordenação / paginação ─────────────────────────────────────────────────────────────────────
+
+test('G · sort por métrica ordena por valor agregado, produtos sem dado (null) por último', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'sort_provider', [{ providerProductId: 's1' }, { providerProductId: 's2' }, { providerProductId: 's3' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'sort_provider' });
+  const { registry } = registryComAnalytics([item('s1', { itemsViewed: 5 }), item('s2', { itemsViewed: 50 })]); // s3 sem dado
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'sort_provider' }, sort: { field: 'itemsViewed', direction: 'desc' }, ...PERIODO });
+  assert.deepEqual(r.items.map((i) => i.product.providerProductId), ['s2', 's1']); // s3 não entra: sem identity nem métrica, fora do conjunto ordenável
+}));
+
+test('G · sort por campo do catálogo (name) usa paginação do banco, sem carregar o catálogo inteiro', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'cat_sort_provider', [{ providerProductId: 'cs1', name: 'Zebra' }, { providerProductId: 'cs2', name: 'Abelha' }]);
+  const { registry } = registryComAnalytics([]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'cat_sort_provider' }, sort: { field: 'name', direction: 'asc' }, ...PERIODO });
+  assert.deepEqual(r.items.map((i) => i.product.name), ['Abelha', 'Zebra']);
+}));
+
+// ── Isolamento ────────────────────────────────────────────────────────────────────────────────
+
+test('G · Organization isolation: A não vê produto de B mesmo com o mesmo external id observado', async () => {
+  await em(ORG_A, STORE_A, () => semearCatalogo(ORG_A, STORE_A, 'iso_pps_provider', [{ providerProductId: 'ip1' }]));
+  await em(ORG_B, STORE_B, () => semearCatalogo(ORG_B, STORE_B, 'iso_pps_provider', [{ providerProductId: 'ip1' }]));
+  const { registry: regA } = registryComAnalytics([item('ip1')]);
+  const svcA = montarServico(regA, pool());
+  const rA = await em(ORG_A, STORE_A, () => svcA.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'iso_pps_provider' }, ...PERIODO }));
+  assert.equal(rA.items.length, 1);
+  const { rows } = await sup.query(`SELECT organization_id FROM commerce_products WHERE id = $1`, [rA.items[0].product.id]);
+  assert.equal(rows[0].organization_id, ORG_A);
+});
+
+test('G · provider isolation: filters.provider restringe ao catálogo daquele provider só', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'prov_x', [{ providerProductId: 'px1' }]);
+  await semearCatalogo(ORG_A, STORE_A, 'prov_y', [{ providerProductId: 'py1' }]);
+  const { registry } = registryComAnalytics([]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformance({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'prov_x' }, ...PERIODO });
+  assert.deepEqual(r.items.map((i) => i.product.providerProductId), ['px1']);
+}));
+
+// ── Guardas estáticas: nenhum import de Ink, GA4 concreto ou pedidos_ink ────────────────────────
+
+const ARQUIVOS_G = [
+  path.join(__dirname, '..', '..', 'lib', 'product-analytics', 'product-performance-service.js'),
+  path.join(__dirname, '..', '..', 'lib', 'product-analytics', 'commerce-catalog-repository.js'),
+];
+
+test('G · nenhum import de Ink, cliente GA4 concreto ou pedidos_ink no service/repository', () => {
+  const achados = [];
+  for (const arq of ARQUIVOS_G) {
+    fs.readFileSync(arq, 'utf8').split('\n').forEach((l, i) => {
+      if (l.trimStart().startsWith('//')) return;
+      if (/reserva[_-]?ink|InkClient|inkApi|Ga4Client|require\([^)]*ga4\/client['"]\)|pedidos_ink\b/i.test(l)) {
+        achados.push(`${path.basename(arq)}:${i + 1}: ${l.trim()}`);
+      }
+    });
+  }
+  assert.deepEqual(achados, []);
+});
