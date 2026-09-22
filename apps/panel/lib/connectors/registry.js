@@ -53,6 +53,7 @@ function conferirIntegracao(resultado, descritor, contexto) {
     integrationId: resultado.integrationId,
     organizationId: contexto.organizationId,
     storeId: contexto.storeId,
+    integrationProvider: resultado.integrationProvider,
     status: typeof resultado.status === 'string' ? resultado.status : null,
     config: Object.freeze({ ...(resultado.config && typeof resultado.config === 'object' ? resultado.config : {}) }),
   });

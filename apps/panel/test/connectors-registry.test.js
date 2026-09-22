@@ -340,7 +340,7 @@ test('Fase B · resultado do resolvedor malformado ou sem identidade explícita 
 test('Fase B · o resultado entregue ao connector é congelado e traz só integração, Store validada, status e config', async () => {
   const r = registryComResolvedor(async () => resultadoOk({ status: 'connected', config: { propertyId: '123' }, apiToken: 'segredo' }));
   const ok = await r.connector.integracaoEmUso();
-  assert.deepEqual(Object.keys(ok).sort(), ['config', 'integrationId', 'organizationId', 'status', 'storeId']);
+  assert.deepEqual(Object.keys(ok).sort(), ['config', 'integrationId', 'integrationProvider', 'organizationId', 'status', 'storeId']);
   assert.equal(ok.apiToken, undefined);
   assert.deepEqual({ ...ok.config }, { propertyId: '123' });
   assert.ok(Object.isFrozen(ok) && Object.isFrozen(ok.config));
