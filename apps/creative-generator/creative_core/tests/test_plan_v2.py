@@ -414,7 +414,8 @@ def test_given_the_field_source_map_then_only_strategy_and_products_are_required
 def test_given_a_v2_plan_then_every_top_level_field_is_covered_by_the_source_map_or_is_bookkeeping():
     bookkeeping = {"plan_id", "creative_id", "schema_version", "internal_strategy_id", "product_mode", "funnel_stage",
                    "remarketing_intent", "layout", "overlay", "copy", "prompt", "versions", "validations", "warnings",
-                   "provenance", "provenance_sources", "resolved_inputs", "semantics", "mode", "objective"}
+                   "provenance", "provenance_sources", "resolved_inputs", "semantics", "mode", "objective",
+                   "angle_recommendation"}  # Fase D: how `angle` was chosen — provenance-like, not itself user-settable
     covered = {key.split(" ")[0].split(".")[0].split("[")[0] for key in FIELD_SOURCES}
     covered |= {"strategy", "products", "references", "angle", "placement", "quality", "persona", "subjects", "scene", "composition",
                 "minor_safety", "context", "model", "seed", "compiler", "brand_kit", "niche_kit"}

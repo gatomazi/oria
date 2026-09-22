@@ -135,6 +135,13 @@ def feedback_snapshot(plan: dict, result_metadata: dict | None = None, asset_sha
         "prompt_sha256": plan["prompt"]["sha256"], "mode": plan.get("mode", "creative"),
         "objective": plan.get("objective") or objective_for(plan["strategy"]), "strategy": plan["strategy"],
         "angle": plan["angle"]["id"], "product_ids": [p["id"] for p in plan["products"]], "subjects": subjects,
+        # Fase D: family/preset/scope/version the angle resolved to, so approval can be grouped by family
+        # later (e.g. "connection" vs "editorial_portrait") without opening the plan JSON. Absent (all None)
+        # on a plan built before Fase D — never backfilled, the plan itself is the only source of truth.
+        "angle_family": (plan.get("angle_recommendation") or {}).get("family"),
+        "angle_preset": (plan.get("angle_recommendation") or {}).get("preset"),
+        "angle_scope": (plan.get("angle_recommendation") or {}).get("scope"),
+        "angle_version": (plan.get("angle_recommendation") or {}).get("version"),
         "people_count": len(subjects) if v2 else (1 if plan.get("persona") else 0),
         "interaction": interaction, "composition_source": scene.get("composition_source"),
         "composition_key": composition_key(plan) if v2 else None,

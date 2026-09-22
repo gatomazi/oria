@@ -70,6 +70,61 @@
     "angle": {
       "type": "string"
     },
+    "angle_family": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "lifestyle",
+            "connection",
+            "editorial_portrait",
+            "action_movement",
+            "product_focus",
+            "product_no_person",
+            "creator_social"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "angle_preset": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "angle_scope": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "system",
+            "organization",
+            "store"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "angle_version": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "product_ids": {
       "type": "array",
       "items": {

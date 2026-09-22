@@ -24,6 +24,16 @@ ANGLE_IDS = (
     "NOSTALGIA_ORIGEM", "CABIDE", "PRODUTO_ESTAMPA", "CAIMENTO", "CLOSE_ESTAMPA",
     "CLOSE_BOLSO", "PREMIUM_ESTILO", "CREATOR_STYLE", "PRESENTE_AFETO",
 )
+# Fase D — Angles V2. `"auto"` lets the planner recommend a family/preset instead of the caller naming one
+# of the 13 legacy ids (angle_catalog.recommend_angle); the legacy ids keep working exactly as before.
+ANGLE_ID_OR_AUTO = ANGLE_IDS + ("auto",)
+# The 7 top-level families (angle_catalog.FAMILIES; kept as its own tuple here so this low-level module
+# does not import the higher-level angle_catalog — a test asserts the two stay in sync).
+ANGLE_FAMILIES = (
+    "lifestyle", "connection", "editorial_portrait", "action_movement", "product_focus",
+    "product_no_person", "creator_social",
+)
+ANGLE_SCOPES = ("system", "organization", "store")
 PUBLIC_STRATEGIES = ("CLEAN_ANGLES", "REMARKETING", "FUNNEL_VISUAL")
 INTERNAL_STRATEGIES = (
     "FUNNEL_VISUAL", "STATE_COLLECTION", "REMARKETING", "CLEAN_ANGLES", "MULTI_PRODUCT_INTERNAL", "ORGANIC",
@@ -245,12 +255,46 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "semantic_context": R("ProductSemanticContext"),
     },
     "Angle": {
-        "id": S(required=True, enum=ANGLE_IDS),
+        "id": S(required=True, enum=ANGLE_IDS),  # never "auto": the plan always names the legacy id it resolved to
         "label": S(required=True),
         "description": S(),
         "uses_person": B(required=True),
         "apparel_only": B(required=True),
         "multi_product_limit": I(required=True, minimum=1),
+    },
+    # Fase D: the family/preset this angle_id resolves to, and how it got there. Additive — a v1 plan and an
+    # older v2 plan simply have no `angle_recommendation`; the compiler/prompt never read this.
+    "AngleRecommendation": {
+        "angle_id": S(required=True),
+        "family": S(required=True, enum=ANGLE_FAMILIES),
+        "preset": S(nullable=True),
+        "objective_hints": A(S()),
+        "scope": S(required=True, enum=ANGLE_SCOPES),
+        "version": I(required=True, minimum=1),
+        "reason": A(S()),
+        "source": S(required=True, enum=VALUE_ORIGINS),
+    },
+    # Organization/store custom angle (Fase D §5/§12) — the shape the panel's `creative_angles` table and its
+    # CRUD exchange; minimal by design (no 20-field form). `definition` carries the richer, still-evolving
+    # planner/prompt hints (§5 "internamente pode ter campos mais ricos") as a free JSONB the core never
+    # requires — only `family`/`people_mode`/`preset` are read by recommend_angle/resolve_angle_meta today.
+    "CustomAngle": {
+        "id": S(required=True),
+        "scope": S(required=True, enum=("organization", "store")),
+        "organization_id": S(required=True),
+        "store_id": S(nullable=True),
+        "slug": S(required=True, min_length=1, max_length=60),
+        "name": S(required=True, min_length=1, max_length=120),
+        "description": S(max_length=2000),
+        "family": S(required=True, enum=ANGLE_FAMILIES),
+        "people_mode": S(required=True, enum=("none", "optional", "required")),
+        "preset": S(nullable=True, max_length=60),
+        "definition": O(),
+        "active": B(required=True),
+        "version": I(required=True, minimum=1),
+        "created_by": S(nullable=True),
+        "created_at": S(required=True),
+        "updated_at": S(required=True),
     },
     "Placement": {
         "id": S(required=True, enum=PUBLIC_PLACEMENTS),
@@ -320,7 +364,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "brand_kit_id": S(max_length=120),
         "niche_kit": R("NicheKit"),
         "niche_kit_id": S(max_length=120),
-        "angle_id": S(required=True, enum=ANGLE_IDS),
+        "angle_id": S(required=True, enum=ANGLE_ID_OR_AUTO),
         "placement_id": S(required=True, enum=PUBLIC_PLACEMENTS),
         "persona_mode": S(enum=PERSONA_MODES),
         "persona": R("Persona"),
@@ -341,6 +385,11 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "subjects": A(R("RequestSubject"), max_items=MAX_SUBJECTS),
         "interaction": S(min_length=1, max_length=40),
         "scene_picks": O(),
+        # Fase D: only meaningful with angle_id "auto" — steers recommend_angle straight to this family
+        # (skipping the heuristic) instead of naming one of the 13 legacy ids. How a custom organization/store
+        # angle (resolved by the panel from `creative_angles`) or a family/preset picker reaches the core.
+        "angle_family_hint": O(nullable=True),  # {family (required, one of ANGLE_FAMILIES), preset?}
+        "angle_intent_hint": S(max_length=40),  # seam for a future GPT-authored brief (Fase D §5) — today a plain literal like "creator", never inferred
     },
     "KitRef": {
         "id": S(required=True),
@@ -473,6 +522,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "product_mode": S(required=True, enum=PRODUCT_MODES),
         "products": A(R("CreativeProduct"), required=True, min_items=1),
         "angle": R("Angle", required=True),
+        "angle_recommendation": R("AngleRecommendation", nullable=True),
         "placement": R("Placement", required=True),
         "persona": R("Persona", nullable=True),
         "context": R("ResolvedContext", required=True),
@@ -556,6 +606,10 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "objective": S(required=True, enum=OBJECTIVES),
         "strategy": S(required=True),
         "angle": S(required=True),
+        "angle_family": S(nullable=True, enum=ANGLE_FAMILIES),
+        "angle_preset": S(nullable=True),
+        "angle_scope": S(nullable=True, enum=ANGLE_SCOPES),
+        "angle_version": I(nullable=True, minimum=1),
         "product_ids": A(S(), required=True),
         "subjects": A(O(), required=True),  # [{role, label, age_band, is_minor, product_use, role_hint}]
         "people_count": I(required=True, minimum=0),
@@ -635,9 +689,9 @@ CONTRACTS: dict[str, dict[str, F]] = {
 
 # Contracts whose schema file is exported (sub-objects are embedded via $defs).
 EXPORTED_CONTRACTS = (
-    "BrandKit", "NicheKit", "ContextProfile", "CreativeProduct", "Persona", "Angle", "Placement",
-    "CreativeRequest", "CreativePlan", "CreativeResult", "GenerationError", "GenerationRecord", "CopyVariant",
-    "CompiledPrompt", "GenerationDraft", "FeedbackSnapshot",
+    "BrandKit", "NicheKit", "ContextProfile", "CreativeProduct", "Persona", "Angle", "AngleRecommendation",
+    "CustomAngle", "Placement", "CreativeRequest", "CreativePlan", "CreativeResult", "GenerationError",
+    "GenerationRecord", "CopyVariant", "CompiledPrompt", "GenerationDraft", "FeedbackSnapshot",
 )
 
 _PY_TYPES = {

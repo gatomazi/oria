@@ -64,6 +64,16 @@
     "angle": {
       "$ref": "#/$defs/Angle"
     },
+    "angle_recommendation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AngleRecommendation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "placement": {
       "$ref": "#/$defs/Placement"
     },
@@ -269,6 +279,82 @@
         "multi_product_limit": {
           "type": "integer",
           "minimum": 1
+        }
+      }
+    },
+    "AngleRecommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "angle_id",
+        "family",
+        "scope",
+        "version",
+        "source"
+      ],
+      "properties": {
+        "angle_id": {
+          "type": "string"
+        },
+        "family": {
+          "type": "string",
+          "enum": [
+            "lifestyle",
+            "connection",
+            "editorial_portrait",
+            "action_movement",
+            "product_focus",
+            "product_no_person",
+            "creator_social"
+          ]
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "objective_hints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "system",
+            "organization",
+            "store"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "product",
+            "product_enrichment",
+            "brand",
+            "niche",
+            "persona",
+            "angle",
+            "planner_default",
+            "safety_policy"
+          ]
         }
       }
     },

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/AngleRecommendation.schema.json",
+  "title": "AngleRecommendation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "angle_id",
+    "family",
+    "scope",
+    "version",
+    "source"
+  ],
+  "properties": {
+    "angle_id": {
+      "type": "string"
+    },
+    "family": {
+      "type": "string",
+      "enum": [
+        "lifestyle",
+        "connection",
+        "editorial_portrait",
+        "action_movement",
+        "product_focus",
+        "product_no_person",
+        "creator_social"
+      ]
+    },
+    "preset": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "objective_hints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "system",
+        "organization",
+        "store"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reason": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "user",
+        "product",
+        "product_enrichment",
+        "brand",
+        "niche",
+        "persona",
+        "angle",
+        "planner_default",
+        "safety_policy"
+      ]
+    }
+  }
+}

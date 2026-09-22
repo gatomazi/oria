@@ -35,7 +35,7 @@ from typing import Callable, Iterable
 
 from . import contracts
 from .angles import ANGLE_IDS, CORE_ANGLES
-from . import composition
+from . import angle_catalog, composition
 from .compiler import compile_prompt
 from .drafts import feedback_snapshot, generation_draft_from_plan
 from .engines import generate_copy_with_usage, generate_creative, plan_creative
@@ -229,6 +229,13 @@ class CreativeCoreService:
             "interactions": [{"id": k, "label": v["label"], "min_people": v["min_people"], "max_people": v["max_people"]}
                              for k, v in composition.INTERACTIONS.items()],
             "relations": [{"id": k, "label": v} for k, v in composition.CATALOG["relation_labels"].items() if k != "_doc"],
+            # Fase D: family cards for a V2 screen (§6 — no ids/hints/prompt internals below `label`/`description`),
+            # plus the legacy angle -> family/preset map so the panel can show "this batch used <family>" for history
+            # generated before Fase D, and the discontinued-as-top-level set (still valid as angle_id, not offered as a card).
+            "angle_families": [{"id": k, "label": v["label"], "description": v["description"], "reserved": bool(v.get("reserved"))}
+                               for k, v in angle_catalog.FAMILIES.items()],
+            "angle_legacy_map": {aid: angle_catalog.resolve_angle_meta(aid) for aid in ANGLE_IDS},
+            "angle_discontinued": sorted(angle_catalog.DISCONTINUED_AS_TOP_LEVEL),
             "builtin_kits": {
                 "brand": [load_brand_kit(k) for k in builtin["brand"]],
                 "niche": [load_niche_kit(k) for k in builtin["niche"]],

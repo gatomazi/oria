@@ -68,7 +68,8 @@
         "CLOSE_BOLSO",
         "PREMIUM_ESTILO",
         "CREATOR_STYLE",
-        "PRESENTE_AFETO"
+        "PRESENTE_AFETO",
+        "auto"
       ]
     },
     "placement_id": {
@@ -159,6 +160,21 @@
     "scene_picks": {
       "type": "object",
       "additionalProperties": true
+    },
+    "angle_family_hint": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "angle_intent_hint": {
+      "type": "string",
+      "maxLength": 40
     }
   },
   "$defs": {

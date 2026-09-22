@@ -263,7 +263,8 @@ def _age_origin(subject: dict) -> str:
     return "planner_default"
 
 
-def build_provenance(*, request: dict, plan: dict, brand: dict, niche: dict, semantics_source: str | None) -> tuple[dict, dict]:
+def build_provenance(*, request: dict, plan: dict, brand: dict, niche: dict, semantics_source: str | None,
+                    angle_source: str = "user") -> tuple[dict, dict]:
     """(provenance, provenance_sources).
 
     `provenance` maps each plan field to ONE origin — a leaf when the field has a single source, `mixed` when a
@@ -275,7 +276,7 @@ def build_provenance(*, request: dict, plan: dict, brand: dict, niche: dict, sem
     provider = plan["context"]["provider"]
     scene = plan["scene"]
     out = {
-        "mode": "planner_default", "objective": "user", "strategy": "user", "products": "user", "angle": "user",
+        "mode": "planner_default", "objective": "user", "strategy": "user", "products": "user", "angle": angle_source,
         "placement": "user", "quality": "user" if request.get("quality") else "planner_default",
         "brand_kit": "user", "niche_kit": "user" if (request.get("niche_kit") or request.get("niche_kit_id")) else "brand",
         "persona": _persona_origin(request, brand, niche) if plan.get("persona") else "planner_default",

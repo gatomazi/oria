@@ -37,6 +37,7 @@ from .domain.remarketing import (
 from . import model_router as mr
 from . import planner_v2, prompt_v2
 from .compiler import compile_prompt, prompt_info
+from .angle_catalog import canonical_legacy_angle_id, recommend_angle, resolve_angle_meta
 from .angles import CORE_ANGLES, angle_descriptor, angle_is_available
 from .blocks import (
     COMMUNICATION,
@@ -229,6 +230,33 @@ def _funnel_parts(request: dict, products: list):
 
 
 # ------------------------------------------------------------------ plan
+def _resolve_angle_id(request: dict, products: list) -> tuple[str, str, list[str]]:
+    """(angle_id, provenance source, reason). `angle_id: "auto"` asks the planner to recommend one (Fase D);
+    any of the 13 legacy ids is used as named, exactly like before this phase. `angle_family_hint` (also only
+    meaningful with "auto") steers straight to a family — how a custom organization/store angle, resolved by
+    the panel from `creative_angles`, or an explicit family/preset picker reaches the core without needing its
+    own legacy id: the human already chose a family, so the source is "user", not "planner_default"."""
+    requested = request.get("angle_id")
+    if requested != "auto":
+        return requested, "user", []
+    hint = request.get("angle_family_hint")
+    if hint and hint.get("family"):
+        legacy_id = canonical_legacy_angle_id(hint["family"], hint.get("preset"))
+        if legacy_id is None:
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": hint["family"],
+                                                         "reason": "family has no generation route yet"})
+        return legacy_id, "user", [f"angle_family_hint:{hint['family']}"]
+    recommendation = recommend_angle({
+        "subjects": request.get("subjects"), "interaction": request.get("interaction"),
+        "persona_mode": request.get("persona_mode"), "products": products,
+        "intent_hint": request.get("angle_intent_hint"),
+    })
+    if recommendation["angle_id"] is None:
+        raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": recommendation["family"],
+                                                     "reason": "family has no generation route yet"})
+    return recommendation["angle_id"], "planner_default", recommendation["reason"]
+
+
 def plan_creative(
     request: dict,
     *,
@@ -264,10 +292,16 @@ def plan_creative(
     if len(roles) > MAX_REFERENCE_IMAGES:
         raise GenerationError("INVALID_REFERENCE", {"reason": "too_many_reference_images", "max": MAX_REFERENCE_IMAGES})
 
-    angle_id = request["angle_id"]
+    angle_id, angle_source, angle_reason = _resolve_angle_id(request, products)
     if not angle_is_available(angle_id, brand, niche):
         raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": angle_id, "brand_kit": brand["id"], "niche_kit": niche["id"]})
     angle = angle_descriptor(angle_id, brand, niche)
+    angle_meta = resolve_angle_meta(angle_id)
+    angle_recommendation = {
+        "angle_id": angle_id, "family": angle_meta["family"], "preset": angle_meta["preset"],
+        "objective_hints": angle_meta["objective_hints"], "scope": angle_meta["scope"], "version": angle_meta["version"],
+        "reason": angle_reason, "source": angle_source,
+    } if angle_meta["family"] else None
     if product_mode == "multi_product" and len(products) > angle["multi_product_limit"]:
         warnings.append(f"above_recommended_products_for_angle:{angle['multi_product_limit']}")
 
@@ -344,11 +378,12 @@ def plan_creative(
         plan_persona = planned["persona"]
         view = {
             "schema_version": PLAN_SCHEMA_V2, "strategy": strategy, "funnel_stage": None if strategy == "CLEAN_ANGLES" else stage,
-            "products": products, "references": roles, "angle": angle, "context": context,
+            "products": products, "references": roles, "angle": angle, "angle_recommendation": angle_recommendation, "context": context,
             "placement": placement_descriptor(request["placement_id"]), "persona": plan_persona, **planned["fields"],
         }
         view["provenance"], view["provenance_sources"] = planner_v2.build_provenance(
-            request=request, plan=view, brand=brand, niche=niche, semantics_source=planned["semantics_source"])
+            request=request, plan=view, brand=brand, niche=niche, semantics_source=planned["semantics_source"],
+            angle_source=angle_source)
         compiled = compile_prompt(view)
         prompt = prompt_info(compiled)
         v2_extra = {**planned["fields"], "provenance": view["provenance"], "provenance_sources": view["provenance_sources"], "seed": seed,
@@ -411,6 +446,7 @@ def plan_creative(
         "product_mode": product_mode,
         "products": products,
         "angle": angle,
+        "angle_recommendation": angle_recommendation,
         "placement": placement_descriptor(request["placement_id"]),
         "persona": plan_persona,
         "context": context,

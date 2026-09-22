@@ -128,6 +128,36 @@ export interface Angle {
   multi_product_limit: number;
 }
 
+export interface AngleRecommendation {
+  angle_id: string;
+  family: "lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social";
+  preset?: string | null;
+  objective_hints?: Array<string>;
+  scope: "system" | "organization" | "store";
+  version: number;
+  reason?: Array<string>;
+  source: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy";
+}
+
+export interface CustomAngle {
+  id: string;
+  scope: "organization" | "store";
+  organization_id: string;
+  store_id?: string | null;
+  slug: string;
+  name: string;
+  description?: string;
+  family: "lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social";
+  people_mode: "none" | "optional" | "required";
+  preset?: string | null;
+  definition?: Record<string, unknown>;
+  active: boolean;
+  version: number;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Placement {
   id: "FEED_4X5" | "STORY_9X16";
   label: string;
@@ -200,7 +230,7 @@ export interface CreativeRequest {
   brand_kit_id?: string;
   niche_kit?: NicheKit;
   niche_kit_id?: string;
-  angle_id: "IDENTIDADE_ORIGEM" | "LIFESTYLE_COTIDIANO" | "ORGULHO_DISCRETO" | "PERTENCIMENTO" | "NOSTALGIA_ORIGEM" | "CABIDE" | "PRODUTO_ESTAMPA" | "CAIMENTO" | "CLOSE_ESTAMPA" | "CLOSE_BOLSO" | "PREMIUM_ESTILO" | "CREATOR_STYLE" | "PRESENTE_AFETO";
+  angle_id: "IDENTIDADE_ORIGEM" | "LIFESTYLE_COTIDIANO" | "ORGULHO_DISCRETO" | "PERTENCIMENTO" | "NOSTALGIA_ORIGEM" | "CABIDE" | "PRODUTO_ESTAMPA" | "CAIMENTO" | "CLOSE_ESTAMPA" | "CLOSE_BOLSO" | "PREMIUM_ESTILO" | "CREATOR_STYLE" | "PRESENTE_AFETO" | "auto";
   placement_id: "FEED_4X5" | "STORY_9X16";
   persona_mode?: "automatic" | "custom" | "none";
   persona?: Persona;
@@ -218,6 +248,8 @@ export interface CreativeRequest {
   subjects?: Array<RequestSubject>;
   interaction?: string;
   scene_picks?: Record<string, unknown>;
+  angle_family_hint?: Record<string, unknown> | null;
+  angle_intent_hint?: string;
 }
 
 export interface KitRef {
@@ -367,6 +399,7 @@ export interface CreativePlan {
   product_mode: "single_product" | "multi_product";
   products: Array<CreativeProduct>;
   angle: Angle;
+  angle_recommendation?: AngleRecommendation | null;
   placement: Placement;
   persona?: Persona | null;
   context: ResolvedContext;
@@ -447,6 +480,10 @@ export interface FeedbackSnapshot {
   objective: "clean_creative" | "remarketing" | "funnel_visual";
   strategy: string;
   angle: string;
+  angle_family?: "lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social" | null;
+  angle_preset?: string | null;
+  angle_scope?: "system" | "organization" | "store" | null;
+  angle_version?: number | null;
   product_ids: Array<string>;
   subjects: Array<Record<string, unknown>>;
   people_count: number;
