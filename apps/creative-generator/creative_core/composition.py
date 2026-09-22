@@ -88,6 +88,75 @@ def infant_product(product: dict) -> bool:
     return any(fold(w) in text for w in DATA["minor"]["infant_product_types"])
 
 
+def infant_bands(product: dict) -> set[str]:
+    """The age bands allowed to WEAR this infant garment (data: planner_v2.json minor.infant_wearer_bands)."""
+    table = DATA["minor"]["infant_wearer_bands"]
+    text = fold(f"{product.get('type', '')} {product.get('name', '')}")
+    for key, bands in table.items():
+        if key not in ("_doc", "default") and fold(key) in text:
+            return set(bands)
+    return set(table["default"])
+
+
+# Who the planner (not the user) picked: it may be corrected. A person the user chose is never silently changed.
+PLANNER_ORIGINS = frozenset({"planner_default", "brand", "niche", "product", "product_enrichment"})
+
+
+def enforce_infant_wearers(subjects: list[dict], products: list, *, pool: list, seed: int) -> tuple[list[dict], list[str], dict | None]:
+    """Whoever WEARS an infant garment must be a child in the garment's bands; adults in the scene are fine as long as
+    they do not wear it. Returns (subjects, warnings, new primary persona or None).
+
+    * a wearer the USER chose (explicit subject, custom persona) who does not fit -> error, no contradictory prompt;
+    * a wearer the planner chose: the primary is recast from the pool (a child entry, else the neutral child persona),
+      a supporting person simply stops wearing it;
+    * an unknown age on a wearer of an infant garment is read as a child (from the product type)."""
+    by_id = {p.get("id"): p for p in products}
+    out: list[dict] = []
+    warnings: list[str] = []
+    recast: dict | None = None
+    errors: list[str] = []
+    for index, subject in enumerate(subjects):
+        product = by_id.get(subject["product_id"]) if subject["product_use"] != "none" else None
+        if not product or not infant_product(product):
+            out.append(subject)
+            continue
+        allowed = infant_bands(product)
+        band = subject["age_band"]
+        if band == "unknown":
+            band, source = "child", "product.type"
+            if band not in allowed:
+                band = sorted(allowed)[0]
+            out.append(_subject(index, subject["persona"] or {"label": subject["label"]}, role=subject["role"], band=band,
+                                age_source=source, relation=subject["relation_to_primary"], relation_label=subject["relation_label"],
+                                product=product, prominence=subject["prominence"], source=subject["source"]))
+            continue
+        if band in allowed:
+            out.append(subject)
+            continue
+        if subject["source"] not in PLANNER_ORIGINS:
+            errors.append(f"subjects[{index}]: {product.get('name') or product.get('type')} is an infant garment and can only be worn by a child, "
+                          f"but this subject is {band}; an adult may be in the scene as support without wearing it")
+            out.append(subject)
+            continue
+        if subject["role"] == "primary":
+            options = [person for person in pool if detect_age(person)[0] in allowed]
+            fallbacks = DATA["roles"]["wearer_personas"]
+            person = dict(options[seed % len(options)]) if options else dict(fallbacks["child" if "child_6_9" in allowed else "baby"])
+            new_band, new_source = detect_age(person)
+            recast = person
+            warnings.append(f"infant_wearer_recast:{subject['id']}")
+            out.append(_subject(index, person, role="primary", band=new_band, age_source=new_source, relation=None, relation_label=None,
+                                product=product, prominence=subject["prominence"], source=subject["source"]))
+        else:
+            warnings.append(f"infant_wearer_removed:{subject['id']}")
+            out.append(_subject(index, subject["persona"] or {"label": subject["label"]}, role=subject["role"], band=band,
+                                age_source=subject["age_source"], relation=subject["relation_to_primary"], relation_label=subject["relation_label"],
+                                product=None, prominence=subject["prominence"], source=subject["source"]))
+    if errors:
+        raise _err(errors)
+    return out, warnings, recast
+
+
 # ------------------------------------------------------------------ relations
 def role_hint(label: str) -> str | None:
     """Role read from a persona label (mãe, pai, irmã, ...), or None. Whole words, accent-insensitive. Only used when
@@ -209,7 +278,7 @@ def explicit_subjects(request_subjects: list, products: list) -> list[dict]:
             band, age_source = rs["age_band"], "subject.age_band"
         else:
             band, age_source = detect_age(persona)
-            if band == "unknown" and is_primary and product and infant_product(product):
+            if band == "unknown" and product and infant_product(product):
                 band, age_source = "child", "product.type"
         subjects.append(_subject(position, persona, role="primary" if is_primary else "supporting", band=band,
                                  age_source=age_source, relation=None if is_primary else relation,
@@ -217,6 +286,9 @@ def explicit_subjects(request_subjects: list, products: list) -> list[dict]:
                                  prominence=rs.get("prominence") or ("hero" if is_primary else "secondary"), source="user"))
     if errors:
         raise _err(errors)
+    # A subject the request says wears an infant garment must be a child (checked per subject and per product, so a
+    # multi-product cast is validated garment by garment). The error names the subject; no contradictory prompt is built.
+    subjects, _warnings, _recast = enforce_infant_wearers(subjects, products, pool=[], seed=0)
     return subjects
 
 

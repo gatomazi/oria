@@ -154,7 +154,8 @@ def test_given_a_cast_then_the_draft_carries_it_as_request_subjects_with_relatio
     girl, father = draft["subjects"]
     assert (girl["age_band"], girl["wears_product_id"], girl["role"]) == ("child_6_9", "pipa-menina", "primary")
     assert (father["relation_to_primary"], father["wears_product_id"], father["age_band"]) == ("father", None, "adult")
-    assert draft["interaction"] == "playing" and {"subjects", "interaction", "scene_picks"} <= set(draft["carried"])
+    assert draft["interaction"] == "playing" and {"subjects", "interaction"} <= set(draft["carried"])
+    assert draft["scene_picks"] is None and "scene_picks" not in draft["carried"], "a frame scene has no picks to carry"
     assert not any(k in json.dumps(draft) for k in ("pose_risk", "minor_source", "compiler_version\": 2, \"sections"))
 
 

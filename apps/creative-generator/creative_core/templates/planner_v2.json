@@ -144,6 +144,11 @@
         200
       ]
     },
+    "infant_wearer_bands": {
+      "_doc": "Who may WEAR an infant garment (Fase C). The garment decides, the scene does not: a Subject that wears it must be in one of these bands; an adult in the scene who does not wear it is fine. The key is looked for in the product type/name; `default` covers every other infant product.",
+      "default": ["baby", "child", "child_3_5", "child_6_9", "child_10_12"],
+      "body infantil": ["baby", "child", "child_3_5"]
+    },
     "minor_bands": [
       "baby",
       "child",

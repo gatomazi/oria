@@ -26,10 +26,17 @@ CASES = (
     ("C", "c-duas-irmas", "Duas irmãs com produtos diferentes"),
     ("D", "d-casal", "Casal, duas pessoas adultas com peças combinando"),
     ("E", "e-familia", "Família de 4: aviso, risco alto e pose simples"),
+    ("F", None, "Sem pessoas no request e sem contexto semântico: cena própria do ângulo (template) com os sorteios da cena"),
 )
 
 
-def _load(name: str) -> dict:
+def _load(name: str | None) -> dict:
+    if name is None:  # case F: the same product and brand as B, but nobody stated and nothing recommended
+        request = _load("b-menino-e-mae")
+        for key in ("subjects", "interaction"):
+            request.pop(key, None)
+        request["products"][0].pop("semantic_context", None)
+        return {**request, "angle_id": "LIFESTYLE_COTIDIANO", "seed": 4}
     return json.loads((FIXTURES / f"fixture-c1-{name}.json").read_text(encoding="utf-8"))["input"]
 
 

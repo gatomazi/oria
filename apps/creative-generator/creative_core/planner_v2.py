@@ -364,10 +364,25 @@ def build(
                 pool_source=_pool_origin(brand, niche),
                 supporting_source=semantic_origin if supporting_info and supporting_info.get("source") == "product" else None)
 
+    # Whoever wears an infant garment must be a child (structural, not a sentence in the prompt).
+    subjects, wearer_fixes, recast = comp.enforce_infant_wearers(subjects, products, pool=pool, seed=seed)
+    warnings += wearer_fixes
+    if recast is not None and source == "legacy":
+        persona = recast
     interaction_id, interaction_source, interaction_warnings = comp.resolve_interaction(
         request.get("interaction"), subjects, semantic) if source != "legacy" or request.get("interaction") else (None, None, [])
     interaction = comp.interaction_detail(interaction_id) if interaction_id else None
     warnings += interaction_warnings
+    scene_mode = "template" if source == "legacy" and not interaction else "frame"
+    if scene_mode == "frame":
+        # A frame scene is the angle's setting + the subjects + the interaction: the pools' action/format sentences are NOT
+        # in its prompt. Keeping the picks would leave a decision that says nothing (an "arriving at a place" action next to
+        # `playing`) yet still moves the gaze and the pose risk, and that "Gerar de novo" / the feedback would carry as
+        # if it were part of the scene. They are used only while the cast is being derived (the gift scenario picks who
+        # wears the piece, and that outcome lives in the subjects), then dropped.
+        if request.get("scene_picks"):
+            warnings.append("scene_picks_ignored:frame_scene")
+        picks = {}
     count = len(subjects)
     if source != "legacy" and count and not limits.get("min", 1) <= count <= limits.get("max", 4):
         warnings.append(f"angle_people_mismatch:{angle_id}:{count}")
@@ -382,7 +397,7 @@ def build(
             "mode": "creative", "objective": objective_for(strategy), "subjects": subjects,
             "scene": {"gaze": gaze, "picks": picks, "prompt_version": prompt_version, "interaction": interaction_id,
                       "interaction_detail": interaction, "interaction_source": interaction_source,
-                      "scene_mode": "template" if source == "legacy" and not interaction else "frame",
+                      "scene_mode": scene_mode,
                       "composition_source": source},
             "composition": composition(angle_id, count, picks, interaction),
             "minor_safety": safety,

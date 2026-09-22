@@ -58,5 +58,15 @@
     "CLOSE_BOLSO": "ÂNGULO CLOSE NO DETALHE PEQUENO: plano próximo com foco num detalhe pequeno do produto (bolso, peito, etiqueta). Cenário: {scene}.",
     "CREATOR_STYLE": "ÂNGULO CREATOR-STYLE: linguagem de rede social (selfie, foto de amigo), sem fingir depoimento. Cenário: {scene}.",
     "PRESENTE_AFETO": "ÂNGULO PRESENTE: valor emocional da peça como presente — momento de presentear ou de uso compartilhado entre as pessoas. Cenário: {scene}."
+  },
+  "wearer_rules": {
+    "_doc": "Compiler v2 replaces the v1 infant-garment sentence 'O MODELO da cena é SEMPRE uma criança' (it is the whole scene's model, which contradicts a child + parent cast) with a rule about whoever WEARS the piece. `old` is the exact sentence in products.py; the compiler refuses to build if any 'O MODELO da cena é SEMPRE' is left after the replacements, so a new garment rule cannot slip the old idea back in.",
+    "guard": "O MODELO da cena é SEMPRE",
+    "rules": [
+      {"old": "O MODELO da cena é SEMPRE uma criança, NUNCA um adulto.",
+       "new": "Qualquer pessoa que VESTE esta peça deve ser uma criança compatível com a faixa do produto. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil."},
+      {"old": "O MODELO da cena é SEMPRE um bebê ou criança pequena, NUNCA um adulto.",
+       "new": "Qualquer pessoa que VESTE esta peça deve ser um bebê ou criança pequena. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil."}
+    ]
   }
 }

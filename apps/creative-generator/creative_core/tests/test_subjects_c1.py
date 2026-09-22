@@ -180,8 +180,10 @@ def test_given_a_manual_composition_that_contradicts_the_print_then_the_scene_is
     assert plan["semantics"]["warnings"] and plan["prompt"]["text"], "never blocked by semantics alone"
 
 
-def test_given_an_adult_wearing_a_child_print_then_a_wearer_warning_is_raised_and_nothing_blocks():
+def test_given_a_wearer_that_does_not_fit_the_print_semantics_then_it_is_a_warning_and_nothing_blocks():
+    # A NON-infant garment whose print says "child": semantics only warn (an infant garment is a hard rule, see test_infant_wearer.py).
     request = _explicit("a-pai-e-filha", subjects=[{"persona": _person("mulher 30 anos", "adult")}])
+    request["products"][0]["type"] = "camiseta"
     plan = plan_creative(request, router=ROUTER)
     assert plan["semantics"]["warnings"][0]["code"] == "wearer_role_mismatch" and "wearer_role_mismatch:None:child" in plan["warnings"]
 
@@ -289,7 +291,7 @@ def test_given_a_declared_age_then_it_wins_over_the_text_and_the_heuristic_is_on
     assert plan["minor_safety"]["basis"] == {"explicit": ["s1"], "heuristic": []}
     contradicting = _explicit(subjects=[{"persona": _person("mulher 30 anos"), "age_band": "child_6_9"}])
     assert plan_creative(contradicting, router=ROUTER)["subjects"][0]["is_minor"] is True, "the declared band beats the label"
-    from_persona = _explicit(subjects=[{"persona": {"label": "Ana", "age_band": "teen"}}])
+    from_persona = _explicit(subjects=[{"persona": {"label": "Ana", "age_band": "child_10_12"}}])
     plan = plan_creative(from_persona, router=ROUTER)
     assert plan["subjects"][0]["age_source"] == "persona.age_band" and plan["minor_safety"]["basis"]["explicit"] == ["s1"]
     assert plan["provenance"]["subjects.s1.age_band"] == "persona"
@@ -356,7 +358,9 @@ def test_given_the_frozen_fase_b_plans_then_the_versioned_compiler_recompiles_ea
         compiled = compile_prompt(plan)
         assert compiled["text"] == plan["prompt"]["text"] and compiled["compiler_version"] == 1, path
         assert "interaction" not in [s["section"] for s in compiled["sections"]]
-    fresh = plan_creative({**_fixture("b-menino-e-mae")}, router=ROUTER)
+    from test_plan_v2 import _plan as legacy_plan
+
+    fresh = legacy_plan(angle="LIFESTYLE_COTIDIANO", prompt_version=2, seed=4)
     assert compile_prompt(fresh, version=1)["compiler_version"] == 1 and compile_prompt(fresh)["compiler_version"] == 2
 
 
@@ -384,6 +388,42 @@ def test_given_scene_picks_from_an_earlier_plan_then_they_replay_the_same_scene_
     assert again["prompt"]["sha256"] == first["prompt"]["sha256"], "same seed and same picks: same prompt"
     for bad in ({"nope": 0}, {"acao": 99}, {"acao": -1}, {"acao": "x"}, {"acao": True}):
         assert _error({**request, "scene_picks": bad}).code == "INVALID_INPUT", bad
+
+
+# ------------------------------------------------------------------ scene picks x interaction
+def test_given_a_frame_scene_then_it_persists_no_scene_picks_and_they_do_not_move_gaze_or_risk():
+    for name in ("a-pai-e-filha", "b-menino-e-mae", "c-duas-irmas", "d-casal", "e-familia"):
+        plan = _plan(name)
+        assert plan["scene"]["scene_mode"] == "frame" and plan["scene"]["picks"] == {}, name
+        assert not [r for r in plan["composition"]["risk_reasons"] if r.startswith(("held_object", "contact"))], name
+        assert "pool:" not in plan["scene"]["gaze"]["reason"], name
+    assert "a chegar" not in _plan("a-pai-e-filha")["prompt"]["text"] and "saindo de" not in _plan("a-pai-e-filha")["prompt"]["text"]
+
+
+def test_given_a_template_scene_then_its_picks_are_the_scene_and_are_still_persisted_and_priced():
+    from test_plan_v2 import _plan as legacy_plan
+
+    plan = legacy_plan(angle="LIFESTYLE_COTIDIANO", prompt_version=2, seed=4)
+    assert plan["scene"]["scene_mode"] == "template" and plan["scene"]["picks"]["acao"]["text"] in plan["prompt"]["text"]
+    assert "held_object:acao" in plan["composition"]["risk_reasons"] and plan["scene"]["gaze"]["reason"].startswith("pool:acao")
+
+
+def test_given_picks_sent_with_a_frame_scene_then_they_are_ignored_out_loud_and_the_prompt_is_the_same():
+    request = _fixture("b-menino-e-mae")
+    base = plan_creative(request, router=ROUTER)
+    sent = plan_creative({**request, "scene_picks": {"acao": 2}}, router=ROUTER)
+    assert "scene_picks_ignored:frame_scene" in sent["warnings"] and sent["scene"]["picks"] == {}
+    assert sent["prompt"]["sha256"] == base["prompt"]["sha256"], "a pick nobody reads cannot change the creative"
+
+
+def test_given_a_recommended_or_explicit_cast_then_again_and_the_snapshot_carry_no_picks():
+    from creative_core.drafts import feedback_snapshot, generation_draft_from_plan
+
+    for name in ("a-pai-e-filha", "b-menino-e-mae", "e-familia"):
+        plan = _plan(name)
+        draft = generation_draft_from_plan(plan)
+        assert draft["scene_picks"] is None and draft["actions"]["again"]["scene_picks"] is None, name
+        assert "scene_picks" not in json.dumps(feedback_snapshot(plan)), name
 
 
 # ------------------------------------------------------------------ contracts

@@ -78,6 +78,17 @@ def _fidelity(plan: dict) -> tuple[str, str, str]:
     return text, "product", str(text.count("\n- "))
 
 
+def _fidelity_v2(plan: dict) -> tuple[str, str, str]:
+    """Same rules as v1, with the infant-garment sentence about the scene's MODEL replaced by the rule about who WEARS it."""
+    text, _apparel = _core_rules(plan["products"], plan.get("funnel_stage"), plan["strategy"])
+    cfg = TEXT["wearer_rules"]
+    for rule in cfg["rules"]:
+        text = text.replace(rule["old"], rule["new"])
+    if cfg["guard"] in text:
+        raise ValueError("a garment rule still says the scene's model is always a child; add it to compiler_v2.json wearer_rules")
+    return text, "product", str(text.count("\n- "))
+
+
 def _minor_safety(plan: dict) -> tuple[str, str, str]:
     safety = plan["minor_safety"]
     if not safety["applies"]:
@@ -282,6 +293,7 @@ def _builders(plan: dict, version: int) -> dict:
         "output_format": lambda: (COMMUNICATION["placements"][plan["placement"]["id"]], "user", plan["placement"]["id"]),
     }
     if version >= 2:
+        builders["fidelity_rules"] = lambda: _fidelity_v2(plan)
         builders["people_composition_contract"] = lambda: _people_v2(plan)
         builders["interaction"] = lambda: _interaction(plan)
         builders["scene_action"] = lambda: _scene_v2(plan)

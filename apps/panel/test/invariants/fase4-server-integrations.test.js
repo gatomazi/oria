@@ -371,7 +371,7 @@ test('tenant novo · Integrações abre com zero integrações: 200, not_configu
   assert.equal(r.json.whatsapp.status, 'not_configured');
 
   // Abrir a tela é leitura: nenhuma chamada externa sai daqui.
-  assert.equal(chamadasMock().length, chamadasAntes, 'abrir Integrações disparou chamada a provider externo');
+  assert.equal(chamadasMock().length, chamadasAntes, 'abrir Integrações disparou chamada a provider externo: ' + JSON.stringify(chamadasMock().slice(chamadasAntes).map((c) => [c.host, c.caminho, c.auth && String(c.auth).slice(0, 12)])));
 
   // E o processo não registrou rejeição não tratada — é isso que virava 502.
   await new Promise((resolve) => setTimeout(resolve, 200));

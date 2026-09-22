@@ -358,10 +358,10 @@ test('Copiar dados devolve o formulário, "de novo" e "variação" prontos, e o 
     assert.equal(form.interaction, 'playing');
     assert.equal(form.seed, undefined, 'semente, sorteios e olhar só vêm pela ação escolhida');
     assert.deepEqual(actions.again.seed, FASE_C.A.draft.seed);
-    assert.deepEqual(actions.again.scene_picks, FASE_C.A.draft.scene_picks);
+    assert.equal(actions.again.scene_picks, undefined, 'cena de composição (frame) não tem sorteios a repetir');
     assert.equal(actions.again.gaze_mode, 'interaction');
     assert.deepEqual(actions.variation, {}, 'variação larga a semente, os sorteios e o olhar que o planner escolheu');
-    assert.ok(carried.includes('subjects') && carried.includes('interaction') && carried.includes('seed'));
+    assert.ok(carried.includes('subjects') && carried.includes('interaction') && carried.includes('seed') && !carried.includes('scene_picks'));
     assert.deepEqual(warnings, FASE_C.A.draft.plan_warnings);
     assert.deepEqual(draft.subjects, form.subjects, 'o draft do core vem inteiro, sem perda');
     const texto = JSON.stringify(r.body);
@@ -378,7 +378,7 @@ test('"Gerar de novo" e "Gerar variação" viram pedidos: mesma cena x nova cena
     const opcoes = { store, tenantId: TENANT, hints: null, promptVersion: 2, planSchemaVersion: 2 };
     const [de_novo] = await buildRequests(normalizeJobInput({ ...form, ...actions.again }), opcoes);
     assert.equal(de_novo.request.seed, FASE_C.A.draft.seed);
-    assert.deepEqual(de_novo.request.scene_picks, FASE_C.A.draft.scene_picks);
+    assert.equal(de_novo.request.scene_picks, undefined);
     assert.equal(de_novo.request.gaze_mode, 'interaction');
     const [variacao] = await buildRequests(normalizeJobInput({ ...form, ...actions.variation }), { ...opcoes, randomInt: () => 4242 });
     assert.equal(variacao.request.seed, 4242, 'semente nova');
@@ -436,11 +436,36 @@ test('sem plano v2/prompt v2 na conta, pessoas, interação e sorteios ficam "in
     assert.equal(r.body.form.subjects, undefined);
     assert.equal(r.body.form.interaction, undefined);
     assert.equal(r.body.actions.again.scene_picks, undefined);
-    assert.deepEqual(r.body.unavailable.map((u) => [u.field, u.reason]), [['subjects', 'plan_v2_not_enabled'], ['scene_picks', 'prompt_v2_not_enabled']]);
+    assert.deepEqual(r.body.unavailable.map((u) => [u.field, u.reason]), [['subjects', 'plan_v2_not_enabled']]);
     assert.equal(r.body.draft.subjects.length, 2, 'o draft do core continua inteiro');
     // O formulário que sobra é válido para o POST /jobs.
     assert.doesNotThrow(() => normalizeJobInput({ ...r.body.form, ...r.body.actions.again }));
   } finally { server.close(); }
+});
+
+test('cena própria do ângulo (template): "de novo" repete os sorteios; "variação" os larga; sem prompt v2 eles ficam indisponíveis', async () => {
+  const comV2 = await ambiente({ env: V2, letra: 'F' });
+  try {
+    const { creativeId } = await criativoConcluido(comV2.store, comV2.ids, { letra: 'F' });
+    const r = await comV2.call('GET', `/items/${creativeId}/draft`);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.form.subjects, undefined);
+    assert.equal(r.body.form.interaction, undefined, 'sem pessoas explícitas nem interação: quem aparece volta pela semente');
+    assert.deepEqual(r.body.actions.again.scene_picks, FASE_C.F.draft.scene_picks);
+    assert.equal(r.body.actions.again.seed, FASE_C.F.draft.seed);
+    assert.equal(r.body.actions.variation.scene_picks, undefined);
+    assert.equal(r.body.actions.variation.seed, undefined);
+    const opcoes = { store: comV2.store, tenantId: TENANT, hints: null, promptVersion: 2, planSchemaVersion: 2 };
+    const [deNovo] = await buildRequests(normalizeJobInput({ ...r.body.form, ...r.body.actions.again }), opcoes);
+    assert.deepEqual([deNovo.request.seed, deNovo.request.scene_picks], [FASE_C.F.draft.seed, FASE_C.F.draft.scene_picks]);
+  } finally { comV2.server.close(); }
+  const semV2 = await ambiente({ env: {}, letra: 'F' });
+  try {
+    const { creativeId } = await criativoConcluido(semV2.store, semV2.ids, { letra: 'F' });
+    const r = await semV2.call('GET', `/items/${creativeId}/draft`);
+    assert.deepEqual(r.body.unavailable.map((u) => [u.field, u.reason]), [['scene_picks', 'prompt_v2_not_enabled']]);
+    assert.equal(r.body.actions.again.scene_picks, undefined);
+  } finally { semV2.server.close(); }
 });
 
 test('contexto geográfico volta com a cidade do lote de origem; sem ela é indisponível', async () => {
