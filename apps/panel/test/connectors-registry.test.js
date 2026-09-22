@@ -356,7 +356,10 @@ test('Fase B · o registry não interpreta status: devolve como veio (a polític
 // ── Guardas estáticas da camada ─────────────────────────────────────────────────────────────────
 
 const DIR_CONNECTORS = path.join(__dirname, '..', 'lib', 'connectors');
-const arquivosDaCamada = () => fs.readdirSync(DIR_CONNECTORS, { recursive: true }).filter((x) => x.endsWith('.js')).map((x) => path.join(DIR_CONNECTORS, x));
+// SÓ o nível genérico (contracts/registry/errors/types) — não recursivo, de propósito: um adapter
+// concreto (lib/connectors/commerce/reserva-ink/…, Fase C) tem todo o direito de citar o próprio
+// provider. A guarda existe para o domínio, não para os adapters que ele hospeda.
+const arquivosDaCamada = () => fs.readdirSync(DIR_CONNECTORS).filter((x) => x.endsWith('.js')).map((x) => path.join(DIR_CONNECTORS, x));
 const semComentario = (arq) => fs.readFileSync(arq, 'utf8').split('\n').filter((l) => !l.trimStart().startsWith('//') && !l.trimStart().startsWith('*'));
 
 // `typeof x.provider !== 'string'` valida formato; não é comparação com um provider concreto.
