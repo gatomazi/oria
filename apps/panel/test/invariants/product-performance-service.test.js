@@ -182,23 +182,36 @@ test('G · 1000 produtos: 1 chamada de analytics REAPROVEITADA entre páginas (c
 
 // ── Cache tenant-safe de relatório (rodada G.1 — escalabilidade) ────────────────────────────────
 
+// Rodada M §2 · relógio falso pro teste de TTL: nunca depende de quanto tempo uma chamada de banco
+// REAL levou (com a máquina ocupada, duas chamadas sequenciais podiam facilmente passar de 50ms de
+// tempo REAL entre elas, expirando o TTL "cedo demais" e fazendo o teste falhar por uma corrida que
+// não tinha nada a ver com o comportamento do cache). `avancar(ms)` move o relógio exatamente o
+// quanto o teste decide, de forma síncrona — remove a corrida, não esconde ela atrás de tolerância.
+function relogioFalso(inicial = 0) {
+  let agora = inicial;
+  const fn = () => agora;
+  fn.avancar = (ms) => { agora += ms; };
+  return fn;
+}
+
 test('G · ReportCache: mesma chave (org/store/provider/período) reaproveita; chave diferente busca de novo; TTL expira; nunca cruza Organization', () => em(ORG_A, STORE_A, async () => {
   await semearCatalogo(ORG_A, STORE_A, 'cache_provider', [{ providerProductId: 'c1' }]);
   await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'cache_provider' });
   const { registry, chamadasFeitas } = registryComAnalytics([item('c1')]);
   const { createReportCache } = h.sujeito('lib/product-analytics/product-performance-service.js');
-  const cache = createReportCache({ ttlMs: 50 });
+  const relogio = relogioFalso();
+  const cache = createReportCache({ ttlMs: 50, relogio });
   const svc = createProductPerformanceService({ pool: pool(), registry, catalogRepository: createCommerceCatalogRepository({ pool: pool() }), reportCache: cache });
   const entrada = { organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'cache_provider' }, ...PERIODO };
 
   await svc.getProductPerformance(entrada);
   await svc.getProductPerformance(entrada);
-  assert.equal(chamadasFeitas(), 1); // 2ª chamada com o MESMO escopo: cache hit
+  assert.equal(chamadasFeitas(), 1); // 2ª chamada com o MESMO escopo, MESMO instante do relógio: cache hit
 
   await svc.getProductPerformance({ ...entrada, endDate: '2026-09-21' }); // período diferente: cache miss
   assert.equal(chamadasFeitas(), 2);
 
-  await new Promise((r) => setTimeout(r, 60)); // TTL de 50ms expira
+  relogio.avancar(60); // TTL de 50ms expira — determinístico, nunca espera tempo real
   await svc.getProductPerformance(entrada);
   assert.equal(chamadasFeitas(), 3); // expirou: busca de novo, nunca serve dado velho além do TTL
 }));
