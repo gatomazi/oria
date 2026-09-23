@@ -70,12 +70,19 @@ indicador de origem atualizado — §5).
 |---|---|
 | [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) | Forma `text.format = {type: "json_schema", strict: true, schema, name}`; strict mode exige TODO campo de `properties` em `required` e `additionalProperties: false`; suporte "a partir do GPT-4o e modelos posteriores", `gpt-6-astra` citado nominalmente |
 | [Images & vision](https://developers.openai.com/api/docs/guides/images-vision) | Forma multimodal `input: [{role, content: [{type:"input_text",...}, {type:"input_image", image_url: "data:<mime>;base64,...", detail}]}]`; array de `input_image` é o jeito normal de mandar VÁRIAS referências — sem a pegadinha de `image[]` multipart (isto é corpo JSON, não multipart form — bug diferente do da Fase C); limites declarados de até 1.500 imagens/512MB por request (`_MAX_REFERENCES = 2` deste round é bem mais conservador) |
-| [Pricing](https://developers.openai.com/api/docs/pricing) | **Não existe modelo literalmente "gpt-5.6"** (o `model_router.DEFAULT_TEXT_MODEL` deste repositório) — só variantes nomeadas (`gpt-5.6-sol/-terra/-luna`). `apps/panel/lib/custos/precos.js` já sinalizava essa mesma ambiguidade independentemente ("a variante efetiva não é conhecida"). GPT-6 (Astra/Sol/Luna, lançado 03/09/2026) é a família atual com visão confirmada para todos os três |
+| [Pricing](https://developers.openai.com/api/docs/pricing) | Tabela de preços por model id canônico (`gpt-5.6-sol/-terra/-luna`, não o alias — ver correção abaixo). GPT-6 (Astra/Sol/Luna, lançado 03/09/2026) é a família mais recente, visão confirmada para os três |
 
-**Achado operacional**: com os defaults de hoje (`OPENAI_TEXT_MODEL` não definido, sem fallbacks), o roteador
-resolve `"gpt-5.6"` para a tarefa `STRUCTURED_OUTPUT` — não é um model id real. Isto é uma lacuna PRÉ-
-EXISTENTE no default COMPARTILHADO do roteador (usado por outras 4 tarefas também), não algo que esta fase
-altera — mas o provider real desta fase NÃO confia nisso cegamente.
+> **Correção (Fase F.2.B, 2026-09-23)**: este relatório afirmava, incorretamente, que "gpt-5.6" não existe
+> como model id real. A documentação oficial ([gpt-5.6-sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol),
+> [latest-model?model=gpt-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6))
+> confirma, em ambas as páginas, que **`gpt-5.6` É um alias válido, roteado para `gpt-5.6-sol`** (visão +
+> Structured Outputs confirmados, US$ 4/1M entrada, US$ 20/1M saída) — a página de preços fetchada na F.2.A
+> simplesmente não lista aliases, só model ids canônicos, e essa ausência foi lida como "não existe", o que
+> era um engano. `model_router.DEFAULT_TEXT_MODEL = "gpt-5.6"` portanto **resolve para um modelo real e
+> utilizável hoje** — não há lacuna de configuração no roteador compartilhado, e o default NÃO foi alterado
+> por esta correção (nem deveria: mudaria comportamento de 5 tarefas sem pedido explícito). O alias
+> simplesmente **não está na allowlist específica do enrichment** — por escolha deliberada de custo/escopo
+> desta fase (ver §"Allowlist versionada" abaixo), o que é uma decisão diferente de "o modelo não existe".
 
 ### Allowlist versionada (a "configuração/allowlist" que o comando pediu)
 
@@ -89,9 +96,12 @@ _OPENAI_MODEL_ALLOWLIST = {
 Um modelo resolvido pelo roteador fora desta lista é tratado como "indisponível" — o MESMO mecanismo que
 `model_router.run_traced` já usa para tentar o próximo fallback (`OPENAI_TEXT_MODEL_FALLBACKS`, a "regra
 explícita aprovada" do comando). Só quando TODOS os candidatos são recusados o erro
-`MODEL_NOT_ALLOWLISTED` aparece. Com os defaults de hoje, isto significa: uma chamada real falharia ANTES de
-qualquer requisição de rede, até alguém configurar `OPENAI_TEXT_MODEL` explicitamente para um valor
-permitido — comportamento confirmado por teste (`test_given_the_routers_current_default_then_it_is_not_allowlisted_and_the_call_never_happens`).
+`MODEL_NOT_ALLOWLISTED` aparece. Com os defaults de hoje (`OPENAI_TEXT_MODEL` não definido → roteador
+resolve o alias `gpt-5.6`, real e utilizável, mas por escolha DELIBERADA fora da allowlist do enrichment por
+custo/escopo — não por não existir, ver correção acima), uma chamada de enriquecimento real falharia ANTES
+de qualquer requisição de rede, até o chamador pinar explicitamente um modelo permitido — comportamento
+confirmado por teste (`test_given_the_routers_current_default_then_it_is_not_allowlisted_and_the_call_never_happens`,
+renomeado/reforçado na F.2.B — ver §0 do relatório).
 
 ### O que o provider real faz (`enrichment.py::_OpenAIProvider`)
 
@@ -207,12 +217,12 @@ TABELAS `creative_*`, não colunas — 0037 só adiciona uma coluna a uma tabela
 
 ## 7. Riscos e decisões remanescentes
 
-- **Modelo do roteador**: o default compartilhado `model_router.DEFAULT_TEXT_MODEL = "gpt-5.6"` não é um
-  model id real hoje (achado independente, confirmado também pela própria tabela de preços do painel). Isto
-  afeta 5 tarefas do roteador (`COPY`, `STRUCTURED_OUTPUT`, `CONTEXT_INTELLIGENCE`, `PROMPT_PLANNING`,
-  `VISION_QA`), não só o enriquecimento — corrigir o default está fora do escopo desta auditoria (mudaria
-  comportamento de código já em produção sem pedido explícito), mas bloqueia QUALQUER chamada real futura
-  até `OPENAI_TEXT_MODEL` ser configurado explicitamente.
+- ~~**Modelo do roteador**: `model_router.DEFAULT_TEXT_MODEL = "gpt-5.6"` não é um model id real hoje~~ —
+  **corrigido na F.2.B**: é um alias real, roteado a `gpt-5.6-sol` (visão + Structured Outputs, ver §0). O
+  risco real, revisado: o default compartilhado (usado por 5 tarefas do roteador) continua fora da
+  allowlist específica do enrichment por escolha deliberada de custo/escopo desta fase, não por invalidez —
+  então uma chamada de enriquecimento sem `OPENAI_TEXT_MODEL` pinado explicitamente ainda falha antes da
+  rede (comportamento intencional, não uma lacuna a corrigir).
 - **Cota por Organization em memória, não distribuída** — uma réplica por processo, não uma cota global. Se
   a operação escalar horizontalmente antes de um limite compartilhado (banco/Redis) existir, o gasto real
   pode ultrapassar o configurado (nunca bloqueia sem motivo, mas também não impede gasto espalhado por várias
