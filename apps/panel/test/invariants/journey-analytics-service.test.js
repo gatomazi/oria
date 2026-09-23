@@ -17,7 +17,7 @@ const { createConnectorRegistry } = h.sujeito('lib/connectors/registry.js');
 const { createCommerceCatalogRepository } = h.sujeito('lib/product-analytics/commerce-catalog-repository.js');
 const { createProductPerformanceService } = h.sujeito('lib/product-analytics/product-performance-service.js');
 const { bootstrapCommerceIdentities } = h.sujeito('lib/product-analytics/product-identity-resolver.js');
-const { createJourneyAnalyticsService } = h.sujeito('lib/product-analytics/journey-analytics-service.js');
+const { createJourneyAnalyticsService, MAX_TRANSACTION_SAMPLE_SIZE, classificarIndisponibilidade } = h.sujeito('lib/product-analytics/journey-analytics-service.js');
 const { LOCAL_ORDERS_HISTORY_START } = h.sujeito('lib/product-analytics/reconciliation.js');
 
 const ORG_A = 'a1c00000-0000-4000-8000-000000000001';
@@ -113,10 +113,10 @@ function registryFake({ pedidos = [], linhas = [], analyticsExtra = {}, comercio
   return registry;
 }
 
-async function montarServico(registry) {
+async function montarServico(registry, overrides = {}) {
   const catalogRepository = createCommerceCatalogRepository({ pool: pool() });
   const productPerformanceService = createProductPerformanceService({ pool: pool(), registry, catalogRepository });
-  return createJourneyAnalyticsService({ pool: pool(), registry, productPerformanceService, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: PROVIDER });
+  return createJourneyAnalyticsService({ pool: pool(), registry, productPerformanceService, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: PROVIDER, ...overrides });
 }
 
 // ── Validação / gate de histórico ────────────────────────────────────────────────────────────────
@@ -289,3 +289,167 @@ test('K · attribution: 3 fontes lado a lado, nenhuma somada com outra', () => e
   assert.equal(Object.prototype.hasOwnProperty.call(commerce, 'spend'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(ga4, 'spend'), false);
 }));
+
+// ── L §2.1/§2.2: taxonomia de status e linkType explícito (nunca complete_journey) ────────────────
+
+test('L · classificarIndisponibilidade: taxonomia normalizada — not_connected/unsupported/insufficient_data/not_verified/temporary_failure', () => {
+  assert.equal(classificarIndisponibilidade(null), 'available');
+  assert.equal(classificarIndisponibilidade('META_NOT_CONNECTED'), 'not_connected');
+  assert.equal(classificarIndisponibilidade('COMMERCE_NOT_REGISTERED'), 'not_connected');
+  assert.equal(classificarIndisponibilidade('PROVIDER_WITHOUT_TRANSACTION_CAPABILITY'), 'unsupported');
+  assert.equal(classificarIndisponibilidade('GA4_ACQUISITION_DIMENSIONS_OR_METRICS_UNAVAILABLE'), 'unsupported');
+  assert.equal(classificarIndisponibilidade('LOCAL_ORDERS_HISTORY_STARTS_LATER'), 'insufficient_data');
+  assert.equal(classificarIndisponibilidade('insufficient_data'), 'insufficient_data');
+  assert.equal(classificarIndisponibilidade('TRANSACTION_CAPABILITY_CHECK_FAILED'), 'not_verified');
+  assert.equal(classificarIndisponibilidade('ALGO_NUNCA_VISTO_ANTES'), 'temporary_failure'); // nunca escondido atrás de "unsupported"
+});
+
+test('L · tier2 nunca rotula um vínculo como "complete_journey" — só transaction_linked', () => em(async () => {
+  const ids = await semearCatalogo([{ providerProductId: 'p6' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: PROVIDER });
+  const registry = registryFake({
+    pedidos: [pedidoFake('link-6', { items: [{ commerceProductId: ids.get('p6'), quantity: 1, totalValue: 100 }], totalValue: 100 })],
+    linhas: [linhaAnalytics('p6')],
+    analyticsExtra: {
+      getTransactionCapabilities: async () => ({ apt: true, reason: null, transactionIdAvailable: true, metrics: {} }),
+      findTransaction: async () => ({ found: true, transactions: 1, revenue: 100 }),
+    },
+  });
+  const svc = await montarServico(registry);
+  const r = await svc.getJourneyAnalytics({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO });
+  assert.equal(r.tier2.transactionOrderLink.links[0].linkType, 'transaction_linked');
+  assert.doesNotMatch(JSON.stringify(r), /complete_journey/);
+}));
+
+// ── L §2.3: findTransaction nunca faz N chamadas sem teto no relatório agregado ────────────────────
+
+test('L · tier2 (agregado) verifica só uma AMOSTRA limitada de pedidos pagos — nunca todos, mesmo com muitos pedidos', () => em(async () => {
+  const ids = await semearCatalogo([{ providerProductId: 'p7' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: PROVIDER });
+  const TOTAL_PEDIDOS = MAX_TRANSACTION_SAMPLE_SIZE + 5; // mais pedidos do que o teto — prova que o teto de fato limita
+  const pedidos = Array.from({ length: TOTAL_PEDIDOS }, (_, i) => pedidoFake(`p7-${i}`, { items: [{ commerceProductId: ids.get('p7'), quantity: 1, totalValue: 10 }], totalValue: 10 }));
+  let chamadasFindTransaction = 0;
+  const registry = registryFake({
+    pedidos,
+    linhas: [linhaAnalytics('p7')],
+    analyticsExtra: {
+      getTransactionCapabilities: async () => ({ apt: true, reason: null, transactionIdAvailable: true, metrics: {} }),
+      findTransaction: async () => { chamadasFindTransaction += 1; return { found: false, transactions: null, revenue: null }; },
+    },
+  });
+  const svc = await montarServico(registry);
+  const r = await svc.getJourneyAnalytics({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO });
+  assert.equal(chamadasFindTransaction, MAX_TRANSACTION_SAMPLE_SIZE, `esperava exatamente o teto de chamadas GA4 (${MAX_TRANSACTION_SAMPLE_SIZE}), não 1 por pedido pago (${TOTAL_PEDIDOS})`);
+  assert.equal(r.tier2.transactionOrderLink.checked, MAX_TRANSACTION_SAMPLE_SIZE);
+  assert.equal(r.tier2.transactionOrderLink.sampled, true);
+  assert.equal(r.tier2.transactionOrderLink.sampleSize, MAX_TRANSACTION_SAMPLE_SIZE);
+  assert.equal(r.tier2.transactionOrderLink.totalEligible, TOTAL_PEDIDOS);
+}));
+
+test('L · maxTransactionSampleSize é configurável na composição — nunca um número mágico fixo', () => em(async () => {
+  const ids = await semearCatalogo([{ providerProductId: 'p8' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: PROVIDER });
+  const pedidos = Array.from({ length: 5 }, (_, i) => pedidoFake(`p8-${i}`, { items: [{ commerceProductId: ids.get('p8'), quantity: 1, totalValue: 10 }], totalValue: 10 }));
+  let chamadas = 0;
+  const registry = registryFake({
+    pedidos, linhas: [linhaAnalytics('p8')],
+    analyticsExtra: {
+      getTransactionCapabilities: async () => ({ apt: true, reason: null, transactionIdAvailable: true, metrics: {} }),
+      findTransaction: async () => { chamadas += 1; return { found: false, transactions: null, revenue: null }; },
+    },
+  });
+  const svc = await montarServico(registry, { maxTransactionSampleSize: 2 });
+  const r = await svc.getJourneyAnalytics({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO });
+  assert.equal(chamadas, 2);
+  assert.equal(r.tier2.transactionOrderLink.sampled, true);
+}));
+
+// ── L §2.3: verificação sob demanda de 1 pedido — o caminho que a UI usa, nunca a carga inicial ────
+
+test('L · checkOrderTransactionLink: 1 pedido explícito, 1 chamada ao Commerce + 1 ao GA4, nunca mais', () => em(async () => {
+  const ids = await semearCatalogo([{ providerProductId: 'p9' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: PROVIDER });
+  let chamadasGetOrder = 0;
+  let chamadasFindTransaction = 0;
+  const pedido = pedidoFake('sob-demanda-1', { items: [{ commerceProductId: ids.get('p9'), quantity: 1, totalValue: 300 }], totalValue: 300 });
+  const registry = createConnectorRegistry();
+  registry.register({
+    domain: 'commerce', provider: PROVIDER, integrationProvider: PROVIDER, requiresStoreContext: true,
+    capabilities: { products: true, variants: false, productsWithVariants: false, orders: true, refunds: false, productCosts: false },
+    create: () => ({
+      listProducts: async () => ({ items: [], nextCursor: null }),
+      getProduct: async () => null,
+      listOrders: async () => ({ items: [], nextCursor: null }),
+      getOrder: async ({ providerOrderId }) => { chamadasGetOrder += 1; return providerOrderId === pedido.id ? pedido : null; },
+    }),
+  });
+  registry.register({
+    domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
+    capabilities: { productMetrics: true, eventMetrics: false, realtime: false },
+    create: () => ({
+      getProductPerformance: async () => [],
+      getTransactionCapabilities: async () => ({ apt: true, reason: null, transactionIdAvailable: true, metrics: {} }),
+      findTransaction: async ({ transactionId }) => { chamadasFindTransaction += 1; return { found: transactionId === pedido.id, transactions: 1, revenue: 300 }; },
+    }),
+  });
+  const svc = await montarServico(registry);
+  const r = await svc.checkOrderTransactionLink({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO, providerOrderId: pedido.id });
+  assert.equal(chamadasGetOrder, 1);
+  assert.equal(chamadasFindTransaction, 1);
+  assert.equal(r.available, true);
+  assert.equal(r.linked, true);
+  assert.equal(r.linkType, 'transaction_linked');
+  assert.equal(r.order.id, pedido.id);
+}));
+
+test('L · checkOrderTransactionLink: pedido inexistente → insufficient_data/ORDER_NOT_FOUND, nunca chama o GA4', () => em(async () => {
+  let chamouGa4 = false;
+  const registry = createConnectorRegistry();
+  registry.register({
+    domain: 'commerce', provider: PROVIDER, integrationProvider: PROVIDER, requiresStoreContext: true,
+    capabilities: { products: true, variants: false, productsWithVariants: false, orders: true, refunds: false, productCosts: false },
+    create: () => ({ listProducts: async () => ({ items: [], nextCursor: null }), getProduct: async () => null, listOrders: async () => ({ items: [], nextCursor: null }), getOrder: async () => null }),
+  });
+  registry.register({
+    domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
+    capabilities: { productMetrics: true, eventMetrics: false, realtime: false },
+    create: () => ({ getProductPerformance: async () => [], findTransaction: async () => { chamouGa4 = true; return { found: false, transactions: null, revenue: null }; } }),
+  });
+  const svc = await montarServico(registry);
+  const r = await svc.checkOrderTransactionLink({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO, providerOrderId: 'nunca-existiu' });
+  assert.equal(r.available, false);
+  assert.equal(r.status, 'insufficient_data');
+  assert.equal(r.reason, 'ORDER_NOT_FOUND');
+  assert.equal(chamouGa4, false);
+}));
+
+test('L · checkOrderTransactionLink exige providerOrderId e período válido', () => em(async () => {
+  const svc = await montarServico(registryFake());
+  await assert.rejects(svc.checkOrderTransactionLink({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO }), TypeError);
+}));
+
+// ── L §2.4: localOrdersHistoryStart injetável — nunca uma data global fixa pra todo tenant SaaS ────
+
+test('L · localOrdersHistoryStart é injetável na composição — default preserva o comportamento atual', () => em(async () => {
+  const svc = await montarServico(registryFake());
+  const r = await svc.getJourneyAnalytics({ organizationId: ORG_A, storeId: STORE_A, startDate: '2026-07-01', endDate: '2026-08-01' });
+  assert.equal(r.historyStartsAt, LOCAL_ORDERS_HISTORY_START); // default = mesma constante de reconciliation.js
+}));
+
+test('L · localOrdersHistoryStart customizado permite um período que o default rejeitaria — nunca hardcoded globalmente', () => em(async () => {
+  const svc = await montarServico(registryFake({ linhas: [] }), { localOrdersHistoryStart: '2026-01-01' });
+  const r = await svc.getJourneyAnalytics({ organizationId: ORG_A, storeId: STORE_A, startDate: '2026-07-01', endDate: '2026-08-01' });
+  assert.equal(r.status, 'ok'); // com o default (19/08/2026) isto teria sido insufficient_data
+}));
+
+// ── L §2.5: provider abstraction — nunca client concreto de Meta/Ink/GA4 direto ────────────────────
+
+test('L · journey-analytics-service.js só importa domínio (reconciliation, meta/campaign-performance via registry) — nunca client concreto', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const arq = path.join(__dirname, '..', '..', 'lib', 'product-analytics', 'journey-analytics-service.js');
+  const fonte = fs.readFileSync(arq, 'utf8');
+  const requires = [...fonte.matchAll(/require\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]);
+  assert.deepEqual(requires, ['./reconciliation', '../meta/campaign-performance']);
+  assert.doesNotMatch(fonte, /reserva[_-]?ink|InkClient|inkApi|Ga4Client|ga4\/(client|connector)|graph\.facebook\.com/i);
+});
