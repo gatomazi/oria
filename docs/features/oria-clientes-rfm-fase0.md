@@ -208,7 +208,7 @@ Depois dessas correções **não rodei a suíte completa de novo** (custa ~2h30)
 - `lib/clientes/{rfm,analise,metricas,segmento,calibracao}.js`, `server.js` (ordem canônica, versão da regra no resumo e no segmento), `src/api/clientes.ts`, `src/pages/clientes/{ClientesPage,SegmentoPanel,rfmTexto}.tsx|ts`;
 - `scripts/clientes/rfm-calibracao.mjs` (relatório somente leitura), `scripts/clientes/smoke-viewport.mjs` (390 × 844);
 - testes: `test/clientes-rfm.test.js`, `test/clientes-calibracao.test.js`, `test/invariants/clientes-rfm-http.test.js`, contagens de migrations em `tenancy-migrations`/`r19-runbook-dry-run`.
-- Commits locais: `5fe90fe` (regra versionada, relatório, testes) + o commit de correção de contagens/doc desta seção.
+- Commits locais: `5fe90fe` (regra versionada, relatório, testes) e `9d7456c` (contagens de migrations fixadas em testes + esta documentação).
 
 ## 9. Riscos que permanecem
 
