@@ -99,15 +99,18 @@ function mapearErro(err, res) {
 }
 
 /**
- * @param {{productPerformanceService, reconciliationService, registry, analyticsProvider: string, commerceProvider: string}} deps
+ * @param {{productPerformanceService, reconciliationService, journeyAnalyticsService, registry, analyticsProvider: string, commerceProvider: string}} deps
  * @returns {import('express').Router}
  */
-function createProductAnalyticsRouter({ productPerformanceService, reconciliationService, registry, analyticsProvider, commerceProvider }) {
+function createProductAnalyticsRouter({ productPerformanceService, reconciliationService, journeyAnalyticsService, registry, analyticsProvider, commerceProvider }) {
   if (!productPerformanceService || typeof productPerformanceService.getProductPerformance !== 'function' || typeof productPerformanceService.getProductPerformanceSummary !== 'function') {
     throw new Error('createProductAnalyticsRouter exige productPerformanceService');
   }
   if (!reconciliationService || typeof reconciliationService.reconcileProductPerformance !== 'function') {
     throw new Error('createProductAnalyticsRouter exige reconciliationService');
+  }
+  if (!journeyAnalyticsService || typeof journeyAnalyticsService.getJourneyAnalytics !== 'function') {
+    throw new Error('createProductAnalyticsRouter exige journeyAnalyticsService');
   }
   if (!registry || typeof registry.resolve !== 'function') throw new Error('createProductAnalyticsRouter exige registry');
   if (!analyticsProvider || !commerceProvider) throw new Error('createProductAnalyticsRouter exige analyticsProvider e commerceProvider');
@@ -203,6 +206,21 @@ function createProductAnalyticsRouter({ productPerformanceService, reconciliatio
       const r = await reconciliationService.reconcileProductPerformance({
         organizationId, storeId, commerceProvider, analyticsProvider, startDate, endDate,
       });
+      return res.json(r);
+    } catch (err) {
+      return mapearErro(err, res);
+    }
+  });
+
+  // Rodada K · Journey Analytics — funil/aquisição/Meta Ads/Commerce agregados (tier1), correlação
+  // transactionId↔pedido quando a propriedade GA4 sustentar (tier2), e o estado (sempre `unavailable`
+  // nesta rodada) de uma futura jornada individual (tier3) — nunca 500 por uma camada indisponível,
+  // cada tier reporta o próprio `available`/`reason`.
+  router.get('/journey', async (req, res) => {
+    const { organizationId, storeId } = req.tenant;
+    try {
+      const { startDate, endDate } = validarPeriodo(req.query);
+      const r = await journeyAnalyticsService.getJourneyAnalytics({ organizationId, storeId, startDate, endDate });
       return res.json(r);
     } catch (err) {
       return mapearErro(err, res);

@@ -23,6 +23,7 @@ const { createGa4PropertyRepository } = require('../connectors/analytics/ga4/pro
 const { createCommerceCatalogRepository } = require('./commerce-catalog-repository');
 const { createProductPerformanceService, createReportCache } = require('./product-performance-service');
 const { createReconciliationService } = require('./reconciliation');
+const { createJourneyAnalyticsService } = require('./journey-analytics-service');
 
 const ANALYTICS_PROVIDER = 'ga4';
 const COMMERCE_PROVIDER = 'reserva_ink';
@@ -56,9 +57,15 @@ function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleCli
   const reportCache = createReportCache(reportCacheTtlMs ? { ttlMs: reportCacheTtlMs } : undefined);
   const productPerformanceService = createProductPerformanceService({ pool, registry, catalogRepository, reportCache });
   const reconciliationService = createReconciliationService({ registry, productPerformanceService });
+  // Rodada K · Journey Analytics reaproveita o MESMO registry (GA4 + Ink já registrados acima) — a
+  // conta Meta Ads é lida direto de meta_insights_daily (lib/meta/campaign-performance.js), fora do
+  // registry por enquanto (ver comentário no próprio arquivo). Nenhum provider `event_analytics` é
+  // registrado nesta composição — tier3 (jornada individual) fica estruturalmente indisponível até
+  // uma composição futura registrar um.
+  const journeyAnalyticsService = createJourneyAnalyticsService({ pool, registry, productPerformanceService, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER });
 
   return Object.freeze({
-    registry, catalogRepository, productPerformanceService, reconciliationService, reportCache,
+    registry, catalogRepository, productPerformanceService, reconciliationService, journeyAnalyticsService, reportCache,
     analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
   });
 }

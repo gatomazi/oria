@@ -319,6 +319,35 @@ test('H · GET /products/:productId devolve a mesma identidade e 404 pra produto
   assert.equal(cruzado.status, 404);
 });
 
+// ── K (Journey Analytics) ──────────────────────────────────────────────────────────────────────
+
+test('K · GET /journey: cada tier reporta available/reason próprio — nunca 500 por uma fonte indisponível (Ink/Meta não conectados neste smoke)', async () => {
+  const periodoProprio = 'startDate=2026-09-06&endDate=2026-09-25';
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', `/api/admin/product-analytics/journey?${periodoProprio}`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.status, 'ok');
+  assert.equal(r.json.tier1.funnel.available, true, 'GA4 mock tem dado real de item — funil deveria estar disponível');
+  assert.equal(r.json.tier1.acquisition.available, true, 'GA4 mock aceita as dimensões de aquisição (checkCompatibility sempre compatível no mock)');
+  assert.equal(r.json.tier1.adsInvestment.available, false); // nenhuma conta Meta selecionada neste smoke
+  assert.equal(r.json.tier1.adsInvestment.reason, 'META_NOT_CONNECTED');
+  assert.equal(r.json.tier1.confirmedOrders.available, false); // Ink nunca conectado neste smoke
+  assert.equal(r.json.tier2.transactionOrderLink.available, false);
+  assert.equal(r.json.tier2.transactionOrderLink.reason, 'COMMERCE_UNAVAILABLE');
+  assert.equal(r.json.tier3.individualJourney.available, false);
+  assert.equal(r.json.tier3.individualJourney.reason, 'NO_EVENT_ANALYTICS_SOURCE_CONFIGURED');
+  assert.equal(r.json.attribution.length, 3);
+  assert.equal(r.texto.includes(GA4_REFRESH[ORG_A]), false);
+});
+
+test('K · GET /journey: período anterior a 19/08/2026 → insufficient_data (mesmo gate da reconciliação)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', '/api/admin/product-analytics/journey?startDate=2026-07-01&endDate=2026-08-01');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.status, 'insufficient_data');
+  assert.equal(r.json.reason, 'LOCAL_ORDERS_HISTORY_STARTS_LATER');
+});
+
 // ── Reconciliação ──────────────────────────────────────────────────────────────────────────────
 
 test('H · reconciliação com período anterior a 19/08/2026: insufficient_data, sem tentar comparar', async () => {

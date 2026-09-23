@@ -17,6 +17,12 @@ const metaCriativos = require('./lib/meta/criativos');
 const financeiroConsolidado = require('./lib/financeiro/consolidado');
 const clientesLista = require('./lib/clientes/lista');
 const clientesCadastro = require('./lib/clientes/cadastro');
+const { agruparPedidosPorIdentidade } = require('./lib/clientes/identidade');
+const clientesAnalise = require('./lib/clientes/analise');
+const clientesMetricas = require('./lib/clientes/metricas');
+const clientesDetalhe = require('./lib/clientes/detalhe');
+const clientesExportacao = require('./lib/clientes/exportacao');
+const clientesSegmento = require('./lib/clientes/segmento');
 const financeiroDespesas = require('./lib/financeiro/despesas');
 const { resolverMidiaDaOrganizacao } = require('./lib/financeiro/midia');
 const custosPrecos = require('./lib/custos/precos');
@@ -7544,7 +7550,9 @@ app.get('/api/admin/clientes/lista', requireAdmin, async (req, res) => {
 
   try {
     const consulta = clientesLista.normalizarConsulta(req.query);
-    const historico = await buscarClientesAgregados();
+    // Recência/segmento/LTV vêm da RFM (mesma regra do resumo). Falha nela não derruba a lista: volta ao agregado simples.
+    let historico = await buscarClientesAgregados();
+    try { historico = enriquecerComRfm(historico, await analisarClientesDaStore()); } catch (err) { console.error(`[CLIENTES] RFM indisponível para a lista: ${err.message}`); }
     let base = historico;
     let cadastro = { incluido: false, disponivel: true, parcial: false, atualizadoEm: null };
 
@@ -7565,6 +7573,302 @@ app.get('/api/admin/clientes/lista', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(`[CLIENTES] falha ao listar clientes paginados: ${err.message}`);
     res.status(500).json({ error: 'não foi possível ler os clientes' });
+  }
+});
+
+// ── Clientes 360°: indicadores, RFM, detalhe, exportação e segmento de campanha ─────────────────────────────
+// Tudo sai do cache local `pedidos_ink` (webhook + sync horário + backfill) da Organization/Store do contexto — nunca
+// da API da Ink ao vivo. As contas vivem em lib/clientes (puras e testadas); aqui só há escopo, SQL e resposta.
+// A Organization e a Store vêm SEMPRE do contexto da sessão, nunca do request.
+const FUSO_ORGANIZACAO = 'America/Sao_Paulo'; // ainda não existe fuso por Organization: mesmo fuso do dashboard
+
+async function lerPedidosParaClientes() {
+  const escopo = escopoDaStore(2);
+  const { rows } = await pgPool.query(
+    `SELECT loja, ink_order_id, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing,
+            buyer_uf, payment_status, order_status, total_value, criado_em, is_troca, frete, descontos, items_count
+     FROM pedidos_ink
+     WHERE organization_id = $1 AND ${escopo.sql}
+     ORDER BY criado_em DESC`,
+    [orgDoContexto(), ...escopo.params]
+  );
+  return rows;
+}
+
+async function analisarClientesDaStore({ de, ate } = {}) {
+  const linhas = await lerPedidosParaClientes();
+  const agora = new Date();
+  const hoje = clientesMetricas.dataLocal(agora, FUSO_ORGANIZACAO);
+  const periodo = clientesMetricas.normalizarPeriodo({ de, ate }, { hoje });
+  return {
+    ...clientesAnalise.analisarPedidos(linhas, { asOf: agora, periodo, fuso: FUSO_ORGANIZACAO, chaveDoContexto: chaveDaStore() }),
+    linhas, periodo, hoje, agora,
+  };
+}
+
+// Sincronização e backfill da Store, para a tela declarar de onde vêm os números e o que pode faltar.
+async function coberturaDeSincronizacao() {
+  const escopo = escopoDaStore(2);
+  const sync = await pgPool.query(
+    `SELECT ultimo_sync_em FROM sync_estado WHERE organization_id = $1 AND ${escopo.sql} ORDER BY ultimo_sync_em DESC LIMIT 1`,
+    [orgDoContexto(), ...escopo.params]
+  );
+  const backfill = await pgPool.query(
+    `SELECT status, desde, pedidos_processados, criado_em, atualizado_em FROM pedidos_backfill_jobs
+     WHERE organization_id = $1 AND ${escopo.sql} ORDER BY criado_em DESC LIMIT 1`,
+    [orgDoContexto(), ...escopo.params]
+  );
+  const job = backfill.rows[0] || null;
+  return {
+    ultimoSyncEm: sync.rows[0] ? sync.rows[0].ultimo_sync_em : null,
+    backfill: job
+      ? { status: job.status, desde: job.desde, pedidosProcessados: job.pedidos_processados, atualizadoEm: job.atualizado_em }
+      : null,
+  };
+}
+
+// Junta a classificação RFM ao agregado que a lista já usa (mesma `loja + customerKey`). Quem tem compra válida passa
+// a mostrar recência/última compra da RFM (calendário no fuso, sem troca) — a mesma base do segmento exibido.
+function enriquecerComRfm(base, analise) {
+  const porChave = new Map();
+  for (const c of analise.clientes) {
+    porChave.set(clientesAnalise.chaveDeJuncao(c.loja, c.customerKey), analise.classificacaoPorId.get(c.id));
+  }
+  return base.map((c) => {
+    const k = porChave.get(clientesAnalise.chaveDeJuncao(c.loja, c.customerKey));
+    if (!k || c.origem === 'cadastro') return c;
+    return {
+      ...c,
+      segmento: k.segmento.id,
+      segmentoNome: k.segmento.nome,
+      rfm: k.escore,
+      pedidosValidos: k.fVida,
+      ltv: k.ltv,
+      ticketMedioValido: k.fVida ? Math.round((k.ltv / k.fVida) * 100) / 100 : null,
+      primeiraCompraEm: k.primeiraCompraEm,
+      ultimaCompraEm: k.ultimaCompraEm,
+      diasSemComprar: k.r,
+    };
+  });
+}
+
+app.get('/api/admin/clientes/resumo', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });
+  try {
+    const de = typeof req.query.de === 'string' ? req.query.de : undefined;
+    const ate = typeof req.query.ate === 'string' ? req.query.ate : undefined;
+    const analise = await analisarClientesDaStore({ de, ate });
+    const sync = await coberturaDeSincronizacao();
+    const { rfm } = analise;
+    res.json({
+      periodo: analise.periodo,
+      indicadores: analise.indicadores,
+      rfm: {
+        versao: rfm.versao, classificadoEm: rfm.asOf, fuso: rfm.fuso, janelaFrequenciaDias: rfm.janelaFrequenciaDias,
+        limitesRecenciaDias: rfm.limitesRecenciaDias, valorAlto: rfm.valorAlto, suficiente: rfm.suficiente,
+        motivoInsuficiencia: rfm.motivoInsuficiencia, universo: rfm.universo, identidadesSemCompraValida: rfm.leadsSemCompraValida,
+        historicoDias: rfm.historicoDias, janelaCobreHistorico: rfm.janelaCobreHistorico, segmentos: rfm.segmentos,
+      },
+      cobertura: { ...analise.cobertura, ...sync, fonte: 'pedidos_ink: cache local alimentado por webhook, sync horário e backfill — não é consulta ao vivo à Ink' },
+      lacunas: [
+        'Reembolso parcial não é rastreado: só o reembolso total (`refunded`) sai do faturamento e da RFM.',
+        'Pedidos sem documento, telefone e e-mail não podem ser atribuídos a um cliente e ficam fora dos indicadores.',
+        'A cobertura do histórico depende do sync e do backfill: confira o primeiro pedido sincronizado antes de tratar os números como completos.',
+      ],
+    });
+  } catch (err) {
+    console.error(`[CLIENTES] falha ao calcular resumo/RFM: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível calcular os indicadores de clientes' });
+  }
+});
+
+app.post('/api/admin/clientes/detalhe', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });
+  // POST (não GET): a chave do cliente é documento/telefone/e-mail e não pode ir na URL nem em log de acesso.
+  const customerKey = req.body && typeof req.body.customerKey === 'string' ? req.body.customerKey.trim() : '';
+  if (!customerKey || customerKey.length > 200) return res.status(400).json({ error: 'customerKey é obrigatório' });
+  try {
+    const analise = await analisarClientesDaStore();
+    const cliente = analise.clientes.find((c) => c.customerKey === customerKey);
+    // Cliente de outra Organização/Store nunca está em `analise` (a leitura é escopada): 404, sem distinguir.
+    if (!cliente) return res.status(404).json({ error: 'cliente não encontrado' });
+
+    // Ver contato de cliente é acesso a dado pessoal: a auditoria é gravada ANTES da resposta e, se falhar, nada é devolvido.
+    await registrarAuditoria(pgPoolReal, {
+      actorUserId: req.auth.userId,
+      action: 'cliente.visualizar',
+      entityType: 'cliente',
+      // Hash, não a chave: ela é CPF/telefone/e-mail.
+      entityId: crypto.createHash('sha256').update(`${orgDoContexto()}:${customerKey}`).digest('hex').slice(0, 24),
+      organizationId: orgDoContexto(),
+      loja: lojaLegadaDoContextoOuNula(),
+      after: { storeId: storeDoContexto() },
+    });
+
+    const escopo = escopoDaStore(2);
+    const ids = cliente.pedidos.map((p) => p.inkOrderId).filter(Boolean);
+    const itensPorPedido = new Map();
+    if (ids.length) {
+      const { rows } = await pgPool.query(
+        `SELECT ink_order_id, produto_nome, sku, modelo, cor, tamanho, quantidade, valor_venda, desconto_rateado
+         FROM pedidos_ink_itens WHERE organization_id = $1 AND ${escopo.sql} AND ink_order_id = ANY($${2 + escopo.usados}::bigint[])
+         ORDER BY item_id`,
+        [orgDoContexto(), ...escopo.params, ids]
+      );
+      for (const r of rows) {
+        const k = String(r.ink_order_id);
+        if (!itensPorPedido.has(k)) itensPorPedido.set(k, []);
+        itensPorPedido.get(k).push(r);
+      }
+    }
+
+    // Campanhas já recebidas: a chave de destinatário pode ter sido gravada com qualquer identificador que a pessoa teve.
+    const chaves = Array.from(new Set([cliente.customerKey, cliente.documento, cliente.telefone, cliente.email].filter(Boolean)));
+    const { rows: campanhas } = await pgPool.query(
+      `SELECT cr.campaign_id, c.nome AS campanha_nome, cr.status, cr.sent_at, cr.delivered_at, cr.read_at, cr.failure_code
+       FROM campaign_recipients cr JOIN campaigns c ON c.id = cr.campaign_id
+       WHERE c.organization_id = $1 AND cr.customer_key = ANY($2::text[])
+       ORDER BY COALESCE(cr.sent_at, cr.criado_em) DESC LIMIT 50`,
+      [orgDoContexto(), chaves]
+    );
+
+    let whatsappConectado = false;
+    try {
+      const remetente = await remetenteWhatsappParaTela();
+      whatsappConectado = remetente.status === 'connected' && !!remetente.token;
+    } catch { whatsappConectado = false; }
+    // Ticket médio de toda a base classificada (histórico observado), o denominador do distintivo "acima da média".
+    const pedidosDaBase = analise.rfm.segmentos.reduce((acc, seg) => acc + seg.pedidos, 0);
+    const receitaDaBase = analise.rfm.segmentos.reduce((acc, seg) => acc + seg.receita, 0);
+    const ticketDaBase = pedidosDaBase ? receitaDaBase / pedidosDaBase : null;
+    const ufRecente = analise.linhas.find((l) => l.buyer_uf && (
+      (cliente.documento && l.buyer_documento === cliente.documento)
+      || (cliente.telefone && l.buyer_telefone === cliente.telefone)
+      || (cliente.email && l.buyer_email === cliente.email)
+    ));
+
+    res.json(clientesDetalhe.montarDetalhe({
+      cliente,
+      classificacao: analise.classificacaoPorId.get(cliente.id),
+      rfm: analise.rfm,
+      itensPorPedido,
+      campanhas,
+      whatsappConectado,
+      ticketMedioDaBase: ticketDaBase,
+      uf: ufRecente ? ufRecente.buyer_uf : null,
+    }));
+  } catch (err) {
+    console.error(`[CLIENTES] falha ao montar detalhe: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível ler o cliente' });
+  }
+});
+
+// Exportação do público filtrado (mesma consulta da lista, sem paginar). POST: os filtros podem carregar busca por
+// e-mail/telefone. Sem CPF. Auditada ANTES de devolver o arquivo.
+app.post('/api/admin/clientes/exportar', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'exportação exige Postgres configurado' });
+  try {
+    const corpo = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    const consulta = clientesLista.normalizarConsulta(corpo.filtros && typeof corpo.filtros === 'object' ? corpo.filtros : {});
+    // Só quem tem compra vai no CSV: cadastro sem pedido não é público de recompra e não passa pelo cadastro da Ink.
+    consulta.tipo = 'com_pedido';
+    const analise = await analisarClientesDaStore();
+    const base = enriquecerComRfm((await buscarClientesAgregados()).map((c) => ({ ...c, origem: 'pedido' })), analise);
+    const selecionados = clientesLista.selecionarClientes(base, consulta).map(clientesLista.paraTela);
+    // Prévia: `confirmar` precisa repetir a quantidade que o usuário viu, ou a exportação não sai.
+    if (corpo.quantidadeConfirmada !== selecionados.length) {
+      return res.status(409).json({ error: 'a quantidade mudou desde a prévia', quantidade: selecionados.length });
+    }
+    await registrarAuditoria(pgPoolReal, {
+      actorUserId: req.auth.userId,
+      action: 'cliente.exportar',
+      entityType: 'cliente_export',
+      entityId: crypto.randomUUID(),
+      organizationId: orgDoContexto(),
+      loja: lojaLegadaDoContextoOuNula(),
+      // Só contagem e nomes dos filtros: nenhum valor de busca (pode ser e-mail/telefone).
+      after: { storeId: storeDoContexto(), quantidade: selecionados.length, filtros: Object.keys(corpo.filtros || {}).sort() },
+    });
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', 'attachment; filename="clientes.csv"');
+    res.set('Cache-Control', 'no-store');
+    res.send(clientesExportacao.gerarCsv(selecionados));
+  } catch (err) {
+    console.error(`[CLIENTES] falha ao exportar: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível exportar' });
+  }
+});
+
+// Salva o público como segmento de Campanhas. A definição é RECALCULADA aqui, a partir da RFM/consulta atuais: o
+// cliente nunca envia o predicado. Fica dinâmica (reavaliada a cada uso) e registra origem, versão e data de classificação.
+app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'segmentos exigem Postgres configurado' });
+  const corpo = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+  const nome = typeof corpo.nome === 'string' ? corpo.nome.trim().slice(0, 120) : '';
+  if (!nome) return res.status(400).json({ error: 'nome é obrigatório' });
+  try {
+    let origem;
+    let filtros;
+    let predicado = null;
+    let rfmSegmento = null;
+    let rfmVersao = null;
+    let classificadoEm = null;
+    let observacoes;
+    let naoConvertidos = [];
+
+    if (corpo.origem === 'rfm') {
+      if (typeof corpo.segmento !== 'string' || !clientesLista.SEGMENTOS.includes(corpo.segmento)) {
+        return res.status(400).json({ error: 'segmento RFM inválido' });
+      }
+      const analise = await analisarClientesDaStore();
+      const seg = analise.rfm.segmentos.find((s) => s.id === corpo.segmento);
+      if (!analise.rfm.suficiente) return res.status(409).json({ error: `dados insuficientes para classificar: ${analise.rfm.motivoInsuficiencia}` });
+      if (!seg || !seg.predicado) return res.status(404).json({ error: 'segmento RFM não encontrado' });
+      origem = 'rfm';
+      predicado = seg.predicado;
+      filtros = clientesSegmento.filtrosDoPredicado(predicado);
+      observacoes = clientesSegmento.observacoesDoPredicado({ janelaCobreHistorico: analise.rfm.janelaCobreHistorico });
+      rfmSegmento = seg.id;
+      rfmVersao = analise.rfm.versao;
+      classificadoEm = analise.rfm.asOf;
+    } else if (corpo.origem === 'clientes') {
+      const consulta = clientesLista.normalizarConsulta(corpo.filtros && typeof corpo.filtros === 'object' ? corpo.filtros : {});
+      if (consulta.segmentos.length) return res.status(400).json({ error: 'para salvar um segmento RFM use origem "rfm"; filtros combinados não levam segmento' });
+      const convertido = clientesSegmento.filtrosDaConsulta(consulta);
+      if (!convertido.filtros.length) return res.status(400).json({ error: 'nenhum filtro que o construtor de audiência saiba avaliar' });
+      origem = 'clientes';
+      filtros = convertido.filtros;
+      naoConvertidos = convertido.naoConvertidos;
+      observacoes = [];
+    } else {
+      return res.status(400).json({ error: 'origem deve ser "rfm" ou "clientes"' });
+    }
+
+    // Mesmo segmento RFM com a mesma regra já salvo: reaproveita em vez de criar duplicata a cada clique.
+    if (origem === 'rfm') {
+      const existente = await pgPool.query(
+        `SELECT ${SEGMENTO_COLUNAS} FROM segments WHERE origem = 'rfm' AND rfm_segmento = $1 AND predicado = $2::jsonb ORDER BY criado_em DESC LIMIT 1`,
+        [rfmSegmento, JSON.stringify(predicado)]
+      );
+      if (existente.rows[0]) {
+        return res.json({ segmento: mapSegmentoRow(existente.rows[0]), reaproveitado: true, politica: 'dinamico', origem, predicado, observacoes, naoConvertidos });
+      }
+    }
+    const { rows } = await pgPool.query(
+      `INSERT INTO segments (nome, match, filtros, exclusoes, criado_por, origem, politica, predicado, rfm_versao, classificado_em, rfm_segmento)
+       VALUES ($1,'ALL',$2,$3,$4,$5,'dinamico',$6,$7,$8,$9)
+       RETURNING ${SEGMENTO_COLUNAS}`,
+      [nome, JSON.stringify(filtros), JSON.stringify({}), req.auth.userId, origem, predicado ? JSON.stringify(predicado) : null, rfmVersao, classificadoEm, rfmSegmento]
+    );
+    await registrarAuditoria(pgPoolReal, {
+      actorUserId: req.auth.userId, action: 'segment.create', entityType: 'segment', entityId: String(rows[0].id),
+      organizationId: orgDoContexto(), loja: lojaLegadaDoContextoOuNula(),
+      after: { storeId: storeDoContexto(), origem, rfmSegmento, rfmVersao, classificadoEm },
+    });
+    res.status(201).json({ segmento: mapSegmentoRow(rows[0]), politica: 'dinamico', origem, predicado, observacoes, naoConvertidos });
+  } catch (err) {
+    console.error(`[CLIENTES] falha ao criar segmento: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível criar o segmento' });
   }
 });
 
@@ -7608,30 +7912,10 @@ async function buscarClientesAgregados() {
   const agora = Date.now();
   const clientes = [];
   for (const [loja, pedidos] of pedidosPorLoja) {
-    const pai = pedidos.map((_, i) => i);
-    const encontrar = (i) => { while (pai[i] !== i) { pai[i] = pai[pai[i]]; i = pai[i]; } return i; };
-    const unir = (a, b) => { const ra = encontrar(a); const rb = encontrar(b); if (ra !== rb) pai[ra] = rb; };
+    // Regra de identidade única (lib/clientes/identidade.js), a mesma da RFM e da lista de Clientes.
+    const grupos = agruparPedidosPorIdentidade(pedidos).map((g) => g.pedidos);
 
-    const porDocumento = new Map();
-    const porTelefone = new Map();
-    const porEmail = new Map();
-    pedidos.forEach((p, i) => {
-      const doc = (p.buyer_documento || '').trim();
-      const tel = (p.buyer_telefone || '').trim();
-      const email = (p.buyer_email || '').trim();
-      if (doc) { if (porDocumento.has(doc)) unir(i, porDocumento.get(doc)); else porDocumento.set(doc, i); }
-      if (tel) { if (porTelefone.has(tel)) unir(i, porTelefone.get(tel)); else porTelefone.set(tel, i); }
-      if (email) { if (porEmail.has(email)) unir(i, porEmail.get(email)); else porEmail.set(email, i); }
-    });
-
-    const grupos = new Map(); // raiz do union-find -> pedidos do grupo, na ordem (já vem DESC por criado_em)
-    pedidos.forEach((p, i) => {
-      const raiz = encontrar(i);
-      if (!grupos.has(raiz)) grupos.set(raiz, []);
-      grupos.get(raiz).push(p);
-    });
-
-    for (const pedidosDoGrupo of grupos.values()) {
+    for (const pedidosDoGrupo of grupos) {
       const maisRecente = pedidosDoGrupo[0]; // grupo preserva a ordem DESC por criado_em da query
       const pedidosPagos = pedidosDoGrupo.filter((p) => PAYMENT_STATUSES_CONVERTIDO.has(p.payment_status));
       const totalCompras = pedidosPagos.length;
@@ -7863,13 +8147,17 @@ function mapSegmentoRow(r) {
   return {
     id: String(r.id), nome: r.nome, match: r.match, filtros: r.filtros, exclusoes: r.exclusoes,
     criadoPor: r.criado_por, criadoEm: r.criado_em, atualizadoEm: r.atualizado_em,
+    // Origem e regra (segmentos vindos de Clientes/RFM); segmentos antigos são 'filtros', dinâmicos, sem regra RFM.
+    origem: r.origem || 'filtros', politica: r.politica || 'dinamico', predicado: r.predicado || null,
+    rfmVersao: r.rfm_versao || null, classificadoEm: r.classificado_em || null, rfmSegmento: r.rfm_segmento || null,
   };
 }
+const SEGMENTO_COLUNAS = 'id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em, origem, politica, predicado, rfm_versao, classificado_em, rfm_segmento';
 
 app.get('/api/admin/segments', requireAdmin, async (req, res) => {
   if (!pgPool) return res.json({ segmentos: [] });
   try {
-    const { rows } = await pgPool.query('SELECT id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em FROM segments ORDER BY criado_em DESC');
+    const { rows } = await pgPool.query(`SELECT ${SEGMENTO_COLUNAS} FROM segments ORDER BY criado_em DESC`);
     res.json({ segmentos: rows.map(mapSegmentoRow) });
   } catch (err) {
     console.error(`[CAMPANHAS] falha ao listar segmentos: ${err.message}`);
@@ -7884,7 +8172,7 @@ app.post('/api/admin/segments', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pgPool.query(
       `INSERT INTO segments (nome, match, filtros, exclusoes, criado_por) VALUES ($1,$2,$3,$4,$5)
-       RETURNING id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em`,
+       RETURNING ${SEGMENTO_COLUNAS}`,
       [String(nome).trim(), match === 'ANY' ? 'ANY' : 'ALL', JSON.stringify(filtros || []), JSON.stringify(exclusoes || {}), 'admin']
     );
     res.json({ segmento: mapSegmentoRow(rows[0]) });
@@ -7901,7 +8189,7 @@ app.put('/api/admin/segments/:id', requireAdmin, exigirRecurso('segments'), asyn
   try {
     const { rows } = await pgPool.query(
       `UPDATE segments SET nome=$1, match=$2, filtros=$3, exclusoes=$4, atualizado_em=now() WHERE id=$5
-       RETURNING id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em`,
+       RETURNING ${SEGMENTO_COLUNAS}`,
       [String(nome).trim(), match === 'ANY' ? 'ANY' : 'ALL', JSON.stringify(filtros || []), JSON.stringify(exclusoes || {}), req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'segmento não encontrado' });
@@ -16711,6 +16999,7 @@ if (PRODUCT_ANALYTICS) {
   app.use('/api/admin/product-analytics', requireAdmin, createProductAnalyticsRouter({
     productPerformanceService: PRODUCT_ANALYTICS.productPerformanceService,
     reconciliationService: PRODUCT_ANALYTICS.reconciliationService,
+    journeyAnalyticsService: PRODUCT_ANALYTICS.journeyAnalyticsService,
     registry: PRODUCT_ANALYTICS.registry,
     analyticsProvider: PRODUCT_ANALYTICS.analyticsProvider,
     commerceProvider: PRODUCT_ANALYTICS.commerceProvider,
