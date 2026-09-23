@@ -498,6 +498,91 @@ test('H · ReportCache: MESMO escopo reaproveita normalmente (getCacheScope não
   assert.equal(chamadasFeitas(), 1);
 }));
 
+// ── J.4 · getProductPerformanceSummary (totais store-wide) ───────────────────────────────────────
+
+// Ids externos com prefixo `j4-` — únicos no arquivo de propósito (achado real: 's1'/'s2'/'c1' já
+// eram usados por testes mais antigos no MESMO ORG_A/STORE_A/namespace 'fake_ga4.item_id', e o
+// UNIQUE de product_external_identities é por (organization_id, store_id, namespace, external_id) —
+// reusar o id fazia o INSERT novo ser descartado por ON CONFLICT DO NOTHING, apontando pro produto
+// do teste ANTIGO. Falha real de isolamento de teste, não do código de produção.
+test('J.4 · summary: observed soma TODA linha do relatório; matched só o que resolveu a produto canônico', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'summary_provider', [{ providerProductId: 'j4-s1' }, { providerProductId: 'j4-s2' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'summary_provider' });
+  const { registry } = registryComAnalytics([
+    item('j4-s1', { itemsViewed: 100, itemsAddedToCart: 10, itemsCheckedOut: 5, itemsPurchased: 2, itemRevenue: 50 }),
+    item('j4-s2', { itemsViewed: 50, itemsAddedToCart: 5, itemsCheckedOut: 2, itemsPurchased: 1, itemRevenue: 20 }),
+    item('j4-orfao-sem-produto', { itemsViewed: 30, itemsAddedToCart: 3, itemsCheckedOut: 1, itemsPurchased: 0, itemRevenue: 0 }),
+  ]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceSummary({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'summary_provider' }, ...PERIODO });
+  // observed: soma de TODAS as 3 linhas, resolvida ou não.
+  assert.equal(r.observed.itemsViewed, 180);
+  assert.equal(r.observed.itemsPurchased, 3);
+  // matched: só s1+s2 (o órfão nunca resolveu a produto nenhum).
+  assert.equal(r.matched.itemsViewed, 150);
+  assert.equal(r.matched.itemsPurchased, 3);
+  assert.equal(r.coverage.observedAnalyticsIds, 3);
+  assert.equal(r.coverage.matchedAnalyticsIds, 2);
+  assert.equal(r.coverage.unmatchedAnalyticsIds, 1);
+}));
+
+test('J.4 · summary: produto com múltiplos ids (produto+variante+sku) soma as linhas dele, nunca conta como 2 produtos', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'summary_multi_provider', [
+    { providerProductId: 'j4-m1', variants: [{ providerVariantId: 'j4-mv1', sku: 'J4SKU-1' }] },
+  ]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'summary_multi_provider' });
+  const { registry } = registryComAnalytics([
+    item('j4-m1', { itemsViewed: 10 }), item('j4-mv1', { itemsViewed: 5 }), item('J4SKU-1', { itemsViewed: 3 }),
+  ]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceSummary({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'summary_multi_provider' }, ...PERIODO });
+  assert.equal(r.observed.itemsViewed, 18); // 10+5+3, sem duplicar como se fossem produtos diferentes
+  assert.equal(r.matched.itemsViewed, 18); // os 3 ids resolvem pro MESMO produto — soma igual
+  assert.equal(r.coverage.matchedAnalyticsIds, 3); // 3 ids resolvidos, 1 produto só
+}));
+
+test('J.4 · summary: métrica indisponível na propriedade vira null nos DOIS grupos, nunca 0', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'summary_unavail_provider', [{ providerProductId: 'j4-u1' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'summary_unavail_provider' });
+  const { registry } = registryComAnalytics([item('j4-u1', { itemRevenue: null })]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceSummary({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'summary_unavail_provider' }, ...PERIODO });
+  assert.equal(r.observed.itemRevenue, null);
+  assert.equal(r.matched.itemRevenue, null);
+  assert.equal(r.observed.itemsViewed, 10); // outras métricas continuam normais
+}));
+
+test('J.4 · summary: período sem nenhuma linha de analytics vira insufficient_data, observed/matched null', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'summary_vazio_provider', [{ providerProductId: 'j4-v1' }]);
+  const { registry } = registryComAnalytics([]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceSummary({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'summary_vazio_provider' }, ...PERIODO });
+  assert.equal(r.observed, null);
+  assert.equal(r.matched, null);
+  assert.equal(r.coverage.status, 'insufficient_data');
+}));
+
+test('J.4 · summary: filters.provider restringe "matched" a produtos daquele provider (observed continua sem filtro)', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'summary_prov_x', [{ providerProductId: 'j4-px1' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'summary_prov_x' });
+  const { registry } = registryComAnalytics([item('j4-px1', { itemsViewed: 40 })]);
+  const svc = montarServico(registry);
+  const r = await svc.getProductPerformanceSummary({ organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'prov_y_nao_tem_nada' }, ...PERIODO });
+  assert.equal(r.observed.itemsViewed, 40); // observed nunca filtra por provider do catálogo
+  assert.equal(r.matched.itemsViewed, 0); // matched: filtrado pro provider errado, zero elegível
+}));
+
+test('J.4 · summary reaproveita o MESMO relatório cacheado que /products — sem chamada de analytics extra', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'summary_cache_provider', [{ providerProductId: 'j4-c1' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'summary_cache_provider' });
+  const { registry, chamadasFeitas } = registryComAnalytics([item('j4-c1')]);
+  const svc = montarServico(registry);
+  const entrada = { organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'summary_cache_provider' }, ...PERIODO };
+  await svc.getProductPerformance(entrada);
+  await svc.getProductPerformanceSummary(entrada);
+  assert.equal(chamadasFeitas(), 1); // 2ª chamada (summary) reaproveita o cache do relatório da 1ª
+}));
+
 // ── Guardas estáticas: nenhum import de Ink, GA4 concreto ou pedidos_ink ────────────────────────
 
 const ARQUIVOS_G = [

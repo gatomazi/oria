@@ -103,6 +103,23 @@ export function getProductAnalyticsCoverage(periodo: { startDate: string; endDat
   return api(`/api/admin/product-analytics/coverage?${periodoParams(periodo).toString()}`);
 }
 
+// Rodada J.4 · totais STORE-WIDE do período inteiro (nunca só a página carregada na tabela).
+// `observed`: soma de TODO itemId que o GA4 relatou, resolvido ou não — a verdade crua da
+// propriedade. `matched`: soma só do que resolveu a um produto canônico da Store — o que dá pra
+// atribuir a um produto de verdade. Os dois vêm SEMPRE juntos (nunca um escondendo o outro);
+// `null` em qualquer campo é métrica indisponível na propriedade, nunca 0 inventado.
+export interface ProductAnalyticsSummary {
+  observed: ProductAnalyticsMetrics | null;
+  matched: ProductAnalyticsMetrics | null;
+  coverage: ProductAnalyticsCoverage;
+}
+
+export function getProductAnalyticsSummary(periodo: { startDate: string; endDate: string; provider?: string }): Promise<ProductAnalyticsSummary> {
+  const params = periodoParams(periodo);
+  if (periodo.provider) params.set('provider', periodo.provider);
+  return api<ProductAnalyticsSummary>(`/api/admin/product-analytics/summary?${params.toString()}`);
+}
+
 export interface ProductAnalyticsStatus {
   analytics: {
     provider: string;

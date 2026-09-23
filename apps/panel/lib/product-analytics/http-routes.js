@@ -103,7 +103,7 @@ function mapearErro(err, res) {
  * @returns {import('express').Router}
  */
 function createProductAnalyticsRouter({ productPerformanceService, reconciliationService, registry, analyticsProvider, commerceProvider }) {
-  if (!productPerformanceService || typeof productPerformanceService.getProductPerformance !== 'function') {
+  if (!productPerformanceService || typeof productPerformanceService.getProductPerformance !== 'function' || typeof productPerformanceService.getProductPerformanceSummary !== 'function') {
     throw new Error('createProductAnalyticsRouter exige productPerformanceService');
   }
   if (!reconciliationService || typeof reconciliationService.reconcileProductPerformance !== 'function') {
@@ -133,6 +133,21 @@ function createProductAnalyticsRouter({ productPerformanceService, reconciliatio
         // a UI precisa distinguir "não configurado ainda" de "erro ao consultar".
         return res.json({ analytics: { provider: analyticsProvider, connected: false, apt: false, reason: 'not_connected', metrics: null } });
       }
+      return mapearErro(err, res);
+    }
+  });
+
+  // Rodada J.4 · totais STORE-WIDE do período (nunca só a página visível) — reaproveita o MESMO
+  // relatório cacheado que /products usa. `observed` (todo itemId do GA4) e `matched` (só o que
+  // resolveu a produto canônico) vêm SEMPRE os dois, nunca um escondendo o outro.
+  router.get('/summary', async (req, res) => {
+    const { organizationId, storeId } = req.tenant;
+    try {
+      const { startDate, endDate } = validarPeriodo(req.query);
+      const filters = validarFilters(req.query);
+      const r = await productPerformanceService.getProductPerformanceSummary({ organizationId, storeId, analyticsProvider, startDate, endDate, filters });
+      return res.json(r);
+    } catch (err) {
       return mapearErro(err, res);
     }
   });

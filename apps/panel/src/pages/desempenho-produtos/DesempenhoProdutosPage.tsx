@@ -5,8 +5,8 @@ import {
 } from '../../components/ds';
 import { formatValor, plural } from '../../lib/format';
 import {
-  getProductAnalyticsStatus, listProductAnalytics,
-  type ProductAnalyticsItem, type ProductAnalyticsListResponse, type ProductAnalyticsSortField, type ProductAnalyticsStatus,
+  getProductAnalyticsStatus, getProductAnalyticsSummary, listProductAnalytics,
+  type ProductAnalyticsItem, type ProductAnalyticsListResponse, type ProductAnalyticsSortField, type ProductAnalyticsStatus, type ProductAnalyticsSummary,
 } from '../../api/productAnalytics';
 import { ProdutoPerformanceDrawer } from './ProdutoPerformanceDrawer';
 import { ReconciliacaoPanel } from './ReconciliacaoPanel';
@@ -22,7 +22,14 @@ const LIMIT = 20;
 
 // Ordenação sempre feita no servidor, sobre o conjunto elegível INTEIRO da Store antes de paginar
 // (Fase G.1) — nunca só a página visível (DataTable no modo controlado, ver TrocasPage/ProdutosPage).
-const SORT_INICIAL: TableSort = { key: 'itemsPurchased', direction: 'desc' };
+//
+// Rodada J (achado do smoke real): ordenar por MÉTRICA (ex.: itemsPurchased) restringe o conjunto
+// elegível aos produtos com identity JÁ resolvida no namespace de analytics (design deliberado da
+// Fase G.1 — não dá pra rankear o que nunca foi observado). Como PADRÃO da tela isso escondia o
+// resto do catálogo sem aviso nenhum (piloto real: 3 produtos no catálogo, só 1 com atividade GA4 →
+// a tabela mostrava "1 produto" por padrão, parecendo um catálogo vazio/quebrado). Padrão agora é
+// um campo de CATÁLOGO (mostra a Store inteira); ordenar por métrica continua disponível a 1 clique.
+const SORT_INICIAL: TableSort = { key: 'name', direction: 'asc' };
 
 type Periodo = { startDate: string; endDate: string };
 
@@ -59,11 +66,40 @@ function ConexaoIndisponivel({ status }: { status: ProductAnalyticsStatus }) {
   return null;
 }
 
+// Rodada J.4 · cartões de totais STORE-WIDE do período inteiro (nunca a soma da página visível da
+// tabela). `observed` é sempre o principal (a verdade crua do GA4); o helper de cada card mostra
+// quanto disso já resolveu a produto (`matched`) — os dois grupos ficam visíveis, nunca um só.
+function CartoesDeTotais({ resumo }: { resumo: ProductAnalyticsSummary }) {
+  if (resumo.coverage.status === 'insufficient_data' || !resumo.observed) {
+    return (
+      <KpiStrip label="Totais do período (GA4)">
+        <KpiCard title="Itens visualizados" value="—" helper="Sem dado de analytics neste período" />
+      </KpiStrip>
+    );
+  }
+  const { observed, matched } = resumo;
+  const helperAtribuido = (campo: keyof NonNullable<typeof matched>) => {
+    const m = matched?.[campo];
+    return m != null ? `${m.toLocaleString('pt-BR')} atribuídos a produto` : undefined;
+  };
+  return (
+    <KpiStrip label="Totais do período (GA4) — Store inteira">
+      <KpiCard title="Itens visualizados" value={observed.itemsViewed} helper={helperAtribuido('itemsViewed')} />
+      <KpiCard title="Itens adicionados ao carrinho" value={observed.itemsAddedToCart} helper={helperAtribuido('itemsAddedToCart')} />
+      <KpiCard title="Itens em checkout" value={observed.itemsCheckedOut} helper={helperAtribuido('itemsCheckedOut')} />
+      <KpiCard title="Itens comprados (observados)" value={observed.itemsPurchased} helper={helperAtribuido('itemsPurchased')} />
+      <KpiCard title="Receita GA4 (itemRevenue)" value={observed.itemRevenue != null ? formatValor(observed.itemRevenue) : null} helper={matched?.itemRevenue != null ? `${formatValor(matched.itemRevenue)} atribuídos a produto` : undefined} />
+    </KpiStrip>
+  );
+}
+
 function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProduto: (id: string) => void }) {
   const [sort, setSort] = useState<TableSort>(SORT_INICIAL);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ProductAnalyticsListResponse | null>(null);
+  const [resumo, setResumo] = useState<ProductAnalyticsSummary | null>(null);
   const [erro, setErro] = useState('');
+  const [erroResumo, setErroResumo] = useState('');
 
   function carregar() {
     setErro('');
@@ -77,8 +113,16 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
       .catch((err: Error) => setErro(err.message));
   }
 
+  function carregarResumo() {
+    setErroResumo('');
+    setResumo(null);
+    getProductAnalyticsSummary(periodo).then(setResumo).catch((err: Error) => setErroResumo(err.message));
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(carregar, [periodo.startDate, periodo.endDate, sort.key, sort.direction, page]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(carregarResumo, [periodo.startDate, periodo.endDate]);
 
   function onSortChange(novo: TableSort) {
     setSort(novo);
@@ -92,6 +136,10 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
 
   return (
     <div className="ds-stack">
+      {erroResumo && <ErrorState description={erroResumo} onRetry={carregarResumo} />}
+      {!erroResumo && !resumo && <Skeleton rows={2} />}
+      {!erroResumo && resumo && <CartoesDeTotais resumo={resumo} />}
+
       <KpiStrip label="Cobertura de identidade no período">
         <KpiCard title="Produtos no catálogo" value={data.totalCount} helper="Total da Store, com o filtro atual" />
         <KpiCard title="Ids observados pelo GA4" value={data.coverage.observedAnalyticsIds} helper="itemId distintos no período (produto, variante ou SKU)" />

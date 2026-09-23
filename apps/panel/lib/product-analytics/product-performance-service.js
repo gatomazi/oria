@@ -247,7 +247,78 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     return montarLinha(produto, acumulado);
   }
 
-  return Object.freeze({ getProductPerformance, getProductPerformanceById });
+  // Rodada J.4 · totais STORE-WIDE do período (menor extensão provider-agnostic): reaproveita o
+  // MESMO relatório cacheado (nenhuma chamada extra ao AnalyticsConnector) e resolve identities em
+  // lote (nunca N+1 — a mesma chamada de resolveAndPersist do resto do service).
+  //
+  // Dois grupos, sempre os dois, nunca um só (§J.4 — "evitar que a soma duplique semanticamente...
+  // exibindo os dois grupos ou explicitando a cobertura"):
+  //   observed  soma de TODO itemId observado pelo GA4 no período, resolvido ou não — a verdade
+  //             crua da propriedade, nunca depende de identity.
+  //   matched   soma só do que resolveu a um produto canônico da Store (e, com filters.provider,
+  //             só produtos DESSE provider) — o que a UI pode atribuir a um produto de verdade.
+  // Os dois nunca "duplicam": cada itemId observado entra em UMA soma (observed sempre; matched só
+  // se resolveu) — um produto com 3 ids (produto+variante+sku) soma 3 linhas trazidas por ele
+  // mesmo, não 3 produtos diferentes contados errado.
+  async function getProductPerformanceSummary({ organizationId, storeId, analyticsProvider, startDate, endDate, filters = {} }) {
+    validarEntrada({ organizationId, storeId, analyticsProvider, startDate, endDate });
+    const namespace = `${analyticsProvider}.item_id`;
+
+    const linhasAnalytics = await obterRelatorio({ organizationId, storeId, analyticsProvider, startDate, endDate });
+    if (!linhasAnalytics.length) {
+      return {
+        observed: null,
+        matched: null,
+        coverage: { observedAnalyticsIds: 0, matchedAnalyticsIds: 0, unmatchedAnalyticsIds: 0, conflictedAnalyticsIds: 0, coverageRate: null, status: 'insufficient_data' },
+      };
+    }
+
+    // Métrica indisponível na propriedade inteira: null nos DOIS grupos — nunca 0 travestido de
+    // "sem suporte" (mesma regra do resto do service, §6.8/Fase E).
+    const metricasIndisponiveis = METRICAS.filter((nome) => linhasAnalytics.every((l) => l[nome] === null));
+    const aplicarIndisponiveis = (m) => { for (const nome of metricasIndisponiveis) m[nome] = null; return m; };
+
+    const observed = metricasZeradas();
+    for (const linha of linhasAnalytics) {
+      for (const nome of METRICAS) observed[nome] = somarMetrica(observed[nome], linha[nome]);
+    }
+    aplicarIndisponiveis(observed);
+
+    const idsObservados = [...new Set(linhasAnalytics.map((l) => l.externalProductId))];
+    const resolucao = await resolveAndPersist({ pool }, { organizationId, storeId, namespace, externalIds: idsObservados });
+    const produtoPorExternalId = new Map(resolucao.resolved.map((r) => [r.externalId, r.commerceProductId]));
+
+    // Com filters.provider: só conta como "matched" o que resolveu a um produto DESSE provider —
+    // mesmo escopo de listPage/getProductPerformance (nunca mistura catálogo de providers diferentes
+    // quando a página pediu um filtro).
+    const idsElegiveis = filters.provider
+      ? new Set(await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, provider: filters.provider }))
+      : null;
+
+    const matched = metricasZeradas();
+    for (const linha of linhasAnalytics) {
+      const commerceProductId = produtoPorExternalId.get(linha.externalProductId);
+      if (!commerceProductId) continue;
+      if (idsElegiveis && !idsElegiveis.has(commerceProductId)) continue;
+      for (const nome of METRICAS) matched[nome] = somarMetrica(matched[nome], linha[nome]);
+    }
+    aplicarIndisponiveis(matched);
+
+    return {
+      observed,
+      matched,
+      coverage: {
+        observedAnalyticsIds: idsObservados.length,
+        matchedAnalyticsIds: resolucao.resolved.length,
+        unmatchedAnalyticsIds: resolucao.unresolved.length,
+        conflictedAnalyticsIds: resolucao.conflicts.length,
+        coverageRate: idsObservados.length > 0 ? resolucao.resolved.length / idsObservados.length : null,
+        status: 'ok',
+      },
+    };
+  }
+
+  return Object.freeze({ getProductPerformance, getProductPerformanceById, getProductPerformanceSummary });
 }
 
 function linhaSemAnalytics(produto, diagnostico) {

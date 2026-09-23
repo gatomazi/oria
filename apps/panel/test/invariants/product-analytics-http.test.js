@@ -283,6 +283,28 @@ test('H · /coverage reaproveita o MESMO cache de /products (mesmo escopo/perío
   assert.equal(chamadasMock().filter((c) => c.host === 'analyticsdata.googleapis.com').length, antes);
 });
 
+test('J.4 · /summary devolve observed E matched store-wide, nunca só a página visível', async () => {
+  const periodoProprio = 'startDate=2026-09-04&endDate=2026-09-23';
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', `/api/admin/product-analytics/summary?${periodoProprio}`);
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(r.json.observed, 'observed deveria vir preenchido (há 1 produto com dado no mock)');
+  assert.ok(r.json.matched);
+  assert.equal(r.json.observed.itemsViewed, r.json.matched.itemsViewed); // só 1 produto, tudo resolvido: os dois batem
+  assert.ok(r.json.coverage);
+  assert.equal(r.texto.includes(GA4_REFRESH[ORG_A]), false);
+});
+
+test('J.4 · /summary reaproveita o MESMO cache de /products (mesmo escopo/período)', async () => {
+  const periodoProprio = 'startDate=2026-09-05&endDate=2026-09-24';
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  await nav.req('GET', `/api/admin/product-analytics/products?${periodoProprio}`); // garante cache quente
+  const antes = chamadasMock().filter((c) => c.host === 'analyticsdata.googleapis.com').length;
+  const r = await nav.req('GET', `/api/admin/product-analytics/summary?${periodoProprio}`);
+  assert.equal(r.status, 200);
+  assert.equal(chamadasMock().filter((c) => c.host === 'analyticsdata.googleapis.com').length, antes);
+});
+
 test('H · GET /products/:productId devolve a mesma identidade e 404 pra produto de outra Organization', async () => {
   const navA = await navegador().entrar('pah-a@teste.oria');
   const lista = await navA.req('GET', `/api/admin/product-analytics/products?${PERIODO}`);
