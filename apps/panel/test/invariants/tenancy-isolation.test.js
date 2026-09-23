@@ -89,6 +89,13 @@ async function valoresPara(tabela, chave) {
   if (tabela === 'creative_angles') {
     Object.assign(v, { scope: 'organization', slug: `teste-${chave.toLowerCase()}`, name: 'Ângulo de teste', family: 'connection', people_mode: 'optional' });
   }
+  // Fase F.1: a proposta aponta para o produto da MESMA Organization (FK composta) e `provider` é um
+  // enum fechado — o gerador genérico (valorPara) não serve pra nenhum dos dois. `proposed`/
+  // `product_snapshot_hash`/`product_updated_at` já saem certos do gerador genérico (jsonb → '{}' passa
+  // no CHECK; texto/timestamp sem CHECK nenhum).
+  if (tabela === 'creative_enrichment_proposals') {
+    Object.assign(v, { product_id: linhas[chave].get('creative_products').id, provider: 'fake' });
+  }
   const decl = manifesto.porTabela(tabela);
   if (decl && decl.pai) v[decl.pai.coluna] = linhas[chave].get(decl.pai.tabela).id;
   return v;

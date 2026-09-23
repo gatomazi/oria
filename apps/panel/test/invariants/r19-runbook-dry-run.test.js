@@ -353,7 +353,8 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
       '1790001700000_creative-plan-v2',
       '1790001800000_creative-feedback',
       '1790001900000_creative-angles',
-      '1790002000000_creative-angles-compat'],
+      '1790002000000_creative-angles-compat',
+      '1790002100000_creative-enrichment'],
     'o pre-deploy da D\' aplicou um conjunto de migrations diferente do declarado'
   );
   semSegredo(pdD.saida, 'pre-deploy D\'');
