@@ -6,7 +6,7 @@ import io
 import json
 from pathlib import Path
 
-from _support import AuthenticationError, FakeClient, FakeImages, load_fixture, png_bytes, run
+from _support import AuthenticationError, FakeClient, FakeImages, FakeResponses, load_fixture, png_bytes, run
 
 from creative_core import contracts
 from creative_core.model_router import ModelRouter
@@ -26,9 +26,9 @@ class Factory:
         return self.client
 
 
-def _app(factory=None):
+def _app(factory=None, router=None):
     factory = factory or Factory()
-    return CreativeCoreService(TOKEN, client_factory=factory, router=ModelRouter(env={})), factory
+    return CreativeCoreService(TOKEN, client_factory=factory, router=router or ModelRouter(env={})), factory
 
 
 def _call(app, method, path, body=None, token=TOKEN, content_type="application/json", raw=None):
@@ -266,6 +266,32 @@ def test_given_two_valid_references_then_they_pass_validation_and_only_fail_on_t
     status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai", "references": refs})
     assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
     assert "client" in " ".join(body["error"]["details"].get("errors", [])).lower()
+
+
+# ------------------------------------------------------------------ Fase F.2.B: BYOK wiring (client fake, zero rede real)
+def test_given_provider_openai_with_a_key_then_the_same_byok_client_factory_is_used_key_never_echoed():
+    saida = {
+        "wearer_roles": [], "relationship_themes": [], "recommended_supporting_roles": [],
+        "incompatible_auto_supporting_roles": [], "scene_intents": [], "visible_text": [],
+        "confidence": 0.4, "justification": "sem sinal forte no texto", "used_reference_image": False,
+    }
+    factory = Factory(FakeClient(responses=FakeResponses(output_text=json.dumps(saida))))
+    app, _ = _app(factory, router=ModelRouter(env={"OPENAI_TEXT_MODEL": "gpt-4o-mini"}))
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai", "openai_api_key": KEY})
+    assert status == 200, body
+    assert body["proposal"]["provider"] == "openai"
+    assert factory.keys == [KEY], "o MESMO client_factory BYOK de /v1/generations e /v1/copies foi usado"
+    assert KEY not in json.dumps(body), "a chave nunca é ecoada na resposta"
+
+
+def test_given_provider_openai_without_a_key_then_it_still_refuses_even_with_a_configured_factory():
+    """A garantia estrutural continua valendo mesmo agora que o serviço SABE construir um client: sem
+    `openai_api_key` no corpo, nenhum client é construído — nunca uma chamada por engano."""
+    factory = Factory()
+    app, _ = _app(factory)
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai"})
+    assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
+    assert factory.keys == []
 
 
 if __name__ == "__main__":

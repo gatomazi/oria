@@ -204,23 +204,28 @@ def _visible_text_from_metadata(product: dict) -> list[str]:
 #     `image[]` multipart-field pitfall here (this is a JSON body, not multipart form data; that was a
 #     different HTTP client, Fase C's bug). Stated limits: up to 1,500 images and 512MB per request —
 #     `_MAX_REFERENCES` below is far more conservative than that ceiling on purpose.
-#   * Pricing — https://developers.openai.com/api/docs/pricing
-#     Confirms there is NO model literally called "gpt-5.6" (this codebase's `model_router.
-#     DEFAULT_TEXT_MODEL`) — only named variants (`gpt-5.6-sol`/`-terra`/`-luna`) exist as billable
-#     model IDs. `apps/panel/lib/custos/precos.js` already flags this same ambiguity independently
-#     ("a variante efetiva não é conhecida"). This is a pre-existing gap in the ROUTER's shared
-#     default (used by 5 other tasks too), not something this phase changes — see the allowlist
-#     below and the Fase F.2.A report for the operational consequence.
+#   * Model alias — https://developers.openai.com/api/docs/models/gpt-5.6-sol and
+#     https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6 (re-verified Fase
+#     F.2.B, 2026-09-23; corrects an F.2.A misreading — see docs/features/creative-generator-fase-f2a.md's
+#     correction note). "gpt-5.6" (this codebase's `model_router.DEFAULT_TEXT_MODEL`) IS a real,
+#     callable alias — both pages confirm it routes to `gpt-5.6-sol` (vision + Structured Outputs,
+#     $4/$20 per 1M tokens). The Fase F.2.A pricing-table fetch simply didn't list aliases, only
+#     canonical model ids, and that absence was misread as "doesn't exist". The router's shared
+#     default is therefore fine as-is — nothing to fix there, and this phase does not touch it.
 #
-# Given that gap, `_OpenAIProvider` does not trust the router's resolved model blindly: it only ever
-# calls a model that is ALSO in `_OPENAI_MODEL_ALLOWLIST` (explicitly confirmed, by name, for BOTH
-# vision input and Structured Outputs in the docs above). A resolved model outside the allowlist is
-# treated as "unavailable" — the SAME mechanism `model_router.run_traced` already uses to move to the
-# next fallback candidate (`FALLBACK_ENV_SUFFIX` env var — the brief's "fallback apenas se houver
-# regra explícita aprovada") — and MODEL_NOT_ALLOWLISTED only surfaces once every candidate is
-# exhausted. With today's defaults (`OPENAI_TEXT_MODEL` unset, no fallbacks configured), the router
-# resolves to "gpt-5.6" for STRUCTURED_OUTPUT — not allowlisted — so a real call would refuse before
-# ever reaching the network, until ops sets `OPENAI_TEXT_MODEL` explicitly to an allowlisted value.
+# The alias is still deliberately NOT on `_OPENAI_MODEL_ALLOWLIST` below — a scope/cost choice for
+# enrichment specifically (gpt-4o-mini is cheaper and already confirmed sufficient), not a statement
+# that it doesn't exist. `_OpenAIProvider` never trusts the router's resolved model blindly regardless
+# of the reason: it only ever calls a model that is ALSO in `_OPENAI_MODEL_ALLOWLIST` (explicitly
+# confirmed, by name, for BOTH vision input and Structured Outputs in the docs above). A resolved
+# model outside the allowlist is treated as "unavailable" — the SAME mechanism `model_router.
+# run_traced` already uses to move to the next fallback candidate (`FALLBACK_ENV_SUFFIX` env var —
+# the brief's "fallback apenas se houver regra explícita aprovada") — and MODEL_NOT_ALLOWLISTED only
+# surfaces once every candidate is exhausted. With today's router defaults (`OPENAI_TEXT_MODEL`
+# unset, no fallbacks configured), the router resolves to the real, working "gpt-5.6" alias for
+# STRUCTURED_OUTPUT — just not allowlisted for enrichment — so a real enrichment call still refuses
+# before ever reaching the network, until the caller pins an allowlisted model explicitly (this
+# module's own callers always do — see the pilot wiring in service.py/engines.py for F.2.B).
 _OPENAI_MODEL_ALLOWLIST: dict[str, dict] = {
     # Cheapest model with BOTH capabilities explicitly named in the docs above — the recommended
     # default for a first small paid pilot (F.2.B, not this round).
@@ -304,6 +309,56 @@ class OpenAIClient(Protocol):
         classify_provider_exception` already classifies (openai SDK exception class names, or any
         exception carrying `.status_code`) — this provider does not define its own error hierarchy."""
         ...
+
+
+_MAX_OUTPUT_TOKENS = 700  # a handful of short array fields + one short justification string — generous
+# headroom, still small; never more tokens than the schema needs (F.2.B brief §3).
+_IMAGE_DETAIL = "low"  # a classification task, not OCR-grade transcription — explicit and conservative
+# per F.2.B's "detail explícito por imagem; evitar mais qualidade/tokens do que o caso exige". Real
+# consequence, documented in the F.2.B report: visible_text from a "low"-detail reference may miss
+# small/dense print — acceptable here because it only ever produces an unverified PROPOSAL a human
+# reviews (§1.6), never an auto-applied value.
+
+
+def real_openai_client(sdk_client) -> OpenAIClient:
+    """Wraps a raw `openai.OpenAI` SDK client (or anything exposing the same `.responses.create(...)`
+    shape) into the `OpenAIClient` protocol this module needs — the F.2.B "real, request-scoped
+    client" the F.2.A module note deferred. The caller builds `sdk_client` itself (service.py's
+    existing `openai_client_factory`/BYOK path — see `_enrichment_propose` for exactly how; this
+    function never reads a key, never imports `openai`, and is the ONLY place in this module that
+    speaks the real Responses API shape). Exactly one HTTP attempt: no retry here, exceptions
+    propagate unmodified for `errors.classify_provider_exception` to classify."""
+    return _RealOpenAIClient(sdk_client)
+
+
+@dataclass(frozen=True)
+class _RealOpenAIClient:
+    sdk_client: object
+
+    def create(self, *, model: str, system: str, user_text: str, images_b64: list[tuple[str, str]],
+               schema: dict, timeout: float) -> OpenAIResult:
+        from .engines import usage_from_response  # local: no hard dependency for callers that never take this path
+
+        content: list[dict] = [{"type": "input_text", "text": user_text}]
+        for mime, b64 in images_b64:
+            content.append({"type": "input_image", "image_url": f"data:{mime};base64,{b64}", "detail": _IMAGE_DETAIL})
+        response = self.sdk_client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": [{"type": "input_text", "text": system}]},
+                {"role": "user", "content": content},
+            ],
+            text={"format": {"type": "json_schema", "strict": True, "name": "product_semantic_context_proposal", "schema": schema}},
+            max_output_tokens=_MAX_OUTPUT_TOKENS,
+            timeout=timeout,
+        )
+        output_text = getattr(response, "output_text", None) or ""
+        try:
+            output_json = json.loads(output_text) if output_text else {}
+        except ValueError:
+            output_json = {}
+        served_model = getattr(response, "model", None) or model
+        return OpenAIResult(output_json=output_json, model=served_model, usage=usage_from_response(response))
 
 
 class _ModelNotAllowlisted(Exception):

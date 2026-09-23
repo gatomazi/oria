@@ -91,8 +91,10 @@ def test_given_a_fake_proposal_then_provider_meta_is_absent_not_an_empty_object(
 
 # ------------------------------------------------------------------ allowlist / fallback (roteador existente)
 def test_given_the_routers_current_default_then_it_is_not_allowlisted_and_the_call_never_happens():
-    """Confirma o achado da auditoria de documentação: o default do router (`gpt-5.6`) não é um
-    model id real hoje — o provider não confia nele às cegas."""
+    """`gpt-5.6` É um alias real (roteia para gpt-5.6-sol — confirmado na F.2.B, corrigindo uma leitura
+    errada da F.2.A), mas não está na allowlist ESPECÍFICA do enrichment (escolha deliberada de
+    custo/escopo, não por invalidez): o provider não confia no default do router às cegas de qualquer
+    forma, então o comportamento — recusar antes de qualquer chamada — é o mesmo por um motivo correto."""
     cliente = ClienteFalso(saida=_saida())
     with pytest.raises(GenerationError) as exc:
         enrichment.propose(produto(), provider="openai", client=cliente, router=mr.ModelRouter(env={}))
@@ -233,3 +235,93 @@ def test_given_the_request_schema_then_role_fields_are_enum_constrained_to_the_p
     assert schema["properties"]["recommended_supporting_roles"]["items"]["enum"] == list(enrichment._PERSON_ROLE_VALUES)
     assert "enum" not in schema["properties"]["relationship_themes"]["items"], "vocabulário livre — sugestão só no prompt, valor não reconhecido é ignorado a jusante, não recusado"
     assert "enum" not in schema["properties"]["scene_intents"]["items"]
+
+
+# ------------------------------------------------------------------ Fase F.2.B: adaptador SDK real (client fake, ZERO rede)
+class _FakeSDKResponses:
+    """Simula `openai.OpenAI().responses` — `.create(**kwargs)` captura exatamente o que seria
+    mandado pela rede de verdade, sem nunca tocar em uma. `object()` no lugar do client real garante
+    que nada aqui pode, por acidente, ser um client de verdade."""
+
+    def __init__(self, output_json, model="gpt-4o-mini", usage=None):
+        self.captured_kwargs = None
+        self._output_json = output_json
+        self._model = model
+        self._usage = usage
+
+    def create(self, **kwargs):
+        self.captured_kwargs = kwargs
+        import json as _json
+        return _FakeSDKResponse(_json.dumps(self._output_json) if self._output_json is not None else "", self._model, self._usage)
+
+
+class _FakeSDKResponse:
+    def __init__(self, output_text, model, usage):
+        self.output_text = output_text
+        self.model = model
+        self.usage = usage
+
+
+class _FakeSDKClient:
+    def __init__(self, output_json, model="gpt-4o-mini", usage=None):
+        self.responses = _FakeSDKResponses(output_json, model, usage)
+
+
+def test_given_the_real_adapter_then_it_sends_the_exact_structured_outputs_request_shape():
+    saida = _saida()
+    sdk = _FakeSDKClient(saida)
+    client = enrichment.real_openai_client(sdk)
+    schema = enrichment._request_schema()
+    resultado = client.create(model="gpt-4o-mini", system="regras do sistema", user_text="texto do produto",
+                              images_b64=[], schema=schema, timeout=12.5)
+    enviado = sdk.responses.captured_kwargs
+    assert enviado["model"] == "gpt-4o-mini"
+    assert enviado["input"][0] == {"role": "system", "content": [{"type": "input_text", "text": "regras do sistema"}]}
+    assert enviado["input"][1]["role"] == "user"
+    assert enviado["input"][1]["content"][0] == {"type": "input_text", "text": "texto do produto"}
+    assert enviado["text"]["format"]["type"] == "json_schema"
+    assert enviado["text"]["format"]["strict"] is True
+    assert enviado["text"]["format"]["schema"] is schema
+    assert isinstance(enviado["text"]["format"]["name"], str) and enviado["text"]["format"]["name"]
+    assert set(schema["required"]) == set(schema["properties"].keys()), "strict mode exige todo campo em required"
+    assert schema["additionalProperties"] is False
+    assert isinstance(enviado["max_output_tokens"], int) and 0 < enviado["max_output_tokens"] <= 2000, "finito e pequeno — nunca mais tokens do que o schema pede"
+    assert enviado["timeout"] == 12.5
+    assert resultado.output_json == saida
+    assert resultado.model == "gpt-4o-mini"
+
+
+def test_given_two_reference_images_then_both_become_input_image_parts_with_explicit_low_detail():
+    sdk = _FakeSDKClient(_saida())
+    client = enrichment.real_openai_client(sdk)
+    client.create(model="gpt-4o-mini", system="s", user_text="u",
+                  images_b64=[("image/png", "AAAA"), ("image/jpeg", "BBBB")], schema=enrichment._request_schema(), timeout=10.0)
+    content = sdk.responses.captured_kwargs["input"][1]["content"]
+    assert content[0] == {"type": "input_text", "text": "u"}
+    assert content[1] == {"type": "input_image", "image_url": "data:image/png;base64,AAAA", "detail": "low"}
+    assert content[2] == {"type": "input_image", "image_url": "data:image/jpeg;base64,BBBB", "detail": "low"}
+
+
+def test_given_a_response_with_usage_then_it_is_extracted_via_the_shared_usage_reader():
+    sdk = _FakeSDKClient(_saida(), usage={"input_tokens": 210, "output_tokens": 55, "total_tokens": 265})
+    resultado = enrichment.real_openai_client(sdk).create(model="gpt-4o-mini", system="s", user_text="u",
+                                                          images_b64=[], schema=enrichment._request_schema(), timeout=10.0)
+    assert resultado.usage == {"input_tokens": 210, "output_tokens": 55, "total_tokens": 265}
+
+
+def test_given_an_empty_or_malformed_output_text_then_the_adapter_returns_an_empty_dict_not_a_crash():
+    sdk = _FakeSDKClient(None)  # output_text vira ""
+    resultado = enrichment.real_openai_client(sdk).create(model="gpt-4o-mini", system="s", user_text="u",
+                                                          images_b64=[], schema=enrichment._request_schema(), timeout=10.0)
+    assert resultado.output_json == {}
+
+
+def test_given_the_real_adapter_wired_through_propose_then_the_full_path_works_with_zero_network():
+    """Fim a fim, incluindo `_OpenAIProvider.propose()` inteiro — o único componente real ainda fora
+    deste teste é `openai.OpenAI()` em si (nunca importado aqui)."""
+    sdk = _FakeSDKClient(_saida(used_reference_image=False), usage={"input_tokens": 100, "output_tokens": 40})
+    client = enrichment.real_openai_client(sdk)
+    proposta = enrichment.propose(produto(), provider="openai", client=client, router=_router())
+    assert contracts.validate("EnrichmentProposal", proposta) == []
+    assert proposta["provider_meta"]["usage"] == {"input_tokens": 100, "output_tokens": 40}
+    assert proposta["provider_meta"]["model_served"] == "gpt-4o-mini"
