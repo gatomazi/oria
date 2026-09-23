@@ -12,10 +12,16 @@
 
 const CENTAVOS_POR_DOLAR = 100;
 
+// Arredonda para CIMA, nunca para o mais próximo — um custo de sub-centavo (ex.: gpt-4o-mini de
+// verdade fica na casa de US$ 0,0006/chamada, menos de 1 centavo) nunca pode virar 0 centavo
+// reservado: isso apagaria a granularidade do teto de VALOR (mesmo com o teto de CHAMADAS ainda
+// protegendo o total). Achado durante a execução real do piloto — corrigido antes de reservar de
+// verdade, coberto por teste.
 function centavosDeUsd(usd) {
   const valor = Number(usd);
   if (!Number.isFinite(valor) || valor < 0) throw new Error('valor em USD inválido');
-  return Math.round(valor * CENTAVOS_POR_DOLAR);
+  if (valor === 0) return 0;
+  return Math.max(1, Math.ceil(valor * CENTAVOS_POR_DOLAR));
 }
 
 // `q` é a função de query já usada pelo resto do painel (aceita SQL parametrizado); funciona tanto
