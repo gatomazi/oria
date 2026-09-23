@@ -62,6 +62,20 @@ function validarSort(query) {
   return { field, direction };
 }
 
+// Rodada L §2.3/§3 · providerOrderId do Commerce — mesma disciplina de "opaco pro cliente, nunca
+// interpretado aqui" já usada pra `cursor` (validarPaginacao): só forma, nunca conteúdo. Charset
+// permissivo o bastante pro id de qualquer CommerceConnector (numérico como a Ink, ou alfanumérico
+// de outro provider) sem abrir espaço pra payload gigante em log/erro.
+const PROVIDER_ORDER_ID_RE = /^[A-Za-z0-9_-]{1,100}$/;
+
+function validarProviderOrderId(query) {
+  const valor = query.providerOrderId;
+  if (typeof valor !== 'string' || !PROVIDER_ORDER_ID_RE.test(valor)) {
+    throw new EntradaInvalidaError('providerOrderId inválido');
+  }
+  return valor;
+}
+
 function validarFilters(query) {
   const filters = {};
   // `provider` é passthrough pro repositório de catálogo (Fase D já filtra por ele de verdade —
@@ -109,8 +123,8 @@ function createProductAnalyticsRouter({ productPerformanceService, reconciliatio
   if (!reconciliationService || typeof reconciliationService.reconcileProductPerformance !== 'function') {
     throw new Error('createProductAnalyticsRouter exige reconciliationService');
   }
-  if (!journeyAnalyticsService || typeof journeyAnalyticsService.getJourneyAnalytics !== 'function') {
-    throw new Error('createProductAnalyticsRouter exige journeyAnalyticsService');
+  if (!journeyAnalyticsService || typeof journeyAnalyticsService.getJourneyAnalytics !== 'function' || typeof journeyAnalyticsService.checkOrderTransactionLink !== 'function') {
+    throw new Error('createProductAnalyticsRouter exige journeyAnalyticsService (getJourneyAnalytics + checkOrderTransactionLink)');
   }
   if (!registry || typeof registry.resolve !== 'function') throw new Error('createProductAnalyticsRouter exige registry');
   if (!analyticsProvider || !commerceProvider) throw new Error('createProductAnalyticsRouter exige analyticsProvider e commerceProvider');
@@ -221,6 +235,21 @@ function createProductAnalyticsRouter({ productPerformanceService, reconciliatio
     try {
       const { startDate, endDate } = validarPeriodo(req.query);
       const r = await journeyAnalyticsService.getJourneyAnalytics({ organizationId, storeId, startDate, endDate });
+      return res.json(r);
+    } catch (err) {
+      return mapearErro(err, res);
+    }
+  });
+
+  // Rodada L §2.3 · verificação SOB DEMANDA de 1 pedido (nunca a carga inicial de /journey, que só
+  // amostra — ver journey-analytics-service.js). A UI chama isto quando o usuário seleciona um
+  // pedido específico na tabela de correlação: 1 chamada ao Commerce + 1 ao GA4, nunca mais.
+  router.get('/journey/transaction-link', async (req, res) => {
+    const { organizationId, storeId } = req.tenant;
+    try {
+      const { startDate, endDate } = validarPeriodo(req.query);
+      const providerOrderId = validarProviderOrderId(req.query);
+      const r = await journeyAnalyticsService.checkOrderTransactionLink({ organizationId, storeId, startDate, endDate, providerOrderId });
       return res.json(r);
     } catch (err) {
       return mapearErro(err, res);

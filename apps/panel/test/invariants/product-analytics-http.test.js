@@ -331,13 +331,31 @@ test('K · GET /journey: cada tier reporta available/reason próprio — nunca 5
   assert.equal(r.json.tier1.acquisition.available, true, 'GA4 mock aceita as dimensões de aquisição (checkCompatibility sempre compatível no mock)');
   assert.equal(r.json.tier1.adsInvestment.available, false); // nenhuma conta Meta selecionada neste smoke
   assert.equal(r.json.tier1.adsInvestment.reason, 'META_NOT_CONNECTED');
+  assert.equal(r.json.tier1.adsInvestment.status, 'not_connected'); // L §2.2: taxonomia normalizada
   assert.equal(r.json.tier1.confirmedOrders.available, false); // Ink nunca conectado neste smoke
+  assert.equal(r.json.tier1.confirmedOrders.status, 'not_connected');
   assert.equal(r.json.tier2.transactionOrderLink.available, false);
   assert.equal(r.json.tier2.transactionOrderLink.reason, 'COMMERCE_UNAVAILABLE');
   assert.equal(r.json.tier3.individualJourney.available, false);
   assert.equal(r.json.tier3.individualJourney.reason, 'NO_EVENT_ANALYTICS_SOURCE_CONFIGURED');
   assert.equal(r.json.attribution.length, 3);
   assert.equal(r.texto.includes(GA4_REFRESH[ORG_A]), false);
+});
+
+test('L · GET /journey/transaction-link: providerOrderId ausente/inválido → 400, nunca chega no service', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const semId = await nav.req('GET', `/api/admin/product-analytics/journey/transaction-link?${PERIODO}`);
+  assert.equal(semId.status, 400);
+  const idInvalido = await nav.req('GET', `/api/admin/product-analytics/journey/transaction-link?${PERIODO}&providerOrderId=${encodeURIComponent('; DROP TABLE x;')}`);
+  assert.equal(idInvalido.status, 400);
+});
+
+test('L · GET /journey/transaction-link: Commerce não conectado → not_connected, nunca 500 (Ink não conectado neste smoke)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', `/api/admin/product-analytics/journey/transaction-link?${PERIODO}&providerOrderId=qualquer-id-123`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.available, false);
+  assert.equal(r.json.status, 'not_connected');
 });
 
 test('K · GET /journey: período anterior a 19/08/2026 → insufficient_data (mesmo gate da reconciliação)', async () => {
