@@ -634,6 +634,25 @@ test('prévia e lote mandam prompt_version=2 ao core só para a Organization hab
   }
 });
 
+test('Fase F.2.A · rollout do provider real: flag distinta de enrichmentFor, kill switch vence a lista', () => {
+  const { enrichmentFor, enrichmentOpenAIFor } = require('../lib/creative-core/rollout');
+  const org = 'a1000000-0000-4000-8000-000000000001';
+  // Padrão fechado, igual às outras flags.
+  assert.equal(enrichmentOpenAIFor({}, org), false);
+  // Estar na lista do modal F.1 não liga o provider real — são listas independentes.
+  assert.equal(enrichmentFor({ CREATIVE_ENRICHMENT_ORGS: org }, org), true);
+  assert.equal(enrichmentOpenAIFor({ CREATIVE_ENRICHMENT_ORGS: org }, org), false);
+  // A flag certa liga.
+  assert.equal(enrichmentOpenAIFor({ CREATIVE_ENRICHMENT_OPENAI_ORGS: org }, org), true);
+  assert.equal(enrichmentOpenAIFor({ CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' }, org), true);
+  assert.equal(enrichmentOpenAIFor({ CREATIVE_ENRICHMENT_OPENAI_ORGS: 'outra-org' }, org), false);
+  // Kill switch desliga GLOBALMENTE, mesmo com a org (ou "*") na lista.
+  assert.equal(enrichmentOpenAIFor({ CREATIVE_ENRICHMENT_OPENAI_ORGS: org, CREATIVE_ENRICHMENT_OPENAI_KILL_SWITCH: '1' }, org), false);
+  assert.equal(enrichmentOpenAIFor({ CREATIVE_ENRICHMENT_OPENAI_ORGS: '*', CREATIVE_ENRICHMENT_OPENAI_KILL_SWITCH: '1' }, org), false);
+  // Qualquer valor que não seja exatamente "1" não aciona o switch (não é um booleano solto).
+  assert.equal(enrichmentOpenAIFor({ CREATIVE_ENRICHMENT_OPENAI_ORGS: org, CREATIVE_ENRICHMENT_OPENAI_KILL_SWITCH: 'true' }, org), true);
+});
+
 test('rollout do plano v2: env própria por Organization, independente do prompt v2', () => {
   const { planSchemaVersionFor } = require('../lib/creative-core/rollout');
   const org = 'a1000000-0000-4000-8000-000000000001';

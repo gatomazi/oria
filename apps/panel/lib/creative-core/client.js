@@ -102,10 +102,16 @@ function createCoreClient({ baseUrl, token, fetchImpl = globalThis.fetch, timeou
         .then((d) => d.result),
     copies: ({ request, apiKey }) =>
       call('POST', '/v1/copies', { request, openai_api_key: apiKey }, 'copies').then((d) => d.variants),
-    // Fase F.1 — Product Enrichment. Pura: nenhuma chave, nenhum provider pago (só "fake" nesta fase;
-    // o core recusa qualquer outro valor).
-    proposeEnrichment: ({ product, brand, niche }) => call('POST', '/v1/enrichment/propose', {
-      product, ...(brand ? { brand } : {}), ...(niche ? { niche } : {}), provider: 'fake',
+    // Fase F.1 — Product Enrichment. `provider` default "fake" preserva o comportamento anterior
+    // (nenhuma chave, nenhum custo) para quem não passa nada. Fase F.2.A: `provider: 'openai'` e
+    // `references` (no máximo 2, `{ ref, data_base64 }` — mesmo formato de `generate` acima) agora
+    // existem, mas esta função NUNCA manda `openai_api_key` — o core não tem de onde construir um
+    // client real para esta rota nesta fase (ver service.py::_enrichment_propose), então pedir
+    // provider "openai" aqui SEMPRE volta um erro limpo (nunca uma chamada de verdade, nunca um
+    // fallback silencioso para "fake" — ver rollout.js::enrichmentOpenAIFor para quem decide pedir).
+    proposeEnrichment: ({ product, brand, niche, provider = 'fake', references = [] }) => call('POST', '/v1/enrichment/propose', {
+      product, ...(brand ? { brand } : {}), ...(niche ? { niche } : {}), provider,
+      ...(references.length ? { references } : {}),
     }, 'enrichment').then((d) => d.proposal),
   };
 }

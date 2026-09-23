@@ -109,13 +109,14 @@ function createMemoryStore() {
       return row && row.organizationId === tenantId ? clone(row) : null;
     },
     async createProposal(tenantId, { productId, provider, proposed, recommendedAngleFamilies, recommendedInteractions,
-      fieldNotes, productSnapshotHash, productUpdatedAt, createdBy }) {
+      fieldNotes, productSnapshotHash, productUpdatedAt, createdBy, providerMeta }) {
       const id = crypto.randomUUID();
       const row = {
         id, organizationId: tenantId, productId, storeId: null, status: 'pending', schemaVersion: 1, provider,
         proposed: clone(proposed), recommendedAngleFamilies: clone(recommendedAngleFamilies || []),
         recommendedInteractions: clone(recommendedInteractions || []), fieldNotes: clone(fieldNotes || {}),
         productSnapshotHash, productUpdatedAt, acceptedFields: null, beforeSemanticContext: null, appliedSemanticContext: null,
+        providerMeta: providerMeta ? clone(providerMeta) : null,
         createdBy: createdBy || null, reviewedBy: null, createdAt: now(), reviewedAt: null, updatedAt: now(),
       };
       enrichmentProposals.set(id, row);

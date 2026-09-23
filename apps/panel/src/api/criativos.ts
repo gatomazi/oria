@@ -327,6 +327,11 @@ export interface EnrichmentSemanticContext {
   visible_text?: string[];
   source?: 'manual' | 'enrichment';
   confidence?: number | null;
+  // Fase F.2.A — proveniência por campo (aditivo; ausente em objetos anteriores a esta fase, que continuam
+  // lidos pelo `source` agregado acima). Chaves = os 6 campos mesclaveis acima; nunca inventado para um campo
+  // sem evidência (ver composition.py::field_origin e enrichment.py::merge no core).
+  field_sources?: Partial<Record<EnrichmentAcceptableField, 'manual' | 'enrichment'>>;
+  field_confidence?: Partial<Record<EnrichmentAcceptableField, number | null>>;
 }
 export interface EnrichmentFieldNote { justification?: string; source?: string }
 export interface EnrichmentProposal {

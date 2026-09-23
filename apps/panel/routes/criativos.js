@@ -23,9 +23,10 @@ const { createPgStore } = require('../lib/creative-core/pgStore');
 const { normalizeJobInput, buildRequests, planSummary, planPrompt, InputError } = require('../lib/creative-core/requests');
 const { createWorker } = require('../lib/creative-core/worker');
 const { progress } = require('../lib/creative-core/status');
-const { promptVersionFor, planSchemaVersionFor, uiV2For, enrichmentFor } = require('../lib/creative-core/rollout');
+const { promptVersionFor, planSchemaVersionFor, uiV2For, enrichmentFor, enrichmentOpenAIFor } = require('../lib/creative-core/rollout');
 const { mapDraftToForm } = require('../lib/creative-core/draft');
 const { FAMILIES: ANGLE_FAMILIES, PEOPLE_MODES: ANGLE_PEOPLE_MODES } = require('../lib/creative-core/pgAngles');
+const enrichmentQuota = require('../lib/creative-core/enrichmentQuota');
 
 const PROFILE_CONTRACT = { brand: 'BrandKit', niche: 'NicheKit', context: 'ContextProfile', persona: 'Persona' };
 const PROFILE_PATH = { brand: 'brand-kits', niche: 'niche-kits', context: 'context-profiles', persona: 'personas' };
@@ -449,34 +450,64 @@ function criarRouterCriativos(deps) {
     res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'produto não encontrado' });
   }));
 
-  // ── Product Enrichment (Fase F.1): propostas de semantic_context, revisão humana obrigatória ───────────────
+  // ── Product Enrichment (Fase F.1 + F.2.A): propostas de semantic_context, revisão humana obrigatória ────────
   // Atrás de CREATIVE_ENRICHMENT_ORGS (rollout.js) — fora da lista, estas rotas respondem 403 como se não
-  // existissem. O provider é sempre "fake" nesta fase (core.proposeEnrichment já força isso); nenhuma chamada
-  // paga, nenhuma chave. A proposta NUNCA muda o produto sozinha — só a decisão explícita (rota /decide) grava,
-  // e só nos campos que a pessoa aceitou.
+  // existissem. A proposta NUNCA muda o produto sozinha — só a decisão explícita (rota /decide) grava, e só nos
+  // campos que a pessoa aceitou.
+  //
+  // Fase F.2.A: qual provider pedir é decisão do BACKEND (enrichmentOpenAIFor, flag DISTINTA da acima), nunca
+  // do navegador — não é um novo passo no fluxo do lojista. Zero uso pago nesta rodada, por construção: o core
+  // (creative_core/service.py) nunca tem um client OpenAI real para esta rota, então provider="openai" SEMPRE
+  // volta um erro limpo do core (nunca uma chamada de verdade, nunca um fallback silencioso para "fake" — ver
+  // client.js::proposeEnrichment). Isso é deliberado: ligar CREATIVE_ENRICHMENT_OPENAI_ORGS antes da F.2.B
+  // existir faz este endpoint FALHAR alto para essa Organization, em vez de mentir que usou visão real.
   const exigirEnrichment = (req, res, next) => (enrichmentFor(env, req.creativeTenant)
     ? next() : res.status(403).json({ error: 'product enrichment não está habilitado nesta conta' }));
   const ACCEPTED_FIELD_NAMES = Object.freeze([
     'wearer_roles', 'relationship_themes', 'recommended_supporting_roles',
     'incompatible_auto_supporting_roles', 'scene_intents', 'visible_text',
   ]);
+  const MAX_ENRICHMENT_REFERENCES = 2; // mesmo teto do core (enrichment._MAX_REFERENCES) — duas referências, precedente do bug da Fase C
 
   router.post('/products/:id/enrichment/propose', exigirStore, exigirModulo, exigirEnrichment, rota(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
     const produto = await store.getProduct(req.creativeTenant, req.params.id);
     if (!produto) return res.status(404).json({ error: 'produto não encontrado' });
-    // Já existe uma pendente: devolve ELA, não cria outra (§ "solicitar nova proposta futuramente" — sem
-    // provider real nesta fase, "de novo" significa reusar a que já existe até alguém decidir).
+    // Já existe uma pendente: devolve ELA, não cria outra — a mesma regra que evita gasto em dobro quando o
+    // provider é real: uma execução idêntica (mesmo produto, ainda sem decisão) nunca dispara duas cobranças.
     const pendente = await store.getPendingProposal(req.creativeTenant, produto.id);
     if (pendente) return res.json(pendente);
+
+    const usarOpenAI = enrichmentOpenAIFor(env, req.creativeTenant);
+    let provider = 'fake';
+    let references = [];
+    if (usarOpenAI) {
+      // Cota ANTES de qualquer coisa que poderia custar — nunca chama o core para "openai" se a
+      // Organization já bateu o teto do dia (§4: "sem retry automático pago", mesma lógica se aplica
+      // a "sem nova tentativa além do limite").
+      const cota = enrichmentQuota.verificar(req.creativeTenant, env);
+      if (!cota.ok) {
+        return res.status(429).json({ error: 'limite diário de análises reais de enriquecimento atingido para esta Organization', ...cota });
+      }
+      provider = 'openai';
+      // Referências resolvidas do ARMAZENAMENTO já autorizado do próprio produto (tenant-scoped por
+      // store.getProduct acima) — nunca uma URL do navegador, sem superfície de SSRF (mesmo padrão de
+      // GET /products/:id/references/:n).
+      references = (produto.references || []).slice(0, MAX_ENRICHMENT_REFERENCES).map((r) => ({
+        ref: r.ref, data_base64: req.creativeStorage.readProductReference(r.ref).toString('base64'),
+      }));
+    }
+
     const proposalCore = await core.proposeEnrichment({
       product: { id: produto.id, name: produto.name, type: produto.type, description: produto.description || null, metadata: produto.metadata || {} },
+      provider, references,
     });
+    if (usarOpenAI) enrichmentQuota.registrar(req.creativeTenant); // só conta depois de sucesso — nunca uma tentativa que falhou
     const salva = await store.createProposal(req.creativeTenant, {
       productId: produto.id, provider: proposalCore.provider, proposed: proposalCore.proposed,
       recommendedAngleFamilies: proposalCore.recommended_angle_families, recommendedInteractions: proposalCore.recommended_interactions,
       fieldNotes: proposalCore.field_notes, productSnapshotHash: proposalCore.product_snapshot_hash,
-      productUpdatedAt: produto.updatedAt, createdBy: usuarioDe(req),
+      productUpdatedAt: produto.updatedAt, createdBy: usuarioDe(req), providerMeta: proposalCore.provider_meta || null,
     });
     res.status(201).json(salva);
   }));

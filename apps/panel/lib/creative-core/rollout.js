@@ -48,4 +48,20 @@ function enrichmentFor(env, tenantId) {
   return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase());
 }
 
-module.exports = { promptVersionFor, planSchemaVersionFor, uiV2For, enrichmentFor, orgsComPromptV2 };
+// Fase F.2.A — provider REAL (OpenAI) do Product Enrichment. Flag DISTINTA de enrichmentFor acima,
+// de propósito (exigência explícita da rodada): uma Organization pode ver o modal F.1 (enrichmentFor)
+// sem nunca poder pedir uma análise "openai" — precisa estar em AMBAS as listas. Mesmo mecanismo,
+// mesmo default fechado (nenhuma conta, por padrão). CREATIVE_ENRICHMENT_OPENAI_ORGS = ids de
+// Organization ou `*`.
+//
+// Kill switch: CREATIVE_ENRICHMENT_OPENAI_KILL_SWITCH="1" desliga o provider real GLOBALMENTE, para
+// TODAS as Organizations, independente da lista acima — corte de emergência sem precisar editar ou
+// reimplantar a lista de orgs. Lido ANTES da lista: o switch sozinho já basta, a lista não precisa
+// ficar vazia para desligar.
+function enrichmentOpenAIFor(env, tenantId) {
+  if (String((env && env.CREATIVE_ENRICHMENT_OPENAI_KILL_SWITCH) || '') === '1') return false;
+  const orgs = orgsComPromptV2(env && env.CREATIVE_ENRICHMENT_OPENAI_ORGS);
+  return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase());
+}
+
+module.exports = { promptVersionFor, planSchemaVersionFor, uiV2For, enrichmentFor, enrichmentOpenAIFor, orgsComPromptV2 };

@@ -9,14 +9,21 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const express = require('express');
 
 const { createMemoryStore } = require('../lib/creative-core/memoryStore');
 const { montarCriativos } = require('../routes/criativos');
+const { mergeSemanticContext } = require('../lib/creative-core/pgEnrichment');
+const { createStorage } = require('../lib/creative-core/storage');
+const enrichmentQuota = require('../lib/creative-core/enrichmentQuota');
 
 const TENANT = 'a1000000-0000-4000-8000-000000000001';
 const OUTRO_TENANT = 'a1000000-0000-4000-8000-000000000002';
 const silencioso = { log() {}, error() {} };
+const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 function fakeCoreComEnrichment() {
   const chamadas = [];
@@ -25,8 +32,10 @@ function fakeCoreComEnrichment() {
     configured: true,
     async health() { return { status: 'ok' }; },
     async contracts() { return { product_modes: [], multi_product_rules: {}, compatibility_matrix: [], catalog: { angles: [] }, versions: {} }; },
-    async proposeEnrichment({ product }) {
+    async proposeEnrichment({ product, provider, references }) {
       chamadas.push(product);
+      chamadas.argsCompletos = chamadas.argsCompletos || [];
+      chamadas.argsCompletos.push({ product, provider, references });
       // Mesma heurística "pai + criança + playing" do fake provider real, simplificada — o objetivo aqui é
       // provar a PLUMBING (rota -> core -> store), não reimplementar o provider.
       const texto = `${product.name} ${product.type} ${product.description || ''}`.toLowerCase();
@@ -50,7 +59,61 @@ function fakeCoreComEnrichment() {
   };
 }
 
-async function subirApp({ store = createMemoryStore(), core = fakeCoreComEnrichment(), enrichmentOrgs = TENANT, tenantAtual = () => TENANT } = {}) {
+// Fase F.2.A — simula EXATAMENTE o comportamento real do core nesta rodada (service.py nunca
+// constrói um client OpenAI para esta rota): pedir provider="openai" sempre recusa, limpo, sem
+// nunca "funcionar por engano" como se fosse uma chamada real.
+function fakeCoreQueRecusaOpenAI() {
+  const base = fakeCoreComEnrichment();
+  return {
+    ...base,
+    async proposeEnrichment(args) {
+      if (args.provider === 'openai') {
+        const { CoreRequestError } = require('../lib/creative-core/client');
+        throw new CoreRequestError(422, {
+          code: 'INVALID_INPUT', message: 'A requisição tem campos inválidos.',
+          details: { errors: ['provider: openai requires a client (none configured this phase)'] },
+        });
+      }
+      return base.proposeEnrichment(args);
+    },
+    calls: base.calls,
+  };
+}
+
+// Fase F.2.A — um core HIPOTÉTICO que já aceitaria "openai" (F.2.B, ainda não autorizada): existe só
+// para testar a lógica da ROTA (resolução de referência, cota) isoladamente da recusa real do core.
+function fakeCoreComOpenAIFuturo() {
+  const chamadas = [];
+  return {
+    calls: chamadas,
+    configured: true,
+    async health() { return { status: 'ok' }; },
+    async contracts() { return { product_modes: [], multi_product_rules: {}, compatibility_matrix: [], catalog: { angles: [] }, versions: {} }; },
+    async proposeEnrichment({ product, provider, references }) {
+      chamadas.push({ product, provider, references });
+      return {
+        id: `enr_${crypto.randomUUID()}`, product_id: product.id, schema_version: 1,
+        proposed: { wearer_roles: ['adult', 'child'], relationship_themes: ['family'], recommended_supporting_roles: ['father'],
+          incompatible_auto_supporting_roles: [], scene_intents: ['play'], visible_text: [], source: 'enrichment', confidence: 0.8 },
+        recommended_angle_families: ['connection'], recommended_interactions: ['play'], field_notes: {},
+        provider: 'openai', product_snapshot_hash: `hash_${product.name}`, created_at: new Date().toISOString(),
+        provider_meta: { model_requested: 'gpt-4o-mini', model_served: 'gpt-4o-mini', models_tried: ['gpt-4o-mini'],
+          schema_version: 1, prompt_version: 1, usage: { input_tokens: 100, output_tokens: 30 }, latency_ms: 42,
+          attempts: 1, references_used: (references || []).length },
+      };
+    },
+  };
+}
+
+function pastaUploadsTemp() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oria-enrichment-'));
+  return dir;
+}
+
+async function subirApp({
+  store = createMemoryStore(), core = fakeCoreComEnrichment(), enrichmentOrgs = TENANT, tenantAtual = () => TENANT,
+  uploadsDir = pastaUploadsTemp(), envExtra = {},
+} = {}) {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
   const requireAdmin = (req, res, next) => {
@@ -59,9 +122,12 @@ async function subirApp({ store = createMemoryStore(), core = fakeCoreComEnrichm
     return next();
   };
   const modulo = montarCriativos(app, {
-    requireAdmin, tenantAtual, paraCadaTenant: (fn) => fn(TENANT), pgPool: null, store, core, uploadsDir: '/tmp',
+    requireAdmin, tenantAtual, paraCadaTenant: (fn) => fn(TENANT), pgPool: null, store, core, uploadsDir,
     lerEntitlements: async () => ({ creative_generator: true }),
-    env: { CREATIVE_FEATURE_FLAGS: 'creative_generator,creative_clean_angles', CREATIVE_ENRICHMENT_ORGS: enrichmentOrgs || '' },
+    env: {
+      CREATIVE_FEATURE_FLAGS: 'creative_generator,creative_clean_angles', CREATIVE_ENRICHMENT_ORGS: enrichmentOrgs || '',
+      ...envExtra,
+    },
     logger: silencioso,
   });
   app.use('/api/admin/criativos', modulo.router);
@@ -72,12 +138,27 @@ async function subirApp({ store = createMemoryStore(), core = fakeCoreComEnrichm
     const ct = res.headers.get('content-type') || '';
     return { status: res.status, body: ct.includes('json') ? await res.json() : null };
   };
-  return { server, call, store, core };
+  return { server, call, store, core, uploadsDir };
 }
 
 async function semear(store, tenant = TENANT, { name = 'Camiseta Azul', type = 'camiseta', description = 'Algodão pima.', metadata = {} } = {}) {
   const id = crypto.randomUUID();
   await store.createProduct(tenant, { id, name, type, description, references: [{ ref: 'x', mime: 'image/png', sizeBytes: 1 }], metadata });
+  return id;
+}
+
+// Fase F.2.A — como `semear`, mas com uma referência REAL gravada no armazenamento (não só um `ref`
+// fictício): necessário para testar a rota resolvendo e lendo a imagem de verdade antes de pedir o
+// provider "openai". `uploadsDir` precisa ser o MESMO passado a `subirApp`, senão a rota não acha o
+// arquivo que este helper gravou.
+async function semearComReferencia(store, uploadsDir, tenant = TENANT, over = {}) {
+  const id = crypto.randomUUID();
+  const storage = createStorage({ uploadsDir, tenantId: tenant });
+  const ref = storage.saveProductReference(id, PNG_B64);
+  await store.createProduct(tenant, {
+    id, name: 'Brincar com Meu Pai', type: 'camiseta infantil', description: 'presente para brincar com o pai',
+    references: [ref], metadata: {}, ...over,
+  });
   return id;
 }
 
@@ -182,7 +263,62 @@ test('approved com acceptedFields parcial: só os campos aceitos entram; o campo
     const produtoFinal = await store.getProduct(TENANT, produtoId);
     assert.deepEqual(produtoFinal.metadata.semantic_context, r.body.after);
     assert.equal(produtoFinal.metadata.semantic_context.source, 'enrichment', 'qualquer campo aceito já torna a origem "enrichment"');
+    // Fase F.2.A — auditoria de proveniência: o `source` agregado acima não distingue mais QUAL campo veio de
+    // onde; `field_sources` por campo é o que resolve isso (ver composition.py::field_origin no core).
+    const fs = produtoFinal.metadata.semantic_context.field_sources;
+    assert.equal(fs.relationship_themes, 'enrichment');
+    assert.equal(fs.scene_intents, 'enrichment');
+    assert.equal(fs.wearer_roles, 'manual', 'campo preservado — a proveniência registrada é a que já existia, não a nova agregada');
+    assert.equal(fs.visible_text, 'manual');
   } finally { server.close(); }
+});
+
+// ------------------------------------------------------------------ Fase F.2.A: proveniência por campo (auditoria)
+test('mergeSemanticContext: proveniência por campo — aceitos viram enrichment, preservados mantêm o que já tinham', () => {
+  const atual = {
+    wearer_roles: ['adult'], relationship_themes: [], recommended_supporting_roles: [],
+    incompatible_auto_supporting_roles: [], scene_intents: [], visible_text: ['Feito à mão'],
+    source: 'manual', confidence: null,
+  };
+  const proposto = {
+    wearer_roles: ['adult', 'child'], relationship_themes: ['family'], recommended_supporting_roles: ['father'],
+    incompatible_auto_supporting_roles: [], scene_intents: ['playing'], visible_text: [],
+    source: 'enrichment', confidence: 0.6,
+  };
+  const mesclado = mergeSemanticContext(atual, proposto, ['relationship_themes', 'scene_intents']);
+  assert.equal(mesclado.field_sources.relationship_themes, 'enrichment');
+  assert.equal(mesclado.field_sources.scene_intents, 'enrichment');
+  // Achado da auditoria: antes desta fase, o `source` agregado (linha abaixo) era o único sinal — e virava
+  // "enrichment" mesmo para campos nunca tocados. Agora field_sources preserva a proveniência real deles.
+  assert.equal(mesclado.field_sources.wearer_roles, 'manual');
+  assert.equal(mesclado.field_sources.visible_text, 'manual');
+  assert.equal(mesclado.field_confidence.relationship_themes, 0.6);
+  assert.equal(mesclado.field_confidence.scene_intents, 0.6);
+  assert.equal(mesclado.field_confidence.wearer_roles, undefined, 'campo não aceito não ganha confidence novo');
+});
+
+test('mergeSemanticContext: produto novo sem source prévio — campos não aceitos não ganham field_sources nenhum', () => {
+  const proposto = { wearer_roles: ['adult'], relationship_themes: ['family'], confidence: 0.6 };
+  const mesclado = mergeSemanticContext(null, proposto, ['wearer_roles']);
+  assert.deepEqual(mesclado.field_sources, { wearer_roles: 'enrichment' });
+  assert.equal('relationship_themes' in mesclado.field_sources, false, 'sem evidência — nada é inventado');
+});
+
+test('mergeSemanticContext: um segundo merge parcial preserva as entradas de field_sources já existentes', () => {
+  const atual = {
+    wearer_roles: ['child'], relationship_themes: ['family'], recommended_supporting_roles: [],
+    incompatible_auto_supporting_roles: [], scene_intents: [], visible_text: [],
+    source: 'enrichment', confidence: 0.5,
+    field_sources: { wearer_roles: 'manual', relationship_themes: 'enrichment' },
+    field_confidence: { relationship_themes: 0.5 },
+  };
+  const proposto = { scene_intents: ['playing'], confidence: 0.9 };
+  const mesclado = mergeSemanticContext(atual, proposto, ['scene_intents']);
+  assert.equal(mesclado.field_sources.wearer_roles, 'manual', 'entrada antiga preservada, não sobrescrita');
+  assert.equal(mesclado.field_sources.relationship_themes, 'enrichment');
+  assert.equal(mesclado.field_sources.scene_intents, 'enrichment');
+  assert.equal(mesclado.field_confidence.relationship_themes, 0.5, 'confidence antiga preservada');
+  assert.equal(mesclado.field_confidence.scene_intents, 0.9);
 });
 
 test('adjusted funciona como approved (mesmo merge), só o status final muda', async () => {
@@ -247,5 +383,117 @@ test('descrição maliciosa no produto: a proposta continua no vocabulário fech
     const { body: proposta } = await call('POST', `/products/${produtoId}/enrichment/propose`);
     assert.deepEqual(proposta.proposed.wearer_roles, []);
     assert.equal(proposta.proposed.source, 'enrichment');
+  } finally { server.close(); }
+});
+
+// ------------------------------------------------------------------ Fase F.2.A: provider real (flag, cota, referências)
+test('sem CREATIVE_ENRICHMENT_OPENAI_ORGS, a rota sempre pede "fake" ao core, mesmo com F.1 habilitado', async () => {
+  const core = fakeCoreComEnrichment();
+  const { server, call, store } = await subirApp({ core });
+  try {
+    const produtoId = await semear(store, TENANT, { name: 'Brincar com Meu Pai', type: 'camiseta infantil' });
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 201);
+    assert.equal(core.calls.argsCompletos[0].provider, 'fake');
+    assert.deepEqual(core.calls.argsCompletos[0].references, []);
+  } finally { server.close(); }
+});
+
+test('com a flag F.2 real ligada, a rota resolve a referência do armazenamento e pede "openai" ao core', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const { server, call, store } = await subirApp({ core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: TENANT } });
+  try {
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 201);
+    assert.equal(r.body.provider, 'openai');
+    assert.equal(core.calls[0].provider, 'openai');
+    assert.equal(core.calls[0].references.length, 1, 'a imagem gravada no armazenamento foi resolvida e enviada');
+    assert.match(core.calls[0].references[0].data_base64, /^[A-Za-z0-9+/=]+$/, 'base64 de verdade, não a chave de storage');
+    assert.equal(r.body.providerMeta.model_served, 'gpt-4o-mini');
+    assert.equal(r.body.providerMeta.references_used, 1);
+  } finally { server.close(); }
+});
+
+test('o navegador não escolhe a imagem: um "references"/"url" no corpo do POST é ignorado, só a referência já autorizada do produto é usada — sem SSRF', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const { server, call, store } = await subirApp({ core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  try {
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    // Um corpo malicioso tentando apontar para uma URL arbitrária (SSRF) ou injetar uma referência que
+    // não é a do produto — a rota nem lê `references`/`url` do corpo desta rota, só resolve do storage.
+    await call('POST', `/products/${produtoId}/enrichment/propose`, { references: [{ url: 'http://169.254.169.254/latest' }] });
+    const enviado = core.calls[0].references[0];
+    assert.equal(enviado.url, undefined, 'nenhuma URL do corpo da requisição chega ao core');
+    // Os bytes enviados são a imagem REAL gravada no storage — não uma string arbitrária, não um path.
+    assert.equal(Buffer.from(enviado.data_base64, 'base64').subarray(0, 4).toString('hex'), '89504e47', 'assinatura PNG de verdade');
+  } finally { server.close(); }
+});
+
+test('kill switch desliga o provider real mesmo com a Organization na lista', async () => {
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const { server, call, store } = await subirApp({
+    core, uploadsDir,
+    envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: TENANT, CREATIVE_ENRICHMENT_OPENAI_KILL_SWITCH: '1' },
+  });
+  try {
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 201);
+    assert.equal(core.calls[0].provider, 'fake', 'kill switch venceu a lista de orgs');
+  } finally { server.close(); }
+});
+
+test('cota diária esgotada: 429 antes de qualquer chamada ao core, nenhum gasto tentado', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const { server, call, store } = await subirApp({
+    core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*', CREATIVE_ENRICHMENT_OPENAI_MAX_PER_DAY: '1' },
+  });
+  try {
+    const p1 = await semearComReferencia(store, uploadsDir);
+    const r1 = await call('POST', `/products/${p1}/enrichment/propose`);
+    assert.equal(r1.status, 201);
+    const p2 = await semearComReferencia(store, uploadsDir);
+    const r2 = await call('POST', `/products/${p2}/enrichment/propose`);
+    assert.equal(r2.status, 429);
+    assert.equal(core.calls.length, 1, 'a segunda tentativa nunca chegou a chamar o core');
+  } finally { server.close(); }
+});
+
+test('o core real desta rodada recusa "openai" de forma limpa — nunca uma chamada de verdade, nunca um fallback silencioso para fake', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreQueRecusaOpenAI(); // simula o service.py de VERDADE nesta fase
+  const uploadsDir = pastaUploadsTemp();
+  const { server, call, store } = await subirApp({ core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  try {
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 422);
+    assert.equal(r.body.code, 'INVALID_INPUT');
+    assert.equal((await store.listProposals(TENANT, produtoId)).length, 0, 'nada foi salvo — a recusa do core não vira uma proposta fantasma');
+  } finally { server.close(); }
+});
+
+test('duas referências (precedente da Fase C): ambas resolvidas e enviadas, nenhuma perdida', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const { server, call, store } = await subirApp({ core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  try {
+    const id = crypto.randomUUID();
+    const storage = createStorage({ uploadsDir, tenantId: TENANT });
+    const ref1 = storage.saveProductReference(id, PNG_B64);
+    const ref2 = storage.saveProductReference(id, PNG_B64);
+    await store.createProduct(TENANT, { id, name: 'Duas Fotos', type: 'camiseta', description: 'produto com duas referências', references: [ref1, ref2], metadata: {} });
+    const r = await call('POST', `/products/${id}/enrichment/propose`);
+    assert.equal(r.status, 201);
+    assert.equal(core.calls[0].references.length, 2);
   } finally { server.close(); }
 });

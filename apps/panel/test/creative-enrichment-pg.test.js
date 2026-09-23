@@ -52,6 +52,22 @@ test('creative_enrichment_proposals: FK composta, RLS, uma pendente por produto'
       productSnapshotHash: 'h1', productUpdatedAt: produtoARow.updatedAt, createdBy: null,
     });
     assert.equal(proposta.status, 'pending');
+    assert.equal(proposta.providerMeta, null, 'provider fake nunca tem provider_meta (Fase F.2.A, migration 0037)');
+
+    // ── Fase F.2.A: provider_meta é uma coluna JSONB de verdade (0037) — round-trip via Postgres, nunca a
+    // resposta bruta do provider, nunca bytes de imagem, nunca credencial.
+    const produtoC = crypto.randomUUID();
+    await store.createProduct(TENANT, { id: produtoC, name: 'Camiseta C', type: 'camiseta', metadata: {}, references: [] });
+    const produtoCRow = await store.getProduct(TENANT, produtoC);
+    const propostaComMeta = await store.createProposal(TENANT, {
+      productId: produtoC, provider: 'openai', proposed: { wearer_roles: [], source: 'enrichment', confidence: 0.2 },
+      recommendedAngleFamilies: [], recommendedInteractions: [], fieldNotes: {},
+      productSnapshotHash: 'h-meta', productUpdatedAt: produtoCRow.updatedAt, createdBy: null,
+      providerMeta: { model_requested: 'gpt-4o-mini', model_served: 'gpt-4o-mini', usage: { input_tokens: 10, output_tokens: 5 }, attempts: 1 },
+    });
+    assert.equal(propostaComMeta.providerMeta.model_served, 'gpt-4o-mini');
+    const relida = await store.getProposal(TENANT, propostaComMeta.id);
+    assert.deepEqual(relida.providerMeta, propostaComMeta.providerMeta, 'sobrevive a uma releitura do banco');
 
     // ── só uma pendente por produto (índice único parcial) ──
     await assert.rejects(

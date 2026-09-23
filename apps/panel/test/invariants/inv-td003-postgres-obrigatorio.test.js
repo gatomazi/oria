@@ -142,6 +142,7 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       '1790001900000_creative-angles',
       '1790002000000_creative-angles-compat',
       '1790002100000_creative-enrichment',
+      '1790002200000_creative-enrichment-provider-meta',
     ]);
   } finally {
     await pool.end();
