@@ -25,6 +25,9 @@ export interface CriativosStatus {
   // isso também — sem ele a UI V2 ainda funciona (recomendação, famílias), mas sem editar a cena.
   uiV2: boolean;
   planV2: boolean;
+  // Fase F.1 — Product Enrichment (propostas de semantic_context, revisão humana obrigatória). Mesmo
+  // mecanismo de rollout; sem provider pago nesta fase (só "fake").
+  enrichment: boolean;
 }
 
 export interface CatalogAngle {
@@ -309,6 +312,45 @@ export const listProducts = () => api<{ items: Product[] }>(`${BASE}/products`);
 export const createProduct = (input: { name: string; type: string; description?: string; metadata?: { city?: string; state?: string }; images: { data_base64: string }[] }) =>
   api<Product>(`${BASE}/products`, json('POST', input));
 export const archiveProduct = (id: string) => api(`${BASE}/products/${id}`, json('DELETE'));
+
+// ── Product Enrichment (Fase F.1) ────────────────────────────────────────────────────────────────────
+// Uma PROPOSTA sobre o que a estampa/peça parece significar — nunca aplicada sozinha. "wearer_roles"/
+// "relationship_themes"/etc. usam o mesmo vocabulário de creative_core/contracts.py::ProductSemanticContext.
+export type EnrichmentStatus = 'pending' | 'approved' | 'adjusted' | 'rejected';
+export type EnrichmentAcceptableField = 'wearer_roles' | 'relationship_themes' | 'recommended_supporting_roles' | 'incompatible_auto_supporting_roles' | 'scene_intents' | 'visible_text';
+export interface EnrichmentSemanticContext {
+  wearer_roles?: string[];
+  relationship_themes?: string[];
+  recommended_supporting_roles?: string[];
+  incompatible_auto_supporting_roles?: string[];
+  scene_intents?: string[];
+  visible_text?: string[];
+  source?: 'manual' | 'enrichment';
+  confidence?: number | null;
+}
+export interface EnrichmentFieldNote { justification?: string; source?: string }
+export interface EnrichmentProposal {
+  id: string;
+  productId: string;
+  status: EnrichmentStatus;
+  provider: 'fake' | 'openai';
+  proposed: EnrichmentSemanticContext;
+  recommendedAngleFamilies: AngleFamilyId[];
+  recommendedInteractions: string[];
+  fieldNotes: Record<string, EnrichmentFieldNote>;
+  acceptedFields: EnrichmentAcceptableField[] | null;
+  beforeSemanticContext: EnrichmentSemanticContext | null;
+  appliedSemanticContext: EnrichmentSemanticContext | null;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+export const proposeEnrichment = (productId: string) => api<EnrichmentProposal>(`${BASE}/products/${productId}/enrichment/propose`, json('POST'));
+export const listEnrichmentProposals = (productId: string) => api<{ items: EnrichmentProposal[] }>(`${BASE}/products/${productId}/enrichment`);
+export const decideEnrichment = (productId: string, proposalId: string, decision: 'approved' | 'adjusted' | 'rejected', acceptedFields: EnrichmentAcceptableField[] = []) =>
+  api<{ proposal: EnrichmentProposal; product?: Product; before?: EnrichmentSemanticContext | null; after?: EnrichmentSemanticContext }>(
+    `${BASE}/products/${productId}/enrichment/${proposalId}/decide`, json('POST', { decision, acceptedFields }),
+  );
 
 export interface PromptPrevia {
   angle: { id: string; label: string } | null;
