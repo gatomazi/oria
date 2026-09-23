@@ -110,9 +110,57 @@ function pastaUploadsTemp() {
   return dir;
 }
 
+// Cifra de teste reversível — mesmo padrão de creative-core.test.js — só para provar que o store
+// nunca recebe a key OpenAI em claro; não é criptografia de verdade.
+const encriptarSegredo = (texto, contexto) => Buffer.from(`${contexto}:${[...texto].reverse().join('')}`).toString('base64');
+const descriptografarSegredo = (b64, contexto) => {
+  const bruto = Buffer.from(b64, 'base64').toString();
+  if (!bruto.startsWith(`${contexto}:`)) return null;
+  return [...bruto.slice(contexto.length + 1)].reverse().join('');
+};
+
+// Fase F.2.B — imita, em memória, EXATAMENTE a semântica das duas funções SQL da migration 0038
+// (creative_enrichment_pilot_reservar/_finalizar) para testar a LÓGICA DA ROTA (chama reservar antes
+// do core, finaliza depois, trata em_andamento/orcamento_excedido) sem precisar de Postgres real.
+// **Isto NÃO prova atomicidade** — a prova real (concorrência de verdade) está em
+// creative-enrichment-pg.test.js, contra Postgres de verdade, com a MESMA migration.
+function criarPgPoolFalsoPiloto() {
+  const tentativas = []; // { id, organizationId, productId, status, custoEstimadoCentavos, custoRealCentavos, model, errorCode }
+  let contador = 0;
+  return {
+    chamadas: [],
+    async query(sql, params) {
+      this.chamadas.push({ sql, params });
+      if (sql.includes('creative_enrichment_pilot_reservar')) {
+        const [organizationId, productId, custoEstimadoCentavos, limiteChamadas, limiteCentavos] = params;
+        const emAndamento = tentativas.some((t) => t.organizationId === organizationId && t.productId === productId && t.status === 'reserved');
+        if (emAndamento) return { rows: [{ ok: false, motivo: 'em_andamento', attempt_id: null }] };
+        const chamadasFeitas = tentativas.length;
+        const centavosGastos = tentativas.reduce((soma, t) => soma + t.custoEstimadoCentavos, 0);
+        if (chamadasFeitas >= limiteChamadas || centavosGastos + custoEstimadoCentavos > limiteCentavos) {
+          return { rows: [{ ok: false, motivo: 'orcamento_excedido', attempt_id: null }] };
+        }
+        contador += 1;
+        const id = `attempt-${contador}`;
+        tentativas.push({ id, organizationId, productId, status: 'reserved', custoEstimadoCentavos, custoRealCentavos: null, model: null, errorCode: null });
+        return { rows: [{ ok: true, motivo: null, attempt_id: id }] };
+      }
+      if (sql.includes('creative_enrichment_pilot_finalizar')) {
+        const [attemptId, status, model, custoRealCentavos, errorCode] = params;
+        const t = tentativas.find((x) => x.id === attemptId && x.status === 'reserved');
+        if (!t) return { rows: [{ ok: false }] };
+        Object.assign(t, { status, model, custoRealCentavos, errorCode });
+        return { rows: [{ ok: true }] };
+      }
+      throw new Error(`fake pgPool piloto: SQL não reconhecido — ${sql.slice(0, 60)}`);
+    },
+    _tentativas: tentativas,
+  };
+}
+
 async function subirApp({
   store = createMemoryStore(), core = fakeCoreComEnrichment(), enrichmentOrgs = TENANT, tenantAtual = () => TENANT,
-  uploadsDir = pastaUploadsTemp(), envExtra = {},
+  uploadsDir = pastaUploadsTemp(), envExtra = {}, pgPool = null,
 } = {}) {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
@@ -122,8 +170,9 @@ async function subirApp({
     return next();
   };
   const modulo = montarCriativos(app, {
-    requireAdmin, tenantAtual, paraCadaTenant: (fn) => fn(TENANT), pgPool: null, store, core, uploadsDir,
+    requireAdmin, tenantAtual, paraCadaTenant: (fn) => fn(TENANT), pgPool, store, core, uploadsDir,
     lerEntitlements: async () => ({ creative_generator: true }),
+    encriptarSegredo, descriptografarSegredo,
     env: {
       CREATIVE_FEATURE_FLAGS: 'creative_generator,creative_clean_angles', CREATIVE_ENRICHMENT_ORGS: enrichmentOrgs || '',
       ...envExtra,
@@ -139,6 +188,13 @@ async function subirApp({
     return { status: res.status, body: ct.includes('json') ? await res.json() : null };
   };
   return { server, call, store, core, uploadsDir };
+}
+
+const CHAVE_TESTE = 'sk-test-oria-byok-0123456789abcdefXYZ';
+
+async function configurarChaveOpenAI(call) {
+  const r = await call('PUT', '/settings/openai-key', { apiKey: CHAVE_TESTE });
+  if (r.status !== 200) throw new Error(`falha ao configurar a chave de teste: ${JSON.stringify(r.body)}`);
 }
 
 async function semear(store, tenant = TENANT, { name = 'Camiseta Azul', type = 'camiseta', description = 'Algodão pima.', metadata = {} } = {}) {
@@ -403,11 +459,14 @@ test('com a flag F.2 real ligada, a rota resolve a referência do armazenamento 
   enrichmentQuota._resetParaTeste();
   const core = fakeCoreComOpenAIFuturo();
   const uploadsDir = pastaUploadsTemp();
-  const { server, call, store } = await subirApp({ core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: TENANT } });
+  const { server, call, store } = await subirApp({
+    core, uploadsDir, pgPool: criarPgPoolFalsoPiloto(), envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: TENANT },
+  });
   try {
+    await configurarChaveOpenAI(call);
     const produtoId = await semearComReferencia(store, uploadsDir);
     const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
-    assert.equal(r.status, 201);
+    assert.equal(r.status, 201, JSON.stringify(r.body));
     assert.equal(r.body.provider, 'openai');
     assert.equal(core.calls[0].provider, 'openai');
     assert.equal(core.calls[0].references.length, 1, 'a imagem gravada no armazenamento foi resolvida e enviada');
@@ -421,12 +480,16 @@ test('o navegador não escolhe a imagem: um "references"/"url" no corpo do POST 
   enrichmentQuota._resetParaTeste();
   const core = fakeCoreComOpenAIFuturo();
   const uploadsDir = pastaUploadsTemp();
-  const { server, call, store } = await subirApp({ core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  const { server, call, store } = await subirApp({
+    core, uploadsDir, pgPool: criarPgPoolFalsoPiloto(), envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' },
+  });
   try {
+    await configurarChaveOpenAI(call);
     const produtoId = await semearComReferencia(store, uploadsDir);
     // Um corpo malicioso tentando apontar para uma URL arbitrária (SSRF) ou injetar uma referência que
     // não é a do produto — a rota nem lê `references`/`url` do corpo desta rota, só resolve do storage.
-    await call('POST', `/products/${produtoId}/enrichment/propose`, { references: [{ url: 'http://169.254.169.254/latest' }] });
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`, { references: [{ url: 'http://169.254.169.254/latest' }] });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
     const enviado = core.calls[0].references[0];
     assert.equal(enviado.url, undefined, 'nenhuma URL do corpo da requisição chega ao core');
     // Os bytes enviados são a imagem REAL gravada no storage — não uma string arbitrária, não um path.
@@ -454,12 +517,14 @@ test('cota diária esgotada: 429 antes de qualquer chamada ao core, nenhum gasto
   const core = fakeCoreComOpenAIFuturo();
   const uploadsDir = pastaUploadsTemp();
   const { server, call, store } = await subirApp({
-    core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*', CREATIVE_ENRICHMENT_OPENAI_MAX_PER_DAY: '1' },
+    core, uploadsDir, pgPool: criarPgPoolFalsoPiloto(),
+    envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*', CREATIVE_ENRICHMENT_OPENAI_MAX_PER_DAY: '1' },
   });
   try {
+    await configurarChaveOpenAI(call);
     const p1 = await semearComReferencia(store, uploadsDir);
     const r1 = await call('POST', `/products/${p1}/enrichment/propose`);
-    assert.equal(r1.status, 201);
+    assert.equal(r1.status, 201, JSON.stringify(r1.body));
     const p2 = await semearComReferencia(store, uploadsDir);
     const r2 = await call('POST', `/products/${p2}/enrichment/propose`);
     assert.equal(r2.status, 429);
@@ -471,13 +536,20 @@ test('o core real desta rodada recusa "openai" de forma limpa — nunca uma cham
   enrichmentQuota._resetParaTeste();
   const core = fakeCoreQueRecusaOpenAI(); // simula o service.py de VERDADE nesta fase
   const uploadsDir = pastaUploadsTemp();
-  const { server, call, store } = await subirApp({ core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  const pgPool = criarPgPoolFalsoPiloto();
+  const { server, call, store } = await subirApp({ core, uploadsDir, pgPool, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
   try {
+    await configurarChaveOpenAI(call);
     const produtoId = await semearComReferencia(store, uploadsDir);
     const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
     assert.equal(r.status, 422);
     assert.equal(r.body.code, 'INVALID_INPUT');
     assert.equal((await store.listProposals(TENANT, produtoId)).length, 0, 'nada foi salvo — a recusa do core não vira uma proposta fantasma');
+    // A reserva foi finalizada como 'failed' — nunca fica 'reserved' para sempre, e conta contra o
+    // orçamento do piloto mesmo tendo falhado ("conte inclusive tentativas malsucedidas").
+    assert.equal(pgPool._tentativas.length, 1);
+    assert.equal(pgPool._tentativas[0].status, 'failed');
+    assert.equal(pgPool._tentativas[0].errorCode, 'INVALID_INPUT');
   } finally { server.close(); }
 });
 
@@ -485,15 +557,112 @@ test('duas referências (precedente da Fase C): ambas resolvidas e enviadas, nen
   enrichmentQuota._resetParaTeste();
   const core = fakeCoreComOpenAIFuturo();
   const uploadsDir = pastaUploadsTemp();
-  const { server, call, store } = await subirApp({ core, uploadsDir, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  const { server, call, store } = await subirApp({
+    core, uploadsDir, pgPool: criarPgPoolFalsoPiloto(), envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' },
+  });
   try {
+    await configurarChaveOpenAI(call);
     const id = crypto.randomUUID();
     const storage = createStorage({ uploadsDir, tenantId: TENANT });
     const ref1 = storage.saveProductReference(id, PNG_B64);
     const ref2 = storage.saveProductReference(id, PNG_B64);
     await store.createProduct(TENANT, { id, name: 'Duas Fotos', type: 'camiseta', description: 'produto com duas referências', references: [ref1, ref2], metadata: {} });
     const r = await call('POST', `/products/${id}/enrichment/propose`);
-    assert.equal(r.status, 201);
+    assert.equal(r.status, 201, JSON.stringify(r.body));
     assert.equal(core.calls[0].references.length, 2);
+  } finally { server.close(); }
+});
+
+// ------------------------------------------------------------------ Fase F.2.B: gates do piloto real
+test('sem Postgres real, provider "openai" é bloqueado com NO-GO antes de qualquer coisa — nunca uma chamada "na confiança"', async () => {
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const { server, call, store } = await subirApp({
+    core, uploadsDir, pgPool: null, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' },
+  });
+  try {
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 503);
+    assert.equal(core.calls.length, 0, 'nenhuma chamada ao core sem a garantia atômica do orçamento');
+  } finally { server.close(); }
+});
+
+test('provider "openai" sem chave OpenAI cadastrada: 409 antes de reservar orçamento ou chamar o core', async () => {
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const pgPool = criarPgPoolFalsoPiloto();
+  const { server, call, store } = await subirApp({ core, uploadsDir, pgPool, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  try {
+    // Nenhuma chave configurada desta vez.
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 409);
+    assert.equal(core.calls.length, 0);
+    assert.equal(pgPool._tentativas.length, 0, 'nenhuma reserva foi criada — a falta de chave é checada antes');
+  } finally { server.close(); }
+});
+
+test('orçamento do piloto esgotado (chamadas): 429 sem chamar o core, mesmo com cota diária de Organization intacta', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const pgPool = criarPgPoolFalsoPiloto();
+  const { server, call, store } = await subirApp({
+    core, uploadsDir, pgPool, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*', CREATIVE_ENRICHMENT_OPENAI_MAX_PER_DAY: '999' },
+  });
+  try {
+    await configurarChaveOpenAI(call);
+    // Pré-preenche o orçamento do piloto (3 chamadas) diretamente na tabela falsa — simula rodadas anteriores.
+    pgPool._tentativas.push(
+      { id: 'a', organizationId: TENANT, productId: 'x', status: 'succeeded', custoEstimadoCentavos: 1 },
+      { id: 'b', organizationId: TENANT, productId: 'y', status: 'failed', custoEstimadoCentavos: 1 },
+      { id: 'c', organizationId: TENANT, productId: 'z', status: 'succeeded', custoEstimadoCentavos: 1 },
+    );
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 429);
+    assert.equal(r.body.motivo, 'orcamento_excedido');
+    assert.equal(core.calls.length, 0, 'orçamento do piloto esgotado — nunca chega a chamar o core');
+  } finally { server.close(); }
+});
+
+test('produto já com uma análise real em andamento: 409 limpo, nunca uma segunda chamada ao core para o MESMO produto', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const pgPool = criarPgPoolFalsoPiloto();
+  const { server, call, store } = await subirApp({ core, uploadsDir, pgPool, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  try {
+    await configurarChaveOpenAI(call);
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    // Simula uma reserva já em andamento para ESTE produto (ex.: uma requisição concorrente que ainda
+    // não terminou) — inserida diretamente, como a função SQL real faria.
+    pgPool._tentativas.push({ id: 'em-voo', organizationId: TENANT, productId: produtoId, status: 'reserved', custoEstimadoCentavos: 1 });
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 409);
+    assert.equal(core.calls.length, 0, 'nunca chega a chamar o core com uma tentativa já em andamento para o mesmo produto');
+  } finally { server.close(); }
+});
+
+test('referência corrompida/ausente no armazenamento: falha ANTES de reservar orçamento — nenhuma reserva presa, nenhum gasto tentado', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const pgPool = criarPgPoolFalsoPiloto();
+  const { server, call, store } = await subirApp({ core, uploadsDir, pgPool, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  try {
+    await configurarChaveOpenAI(call);
+    // Produto com uma referência de formato VÁLIDO (mesmo padrão que storage.saveProductReference
+    // geraria) que aponta para um arquivo que não existe de verdade no disco (corrompido/perdido).
+    const id = crypto.randomUUID();
+    await store.createProduct(TENANT, {
+      id, name: 'Produto com referência quebrada', type: 'camiseta', description: '',
+      references: [{ ref: `products/${id}/${crypto.randomUUID()}.png`, mime: 'image/png', sizeBytes: 1 }], metadata: {},
+    });
+    const r = await call('POST', `/products/${id}/enrichment/propose`);
+    assert.equal(r.status, 500, 'erro interno — o arquivo referenciado não existe de verdade');
+    assert.equal(core.calls.length, 0, 'nunca chegou a chamar o core');
+    assert.equal(pgPool._tentativas.length, 0, 'nenhuma reserva foi criada — a leitura da referência falhou ANTES de reservar');
   } finally { server.close(); }
 });

@@ -30,8 +30,9 @@ const FASE1 = 8;
 // (platform-admin), o aceite do convite (0020), o `store_id` do Connector Ink (0021), a
 // reclassificação de features (0022) e o entitlement canônico (0023) vêm depois; o rollback da
 // Fase 1 desce todas.
-const DEPOIS_DA_FASE1 = 25; // +7: 0031 (trace), 0032 (versão do plano/compiler), 0033 (feedback), 0034 (angles customizados),
-// 0035 (compat. de angles), 0036 (Product Enrichment) e 0037 (provider_meta, Fase F.2.A) do Gerador de Criativos
+const DEPOIS_DA_FASE1 = 26; // +8: 0031 (trace), 0032 (versão do plano/compiler), 0033 (feedback), 0034 (angles customizados),
+// 0035 (compat. de angles), 0036 (Product Enrichment), 0037 (provider_meta, Fase F.2.A) e 0038 (reserva de
+// concorrência/orçamento do piloto, Fase F.2.B) do Gerador de Criativos
 
 const lerJson = (arquivo) => JSON.parse(fs.readFileSync(arquivo, 'utf8'));
 

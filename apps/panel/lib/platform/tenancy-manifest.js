@@ -342,6 +342,10 @@ const TABELAS_GLOBAIS = Object.freeze([
     tabela: 'onboarding_idempotencia',
     motivo: 'chave de idempotência (pessoa, chave) → Organization criada (Fase 7); só função SECURITY DEFINER, com a Organization do contexto',
   }),
+  Object.freeze({
+    tabela: 'creative_enrichment_pilot_attempts',
+    motivo: 'reserva de concorrência/orçamento do piloto controlado F.2.B (Product Enrichment real): o teto (3 chamadas, US$ 0,05) é do PILOTO INTEIRO, não por Organization — só funções SECURITY DEFINER (creative_enrichment_pilot_reservar/_finalizar); temporário para esta rodada, não infraestrutura permanente',
+  }),
 
   // ── Control Plane (Oria Admin · apps/platform-admin) ───────────────────────────────────────
   // Nenhuma delas é tenant-owned: elas FALAM SOBRE Organizations (FK de referência), não pertencem
@@ -390,6 +394,7 @@ const TABELAS_GLOBAIS_DA_APLICACAO = Object.freeze(['users', 'sessions', 'oauth_
 // Globais que a role da aplicação NÃO pode ler nem escrever diretamente.
 const TABELAS_GLOBAIS_PRIVADAS = Object.freeze([
   'tenancy_mapeamentos', 'external_resource_claims', 'job_leases', 'onboarding_invites', 'onboarding_idempotencia',
+  'creative_enrichment_pilot_attempts',
   'platform_admins', 'platform_admin_sessions', 'plans', 'plan_features',
   'organization_subscriptions', 'organization_entitlement_overrides', 'organization_owner_invites',
   'platform_organization_creations', 'platform_audit_logs',

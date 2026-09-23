@@ -27,6 +27,8 @@ const { promptVersionFor, planSchemaVersionFor, uiV2For, enrichmentFor, enrichme
 const { mapDraftToForm } = require('../lib/creative-core/draft');
 const { FAMILIES: ANGLE_FAMILIES, PEOPLE_MODES: ANGLE_PEOPLE_MODES } = require('../lib/creative-core/pgAngles');
 const enrichmentQuota = require('../lib/creative-core/enrichmentQuota');
+const enrichmentPilotBudget = require('../lib/creative-core/enrichmentPilotBudget');
+const precos = require('../lib/custos/precos');
 
 const PROFILE_CONTRACT = { brand: 'BrandKit', niche: 'NicheKit', context: 'ContextProfile', persona: 'Persona' };
 const PROFILE_PATH = { brand: 'brand-kits', niche: 'niche-kits', context: 'context-profiles', persona: 'personas' };
@@ -116,6 +118,11 @@ function criarRouterCriativos(deps) {
   if (typeof deps.tenantAtual !== 'function') throw new Error('criativos: tenantAtual obrigatório');
   const store = deps.store || (deps.pgPool ? createPgStore(deps.pgPool) : null);
   const core = deps.core || createCoreClient({ baseUrl: env.CREATIVE_CORE_URL, token: env.CREATIVE_CORE_SERVICE_TOKEN });
+  // Fase F.2.B — só para a reserva atômica de concorrência/orçamento do piloto real (enrichmentPilotBudget):
+  // precisa de Postgres de VERDADE (a garantia atômica não existe em memoryStore) — `null` quando não há
+  // pgPool, e a rota de propose trata isso como bloqueio estrutural para provider="openai" (nunca um "quase
+  // atômico" em memória para dinheiro de verdade).
+  const q = deps.pgPool ? (sql, params) => deps.pgPool.query(sql, params) : null;
   // OPS-22: leitura dupla só com configuração explícita; a storage confere a Organization e confina o caminho.
   const leituraLegada = deps.leituraLegada || null;
   const observadorLegado = criarObservadorLeituraLegada({ logger });
@@ -450,17 +457,22 @@ function criarRouterCriativos(deps) {
     res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'produto não encontrado' });
   }));
 
-  // ── Product Enrichment (Fase F.1 + F.2.A): propostas de semantic_context, revisão humana obrigatória ────────
+  // ── Product Enrichment (Fase F.1 + F.2.A + F.2.B): propostas de semantic_context, revisão humana obrigatória ──
   // Atrás de CREATIVE_ENRICHMENT_ORGS (rollout.js) — fora da lista, estas rotas respondem 403 como se não
   // existissem. A proposta NUNCA muda o produto sozinha — só a decisão explícita (rota /decide) grava, e só nos
   // campos que a pessoa aceitou.
   //
-  // Fase F.2.A: qual provider pedir é decisão do BACKEND (enrichmentOpenAIFor, flag DISTINTA da acima), nunca
-  // do navegador — não é um novo passo no fluxo do lojista. Zero uso pago nesta rodada, por construção: o core
-  // (creative_core/service.py) nunca tem um client OpenAI real para esta rota, então provider="openai" SEMPRE
-  // volta um erro limpo do core (nunca uma chamada de verdade, nunca um fallback silencioso para "fake" — ver
-  // client.js::proposeEnrichment). Isso é deliberado: ligar CREATIVE_ENRICHMENT_OPENAI_ORGS antes da F.2.B
-  // existir faz este endpoint FALHAR alto para essa Organization, em vez de mentir que usou visão real.
+  // Qual provider pedir é decisão do BACKEND (enrichmentOpenAIFor, flag DISTINTA da acima), nunca do navegador —
+  // não é um novo passo no fluxo do lojista.
+  //
+  // Fase F.2.B — piloto controlado, real: a chave OpenAI vem do MESMO BYOK por Organization que
+  // gera/copies já usa (req.creativeByok.resolve — nunca do navegador, nunca persistida aqui);
+  // antes de QUALQUER chamada: cota diária (enrichmentQuota, operacional), disponibilidade de
+  // Postgres real (sem ele, o orçamento não pode ser garantido de forma atômica — bloqueio
+  // estrutural, nunca uma chamada "na confiança"), e a reserva atômica de concorrência/orçamento do
+  // piloto inteiro (enrichmentPilotBudget — no máximo PILOT_MAX_CHAMADAS chamadas, no máximo
+  // PILOT_MAX_USD, contando inclusive falhas). Nenhum retry nem fallback pago em nenhum ponto deste
+  // fluxo — uma falha finaliza a reserva como 'failed' e propaga o erro normalmente.
   const exigirEnrichment = (req, res, next) => (enrichmentFor(env, req.creativeTenant)
     ? next() : res.status(403).json({ error: 'product enrichment não está habilitado nesta conta' }));
   const ACCEPTED_FIELD_NAMES = Object.freeze([
@@ -468,6 +480,9 @@ function criarRouterCriativos(deps) {
     'incompatible_auto_supporting_roles', 'scene_intents', 'visible_text',
   ]);
   const MAX_ENRICHMENT_REFERENCES = 2; // mesmo teto do core (enrichment._MAX_REFERENCES) — duas referências, precedente do bug da Fase C
+  const PILOT_MAX_CHAMADAS = 3;
+  const PILOT_MAX_USD = 0.05;
+  const PILOT_RESERVA_TTL_SEGUNDOS = 180; // folga generosa sobre o timeout do client OpenAI (30s) + latência de rede
 
   router.post('/products/:id/enrichment/propose', exigirStore, exigirModulo, exigirEnrichment, rota(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
@@ -481,28 +496,77 @@ function criarRouterCriativos(deps) {
     const usarOpenAI = enrichmentOpenAIFor(env, req.creativeTenant);
     let provider = 'fake';
     let references = [];
+    let apiKey;
+    let reserva = null;
+
     if (usarOpenAI) {
-      // Cota ANTES de qualquer coisa que poderia custar — nunca chama o core para "openai" se a
-      // Organization já bateu o teto do dia (§4: "sem retry automático pago", mesma lógica se aplica
-      // a "sem nova tentativa além do limite").
+      // Cota diária por Organization ANTES de qualquer coisa que poderia custar (operacional, em memória).
       const cota = enrichmentQuota.verificar(req.creativeTenant, env);
       if (!cota.ok) {
         return res.status(429).json({ error: 'limite diário de análises reais de enriquecimento atingido para esta Organization', ...cota });
       }
-      provider = 'openai';
-      // Referências resolvidas do ARMAZENAMENTO já autorizado do próprio produto (tenant-scoped por
-      // store.getProduct acima) — nunca uma URL do navegador, sem superfície de SSRF (mesmo padrão de
-      // GET /products/:id/references/:n).
+      // Sem Postgres real, a reserva atômica do orçamento do piloto não existe — bloqueio estrutural
+      // (F.2.B: "se não for possível impor um limite de custo conservador... não executar chamadas reais").
+      if (!q) {
+        return res.status(503).json({ error: 'orçamento do piloto de enriquecimento real não pode ser garantido neste ambiente (sem Postgres) — chamada bloqueada' });
+      }
+      apiKey = await req.creativeByok.resolve();
+      if (!apiKey) return res.status(409).json({ error: 'cadastre a OpenAI API Key em Integrações antes de pedir uma análise real' });
+
+      // Referências resolvidas ANTES de reservar orçamento — de propósito: ler do armazenamento
+      // (ARMAZENAMENTO já autorizado do próprio produto, tenant-scoped por store.getProduct acima —
+      // nunca uma URL do navegador, sem superfície de SSRF, mesmo padrão de GET /products/:id/references/:n)
+      // não custa nada; se falhar (arquivo corrompido/ausente), a reserva nunca chega a ser criada, em
+      // vez de ficar presa em 'reserved' até o TTL por uma falha que nada tem a ver com a OpenAI.
       references = (produto.references || []).slice(0, MAX_ENRICHMENT_REFERENCES).map((r) => ({
         ref: r.ref, data_base64: req.creativeStorage.readProductReference(r.ref).toString('base64'),
       }));
+
+      const piorCaso = precos.custoEnrichmentPiorCaso(precos.PRECOS_PADRAO);
+      if (!piorCaso) {
+        return res.status(503).json({ error: 'custo do modelo do piloto não está na tabela de preços — chamada bloqueada' });
+      }
+      reserva = await enrichmentPilotBudget.reservar(q, {
+        organizationId: req.creativeTenant, productId: produto.id, custoEstimadoUsd: piorCaso.usd,
+        limiteChamadas: PILOT_MAX_CHAMADAS, limiteUsd: PILOT_MAX_USD, ttlSegundos: PILOT_RESERVA_TTL_SEGUNDOS,
+      });
+      if (!reserva.ok) {
+        if (reserva.motivo === 'em_andamento') {
+          return res.status(409).json({ error: 'já existe uma análise real em andamento para este produto' });
+        }
+        return res.status(429).json({ error: 'orçamento do piloto de enriquecimento real esgotado (chamadas ou valor)', motivo: reserva.motivo });
+      }
+
+      provider = 'openai';
     }
 
-    const proposalCore = await core.proposeEnrichment({
-      product: { id: produto.id, name: produto.name, type: produto.type, description: produto.description || null, metadata: produto.metadata || {} },
-      provider, references,
-    });
-    if (usarOpenAI) enrichmentQuota.registrar(req.creativeTenant); // só conta depois de sucesso — nunca uma tentativa que falhou
+    let proposalCore;
+    try {
+      proposalCore = await core.proposeEnrichment({
+        product: { id: produto.id, name: produto.name, type: produto.type, description: produto.description || null, metadata: produto.metadata || {} },
+        provider, references, ...(apiKey ? { apiKey } : {}),
+      });
+    } catch (erro) {
+      // Falha, timeout ou erro do core: a reserva conta contra o orçamento do piloto de qualquer
+      // forma ("conte inclusive tentativas malsucedidas") — nunca um retry automático a partir daqui.
+      if (reserva) {
+        await enrichmentPilotBudget.finalizar(q, reserva.attemptId, {
+          status: 'failed', errorCode: (erro && erro.code) || (erro && erro.name) || 'erro_desconhecido',
+        });
+      }
+      throw erro;
+    }
+
+    if (usarOpenAI) enrichmentQuota.registrar(req.creativeTenant);
+    if (reserva) {
+      const custoReal = precos.custoEnrichmentReal(proposalCore.provider_meta && proposalCore.provider_meta.usage, precos.PRECOS_PADRAO);
+      await enrichmentPilotBudget.finalizar(q, reserva.attemptId, {
+        status: 'succeeded',
+        model: (proposalCore.provider_meta && proposalCore.provider_meta.model_served) || null,
+        custoRealUsd: custoReal ? custoReal.usd : null,
+      });
+    }
+
     const salva = await store.createProposal(req.creativeTenant, {
       productId: produto.id, provider: proposalCore.provider, proposed: proposalCore.proposed,
       recommendedAngleFamilies: proposalCore.recommended_angle_families, recommendedInteractions: proposalCore.recommended_interactions,
