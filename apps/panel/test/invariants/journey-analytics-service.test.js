@@ -161,8 +161,12 @@ test('K · tier1: Commerce indisponível (registry sem provider) → confirmedOr
   const svc = await montarServico(registry);
   const r = await svc.getJourneyAnalytics({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO });
   assert.equal(r.tier1.confirmedOrders.available, false);
+  assert.equal(r.tier1.confirmedOrders.status, 'not_connected');
   assert.equal(r.tier2.transactionOrderLink.available, false);
-  assert.equal(r.tier2.transactionOrderLink.reason, 'COMMERCE_UNAVAILABLE');
+  // L: tier2 herda o MESMO status/reason que tier1.confirmedOrders já classificou — nunca um
+  // "COMMERCE_UNAVAILABLE" genérico que cairia em temporary_failure por padrão (achado do smoke visual).
+  assert.equal(r.tier2.transactionOrderLink.status, r.tier1.confirmedOrders.status);
+  assert.equal(r.tier2.transactionOrderLink.reason, r.tier1.confirmedOrders.reason);
 }));
 
 test('K · tier1: aquisição por canal/campanha disponível quando o provider implementa a capability', () => em(async () => {
@@ -296,6 +300,9 @@ test('L · classificarIndisponibilidade: taxonomia normalizada — not_connected
   assert.equal(classificarIndisponibilidade(null), 'available');
   assert.equal(classificarIndisponibilidade('META_NOT_CONNECTED'), 'not_connected');
   assert.equal(classificarIndisponibilidade('COMMERCE_NOT_REGISTERED'), 'not_connected');
+  // CONNECTOR_NOT_REGISTERED é o codigo REAL que lib/connectors/registry.js lança (CODIGOS.NOT_REGISTERED)
+  // — não um literal inventado; achado do smoke visual (Rodada L).
+  assert.equal(classificarIndisponibilidade('CONNECTOR_NOT_REGISTERED'), 'not_connected');
   assert.equal(classificarIndisponibilidade('PROVIDER_WITHOUT_TRANSACTION_CAPABILITY'), 'unsupported');
   assert.equal(classificarIndisponibilidade('GA4_ACQUISITION_DIMENSIONS_OR_METRICS_UNAVAILABLE'), 'unsupported');
   assert.equal(classificarIndisponibilidade('LOCAL_ORDERS_HISTORY_STARTS_LATER'), 'insufficient_data');
@@ -449,7 +456,8 @@ test('L · journey-analytics-service.js só importa domínio (reconciliation, me
   const path = require('node:path');
   const arq = path.join(__dirname, '..', '..', 'lib', 'product-analytics', 'journey-analytics-service.js');
   const fonte = fs.readFileSync(arq, 'utf8');
-  const requires = [...fonte.matchAll(/require\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]);
+  // (?<![.\w]) exclui `resolvido.require('orders')` (método do registry, não `require()` de módulo).
+  const requires = [...fonte.matchAll(/(?<![.\w])require\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]);
   assert.deepEqual(requires, ['./reconciliation', '../meta/campaign-performance']);
   assert.doesNotMatch(fonte, /reserva[_-]?ink|InkClient|inkApi|Ga4Client|ga4\/(client|connector)|graph\.facebook\.com/i);
 });

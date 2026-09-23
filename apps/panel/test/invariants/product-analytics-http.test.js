@@ -335,7 +335,10 @@ test('K · GET /journey: cada tier reporta available/reason próprio — nunca 5
   assert.equal(r.json.tier1.confirmedOrders.available, false); // Ink nunca conectado neste smoke
   assert.equal(r.json.tier1.confirmedOrders.status, 'not_connected');
   assert.equal(r.json.tier2.transactionOrderLink.available, false);
-  assert.equal(r.json.tier2.transactionOrderLink.reason, 'COMMERCE_UNAVAILABLE');
+  // L: tier2 herda o MESMO status/reason de tier1.confirmedOrders — nunca "falha temporária" pra
+  // um estado normal de "nunca conectado" (achado real do smoke visual da Rodada L).
+  assert.equal(r.json.tier2.transactionOrderLink.status, 'not_connected');
+  assert.equal(r.json.tier2.transactionOrderLink.reason, r.json.tier1.confirmedOrders.reason);
   assert.equal(r.json.tier3.individualJourney.available, false);
   assert.equal(r.json.tier3.individualJourney.reason, 'NO_EVENT_ANALYTICS_SOURCE_CONFIGURED');
   assert.equal(r.json.attribution.length, 3);

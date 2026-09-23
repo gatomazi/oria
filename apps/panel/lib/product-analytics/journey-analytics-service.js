@@ -64,12 +64,22 @@ function somarCampos(linhas, campo) {
 // Rodada L §2.2 · taxonomia normalizada de indisponibilidade — sempre uma destas 5 categorias,
 // nunca um `reason` cru sem classificação. Mapeia os códigos que este service e os connectors já
 // usam; nunca inventa um código novo, só rotula os existentes para a UI decidir o texto certo.
-const RAZAO_NOT_CONNECTED = new Set(['META_NOT_CONNECTED', 'ANALYTICS_NOT_REGISTERED', 'COMMERCE_NOT_REGISTERED', 'INTEGRATION_NOT_CONNECTED']);
+//
+// Achado real do smoke visual (Rodada L, gate 3): `registry.resolve(...)` sem provider registrado
+// lança com `err.codigo = CODIGOS.NOT_REGISTERED` ('CONNECTOR_NOT_REGISTERED' — lib/connectors/
+// errors.js), nunca o literal 'ANALYTICS_NOT_REGISTERED'/'COMMERCE_NOT_REGISTERED' que este arquivo
+// só usa como fallback quando `err.codigo` está ausente (defensivo, praticamente nunca acontece,
+// já que ConnectorError sempre carrega `codigo`). Os dois entram no set — o código REAL do
+// registry e o literal de fallback — pra nunca mais cair silenciosamente em `temporary_failure`.
+const RAZAO_NOT_CONNECTED = new Set([
+  'META_NOT_CONNECTED', 'ANALYTICS_NOT_REGISTERED', 'COMMERCE_NOT_REGISTERED', 'INTEGRATION_NOT_CONNECTED',
+  'CONNECTOR_NOT_REGISTERED',
+]);
 const RAZAO_UNSUPPORTED = new Set([
   'PROVIDER_WITHOUT_ACQUISITION_CAPABILITY', 'PROVIDER_WITHOUT_TRANSACTION_CAPABILITY',
   'TRANSACTION_ID_UNAVAILABLE', 'TRANSACTION_METRICS_UNAVAILABLE',
   'ACQUISITION_DIMENSIONS_OR_METRICS_UNAVAILABLE', 'ITEM_ID_UNAVAILABLE', 'ITEMS_VIEWED_UNAVAILABLE',
-  'NO_EVENT_ANALYTICS_SOURCE_CONFIGURED',
+  'NO_EVENT_ANALYTICS_SOURCE_CONFIGURED', 'CONNECTOR_CAPABILITY_UNSUPPORTED',
 ]);
 const RAZAO_INSUFFICIENT_DATA = new Set(['insufficient_data', 'LOCAL_ORDERS_HISTORY_STARTS_LATER', 'ORDER_NOT_FOUND']);
 const RAZAO_NOT_VERIFIED = new Set(['TRANSACTION_CAPABILITY_CHECK_FAILED']);
@@ -335,9 +345,13 @@ function createJourneyAnalyticsService({
     const [funil, aquisicao, meta, commerce] = await Promise.all([
       funilAgregado(entrada), aquisicaoPorCanal(entrada), investimentoMeta(entrada), pedidosConfirmados(entrada),
     ]);
+    // Commerce indisponível: tier2 herda o MESMO status/reason que tier1.confirmedOrders já
+    // classificou corretamente (ex.: not_connected quando é INTEGRATION_NOT_CONNECTED) — achado real
+    // do smoke visual (Rodada L): um `reason` genérico aqui caía em `temporary_failure` por padrão,
+    // mostrando "falha temporária" pra um estado normal de "nunca conectado".
     const tier2 = commerce.available
       ? await correlacaoTransacaoPedido(entrada, commerce.orders)
-      : { available: false, status: classificarIndisponibilidade('COMMERCE_UNAVAILABLE'), reason: 'COMMERCE_UNAVAILABLE', checked: 0, linked: 0, links: [], sampled: false, sampleSize: 0, totalEligible: 0 };
+      : { available: false, status: commerce.status, reason: commerce.reason, checked: 0, linked: 0, links: [], sampled: false, sampleSize: 0, totalEligible: 0 };
     const tier3 = await jornadaIndividual(entrada);
 
     const commerceCount = commerce.available ? commerce.orders.length : null;
