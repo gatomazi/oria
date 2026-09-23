@@ -20,7 +20,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
 
-const { normalizeJobInput, buildRequests, InputError } = require('../lib/creative-core/requests');
+const { normalizeJobInput, buildRequests, planSummary, InputError } = require('../lib/creative-core/requests');
 const { createMemoryStore } = require('../lib/creative-core/memoryStore');
 const { mapDraftToForm } = require('../lib/creative-core/draft');
 
@@ -192,6 +192,53 @@ test('custom_angle_id e custom_angle_replay_of juntos: recusado', async () => {
     () => normalizeJobInput(jobInput(ids, { custom_angle_id: crypto.randomUUID(), custom_angle_replay_of: crypto.randomUUID() })),
     InputError,
   );
+});
+
+// ---------------------------------------------------------------- Fase E · angle_family_hint e "auto" puro (§7)
+test('angle_family_hint válido: força angle_ids ["auto"] e chega ao core como angle_family_hint', async () => {
+  const store = createMemoryStore();
+  const ids = await semear(store);
+  const input = normalizeJobInput(jobInput(ids, { angle_family_hint: { family: 'connection', preset: 'gifting' } }));
+  assert.deepEqual(input.angle_ids, ['auto']);
+  const [item] = await buildRequests(input, { store, tenantId: TENANT, hints: null, planSchemaVersion: 2 });
+  assert.deepEqual(item.request.angle_family_hint, { family: 'connection', preset: 'gifting' });
+  assert.equal(item.request.custom_angle, undefined);
+});
+
+test('angle_family_hint: família desconhecida é recusada antes de qualquer consulta', async () => {
+  const ids = { productId: crypto.randomUUID(), brandId: crypto.randomUUID() };
+  assert.throws(() => normalizeJobInput(jobInput(ids, { angle_family_hint: { family: 'nao-existe' } })), InputError);
+});
+
+test('angle_family_hint junto de ângulo personalizado: recusado', async () => {
+  const ids = { productId: crypto.randomUUID(), brandId: crypto.randomUUID() };
+  assert.throws(
+    () => normalizeJobInput(jobInput(ids, { angle_family_hint: { family: 'lifestyle' }, custom_angle_id: crypto.randomUUID() })),
+    InputError,
+  );
+});
+
+test('angle_ids: ["auto"] puro (sem hint nenhum): passa reto, sem custom_angle nem angle_family_hint — o core recomenda de verdade', async () => {
+  const store = createMemoryStore();
+  const ids = await semear(store);
+  const input = normalizeJobInput(jobInput(ids, { angle_ids: ['auto'] }));
+  assert.deepEqual(input.angle_ids, ['auto']);
+  const [item] = await buildRequests(input, { store, tenantId: TENANT, hints: null, planSchemaVersion: 2 });
+  assert.equal(item.request.angle_id, 'auto');
+  assert.equal(item.request.custom_angle, undefined);
+  assert.equal(item.request.angle_family_hint, undefined);
+});
+
+// ---------------------------------------------------- Fase E · planSummary expõe a recomendação real (§6)
+test('planSummary: angle_recommendation passa como veio do plano (family/preset/source/reason), nunca inventado', () => {
+  const plano = { angle_recommendation: { angle_id: 'LIFESTYLE_COTIDIANO', family: 'lifestyle', preset: null, objective_hints: [], reason: ['people_count:2'], source: 'planner_default' } };
+  const resumo = planSummary(plano);
+  assert.deepEqual(resumo.angle_recommendation, { family: 'lifestyle', preset: null, source: 'planner_default', reason: ['people_count:2'] });
+});
+
+test('planSummary: sem angle_recommendation no plano, o campo é null (a tela nunca mostra uma sugestão que o motor não deu)', () => {
+  const resumo = planSummary({});
+  assert.equal(resumo.angle_recommendation, null);
 });
 
 // ------------------------------------------------------------------ Copiar dados recupera o ângulo (§6)

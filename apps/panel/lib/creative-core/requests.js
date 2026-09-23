@@ -6,7 +6,7 @@
 
 const crypto = require('crypto');
 const { UUID_RE } = require('./storage');
-const { angleForCore } = require('./pgAngles');
+const { angleForCore, FAMILIES: ANGLE_FAMILIES } = require('./pgAngles');
 
 const ENGINES = ['CLEAN_ANGLES', 'REMARKETING', 'FUNNEL_VISUAL'];
 const PRODUCT_MODES = ['single_product', 'multi_product'];
@@ -32,6 +32,9 @@ const INPUT_KEYS = new Set([
   // gerado, já autorizado), e o servidor busca o snapshot no PLANO PERSISTIDO (buildRequests), nunca no corpo do
   // request — ver docs/features/creative-generator-fase-d1-1.md.
   'custom_angle_id', 'custom_angle_replay_of',
+  // Fase E · família de ângulo (§7): outra forma de "auto" — o usuário escolheu uma família (cartão), não um
+  // ângulo customizado nem um id legado. O core resolve pra o legacy angle_id daquela família.
+  'angle_family_hint',
 ]);
 const GAZE_MODES = ['auto', 'camera', 'off_camera', 'product', 'interaction'];
 const INTERACTION_RE = /^[a-z_]{2,40}$/;
@@ -71,12 +74,25 @@ function normalizeJobInput(raw) {
   // Ângulo personalizado (Fase D.1): substitui a lista de ângulos legados por um único slot "auto" — o core
   // resolve o ângulo real a partir de `custom_angle_id`/`custom_angle_replay_of`, nunca dos 13 ids.
   exigir(raw.custom_angle_id === undefined || raw.custom_angle_replay_of === undefined, 'ângulo personalizado: informe custom_angle_id OU custom_angle_replay_of, não os dois');
+  // Fase E · família (§7): outro jeito de pedir "auto" — o usuário escolheu uma família (não um id legado nem um
+  // ângulo customizado), e o core roteia pra o legacy angle_id daquela família (canonical_legacy_angle_id).
+  // `angle_family_hint` só faz sentido junto de "auto"; exclusivo com ângulo personalizado (que, se presente,
+  // já venceria a hint no core mesmo assim — recusar aqui evita um pedido que parece pedir duas coisas).
+  exigir(
+    raw.angle_family_hint === undefined || (raw.custom_angle_id === undefined && raw.custom_angle_replay_of === undefined),
+    'informe angle_family_hint OU um ângulo personalizado, não os dois',
+  );
   const usaAnguloCustomizado = raw.custom_angle_id !== undefined || raw.custom_angle_replay_of !== undefined;
+  const usaFamiliaHint = raw.angle_family_hint !== undefined;
+  // "auto" puro (sem hint nenhum): pede a recomendação do motor de verdade (recommend_angle) — é o que dá o
+  // "Gerar assim" da primeira geração. `angle_ids: ['auto']` só passa reto aqui; qualquer outra lista cai na
+  // validação legada de 13 ids abaixo.
+  const pedeAutoPuro = !usaAnguloCustomizado && !usaFamiliaHint && Array.isArray(raw.angle_ids) && raw.angle_ids.length === 1 && raw.angle_ids[0] === 'auto';
   const input = {
     engine: raw.engine,
     product_mode: raw.product_mode,
     product_ids: listaDe(raw.product_ids, { min: 1, max: 6, validar: (v) => UUID_RE.test(v) }, 'produtos'),
-    angle_ids: usaAnguloCustomizado ? ['auto'] : listaDe(raw.angle_ids, { min: 1, max: 13, validar: (v) => ANGLE_RE.test(v) }, 'ângulos'),
+    angle_ids: (usaAnguloCustomizado || usaFamiliaHint || pedeAutoPuro) ? ['auto'] : listaDe(raw.angle_ids, { min: 1, max: 13, validar: (v) => ANGLE_RE.test(v) }, 'ângulos'),
     placements: listaDe(raw.placements, { min: 1, max: 2, validar: (v) => PLACEMENTS.includes(v) }, 'formatos'),
     quantity: raw.quantity === undefined ? 1 : raw.quantity,
     quality: raw.quality || 'medium',
@@ -91,6 +107,11 @@ function normalizeJobInput(raw) {
     // §3 da Fase D.1) e nada que o navegador mande sobre o ângulo é usado como prova de autorização.
     exigir(UUID_RE.test(raw.custom_angle_replay_of), 'custom_angle_replay_of: id inválido');
     input.custom_angle_replay_of = raw.custom_angle_replay_of;
+  }
+  if (raw.angle_family_hint !== undefined) {
+    exigir(objetoSimples(raw.angle_family_hint) && ANGLE_FAMILIES.includes(raw.angle_family_hint.family), `angle_family_hint.family: use ${ANGLE_FAMILIES.join(', ')}`);
+    exigir(raw.angle_family_hint.preset === undefined || (typeof raw.angle_family_hint.preset === 'string' && raw.angle_family_hint.preset.length <= 60), 'angle_family_hint.preset: até 60 caracteres');
+    input.angle_family_hint = { family: raw.angle_family_hint.family, ...(raw.angle_family_hint.preset !== undefined ? { preset: raw.angle_family_hint.preset } : {}) };
   }
   exigir(ENGINES.includes(input.engine), 'motor inválido');
   exigir(PRODUCT_MODES.includes(input.product_mode), 'modo de produto inválido');
@@ -304,6 +325,10 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, pla
     const snapshot = original.plan.angle_recommendation && original.plan.angle_recommendation.custom_angle;
     exigir(snapshot, 'este criativo não usou um ângulo personalizado');
     base.custom_angle = snapshot;
+  } else if (input.angle_family_hint) {
+    // Sem consulta ao banco: `family`/`preset` já são valores fechados (whitelist acima), o core resolve o
+    // legacy angle_id (canonical_legacy_angle_id) e recusa família sem rota (ex.: action_movement, reservada).
+    base.angle_family_hint = input.angle_family_hint;
   }
   // Cena com pessoas/interação só existe no plano v2 (o core recusa no v1). Diga antes de enfileirar, em português.
   if ((input.subjects || input.interaction || input.scene_picks || base.custom_angle) && planSchemaVersion !== 2) {
@@ -373,6 +398,17 @@ function planSummary(plan) {
     people_count: plan.composition ? plan.composition.people_count : null,
     pose_risk: plan.composition ? plan.composition.pose_risk : null,
     minor_safety_applied: plan.minor_safety ? plan.minor_safety.applies : null,
+    // Fase E: a recomendação REAL do motor (não algo que a UI inventa) — presente em qualquer versão de plano
+    // (engines.py inclui `angle_recommendation` tanto no v1 quanto no v2). `family`/`preset` deixam a tela montar
+    // "Sugestão para esta estampa" sem expor `angle_id` legado nem os 13 ids — só o que já é seguro para tela
+    // (nunca `custom_angle` aqui: a origem completa do ângulo customizado, quando existir, já tem seu próprio
+    // resumo em `angle` acima; nada de segredo/definition sai neste campo).
+    angle_recommendation: plan.angle_recommendation ? {
+      family: plan.angle_recommendation.family || null,
+      preset: plan.angle_recommendation.preset || null,
+      source: plan.angle_recommendation.source || null,
+      reason: Array.isArray(plan.angle_recommendation.reason) ? plan.angle_recommendation.reason : [],
+    } : null,
   };
 }
 

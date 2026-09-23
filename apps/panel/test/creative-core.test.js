@@ -462,6 +462,32 @@ test('rotas exigem admin e respeitam flags desligadas por padrão', async () => 
   }
 });
 
+test('Fase E · uiV2/planV2 no status: rollout operacional por Organization, nunca ligado por padrão', async () => {
+  const { server, call } = await subirApp();
+  try {
+    const padrao = await call('GET', '/status');
+    assert.equal(padrao.body.uiV2, false, 'sem CREATIVE_UI_V2_ORGS, ninguém vê a UI V2');
+    assert.equal(padrao.body.planV2, false);
+  } finally {
+    server.close();
+  }
+  const { server: server2, call: call2 } = await subirApp({ envExtra: { CREATIVE_UI_V2_ORGS: TENANT, CREATIVE_PLAN_V2_ORGS: TENANT } });
+  try {
+    const ligado = await call2('GET', '/status');
+    assert.equal(ligado.body.uiV2, true);
+    assert.equal(ligado.body.planV2, true);
+  } finally {
+    server2.close();
+  }
+  const { server: server3, call: call3 } = await subirApp({ envExtra: { CREATIVE_UI_V2_ORGS: 'outra-organization' } });
+  try {
+    const foraDaLista = await call3('GET', '/status');
+    assert.equal(foraDaLista.body.uiV2, false, 'lista com OUTRA Organization não liga a flag para esta');
+  } finally {
+    server3.close();
+  }
+});
+
 test('sem Postgres o módulo responde 503 e o status explica', async () => {
   const { server, call } = await subirApp({ semStore: true });
   try {

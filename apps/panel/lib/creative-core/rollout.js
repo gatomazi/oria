@@ -30,4 +30,13 @@ function planSchemaVersionFor(env, tenantId) {
   return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase()) ? 2 : undefined;
 }
 
-module.exports = { promptVersionFor, planSchemaVersionFor, orgsComPromptV2 };
+// Fase E — a UI V2 do gerador (fluxo simples, recomendação, famílias de ângulo). Mesmo mecanismo: rollout
+// operacional por Organization, nunca comercial, nunca automático. CREATIVE_UI_V2_ORGS = ids de Organization
+// ou `*`. Implementação só local nesta rodada — nenhuma conta fora da lista vê nada diferente do V1; a conta
+// que está na lista continua com o V1 completo disponível (a UI V2 é um caminho novo, não uma substituição).
+function uiV2For(env, tenantId) {
+  const orgs = orgsComPromptV2(env && env.CREATIVE_UI_V2_ORGS);
+  return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase());
+}
+
+module.exports = { promptVersionFor, planSchemaVersionFor, uiV2For, orgsComPromptV2 };

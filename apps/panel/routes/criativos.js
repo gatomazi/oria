@@ -23,7 +23,7 @@ const { createPgStore } = require('../lib/creative-core/pgStore');
 const { normalizeJobInput, buildRequests, planSummary, planPrompt, InputError } = require('../lib/creative-core/requests');
 const { createWorker } = require('../lib/creative-core/worker');
 const { progress } = require('../lib/creative-core/status');
-const { promptVersionFor, planSchemaVersionFor } = require('../lib/creative-core/rollout');
+const { promptVersionFor, planSchemaVersionFor, uiV2For } = require('../lib/creative-core/rollout');
 const { mapDraftToForm } = require('../lib/creative-core/draft');
 const { FAMILIES: ANGLE_FAMILIES, PEOPLE_MODES: ANGLE_PEOPLE_MODES } = require('../lib/creative-core/pgAngles');
 
@@ -198,6 +198,12 @@ function criarRouterCriativos(deps) {
       postgres: Boolean(store),
       core: coreStatus,
       openaiKey: store ? await req.creativeByok.status() : { configured: false, last4: null, updatedAt: null },
+      // Fase E — rollout operacional por Organization (nunca comercial), como prompt_version/plan_schema_version
+      // acima: CREATIVE_UI_V2_ORGS decide quem vê a tela nova. "Personalizar cena"/ângulo personalizado nela
+      // também dependem de planSchemaVersion === 2 para esta Organization — a UI V2 sinaliza os dois para a tela
+      // saber o que oferecer sem adivinhar.
+      uiV2: uiV2For(env, req.creativeTenant),
+      planV2: planSchemaVersionFor(env, req.creativeTenant) === 2,
     });
   }));
 
