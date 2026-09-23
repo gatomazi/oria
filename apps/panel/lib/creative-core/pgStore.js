@@ -7,6 +7,7 @@
 const { aggregateJobStatus, FINAL_JOB } = require('./status');
 const { feedbackMethods } = require('./pgFeedback');
 const { angleMethods } = require('./pgAngles');
+const { enrichmentMethods, mapProposal, mergeSemanticContext } = require('./pgEnrichment');
 
 const PROFILE_TABLE = Object.freeze({
   brand: 'creative_brand_profiles',
@@ -104,6 +105,75 @@ function createPgStore(pgPool) {
     ...feedbackMethods(q),
     // Ângulos customizados (Fase D): mesmo motivo.
     ...angleMethods(q),
+    // Propostas de Product Enrichment (Fase F.1): CRUD simples aqui; a decisão (approve/adjust/reject),
+    // que precisa tocar creative_products E creative_enrichment_proposals numa transação, fica abaixo
+    // (decideEnrichmentProposal) — mesmo motivo de createJob usar o client bruto, não só `q`.
+    ...enrichmentMethods(q),
+    async decideEnrichmentProposal(tenantId, proposalId, { decision, acceptedFields = [], reviewedBy }) {
+      const client = await pgPool.connect();
+      try {
+        await client.query('BEGIN');
+        const { rows: [prop] } = await client.query(
+          `SELECT * FROM creative_enrichment_proposals WHERE organization_id = $1::uuid AND id = $2 AND status = 'pending' FOR UPDATE`,
+          [tenantId, proposalId],
+        );
+        if (!prop) { await client.query('ROLLBACK'); return { error: 'not_found' }; }
+
+        if (decision === 'rejected') {
+          const { rows: [atualizada] } = await client.query(
+            `UPDATE creative_enrichment_proposals SET status = 'rejected', reviewed_by = $3, reviewed_at = now(), updated_at = now()
+             WHERE organization_id = $1::uuid AND id = $2 RETURNING *`,
+            [tenantId, proposalId, reviewedBy || null],
+          );
+          await client.query('COMMIT');
+          return { proposal: mapProposal(atualizada) };
+        }
+
+        // approved/adjusted: exige o produto ainda existir e não ter mudado desde a proposta (§4 —
+        // "exigir revalidação/revisão, sem aprovação silenciosa"). FOR UPDATE: ninguém mais decide este
+        // produto/proposta ao mesmo tempo (INV de concorrência — §7.7 do comando).
+        const { rows: [produtoAtual] } = await client.query(
+          'SELECT * FROM creative_products WHERE organization_id = $1::uuid AND id = $2 AND archived_at IS NULL FOR UPDATE',
+          [tenantId, prop.product_id],
+        );
+        if (!produtoAtual) { await client.query('ROLLBACK'); return { error: 'product_not_found' }; }
+        const updatedAtProposta = prop.product_updated_at instanceof Date ? prop.product_updated_at.getTime() : new Date(prop.product_updated_at).getTime();
+        const updatedAtAtual = produtoAtual.updated_at instanceof Date ? produtoAtual.updated_at.getTime() : new Date(produtoAtual.updated_at).getTime();
+        if (updatedAtProposta !== updatedAtAtual) {
+          await client.query('ROLLBACK');
+          return { error: 'product_changed', product: mapProduct(produtoAtual) };
+        }
+
+        const antes = (produtoAtual.metadata && produtoAtual.metadata.semantic_context) || null;
+        let mesclado;
+        try {
+          mesclado = mergeSemanticContext(antes, prop.proposed, acceptedFields);
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
+        const novoMetadata = { ...(produtoAtual.metadata || {}), semantic_context: mesclado };
+        const { rows: [produtoAtualizado] } = await client.query(
+          'UPDATE creative_products SET metadata = $3::jsonb, updated_at = now() WHERE organization_id = $1::uuid AND id = $2 RETURNING *',
+          [tenantId, prop.product_id, JSON.stringify(novoMetadata)],
+        );
+        const { rows: [propostaAtualizada] } = await client.query(
+          `UPDATE creative_enrichment_proposals SET
+             status = $3, accepted_fields = $4::jsonb, before_semantic_context = $5::jsonb, applied_semantic_context = $6::jsonb,
+             reviewed_by = $7, reviewed_at = now(), updated_at = now()
+           WHERE organization_id = $1::uuid AND id = $2 RETURNING *`,
+          [tenantId, proposalId, decision, JSON.stringify(acceptedFields), antes ? JSON.stringify(antes) : null,
+            JSON.stringify(mesclado), reviewedBy || null],
+        );
+        await client.query('COMMIT');
+        return { proposal: mapProposal(propostaAtualizada), product: mapProduct(produtoAtualizado), before: antes, after: mesclado };
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
 
     // A OpenAI key não mora aqui desde a Fase 4: é a integração 'openai' da Organization
     // (integration_secrets). creative_settings.openai_key_* só é lida pelo import legado.

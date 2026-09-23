@@ -6,6 +6,7 @@ const crypto = require('crypto');
 // o módulo exige Postgres (sem DATABASE_URL as rotas respondem 503).
 
 const { aggregateJobStatus } = require('./status');
+const { mergeSemanticContext } = require('./pgEnrichment');
 
 const PROFILE_KINDS = ['brand', 'niche', 'context', 'persona'];
 // Mesmas dimensões do pgStore (coluna do snapshot que cada uma agrupa).
@@ -27,6 +28,7 @@ function createMemoryStore() {
   const assets = new Map();
   const feedback = new Map();
   const angles = new Map();
+  const enrichmentProposals = new Map();
   const now = () => new Date().toISOString();
 
   function own(map, tenantId, id) {
@@ -90,6 +92,69 @@ function createMemoryStore() {
       if (!row) return false;
       row.archivedAt = now();
       return true;
+    },
+
+    // Product Enrichment (Fase F.1) — mesmo contrato do pgStore/pgEnrichment.js.
+    async listProposals(tenantId, productId) {
+      return [...enrichmentProposals.values()]
+        .filter((p) => p.organizationId === tenantId && p.productId === productId)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).map(clone);
+    },
+    async getPendingProposal(tenantId, productId) {
+      const row = [...enrichmentProposals.values()].find((p) => p.organizationId === tenantId && p.productId === productId && p.status === 'pending');
+      return clone(row) || null;
+    },
+    async getProposal(tenantId, id) {
+      const row = enrichmentProposals.get(id);
+      return row && row.organizationId === tenantId ? clone(row) : null;
+    },
+    async createProposal(tenantId, { productId, provider, proposed, recommendedAngleFamilies, recommendedInteractions,
+      fieldNotes, productSnapshotHash, productUpdatedAt, createdBy }) {
+      const id = crypto.randomUUID();
+      const row = {
+        id, organizationId: tenantId, productId, storeId: null, status: 'pending', schemaVersion: 1, provider,
+        proposed: clone(proposed), recommendedAngleFamilies: clone(recommendedAngleFamilies || []),
+        recommendedInteractions: clone(recommendedInteractions || []), fieldNotes: clone(fieldNotes || {}),
+        productSnapshotHash, productUpdatedAt, acceptedFields: null, beforeSemanticContext: null, appliedSemanticContext: null,
+        createdBy: createdBy || null, reviewedBy: null, createdAt: now(), reviewedAt: null, updatedAt: now(),
+      };
+      enrichmentProposals.set(id, row);
+      return clone(row);
+    },
+    async decideEnrichmentProposal(tenantId, proposalId, { decision, acceptedFields = [], reviewedBy }) {
+      const prop = enrichmentProposals.get(proposalId);
+      if (!prop || prop.organizationId !== tenantId || prop.status !== 'pending') return { error: 'not_found' };
+
+      if (decision === 'rejected') {
+        prop.status = 'rejected';
+        prop.reviewedBy = reviewedBy || null;
+        prop.reviewedAt = now();
+        prop.updatedAt = now();
+        return { proposal: clone(prop) };
+      }
+
+      const produto = own(products, tenantId, prop.productId);
+      if (!produto) return { error: 'product_not_found' };
+      if (produto.updatedAt !== prop.productUpdatedAt) return { error: 'product_changed', product: clone(produto) };
+
+      const antes = (produto.metadata && produto.metadata.semantic_context) || null;
+      let mesclado;
+      try {
+        mesclado = mergeSemanticContext(antes, prop.proposed, acceptedFields);
+      } catch (err) {
+        throw err;
+      }
+      produto.metadata = { ...(produto.metadata || {}), semantic_context: mesclado };
+      produto.updatedAt = now();
+
+      prop.status = decision;
+      prop.acceptedFields = clone(acceptedFields);
+      prop.beforeSemanticContext = antes ? clone(antes) : null;
+      prop.appliedSemanticContext = clone(mesclado);
+      prop.reviewedBy = reviewedBy || null;
+      prop.reviewedAt = now();
+      prop.updatedAt = now();
+      return { proposal: clone(prop), product: clone(produto), before: antes, after: mesclado };
     },
 
     async createJob(tenantId, job, jobItems) {

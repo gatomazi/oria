@@ -14,6 +14,7 @@ const TIMEOUTS_MS = {
   feedbackSnapshots: 15_000,
   generations: 240_000,
   copies: 90_000,
+  enrichment: 15_000, // fake provider, puro — sem chamada externa, nunca deveria demorar
 };
 
 const CONTRACT_NAME_RE = /^[A-Za-z]{1,40}$/;
@@ -101,6 +102,11 @@ function createCoreClient({ baseUrl, token, fetchImpl = globalThis.fetch, timeou
         .then((d) => d.result),
     copies: ({ request, apiKey }) =>
       call('POST', '/v1/copies', { request, openai_api_key: apiKey }, 'copies').then((d) => d.variants),
+    // Fase F.1 — Product Enrichment. Pura: nenhuma chave, nenhum provider pago (só "fake" nesta fase;
+    // o core recusa qualquer outro valor).
+    proposeEnrichment: ({ product, brand, niche }) => call('POST', '/v1/enrichment/propose', {
+      product, ...(brand ? { brand } : {}), ...(niche ? { niche } : {}), provider: 'fake',
+    }, 'enrichment').then((d) => d.proposal),
   };
 }
 

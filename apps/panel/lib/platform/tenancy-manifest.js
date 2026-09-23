@@ -301,6 +301,9 @@ const TABELAS_PLATAFORMA = Object.freeze([
   Object.freeze({ tabela: 'creative_feedback', colunaTenant: 'organization_id' }),
   // Fase D · ângulos customizados de Organization/Store (migration 0034); system fica versionado no core.
   Object.freeze({ tabela: 'creative_angles', colunaTenant: 'organization_id' }),
+  // Fase F.1 · propostas de Product Enrichment (migration 0036). Filho de creative_products (tenant-owned,
+  // vem antes na ordem de criação); nunca aplica sozinha — aprovar é o que grava em creative_products.
+  Object.freeze({ tabela: 'creative_enrichment_proposals', colunaTenant: 'organization_id' }),
 ]);
 
 // Globais DECLARADAS. Não recebem RLS. A role da aplicação acessa só as de identidade

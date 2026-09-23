@@ -39,4 +39,13 @@ function uiV2For(env, tenantId) {
   return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase());
 }
 
-module.exports = { promptVersionFor, planSchemaVersionFor, uiV2For, orgsComPromptV2 };
+// Fase F.1 — Product Enrichment (propostas de semantic_context; nunca aplicadas automaticamente).
+// CREATIVE_ENRICHMENT_ORGS = ids de Organization ou `*`, mesmo mecanismo — nunca comercial, sem provider
+// pago nesta fase (só "fake"). Fora da lista, as rotas de /products/:id/enrichment/* respondem 403, como
+// se não existissem.
+function enrichmentFor(env, tenantId) {
+  const orgs = orgsComPromptV2(env && env.CREATIVE_ENRICHMENT_ORGS);
+  return orgs.has('*') || orgs.has(String(tenantId || '').toLowerCase());
+}
+
+module.exports = { promptVersionFor, planSchemaVersionFor, uiV2For, enrichmentFor, orgsComPromptV2 };

@@ -23,7 +23,7 @@ const { createPgStore } = require('../lib/creative-core/pgStore');
 const { normalizeJobInput, buildRequests, planSummary, planPrompt, InputError } = require('../lib/creative-core/requests');
 const { createWorker } = require('../lib/creative-core/worker');
 const { progress } = require('../lib/creative-core/status');
-const { promptVersionFor, planSchemaVersionFor, uiV2For } = require('../lib/creative-core/rollout');
+const { promptVersionFor, planSchemaVersionFor, uiV2For, enrichmentFor } = require('../lib/creative-core/rollout');
 const { mapDraftToForm } = require('../lib/creative-core/draft');
 const { FAMILIES: ANGLE_FAMILIES, PEOPLE_MODES: ANGLE_PEOPLE_MODES } = require('../lib/creative-core/pgAngles');
 
@@ -204,6 +204,8 @@ function criarRouterCriativos(deps) {
       // saber o que oferecer sem adivinhar.
       uiV2: uiV2For(env, req.creativeTenant),
       planV2: planSchemaVersionFor(env, req.creativeTenant) === 2,
+      // Fase F.1 — Product Enrichment (propostas de semantic_context, revisão humana obrigatória).
+      enrichment: enrichmentFor(env, req.creativeTenant),
     });
   }));
 
@@ -445,6 +447,69 @@ function criarRouterCriativos(deps) {
     if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
     const ok = await store.archiveProduct(req.creativeTenant, req.params.id);
     res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'produto não encontrado' });
+  }));
+
+  // ── Product Enrichment (Fase F.1): propostas de semantic_context, revisão humana obrigatória ───────────────
+  // Atrás de CREATIVE_ENRICHMENT_ORGS (rollout.js) — fora da lista, estas rotas respondem 403 como se não
+  // existissem. O provider é sempre "fake" nesta fase (core.proposeEnrichment já força isso); nenhuma chamada
+  // paga, nenhuma chave. A proposta NUNCA muda o produto sozinha — só a decisão explícita (rota /decide) grava,
+  // e só nos campos que a pessoa aceitou.
+  const exigirEnrichment = (req, res, next) => (enrichmentFor(env, req.creativeTenant)
+    ? next() : res.status(403).json({ error: 'product enrichment não está habilitado nesta conta' }));
+  const ACCEPTED_FIELD_NAMES = Object.freeze([
+    'wearer_roles', 'relationship_themes', 'recommended_supporting_roles',
+    'incompatible_auto_supporting_roles', 'scene_intents', 'visible_text',
+  ]);
+
+  router.post('/products/:id/enrichment/propose', exigirStore, exigirModulo, exigirEnrichment, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
+    const produto = await store.getProduct(req.creativeTenant, req.params.id);
+    if (!produto) return res.status(404).json({ error: 'produto não encontrado' });
+    // Já existe uma pendente: devolve ELA, não cria outra (§ "solicitar nova proposta futuramente" — sem
+    // provider real nesta fase, "de novo" significa reusar a que já existe até alguém decidir).
+    const pendente = await store.getPendingProposal(req.creativeTenant, produto.id);
+    if (pendente) return res.json(pendente);
+    const proposalCore = await core.proposeEnrichment({
+      product: { id: produto.id, name: produto.name, type: produto.type, description: produto.description || null, metadata: produto.metadata || {} },
+    });
+    const salva = await store.createProposal(req.creativeTenant, {
+      productId: produto.id, provider: proposalCore.provider, proposed: proposalCore.proposed,
+      recommendedAngleFamilies: proposalCore.recommended_angle_families, recommendedInteractions: proposalCore.recommended_interactions,
+      fieldNotes: proposalCore.field_notes, productSnapshotHash: proposalCore.product_snapshot_hash,
+      productUpdatedAt: produto.updatedAt, createdBy: usuarioDe(req),
+    });
+    res.status(201).json(salva);
+  }));
+
+  router.get('/products/:id/enrichment', exigirStore, exigirModulo, exigirEnrichment, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
+    const produto = await store.getProduct(req.creativeTenant, req.params.id);
+    if (!produto) return res.status(404).json({ error: 'produto não encontrado' });
+    res.json({ items: await store.listProposals(req.creativeTenant, produto.id) });
+  }));
+
+  router.post('/products/:id/enrichment/:proposalId/decide', exigirStore, exigirModulo, exigirEnrichment, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.proposalId)) throw new InputError('id inválido');
+    const corpo = req.body || {};
+    if (!['approved', 'adjusted', 'rejected'].includes(corpo.decision)) throw new InputError('decision: use approved, adjusted ou rejected');
+    const acceptedFields = corpo.decision === 'rejected' ? [] : corpo.acceptedFields;
+    if (corpo.decision !== 'rejected') {
+      if (!Array.isArray(acceptedFields) || acceptedFields.some((f) => !ACCEPTED_FIELD_NAMES.includes(f))) {
+        throw new InputError(`acceptedFields: lista com valores de ${ACCEPTED_FIELD_NAMES.join(', ')}`);
+      }
+    }
+    const proposta = await store.getProposal(req.creativeTenant, req.params.proposalId);
+    if (!proposta || proposta.productId !== req.params.id) return res.status(404).json({ error: 'proposta não encontrada' });
+    if (proposta.status !== 'pending') return res.status(409).json({ error: 'esta proposta já foi decidida', status: proposta.status });
+    const resultado = await store.decideEnrichmentProposal(req.creativeTenant, req.params.proposalId, {
+      decision: corpo.decision, acceptedFields: acceptedFields || [], reviewedBy: usuarioDe(req),
+    });
+    if (resultado.error === 'not_found') return res.status(409).json({ error: 'esta proposta já foi decidida' });
+    if (resultado.error === 'product_not_found') return res.status(404).json({ error: 'produto não encontrado' });
+    if (resultado.error === 'product_changed') {
+      return res.status(409).json({ error: 'o produto mudou desde que a proposta foi feita — peça uma proposta nova antes de aprovar', product: resultado.product });
+    }
+    res.json(resultado);
   }));
 
   // ── Prévia e lotes ───────────────────────────────────────────────────────
