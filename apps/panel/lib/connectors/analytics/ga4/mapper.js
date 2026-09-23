@@ -3,7 +3,7 @@
 // Fase E · GA4 runReport row → ProductAnalyticsRow (lib/connectors/types.js). A Data API devolve
 // todo valor como STRING — nada aqui confia em coerção implícita.
 
-const { METRICAS_PRODUTO, NAO_DEFINIDO } = require('./queries');
+const { METRICAS_PRODUTO, DIMENSOES_ACQUISITION, METRICAS_ACQUISITION, METRICAS_TRANSACTION, NAO_DEFINIDO } = require('./queries');
 
 class Ga4MetricParseError extends Error {
   constructor(campo, bruto) {
@@ -99,4 +99,40 @@ function mapReportRows(rows, contexto) {
   return { linhas, itemIdVazioOuNaoDefinido };
 }
 
-module.exports = { Ga4MetricParseError, parseInteiro, parseMonetario, ehItemIdValido, mapRow, mapReportRows };
+// Rodada K (Journey Analytics) · escopo SESSÃO, nunca item — `source`/`medium`/`campaign` cru da
+// Data API, "(not set)" preservado como veio (nunca traduzido pra null: é o valor real que o GA4
+// devolve pra sessão sem UTM manual nenhuma, e a UI/service decide o que fazer com ele — este mapper
+// só traduz o formato, nunca decide semântica de aquisição).
+const PARSERS_ACQUISITION = Object.freeze({ sessions: parseInteiro, ecommercePurchases: parseInteiro, totalRevenue: parseMonetario });
+
+function mapAcquisitionRow(row) {
+  if (!row || !Array.isArray(row.dimensionValues) || !Array.isArray(row.metricValues)) {
+    throw new TypeError('mapAcquisitionRow exige dimensionValues e metricValues');
+  }
+  const [source, medium, campaign] = DIMENSOES_ACQUISITION.map((_, i) => row.dimensionValues[i] && row.dimensionValues[i].value);
+  const metrics = Object.fromEntries(METRICAS_ACQUISITION.map((nome, i) => [nome, PARSERS_ACQUISITION[nome](row.metricValues[i] && row.metricValues[i].value, nome)]));
+  return Object.freeze({ source: source ?? NAO_DEFINIDO, medium: medium ?? NAO_DEFINIDO, campaign: campaign ?? NAO_DEFINIDO, ...metrics });
+}
+
+function mapAcquisitionRows(rows) {
+  return (rows || []).map(mapAcquisitionRow);
+}
+
+const PARSERS_TRANSACTION = Object.freeze({ transactions: parseInteiro, purchaseRevenue: parseMonetario });
+
+// Rodada K · lookup pontual de transactionId: `rows` vazio significa "não encontrada" (não é erro —
+// GA4 nunca viu esta transação, ou o navegador não emitiu `purchase` com este transaction_id, ou o
+// período não cobre a data real da compra). Nunca inventa `found: true` por um valor parecido.
+// Posição em `metricValues[]` = posição em METRICAS_TRANSACTION (mesma ordem do body em queries.js).
+function mapTransactionLookup(rows) {
+  const linhas = rows || [];
+  if (!linhas.length) return Object.freeze({ found: false, transactions: null, revenue: null });
+  const valores = linhas[0].metricValues || [];
+  const [transactions, revenue] = METRICAS_TRANSACTION.map((nome, i) => PARSERS_TRANSACTION[nome](valores[i] && valores[i].value, nome));
+  return Object.freeze({ found: true, transactions, revenue });
+}
+
+module.exports = {
+  Ga4MetricParseError, parseInteiro, parseMonetario, ehItemIdValido, mapRow, mapReportRows,
+  mapAcquisitionRow, mapAcquisitionRows, mapTransactionLookup,
+};

@@ -246,6 +246,125 @@ test('H · getCacheScope sem propriedade configurada lança INTEGRATION_NOT_CONN
   await assert.rejects(r.connector.getCacheScope(), (err) => err.codigo === CODIGOS.INTEGRATION_NOT_CONNECTED);
 }));
 
+// ── K (Journey Analytics): aquisição por canal/campanha e lookup de transactionId ────────────────
+// "não presuma compatibilidade sem evidência" — os dois caminhos (aquisição e transação) passam
+// pela MESMA checagem de metadata+checkCompatibility do path de produto, nunca assumem que a
+// propriedade aceita.
+
+const METADATA_COM_ACQUISITION_E_TRANSACTION = {
+  dimensions: [
+    { apiName: 'itemId' }, { apiName: 'itemName' },
+    { apiName: 'sessionManualSource' }, { apiName: 'sessionManualMedium' }, { apiName: 'sessionManualCampaignName' },
+    { apiName: 'transactionId' },
+  ],
+  metrics: [
+    { apiName: 'itemsViewed' }, { apiName: 'itemsAddedToCart' }, { apiName: 'itemsCheckedOut' }, { apiName: 'itemsPurchased' }, { apiName: 'itemRevenue' },
+    { apiName: 'sessions' }, { apiName: 'ecommercePurchases' }, { apiName: 'totalRevenue' }, { apiName: 'transactions' }, { apiName: 'purchaseRevenue' },
+  ],
+};
+const COMPAT_COM_ACQUISITION_E_TRANSACTION = {
+  dimensionCompatibilities: ['itemId', 'itemName', 'sessionManualSource', 'sessionManualMedium', 'sessionManualCampaignName', 'transactionId']
+    .map((apiName) => ({ dimensionMetadata: { apiName }, compatibility: 'COMPATIBLE' })),
+  metricCompatibilities: ['itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue', 'sessions', 'ecommercePurchases', 'totalRevenue', 'transactions', 'purchaseRevenue']
+    .map((apiName) => ({ metricMetadata: { apiName }, compatibility: 'COMPATIBLE' })),
+};
+
+test('K · getAcquisitionCapabilities: propriedade completa → apt=true', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(roteador({ metadata: METADATA_COM_ACQUISITION_E_TRANSACTION, compat: COMPAT_COM_ACQUISITION_E_TRANSACTION, report: () => jsonRes(200, { rows: [] }) }));
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  const cap = await r.connector.getAcquisitionCapabilities();
+  assert.equal(cap.apt, true);
+  assert.equal(cap.reason, null);
+  assert.deepEqual({ ...cap.dimensions }, { sessionManualSource: true, sessionManualMedium: true, sessionManualCampaignName: true });
+}));
+
+test('K · getAcquisitionCapabilities: propriedade SEM as dimensões de aquisição → apt=false, nunca inventa compatibilidade', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(roteador({ report: () => jsonRes(200, { rows: [] }) })); // METADATA_COMPLETA/COMPAT_COMPLETA (só item-scoped)
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  const cap = await r.connector.getAcquisitionCapabilities();
+  assert.equal(cap.apt, false);
+  assert.equal(cap.reason, 'ACQUISITION_DIMENSIONS_OR_METRICS_UNAVAILABLE');
+}));
+
+test('K · getAcquisitionPerformance: mapeia source/medium/campaign + sessions/purchases/revenue, preserva "(not set)"', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(roteador({
+    metadata: METADATA_COM_ACQUISITION_E_TRANSACTION, compat: COMPAT_COM_ACQUISITION_E_TRANSACTION,
+    report: () => jsonRes(200, {
+      rows: [
+        { dimensionValues: ['instagram', 'paid_social', 'campanha-x'].map((value) => ({ value })), metricValues: ['50', '5', '499.90'].map((value) => ({ value })) },
+        { dimensionValues: ['(not set)', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: ['20', '0', '0'].map((value) => ({ value })) },
+      ],
+      rowCount: 2,
+    }),
+  }));
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  const linhas = await r.connector.getAcquisitionPerformance({ startDate: '2026-09-01', endDate: '2026-09-20' });
+  assert.deepEqual(linhas, [
+    { source: 'instagram', medium: 'paid_social', campaign: 'campanha-x', sessions: 50, ecommercePurchases: 5, totalRevenue: 499.9 },
+    { source: '(not set)', medium: '(not set)', campaign: '(not set)', sessions: 20, ecommercePurchases: 0, totalRevenue: 0 },
+  ]);
+}));
+
+test('K · getAcquisitionPerformance lança GA4_ACQUISITION_DIMENSIONS_OR_METRICS_UNAVAILABLE quando a propriedade não é apta — nunca uma linha inventada', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(roteador({ report: () => { throw new Error('não deveria chamar runReport sem apt'); } }));
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  await assert.rejects(
+    r.connector.getAcquisitionPerformance({ startDate: '2026-09-01', endDate: '2026-09-20' }),
+    (err) => err.codigo === 'GA4_ACQUISITION_DIMENSIONS_OR_METRICS_UNAVAILABLE'
+  );
+}));
+
+test('K · getTransactionCapabilities: apt=true só quando transactionId + transactions/purchaseRevenue são COMPATIBLE', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(roteador({ metadata: METADATA_COM_ACQUISITION_E_TRANSACTION, compat: COMPAT_COM_ACQUISITION_E_TRANSACTION, report: () => jsonRes(200, { rows: [] }) }));
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  const cap = await r.connector.getTransactionCapabilities();
+  assert.equal(cap.apt, true);
+  assert.equal(cap.transactionIdAvailable, true);
+}));
+
+test('K · getTransactionCapabilities: sem a dimensão transactionId → apt=false, reason TRANSACTION_ID_UNAVAILABLE', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(roteador({ report: () => jsonRes(200, { rows: [] }) }));
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  const cap = await r.connector.getTransactionCapabilities();
+  assert.equal(cap.apt, false);
+  assert.equal(cap.reason, 'TRANSACTION_ID_UNAVAILABLE');
+}));
+
+test('K · findTransaction: found=true com transactions/revenue quando a Data API devolve a linha', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(roteador({
+    report: (body) => {
+      assert.equal(body.dimensionFilter.filter.stringFilter.value, 'ga4-encontrada-123');
+      return jsonRes(200, { rows: [{ dimensionValues: [{ value: 'ga4-encontrada-123' }], metricValues: [{ value: '1' }, { value: '129.9' }] }], rowCount: 1 });
+    },
+  }));
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  const resultado = await r.connector.findTransaction({ startDate: '2026-09-01', endDate: '2026-09-20', transactionId: 'ga4-encontrada-123' });
+  assert.deepEqual(resultado, { found: true, transactions: 1, revenue: 129.9 });
+}));
+
+test('K · findTransaction: found=false (rows vazio) nunca é erro — é o resultado esperado quando o pedido nunca apareceu no GA4', () => emA(async () => {
+  const { registry, definirFetch } = await montarAmbiente();
+  definirFetch(roteador({ report: () => jsonRes(200, { rows: [] }) }));
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  const resultado = await r.connector.findTransaction({ startDate: '2026-09-01', endDate: '2026-09-20', transactionId: 'ink-999' });
+  assert.deepEqual(resultado, { found: false, transactions: null, revenue: null });
+}));
+
+test('K · findTransaction exige startDate/endDate/transactionId', () => emA(async () => {
+  const { registry } = await montarAmbiente();
+  const r = registry.resolve('analytics', 'ga4', ctxA);
+  await assert.rejects(r.connector.findTransaction({ endDate: '2026-09-20', transactionId: 'x' }), TypeError);
+  await assert.rejects(r.connector.findTransaction({ startDate: '2026-09-01', transactionId: 'x' }), TypeError);
+  await assert.rejects(r.connector.findTransaction({ startDate: '2026-09-01', endDate: '2026-09-20' }), TypeError);
+}));
+
 test('E · getProductPerformance exige startDate/endDate e startDate <= endDate', () => emA(async () => {
   const { registry } = await montarAmbiente();
   const r = registry.resolve('analytics', 'ga4', ctxA);
