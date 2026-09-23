@@ -244,6 +244,32 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "source": S(enum=("manual", "enrichment")),
         "confidence": N(minimum=0, maximum=1),
     },
+    # Fase F.1 — Product Enrichment. A PROPOSAL, never applied automatically: `proposed` reuses
+    # ProductSemanticContext as-is (the merge into the product writes exactly that shape, with
+    # source: "enrichment" — composition.py already reads that origin correctly, unchanged since
+    # Fase B/C). `field_notes` is intentionally free-form (short justification/evidence per field,
+    # human-readable) rather than a second strict schema per field — the structural guarantee is
+    # `proposed`'s own validation (enums, lengths, no invented free text pretending to be a field);
+    # `field_notes` is display-only, never read back into any decision.
+    "EnrichmentProposal": {
+        "id": ID,
+        "product_id": ID,
+        "schema_version": I(required=True, minimum=1),
+        "proposed": R("ProductSemanticContext", required=True),
+        # Angle recommendation is a SUGGESTION alongside the semantic proposal, not part of the
+        # product record itself — it never gets merged into anything; the panel may show it, and a
+        # real generation still goes through recommend_angle() on its own, from the approved
+        # semantic_context (or not at all, if the person never asked for a suggestion here).
+        "recommended_angle_families": A(S(enum=ANGLE_FAMILIES), max_items=3),
+        "recommended_interactions": A(S(min_length=1, max_length=40), max_items=6),
+        "field_notes": O(),
+        "provider": S(required=True, enum=("fake", "openai")),
+        # Hash of the product fields the proposal was made FROM (name/type/description/metadata) —
+        # the caller's freshness check before merging: if the product changed since, the hash won't
+        # match and approval must be refused (§4, "exigir revalidação/revisão, sem aprovação silenciosa").
+        "product_snapshot_hash": S(required=True, max_length=128),
+        "created_at": S(required=True),
+    },
     "CreativeProduct": {
         "id": ID,
         "brandId": S(max_length=120),
@@ -714,6 +740,7 @@ EXPORTED_CONTRACTS = (
     "BrandKit", "NicheKit", "ContextProfile", "CreativeProduct", "Persona", "Angle", "AngleRecommendation",
     "CustomAngle", "Placement", "CreativeRequest", "CreativePlan", "CreativeResult", "GenerationError",
     "GenerationRecord", "CopyVariant", "CompiledPrompt", "GenerationDraft", "FeedbackSnapshot",
+    "EnrichmentProposal",
 )
 
 _PY_TYPES = {

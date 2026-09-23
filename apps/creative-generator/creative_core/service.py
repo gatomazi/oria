@@ -12,6 +12,7 @@ server-to-server; browsers never do.
     POST /v1/feedback-snapshot {plan[, result_metadata, asset_sha256]} -> {snapshot: FeedbackSnapshot}   (pure — "Gostei / Não gostei")
     POST /v1/generations   {plan, references, openai_api_key[, generation_attempt, normalize_references]} -> CreativeResult
     POST /v1/copies        {request, openai_api_key}  -> {variants: CopyVariant[], usage}
+    POST /v1/enrichment/propose {product[, brand, niche, provider]} -> {proposal: EnrichmentProposal}   (pure, fake provider only — Fase F.1)
 
 Security controls:
   * service-to-service auth: `Authorization: Bearer <CREATIVE_CORE_SERVICE_TOKEN>`,
@@ -39,6 +40,7 @@ from . import angle_catalog, composition
 from .compiler import compile_prompt
 from .drafts import feedback_snapshot, generation_draft_from_plan
 from .engines import generate_copy_with_usage, generate_creative, plan_creative
+from . import enrichment
 from .errors import GenerationError
 from .kits import list_builtin_kits, load_brand_kit, load_niche_kit
 from .model_router import ModelRouter
@@ -166,6 +168,7 @@ class CreativeCoreService:
             ("POST", "/v1/feedback-snapshot"): self._feedback_snapshot,
             ("POST", "/v1/generations"): self._generations,
             ("POST", "/v1/copies"): self._copies,
+            ("POST", "/v1/enrichment/propose"): self._enrichment_propose,
         }
         if path == "/v1/health" and method == "GET":
             return self._health(environ)
@@ -278,6 +281,19 @@ class CreativeCoreService:
         call, no key, and no state — the panel decides what of the draft still exists (products, profiles)."""
         body = self._read_json(environ, allowed={"plan"}, required={"plan"})
         return 200, {"draft": generation_draft_from_plan(self._persisted_plan(body))}
+
+    def _enrichment_propose(self, environ: dict) -> tuple[int, dict]:
+        """Fase F.1 — a PROPOSAL about one product's semantic_context. Pure: no provider call beyond
+        the deterministic fake heuristic (no network, no key, no cost), no persistence — the panel
+        stores the returned envelope as a pending row and decides approval. `provider` defaults to
+        "fake" and, this phase, "fake" is the ONLY value accepted — a real provider is F.2, explicitly
+        out of scope here (see enrichment.py's module docstring)."""
+        body = self._read_json(environ, allowed={"product", "brand", "niche", "provider"}, required={"product"})
+        provider = body.get("provider", "fake")
+        if provider != "fake":
+            raise GenerationError("INVALID_INPUT", {"errors": ["provider: only \"fake\" is available in this phase"]})
+        proposal = enrichment.propose(body["product"], brand=body.get("brand"), niche=body.get("niche"), provider=provider)
+        return 200, {"proposal": proposal}
 
     def _feedback_snapshot(self, environ: dict) -> tuple[int, dict]:
         """What to remember about a creative when the user says liked/disliked, read from its persisted plan. The

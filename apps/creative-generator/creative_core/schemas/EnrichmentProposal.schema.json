@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/EnrichmentProposal.schema.json",
+  "title": "EnrichmentProposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "product_id",
+    "schema_version",
+    "proposed",
+    "provider",
+    "product_snapshot_hash",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "product_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "proposed": {
+      "$ref": "#/$defs/ProductSemanticContext"
+    },
+    "recommended_angle_families": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "lifestyle",
+          "connection",
+          "editorial_portrait",
+          "action_movement",
+          "product_focus",
+          "product_no_person",
+          "creator_social"
+        ]
+      },
+      "maxItems": 3
+    },
+    "recommended_interactions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      },
+      "maxItems": 6
+    },
+    "field_notes": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "fake",
+        "openai"
+      ]
+    },
+    "product_snapshot_hash": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "created_at": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ProductSemanticContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "wearer_roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "relationship_themes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "recommended_supporting_roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "incompatible_auto_supporting_roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "scene_intents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "visible_text": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "maxItems": 10
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "enrichment"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}

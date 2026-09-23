@@ -108,6 +108,19 @@ export interface ProductSemanticContext {
   confidence?: number;
 }
 
+export interface EnrichmentProposal {
+  id: string;
+  product_id: string;
+  schema_version: number;
+  proposed: ProductSemanticContext;
+  recommended_angle_families?: Array<"lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social">;
+  recommended_interactions?: Array<string>;
+  field_notes?: Record<string, unknown>;
+  provider: "fake" | "openai";
+  product_snapshot_hash: string;
+  created_at: string;
+}
+
 export interface CreativeProduct {
   id: string;
   brandId?: string;
