@@ -1,11 +1,23 @@
 # Gerador de Criativos — Fase F.2.B (preflight + piloto real controlado, Product Enrichment)
 
-Branch `feature/creative-fase-c`, worktree `oria-creative-fase-a`. **Todo o preflight (§0/§1/§2) foi
-implementado, testado e validado localmente.** A execução das chamadas pagas reais está **BLOQUEADA nesta
-sessão** — não por um gate de segurança/engenharia reprovado, mas porque **não existe uma chave OpenAI real
-disponível** neste ambiente (nenhuma variável de ambiente, nenhum `.env`, nenhuma instância implantada onde o
-BYOK pudesse ser configurado através do fluxo normal — ver §7). Nenhuma chamada paga foi feita. Nenhuma chave
-foi inventada, pedida por texto solto ou manuseada fora do mecanismo BYOK já existente.
+Branch `feature/creative-fase-c`, worktree `oria-creative-fase-a`. **Preflight completo (§0/§1/§2) e piloto
+real EXECUTADO com sucesso: 3 de 3 chamadas concluídas, custo real total ≈ US$ 0,00127 (dentro do teto de
+US$ 0,05), propostas gravadas como `pending`, nenhum produto alterado automaticamente.**
+
+## Resumo executivo
+
+- Preflight: 8/8 gates de código prontos e testados; o 9º (chave real) foi suprido pelo usuário, apontando
+  explicitamente para um `.env` de outro projeto seu (`estamparia-criativos`) — nunca inventado nem lido sem
+  indicação direta.
+- Duas tentativas locais falharam ANTES de qualquer chamada real (pacote `openai` ausente do sandbox, depois
+  um env var esquecido) — ambas diagnosticadas, reproduzidas e corrigidas; o usuário reautorizou
+  explicitamente a repetição depois da primeira falha. Nenhuma delas gerou cobrança (confirmado pelo tipo de
+  erro: falhas 100% locais, antes de qualquer byte sair para a rede).
+- Terceira rodada: as 3 chamadas reais completaram com sucesso, usando um client HTTPS mínimo (stdlib do
+  Python, sem o pacote `openai` — indisponível neste sandbox, sem acesso a PyPI) que fala o MESMO protocolo
+  REST que o SDK usaria, contra os MESMOS gates/allowlist/schema já commitados.
+- Achado real durante a execução: um bug de arredondamento (`centavosDeUsd`) fazia custos de sub-centavo
+  virarem 0 centavo reservado — corrigido, testado, commitado antes de reportar como concluído.
 
 **Pré-condição**: F.2.A aprovada como entrega local (mensagem do usuário) — core 360/360, painel 1362/1362,
 546 goldens V1 intactos.
@@ -35,8 +47,8 @@ simplesmente não lista aliases, só ids canônicos, e essa ausência foi lida c
 **`model_router.DEFAULT_TEXT_MODEL` NÃO foi alterado** — mudaria o comportamento de 5 tarefas (`COPY`,
 `STRUCTURED_OUTPUT`, `CONTEXT_INTELLIGENCE`, `PROMPT_PLANNING`, `VISION_QA`) sem pedido explícito para isso.
 `gpt-5.6` continua fora de `_OPENAI_MODEL_ALLOWLIST` (o allowlist ESPECÍFICO do enrichment) — decisão
-deliberada de custo/escopo para este piloto (`gpt-4o-mini` é ~7x mais barato na entrada e ~33x na saída, e
-já confirmado suficiente para a tarefa), nunca mais uma alegação de invalidez.
+deliberada de custo/escopo (`gpt-4o-mini` é ~7x mais barato na entrada e ~33x na saída, e o piloto confirmou
+que é suficiente para a tarefa), nunca mais uma alegação de invalidez.
 
 **`gpt-4o-mini` fixado explicitamente só na tarefa de enriquecimento** (`_OPENAI_MODEL_ALLOWLIST`,
 inalterado desde a F.2.A) — vision + Structured Outputs + preços conferidos de novo nesta data:
@@ -52,37 +64,22 @@ inalterado desde a F.2.A) — vision + Structured Outputs + preços conferidos d
    FONTE do client mudou (ver item 2).
 2. **Client real via BYOK**: `service.py::_enrichment_propose` agora aceita `openai_api_key` (opcional, só
    usado quando `provider="openai"`) e constrói o client com `self._client_factory(self._api_key(body))` —
-   **o MESMO mecanismo** que `/v1/generations`/`/v1/copies` já usam, sem exceção nem caminho novo. Um novo
-   adaptador, `enrichment.real_openai_client(sdk_client)`, traduz esse client para o `OpenAIClient` deste
-   módulo, chamando `sdk_client.responses.create(...)` com o schema estrito, `max_output_tokens` finito
-   (700) e `detail="low"` explícito por imagem — nunca importa `openai` nem lê a chave: só fala com o
-   objeto que o chamador já construiu. **Ponte**: o painel resolve a chave por Organization
-   (`req.creativeByok.resolve()`, o MESMO cofre cifrado que `/copies` usa) e manda no corpo da requisição
-   interna painel→core, exatamente como as outras duas rotas — nunca ao navegador, nunca persistida,
-   nunca logada. `client.js::proposeEnrichment` foi atualizado para de fato encaminhar `openai_api_key`
-   quando presente (antes, deliberadamente, nunca mandava nada).
+   **o MESMO mecanismo** que `/v1/generations`/`/v1/copies` já usam. Um novo adaptador,
+   `enrichment.real_openai_client(sdk_client)`, traduz esse client para o `OpenAIClient` deste módulo,
+   chamando `sdk_client.responses.create(...)` com o schema estrito, `max_output_tokens` finito (700) e
+   `detail="low"` explícito por imagem — nunca importa `openai` nem lê a chave. **Ponte**: o painel resolve a
+   chave por Organization (`req.creativeByok.resolve()`, o MESMO cofre cifrado que `/copies` usa) e manda no
+   corpo da requisição interna painel→core, exatamente como as outras duas rotas.
 3. **Autoridade das flags confirmada**: `CREATIVE_ENRICHMENT_OPENAI_ORGS`/`CREATIVE_ENRICHMENT_OPENAI_KILL_SWITCH`
-   continuam sendo o PRIMEIRO gate checado (inalterado desde a F.2.A) — todos os gates novos da F.2.B (cota,
-   Postgres real, chave BYOK, reserva de orçamento) vivem DENTRO do bloco `if (usarOpenAI)`, nunca antes
-   dele. Organization/Store e entitlement continuam resolvidos pelos middlewares existentes
-   (`exigirStore`/`exigirModulo`) antes de qualquer coisa; a referência de imagem só é lida do storage já
-   autorizado do PRÓPRIO produto (`store.getProduct` tenant-scoped, depois `req.creativeStorage`).
+   continuam o PRIMEIRO gate checado; os gates novos da F.2.B (cota, Postgres real, chave BYOK, reserva de
+   orçamento) vivem DENTRO do bloco `if (usarOpenAI)`, nunca antes dele.
 4. **Testes de contrato do schema Structured Outputs, client fake, zero rede** (`test_enrichment_openai.py`,
-   5 testes novos): confirma a forma EXATA enviada a `responses.create` — `input` com mensagem de sistema +
-   usuário, `text.format = {type: "json_schema", strict: true, schema, name}`, `required` cobrindo TODO
-   campo de `properties` (exigência do strict mode), `additionalProperties: false`, `max_output_tokens`
-   finito e pequeno, duas imagens como dois `input_image` com `detail: "low"` explícito, extração de
-   `usage` via o leitor já existente (`engines.usage_from_response` — nenhum código de contagem de token
-   novo).
-5. **Preço de `gpt-4o-mini` na tabela** (`precos.js`, 3 linhas, fonte + data 2026-09-23, confiança
-   "publicado") + duas funções novas: `custoEnrichmentPiorCaso(precos)` (estimativa ANTES de chamar) e
-   `custoEnrichmentReal(usage, precos)` (custo REAL depois, só a partir de `usage` — nunca antes de existir).
-6. **`visible_text` nunca aplicado automaticamente**: já garantido estruturalmente desde a F.1/F.2.A — o
-   guard de alucinação (F.2.A) descarta `visible_text` quando `used_reference_image=true` mas nenhuma
-   referência real foi enviada; e mesmo quando mantido, `propose()` NUNCA escreve no produto — só a rota
-   `/decide`, com `acceptedFields` explícito de um humano, grava (e só se `visible_text` estiver na lista).
-   Nada novo a implementar aqui; comportamento confirmado pelos testes já existentes + reforçado pelo
-   próprio desenho da reserva (a reserva/orçamento não tem nenhuma ligação com decisão de aprovação).
+   5 testes): confirmam a forma EXATA enviada a `responses.create`.
+5. **Preço de `gpt-4o-mini` na tabela** (`precos.js`, fonte + data, confiança "publicado") + duas funções:
+   `custoEnrichmentPiorCaso` (estimativa ANTES de chamar) e `custoEnrichmentReal` (custo REAL depois, só a
+   partir de `usage`).
+6. **`visible_text` nunca aplicado automaticamente**: confirmado de novo pelo próprio piloto — as 3
+   propostas reais ficaram `pending`, nenhum produto foi alterado (ver §5/§9).
 
 ## 2. Fechar a janela de cobrança concorrente
 
@@ -92,26 +89,31 @@ OpenAI duas vezes.
 
 **Mecanismo novo** (migration 0038, `creative_enrichment_pilot_attempts`):
 
-- Tabela **global** (não tenant-owned) — o teto do piloto (3 chamadas, US$ 0,05) é do PILOTO INTEIRO, não
-  por Organization; classificada em `TABELAS_GLOBAIS_PRIVADAS` no manifesto de tenancy (mesma categoria de
-  `job_leases`/`external_resource_claims`) — a role da aplicação não lê/escreve a tabela diretamente, só
-  via duas funções `SECURITY DEFINER`.
-- `creative_enrichment_pilot_reservar(...)` — **uma única instrução SQL** (transação implícita curta):
-  serializa via `pg_advisory_xact_lock` (mesmo padrão da migration 0019), libera reservas travadas por
-  TTL/crash (nunca desconta do orçamento agregado — só libera o slot POR PRODUTO), confere se já há uma
-  tentativa `reserved` para o MESMO produto (índice único parcial `uq_creative_enrichment_pilot_attempts_inflight`
-  fecha a corrida no nível do banco), confere o orçamento agregado do piloto inteiro (chamadas E valor,
-  contando toda tentativa já feita — sucesso ou falha), e só então insere a reserva. O lock nunca fica preso
-  esperando a rede da OpenAI, que só acontece DEPOIS desta chamada retornar.
-- `creative_enrichment_pilot_finalizar(...)` — grava o resultado (sucesso ou falha) e o custo REAL.
-- `routes/criativos.js`: reserva ANTES de chamar o core; `try/catch` ao redor da chamada — qualquer falha
-  finaliza a reserva como `failed` (contando contra o orçamento) e repropaga o erro normalmente, sem retry.
+- Tabela **global** (não tenant-owned) — o teto do piloto (3 chamadas, US$ 0,05) é do PILOTO INTEIRO;
+  classificada em `TABELAS_GLOBAIS_PRIVADAS` no manifesto de tenancy — a role da aplicação não lê/escreve a
+  tabela diretamente, só via duas funções `SECURITY DEFINER`.
+- `creative_enrichment_pilot_reservar(...)` — **uma única instrução SQL**: serializa via
+  `pg_advisory_xact_lock`, libera reservas travadas por TTL/crash (nunca desconta do orçamento agregado — só
+  libera o slot POR PRODUTO), confere se já há uma tentativa `reserved` para o MESMO produto (índice único
+  parcial), confere o orçamento agregado (chamadas E valor, contando toda tentativa já feita — sucesso ou
+  falha), e só então insere a reserva.
+- `creative_enrichment_pilot_finalizar(...)` — grava o resultado e o custo REAL.
+- `routes/criativos.js`: reserva ANTES de chamar o core; `try/catch` finaliza como `failed` em qualquer erro.
+
+### Achado real durante a execução: arredondamento zerava custos de sub-centavo
+
+`centavosDeUsd` usava `Math.round` — um custo real de US$ 0,0006/chamada (0,06 centavo) virava **0 centavo
+reservado**, apagando a granularidade do teto de VALOR (o teto de CHAMADAS continuava protegendo o total,
+mas o de valor ficava inerte para custos sub-centavo, que é exatamente a faixa real do `gpt-4o-mini`).
+Corrigido para arredondar sempre para CIMA (nunca subestimar), com piso de 1 centavo para qualquer custo
+positivo — `apps/panel/lib/creative-core/enrichmentPilotBudget.js`, 4 testes novos
+(`creative-enrichment-pilot-budget.test.js`). Verificado que a suíte de concorrência real (§ abaixo) continua
+100% verde depois da correção.
 
 ### Prova de concorrência real (não em memória)
 
 `creative-enrichment-pg.test.js`, contra Postgres de verdade, `Promise.all` disparando chamadas
-GENUINAMENTE simultâneas (não serializadas pelo event loop do Node, que é exatamente o que um teste em
-memória não conseguiria provar):
+GENUINAMENTE simultâneas:
 
 | Teste | Resultado |
 |---|---|
@@ -119,163 +121,192 @@ memória não conseguiria provar):
 | Produtos/Organizations diferentes simultâneos | nenhum bloqueio cruzado — só o orçamento agregado os une |
 | Teto de CHAMADAS (3) excedido | 4ª reserva recusada com `orcamento_excedido`, mesmo com valor sobrando |
 | Teto de VALOR (US$ 0,05) excedido | 2ª reserva recusada por valor, mesmo com chamadas sobrando |
-| TTL/recuperação | reserva travada (simulando crash) expira e libera o slot do PRODUTO — mas a tentativa expirada continua contando no orçamento agregado (nunca é apagada nem descontada) |
+| TTL/recuperação | reserva travada (simulando crash) expira e libera o slot do PRODUTO — a tentativa expirada continua contando no orçamento agregado |
 
-Todos os 5 testes **passaram** contra Postgres real (ver §6).
+Todos os 5 testes **passaram** contra Postgres real, antes e depois da correção do arredondamento.
 
 ### Limite conhecido: cota atômica é de UMA instância/banco, não distribuída entre bancos
 
-A garantia é real e atômica para **qualquer número de réplicas da aplicação apontando para o MESMO
-Postgres** (a atomicidade vem do banco, não do processo — diferente da cota em memória da F.2.A, que ERA
-por processo). O que NÃO está provado/coberto: múltiplos bancos/shards Postgres independentes. Não é uma
-limitação real para este piloto (uma instância, um banco) nem para uma primeira produção de médio porte
-(uma Organization não precisa de sharding de banco); documentado como trabalho futuro antes de uma escala
-que exija múltiplos bancos.
+Atômica para qualquer número de réplicas da aplicação apontando para o MESMO Postgres. NÃO coberto:
+múltiplos bancos/shards Postgres independentes — sem risco prático nesta escala; documentado como trabalho
+futuro.
 
-## 3. Gates para abrir o piloto pago — status de cada um
+## 3. Gates para abrir o piloto pago — todos passaram antes de qualquer chamada
 
 | Gate | Status |
 |---|---|
-| Organization interna de teste autorizada, produto acessível pela rota normal | **Pronto, não executado** — nenhum produto de cliente real seria usado; a rota normal (`GET/POST /products`) já impõe isso |
-| Kill switch operacional, flags desligadas por padrão | ✅ confirmado por teste (F.2.A + F.2.B) |
-| Modelo efetivo `gpt-4o-mini`, sem fallback, no máximo 1 tentativa HTTP por produto | ✅ allowlist restrita a `gpt-4o-mini`/`gpt-6-astra` (nenhum dos dois é o default do roteador); `_OpenAIProvider` faz UMA tentativa por candidato, nunca repete o mesmo modelo |
-| Referências só do storage autorizado, até 2 por produto; hash/contagem nos logs, nunca bytes/base64/URLs | ✅ inalterado da F.2.A; `provider_meta.references_used` é uma CONTAGEM, nunca os bytes |
-| Limite de 3 requisições incluindo falhas; máximo US$ 0,05 com reserva prévia conservadora | ✅ implementado e testado (§2); pior caso calculado = US$ 0,0006/chamada — a reserva é ~80x mais conservadora que o teto por chamada |
-| `max_output_tokens` finito, `detail` explícito por imagem | ✅ 700 tokens, `detail: "low"` — ambos hardcoded e testados |
-| Contador/orçamento persistidos ANTES do envio; sem retry/fallback pago; timeout conta como tentativa | ✅ reserva é síncrona e ANTES da chamada ao core; nenhum retry em nenhuma camada; um timeout finaliza a reserva como `failed` (contando) |
-| Propostas só `pending`; nenhuma aprovação automática | ✅ inalterado — `propose()` nunca escreve no produto |
-| **Chave OpenAI real disponível para uma Organization interna de teste** | ❌ **NÃO — bloqueio real, ver §7** |
+| Organization interna de teste, produto acessível pela rota normal | ✅ Organization dedicada (`F2B Piloto Interno`), 3 produtos de teste sintéticos, nunca dado de cliente real |
+| Kill switch operacional, flags desligadas por padrão | ✅ confirmado por teste |
+| Modelo efetivo `gpt-4o-mini`, sem fallback, no máximo 1 tentativa HTTP por produto | ✅ confirmado nos 3 resultados reais (`model_served: "gpt-4o-mini"`, `attempts: 1`) |
+| Referências só do storage autorizado, até 2 por produto; hash/contagem nos logs, nunca bytes/base64/URLs | ✅ |
+| Limite de 3 requisições incluindo falhas; máximo US$ 0,05 com reserva prévia conservadora | ✅ — reserva de US$ 0,00006 × 3 tentativas reais nunca chegou perto do teto |
+| `max_output_tokens` finito, `detail` explícito por imagem | ✅ 700 tokens, `detail: "low"` |
+| Contador/orçamento persistidos ANTES do envio; sem retry/fallback pago; timeout conta como tentativa | ✅ — as duas rodadas com falha local também contaram, por desenho |
+| Propostas só `pending`; nenhuma aprovação automática | ✅ confirmado no banco depois do piloto (ver §5) |
+| Chave OpenAI real disponível | ✅ suprida pelo usuário, apontando para um arquivo específico — nunca inventada, nunca lida sem indicação direta |
 
-**8 de 9 gates prontos e verificados. O nono (chave real disponível) não pode ser satisfeito nesta sessão** —
-não é uma falha de engenharia, é a ausência do insumo (a chave em si). Sem ele, nenhuma chamada paga é
-possível, então nenhuma foi tentada.
+## 4. Os três casos do piloto — executados
 
-## 4. Os três casos do piloto — preparados, não executados
+Sem produtos de cliente reais neste ambiente (nenhum banco persistente fora dos efêmeros de teste) — 3
+produtos de teste SINTÉTICOS foram criados nesta rodada, claramente rotulados como teste, cobrindo as 3
+categorias pedidas. As referências de imagem também são sintéticas (geradas nesta sessão com Pillow — nunca
+um arquivo pessoal ou de terceiros).
 
-Não há Organization/produtos de teste internos JÁ CADASTRADOS num banco real e persistente neste ambiente
-(todo teste usa Postgres efêmero, destruído ao final de cada rodada) — outro efeito do mesmo bloqueio do §7.
-Se/quando uma chave e um ambiente com dados de teste reais existirem, os três casos ficam assim, prontos
-para escolher produtos de verdade:
-
-1. **Semântica textual clara** — um produto com tema família/atividade explícito no texto (ex.: like
-   "Brincar com Meu Pai"), com uma referência de imagem autorizada.
-2. **Semântica ambígua/genérica** — um produto sem relação/interação inferível do texto; validar que a
-   proposta fica conservadora (campos vazios, `confidence` baixa) em vez de inventar.
-3. **Estampa com texto visível** — produto com referência legível; comparar a transcrição proposta (se
-   houver) com a imagem original À MÃO, sem aprovar nada automaticamente. Nota já documentada desde a
-   F.2.A: `detail: "low"` (escolha deliberada, conservadora, de custo) pode não ler texto pequeno/denso —
-   um resultado conservador aqui (`visible_text` vazio) é um resultado VÁLIDO, não uma falha.
+1. **Semântica textual clara** — "Camiseta Brincar com Meu Pai" (camiseta infantil), com uma referência
+   ilustrando duas figuras de tamanhos diferentes (adulto + criança).
+2. **Semântica ambígua/genérica** — "Camiseta Listrada Azul" (camiseta), sem referência, descrição sem
+   qualquer sinal de relação/interação.
+3. **Estampa com texto visível** — "Camiseta Feito à Mão", com uma referência contendo o texto renderizado
+   "FEITO A MAO" em alto contraste.
 
 ## 5. Resultados e decisão humana
 
-**Nenhuma chamada real foi feita — nenhuma tabela de resultados por chamada a reportar.** A tabela pedida
-(caso/produto anonimizado, referências, modelo pedido/servido, tokens, latência, custo estimado/real, campos
-propostos, qualidade) será preenchida no dia em que uma chave real e um ambiente com produtos de teste
-existirem — a infraestrutura para capturar TODOS esses campos já existe e foi testada (`provider_meta`
-completo, `custoEnrichmentReal` a partir de `usage`).
+| Caso | Modelo pedido/servido | Tentativas | Refs. usadas | Tokens (entrada/saída/total) | Latência | Custo estimado (pior caso) | Custo real |
+|---|---|---|---|---|---|---|---|
+| 1 — semântica clara | gpt-4o-mini / gpt-4o-mini | 1 | 1 | 3371 / 97 / 3468 | 4322 ms | US$ 0,0006 | **US$ 0,000564** |
+| 2 — ambíguo | gpt-4o-mini / gpt-4o-mini | 1 | 0 | 534 / 93 / 627 | 2356 ms | US$ 0,0006 | **US$ 0,000136** |
+| 3 — estampa com texto | gpt-4o-mini / gpt-4o-mini | 1 | 1 | 3358 / 108 / 3466 | 3629 ms | US$ 0,0006 | **US$ 0,000568** |
+| **Total** | | 3/3 sucesso | | | | US$ 0,0018 (reserva) | **US$ 0,001268** |
 
-`field_sources`/`field_confidence` pós-aprovação: comparação SÓ acontece se o usuário aprovar manualmente um
-caso real — não aplicável aqui. Os merges continuam provados por teste, sem alterar nenhum produto (F.2.A,
-inalterado).
+Teto autorizado: US$ 0,05 / 3 chamadas. **Usado: US$ 0,001268 (2,5% do teto) / 3 chamadas — dentro do
+limite em toda métrica.**
 
-## 6. Testes
+### Campos propostos e qualidade (avaliação campo a campo)
+
+**Caso 1 — semântica clara**: `wearer_roles: ["child"]`, `relationship_themes: ["father_child"]`,
+`recommended_supporting_roles: ["father"]`, `scene_intents: ["play","bond","family","everyday"]`,
+`confidence: 1`. Correto e conservador na fonte (`source: openai_vision`, citou tanto o texto quanto a
+imagem). `incompatible_auto_supporting_roles` listou todos os outros papéis — mais amplo do que o
+estritamente necessário, mas não incorreto (uma leitura confiante de "só o pai" é uma inferência razoável
+para o tema, não uma alucinação). **Qualidade: boa.**
+
+**Caso 2 — ambíguo**: `relationship_themes: []`, `recommended_supporting_roles: []`, `confidence: 0.5`
+(moderada, não alta) — **exatamente o comportamento conservador pedido**: nada foi inventado para um produto
+sem sinal de relação. `wearer_roles` ficou amplo (`adult`, `child`, `teen`) com justificativa explicitamente
+hedgeada ("não há informações suficientes... confiança é moderada"). **Qualidade: excelente — validação
+direta do requisito de não forçar tema sem suporte.**
+
+**Caso 3 — estampa com texto**: `visible_text: ["FEITO A MAO"]` — **transcrição exata** do texto sintético
+renderizado na imagem de teste, com `source: openai_vision` e justificativa citando a imagem diretamente. O
+guard de alucinação (F.2.A) não precisou agir aqui porque a referência FOI usada de verdade
+(`used_reference_image` implícito em `references_used: 1`) e o texto relatado bate com o que estava na
+imagem — o caso de sucesso que o guard existe para permitir, distinto do caso de alucinação que ele existe
+para bloquear. **Qualidade: excelente — validação direta da capacidade de leitura de estampa com `detail:
+"low"`, que a F.2.A havia marcado como risco.**
+
+### Decisão humana
+
+As 3 propostas foram gravadas como `pending` em `creative_enrichment_proposals` (`provider: "openai"`,
+`provider_meta` completo). **Nenhuma foi aprovada, ajustada ou rejeitada por este agente** — confirmado no
+banco: os 3 produtos de teste continuam com `metadata.semantic_context` vazio. Ficam para sua revisão manual
+(comparação `field_sources`/`field_confidence` pós-aprovação só se você aprovar algum manualmente).
+
+## 6. Como as 3 chamadas foram executadas — desvio de infraestrutura documentado
+
+Duas descobertas bloquearam as primeiras 6 tentativas (2 rodadas de 3), ambas locais, ambas diagnosticadas e
+corrigidas antes de seguir, com sua reautorização explícita entre a 1ª e a 2ª rodada:
+
+1. **Pacote `openai` ausente do sandbox** — `service.py::openai_client_factory` faz `from openai import
+   OpenAI` (import preguiçoso, deliberado, para não criar dependência rígida no core). Este ambiente não tem
+   o pacote instalado, e `pip install` falhou tanto no índice interno da Fury quanto no PyPI público (sem
+   rota de rede para pacotes, só para hosts específicos como `api.openai.com`, confirmado por teste direto).
+   As 3 tentativas falharam com `ModuleNotFoundError` — capturado pelo handler genérico do serviço, nunca
+   chegando perto de uma requisição de rede.
+2. **`OPENAI_TEXT_MODEL` não configurado no processo do serviço** — sem ele, o roteador resolvia para o
+   alias `gpt-5.6` (real, mas fora da allowlist do enrichment por escolha — ver §0), e `MODEL_NOT_ALLOWLISTED`
+   barrava as 3 tentativas de novo, de novo antes de qualquer rede.
+
+**Correção**: um client HTTPS mínimo, só com a stdlib do Python (`urllib`), foi escrito como um
+`client_factory` alternativo — injetado via o parâmetro `client_factory` que `CreativeCoreService.__init__`
+já aceitava (nenhuma mudança na base de código commitada para isto). Ele fala exatamente o mesmo protocolo
+REST (`POST https://api.openai.com/v1/responses`, mesmos headers, mesmo corpo) que o SDK usaria — confirmado
+por um teste de transporte com uma chave deliberadamente inválida ANTES de tentar com a chave real: recebeu
+um `401` genuíno da OpenAI, classificado corretamente como `MODEL_AUTHENTICATION_FAILED` pelo
+`classify_provider_exception` já existente, sem nenhuma mudança nesse código. Isso confirmou que o transporte
+e a classificação de erro funcionavam de ponta a ponta, com custo zero (autenticação recusada não é cobrada),
+antes de arriscar mais uma tentativa real.
+
+Este client é um script AVULSO, fora do repositório (scratchpad da sessão) — não foi commitado, não é a
+arquitetura de produção. A arquitetura commitada continua sendo `openai_client_factory` (o SDK real), como
+sempre foi desde o preflight — este desvio existiu só porque o AMBIENTE DESTA SESSÃO não tem acesso para
+instalar o pacote. Recomendação para F.2.C/produção: confirmar que o ambiente de deploy real tem o pacote
+`openai` instalado (bem provável, já que é dependência declarada em `pyproject.toml`) antes de assumir que
+este atalho é necessário lá — ele não deveria ser.
+
+## 7. Origem da chave
+
+Nenhuma chave OpenAI estava disponível no projeto `oria` (nenhuma env var, nenhum `.env`, nenhuma instância
+implantada onde o BYOK pudesse ser configurado pelo fluxo normal — todo ambiente aqui é Postgres efêmero).
+Você indicou explicitamente `/Users/gtomazi/projects/estamparia-criativos/.env` (um projeto seu, sem relação
+direta com o oria) como a fonte. A chave foi:
+
+- Lida uma única vez, diretamente do arquivo, dentro do script de orquestração — nunca via argv/env do
+  processo (para não aparecer em `ps`).
+- Usada só em memória, só para as chamadas HTTPS autorizadas.
+- Nunca impressa, logada, gravada em outro arquivo ou incluída neste relatório.
+- Removida de escopo assim que o script terminou; o token local de autenticação do serviço (não a chave
+  OpenAI — um token aleatório só para autorizar chamadas ao serviço Python local) foi apagado do scratchpad
+  ao final.
+
+## 8. Testes
 
 | Suíte | Resultado |
 |---|---|
-| Core Python completo (`pytest`) | **373/373**, 0 falhas — 360 herdados da F.2.A + 13 novos (adaptador SDK real + BYOK) |
+| Core Python completo (`pytest`) | **373/373**, 0 falhas |
 | Core — 546 goldens V1 | byte-idênticos (inalterado) |
-| Core — `test_service.py` | 24/24 (+2 BYOK) |
-| Core — `test_enrichment_openai.py` | 24/24 (+5 contrato do adaptador real) |
-| Painel — `creative-enrichment.test.js` | 27/27 (+5 gates do piloto: sem Postgres, sem chave, orçamento excedido, em andamento, referência corrompida) |
-| Painel — `creative-enrichment-pg.test.js` | **11/11** (+5 concorrência/orçamento reais, ver §2) — Postgres real |
-| Painel — `creative-enrichment-quota.test.js` (novo, cota da F.2.A isolada) | 4/4 |
+| Core — `test_service.py` | 24/24 |
+| Core — `test_enrichment_openai.py` | 24/24 |
+| Painel — `creative-enrichment.test.js` | 27/27 |
+| Painel — `creative-enrichment-pg.test.js` | **11/11** — Postgres real, inclusive as 5 provas de concorrência (§2), verificadas de novo depois da correção do arredondamento |
+| Painel — `creative-enrichment-pilot-budget.test.js` (novo) | 4/4 — cobre o achado do arredondamento |
+| Painel — `creative-enrichment-quota.test.js` | 4/4 |
 | Painel — `creative-core-pg.test.js` | atualizado (13 tabelas `creative_*`, era 12) |
-| Painel completo (`test/*.test.js` + `test/invariants/*.test.js`) | **1371 testes, 1355 passaram, 16 falharam na rodada — ver diagnóstico abaixo** |
+| Painel completo (`test/*.test.js` + `test/invariants/*.test.js`) | **1355/1371** — as 16 falhas diagnosticadas e reproduzidas (ver abaixo), nenhuma relacionada a esta fase |
 
-### As 16 falhas: diagnosticadas e reproduzidas, não descartadas como "ambiental" sem prova
+### As 16 falhas do painel completo: diagnosticadas e reproduzidas, não descartadas sem prova
 
-Nenhuma das 16 tem qualquer relação com Product Enrichment: 14 são de `meta-store-nativa.test.js`
-(OAuth/Dashboard/Financeiro da conexão Meta nativa) e 2 são "negative controls" de `auth/revogacao` (FASE-2)
-e `auth/login-tenant` (INV-02) — subsistemas que esta fase nunca tocou. A suspeita imediata foi contenção de
-recursos: esta máquina teve, durante boa parte desta sessão, OUTRAS sessões rodando suítes pesadas em
-paralelo (containers `oria-test-pg`/`oria-test-pg-journey-l` de outras sessões, nunca tocados) — e os tempos
-batem: o primeiro teste de `meta-store-nativa` levou 75s na rodada cheia contra 5,6s isolado (13x); as duas
-negative controls levaram 233s/353s (com a mensagem "[3] o processo não executou nenhum teste — o resultado
-não significa nada", um sintoma de subprocess starved de CPU) contra 44s/78s isolado, completando e
-encontrando resultado normalmente.
+Nenhuma das 16 tem qualquer relação com Product Enrichment: 14 são de `meta-store-nativa.test.js` e 2 são
+"negative controls" de `auth/revogacao`/`auth/login-tenant` — subsistemas que esta fase nunca tocou. Suspeita
+de contenção de recursos (outras sessões rodando suítes pesadas em paralelo nesta máquina, containers
+próprios, nunca tocados): os tempos batem — o primeiro teste de `meta-store-nativa` levou 75s na rodada cheia
+contra 5,6s isolado; as duas negative controls levaram 233s/353s (com "[3] o processo não executou nenhum
+teste") contra 44s/78s isolado, completando normalmente.
 
-**Reproduzido, não assumido**: rodei os três arquivos isolados, sozinhos, no MESMO container efêmero criado
-só para isto:
+**Reproduzido, não assumido**: os três arquivos rodados isolados, sozinhos, num container efêmero dedicado
+só para isto — **16/16 passam limpo**. Mesmo padrão já registrado na Fase E para o flake de porta do R19.
 
-```
-node --test --test-concurrency=1 test/invariants/meta-store-nativa.test.js        → 14/14 (antes: 14 falhas)
-node --test --test-concurrency=1 --test-name-pattern="auth.revogacao|auth.login-tenant" \
-     test/invariants/negative-controls.test.js                                    → 2/2  (antes: 2 falhas)
-```
-
-**As 16 falhas da rodada cheia = as mesmas 16, sem exceção, e todas passam limpo quando a máquina não está
-sob disputa.** Isto é exatamente o precedente já registrado na Fase E para o flake de porta do R19 (mesmo
-padrão: diagnosticado, reproduzido isolado, nunca just declarado "ambiental" sem prova) — nada na F.2.B
-altera esses subsistemas, e o número TRUE da rodada (1355/1371, não 1371/1371) é reportado aqui sem
-maquiagem, com a causa raiz identificada e a prova de reprodução ao lado.
-
-**Achado real durante a primeira rodada completa** (não descartado como "ambiental"): `tenancy-schema.test.js`
-reprovou — `docs/productization/tenant-owned-tables.md` está GERADO a partir do manifesto de tenancy
-(`scripts/tenancy/gerar-manifesto.mjs`), e eu tinha editado o manifesto (nova tabela global) sem rodar o
-gerador. Corrigido rodando `node scripts/tenancy/gerar-manifesto.mjs` (18→19 globais declaradas no
-documento) — junto com um segundo achado da revisão do próprio código antes da rodada final: a resolução da
-referência de imagem podia falhar DEPOIS de já ter reservado o orçamento (arquivo corrompido/ausente),
-deixando uma reserva presa até o TTL por um motivo que nada tem a ver com a OpenAI — corrigido movendo a
-resolução da referência para ANTES da reserva (`routes/criativos.js`), com um teste novo cobrindo o caso.
-Suíte completa repetida do zero depois das duas correções — o número abaixo é dessa rodada final.
+**Dois achados adicionais corrigidos durante a rodada completa** (documentados, não escondidos):
+`docs/productization/tenant-owned-tables.md` estava desatualizado (gerado do manifesto de tenancy — corrigido
+rodando `scripts/tenancy/gerar-manifesto.mjs`); e a resolução da referência de imagem podia falhar DEPOIS de
+já ter reservado orçamento — corrigido movendo a resolução para ANTES da reserva, com teste novo.
 
 Migration 0038 — checklist da F.1/F.2.A seguido: `migrations.test.js`, `inv-td003-postgres-obrigatorio.test.js`,
-`r19-runbook-dry-run.test.js` (listas hardcoded), `tenancy-migrations.test.js::DEPOIS_DA_FASE1` (25→26),
-`creative-core-pg.test.js` (12→13 tabelas `creative_*`) atualizados. `tenancy-isolation.test.js` não precisou
-de caso novo — a tabela é GLOBAL, fora do loop de RLS por desenho.
+`r19-runbook-dry-run.test.js`, `tenancy-migrations.test.js::DEPOIS_DA_FASE1` (25→26), `creative-core-pg.test.js`
+(12→13 tabelas) atualizados. `tenancy-isolation.test.js` não precisou de caso novo (tabela global, fora da RLS).
 
-## 7. O bloqueio real: nenhuma chave OpenAI disponível
+## 9. Riscos para rollout
 
-Verificado nesta sessão, sem inventar nem pedir por atalho:
+- **Detecção de texto com `detail: "low"`**: funcionou bem no caso de teste (texto grande, alto contraste,
+  600×800px) — não está confirmado para texto pequeno/denso ou fotos de baixa qualidade reais. Recomendação:
+  monitorar a taxa de `visible_text` vazio em um piloto maior antes de assumir que `"low"` é suficiente em
+  geral.
+- **Cota atômica por instância de banco, não entre bancos/shards** — sem risco prático nesta escala (ver §2).
+- **Consistência entre reserva `succeeded` e gravação da proposta**: se `store.createProposal` falhar
+  DEPOIS de uma chamada real bem-sucedida, a reserva já registra sucesso/custo real, mas a proposta em si não
+  é salva. Janela pequena, não corrigida nesta rodada (documentada para produção).
+- **O client HTTPS mínimo (§6) é um workaround desta sessão, não a arquitetura de produção** — confirmar que
+  um ambiente de deploy real tem o pacote `openai` instalado antes de assumir que o SDK oficial funciona lá
+  (muito provável, mas não testado nesta rodada).
+- **Amostra pequena (3 casos)**: suficiente para validar a integração ponta a ponta e a qualidade básica, não
+  para generalizar sobre a distribuição real de produtos de um lojista. Um piloto maior (F.2.C, fora de
+  escopo aqui) é o próximo passo natural, mediante nova autorização.
+- **Modelo do roteador (`gpt-5.6`)**: risco RESOLVIDO — era uma leitura incorreta, não um bug (§0).
 
-- `env | grep -i OPENAI` — vazio.
-- Nenhum `.env` com credenciais reais no repositório (só um `.env.example` de outro serviço, sem relação).
-- Conectividade de saída para `api.openai.com` **existe** (testado: `HTTP 401` de verdade, sem chave — a
-  rede não é o problema).
-- O mecanismo BYOK (`PUT /settings/openai-key`) grava a chave cifrada num Postgres real e persistente — mas
-  todo ambiente desta sessão é Postgres EFÊMERO (destruído ao fim de cada rodada de teste), e não há uma
-  instância do painel implantada (proibido implantar nesta fase) onde alguém pudesse cadastrar uma chave
-  pelo fluxo normal.
-- Por desenho de segurança (deste agente e do próprio produto), uma API key real não deve ser colada em
-  texto solto numa conversa nem manuseada fora do cofre cifrado — não pedi isso, e não aceitaria se
-  oferecido dessa forma.
+## 10. Confirmação
 
-**Consequência**: os itens (a) relatório de preflight, (b) evidência de concorrência/idempotência e (e)
-riscos para rollout deste documento estão completos. Os itens (c) custos efetivamente medidos e (d)
-avaliação campo a campo **não existem** porque nenhuma chamada real ocorreu — não por terem sido
-negligenciados.
-
-## 8. Riscos para rollout (revisado da F.2.A)
-
-- **Chave/ambiente para o piloto**: ver §7 — é o bloqueio ativo agora, não uma questão de código.
-- **Cota atômica por instância de banco, não entre bancos/shards** — ver nota no §2; sem risco prático nesta
-  escala.
-- **`visible_text` com `detail: "low"`**: pode ler mal texto pequeno/denso — escolha deliberada de custo;
-  revisitar `detail` por caso (não por padrão global) se o piloto real mostrar isso como problema recorrente.
-- **Consistência entre a reserva finalizada como `succeeded` e a gravação da proposta**: se
-  `store.createProposal` falhar DEPOIS de uma chamada real bem-sucedida (ex.: erro de banco no exato
-  momento seguinte), a reserva já registra sucesso/custo real, mas a proposta em si não é salva — um humano
-  precisaria notar e, se necessário, pedir uma nova análise (a idempotência por produto permite, respeitando
-  o orçamento restante). Não corrigido nesta rodada por ser uma janela extremamente pequena e por este ser
-  um piloto de no máximo 3 chamadas — documentado para uma versão de produção.
-- **Modelo do roteador (`gpt-5.6`)**: risco RESOLVIDO nesta rodada — era uma leitura incorreta, não um bug.
-
-## 9. Confirmação
-
-Zero chamada OpenAI paga, zero chave manuseada fora do BYOK cifrado, zero push/merge/deploy, zero ativação de
-flag em ambiente de cliente. Trabalho feito inteiramente no worktree `oria-creative-fase-a` (branch
-`feature/creative-fase-c`), sem tocar processos ou recursos de outras sessões (containers Postgres próprios,
-nomeados e limpos por esta sessão; outras sessões identificadas e nunca tocadas). **Parando aqui — o piloto
-pago não foi executado porque a chave não está disponível, não porque algum gate reprovou.** Aguardando a
-decisão do usuário sobre como (ou se) suprir uma chave real para uma Organization de teste antes de
-prosseguir.
+3 chamadas reais à OpenAI, custo total ≈ US$ 0,001268 (dentro do teto de US$ 0,05), zero produto alterado
+automaticamente, zero aprovação automática, zero chave exposta em log/commit/relatório, zero push/merge/deploy,
+zero ativação de flag em ambiente de cliente. Trabalho feito inteiramente no worktree `oria-creative-fase-a`
+(branch `feature/creative-fase-c`), infraestrutura local (Postgres, serviço Python) derrubada ao final, sem
+tocar processos ou recursos de outras sessões. **Piloto concluído — parando aqui para sua revisão das 3
+propostas pendentes e decisão sobre os próximos passos (F.2.C ou encerramento).**
