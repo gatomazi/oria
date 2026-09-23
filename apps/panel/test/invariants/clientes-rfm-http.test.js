@@ -326,6 +326,14 @@ test('segmento RFM: definição vem do servidor, fica dinâmica com versão e da
   const prev = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: linha.filtros, exclusions: { semOptIn: false, numeroInvalido: false } } });
   assert.equal(prev.status, 200, prev.texto);
   assert.ok(Math.abs(prev.json.matched - alvo.clientes) <= 2, `preview ${prev.json.matched} vs segmento ${alvo.clientes} (bordas de 1 dia)`);
+
+  // Clicar de novo com a mesma regra reaproveita o segmento salvo, em vez de gerar duplicata.
+  const repetido = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Outro nome', origem: 'rfm', segmento: alvo.id } });
+  assert.equal(repetido.status, 200, repetido.texto);
+  assert.equal(repetido.json.reaproveitado, true);
+  assert.equal(repetido.json.segmento.id, criar.json.segmento.id);
+  assert.equal(repetido.json.segmento.origem, 'rfm');
+  assert.equal(repetido.json.segmento.politica, 'dinamico');
 });
 
 test('segmento: recusa origem/segmento inválidos e filtro sem campo avaliável; não aparece para outra Organization', async () => {

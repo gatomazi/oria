@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react';
 import { MiniSparkline } from './MiniSparkline';
+import { InfoTooltip } from './Tooltip';
 
 // Célula de KPI dentro de <KpiStrip> (DESIGN.md › KPI Strip). `icon` é o miolo de um <svg> 24x24
 // (ver icons.ts) e sai monocromático. `tone` é mantido por compatibilidade e não pinta mais nada:
@@ -17,9 +19,11 @@ interface KpiCardProps {
   // Série real opcional (ex: últimos N dias) — só passe quando houver dado real o bastante pra
   // desenhar uma linha (2+ pontos); não fabricar série pra preencher a célula.
   sparkline?: number[];
+  // Definição/denominador do número, sob demanda (ícone "i" ao lado do rótulo).
+  info?: ReactNode;
 }
 
-export function KpiCard({ title, value, helper, delta, trend, icon, sparkline }: KpiCardProps) {
+export function KpiCard({ title, value, helper, delta, trend, icon, sparkline, info }: KpiCardProps) {
   // Estado em palavra ("Indisponível", "Conectado") não é número: sai em tamanho de texto, sem cortar.
   const textual = typeof value === 'string' && value.length > 1 && !/\d/.test(value);
   return (
@@ -41,6 +45,7 @@ export function KpiCard({ title, value, helper, delta, trend, icon, sparkline }:
           />
         )}
         <span className="ds-kpi__title-text">{title}</span>
+        {info && <InfoTooltip content={info} />}
         {sparkline && sparkline.length > 1 && (
           <span className="ds-kpi__sparkline" aria-hidden="true">
             <MiniSparkline values={sparkline} />

@@ -20,7 +20,7 @@ const ROTAS = Object.freeze([
   // Rodada H→I: Product Analytics (GA4 + Commerce/reconciliação) — feature própria, nunca
   // `analytics_ga4` (aquela é "capacidade sem_guard" hoje; esta é a feature com guard real).
   [/^\/api\/admin\/product-analytics(\/|$)/, 'analytics_product_performance'],
-  [/^\/api\/admin\/(whatsapp|whatsapp-web|whatsapp-templates|campaigns|segments|automacao-eventos|automation-settings|recuperacao|dashboard\/recuperacao-resumo)(\/|$)/, 'whatsapp'],
+  [/^\/api\/admin\/(whatsapp|whatsapp-web|whatsapp-templates|campaigns|segments|clientes\/segmentos|automacao-eventos|automation-settings|recuperacao|dashboard\/recuperacao-resumo)(\/|$)/, 'whatsapp'],
   [/^\/api\/admin\/criativos(\/|$)/, 'creative_generator'],
   // ── Em transição ────────────────────────────────────────────────────────────────────────────
   // Conceitualmente são capacidades do Connector Ink (ROTAS_CAPABILITY abaixo descreve o destino).

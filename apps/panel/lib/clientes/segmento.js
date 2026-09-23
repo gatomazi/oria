@@ -49,6 +49,7 @@ function filtrosDaConsulta(consulta) {
   faixa('totalGasto', consulta.ltvMin, consulta.ltvMax);
   faixa('ticketMedio', consulta.ticketMin, consulta.ticketMax);
   if (consulta.marketing === 'sim') filtros.push({ field: 'optIn', value: true });
+  if (consulta.uf) filtros.push({ field: 'uf', op: 'eq', value: consulta.uf });
   const naoConvertidos = [];
   if (consulta.busca) naoConvertidos.push('busca');
   if (consulta.primeiraDe || consulta.primeiraAte) naoConvertidos.push('data da primeira compra');

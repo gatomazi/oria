@@ -7595,11 +7595,22 @@ async function lerPedidosParaClientes() {
   return rows;
 }
 
-async function analisarClientesDaStore({ de, ate } = {}) {
+const DIAS_DO_PERIODO = Object.freeze(['30', '90', '180', '365']);
+
+// `dias` (lista de permissão) ou `tudo` = do primeiro pedido sincronizado até hoje; sem `de`/`ate` válidos cai em 30 dias.
+async function analisarClientesDaStore({ de, ate, dias } = {}) {
   const linhas = await lerPedidosParaClientes();
   const agora = new Date();
   const hoje = clientesMetricas.dataLocal(agora, FUSO_ORGANIZACAO);
-  const periodo = clientesMetricas.normalizarPeriodo({ de, ate }, { hoje });
+  let periodo;
+  if (dias === 'tudo') {
+    const primeiro = linhas.reduce((min, l) => (l.criado_em && (min == null || new Date(l.criado_em) < min) ? new Date(l.criado_em) : min), null);
+    periodo = clientesMetricas.normalizarPeriodo({ de: primeiro ? clientesMetricas.dataLocal(primeiro, FUSO_ORGANIZACAO) : undefined, ate: hoje }, { hoje });
+  } else if (DIAS_DO_PERIODO.includes(dias)) {
+    periodo = clientesMetricas.normalizarPeriodo({ ate: hoje }, { hoje, diasPadrao: Number(dias) });
+  } else {
+    periodo = clientesMetricas.normalizarPeriodo({ de, ate }, { hoje });
+  }
   return {
     ...clientesAnalise.analisarPedidos(linhas, { asOf: agora, periodo, fuso: FUSO_ORGANIZACAO, chaveDoContexto: chaveDaStore() }),
     linhas, periodo, hoje, agora,
@@ -7657,7 +7668,8 @@ app.get('/api/admin/clientes/resumo', requireAdmin, async (req, res) => {
   try {
     const de = typeof req.query.de === 'string' ? req.query.de : undefined;
     const ate = typeof req.query.ate === 'string' ? req.query.ate : undefined;
-    const analise = await analisarClientesDaStore({ de, ate });
+    const dias = typeof req.query.dias === 'string' ? req.query.dias : undefined;
+    const analise = await analisarClientesDaStore({ de, ate, dias });
     const sync = await coberturaDeSincronizacao();
     const { rfm } = analise;
     res.json({
@@ -7844,10 +7856,20 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'origem deve ser "rfm" ou "clientes"' });
     }
 
+    // Mesmo segmento RFM com a mesma regra já salvo: reaproveita em vez de criar duplicata a cada clique.
+    if (origem === 'rfm') {
+      const existente = await pgPool.query(
+        `SELECT ${SEGMENTO_COLUNAS} FROM segments WHERE origem = 'rfm' AND rfm_segmento = $1 AND predicado = $2::jsonb ORDER BY criado_em DESC LIMIT 1`,
+        [rfmSegmento, JSON.stringify(predicado)]
+      );
+      if (existente.rows[0]) {
+        return res.json({ segmento: mapSegmentoRow(existente.rows[0]), reaproveitado: true, politica: 'dinamico', origem, predicado, observacoes, naoConvertidos });
+      }
+    }
     const { rows } = await pgPool.query(
       `INSERT INTO segments (nome, match, filtros, exclusoes, criado_por, origem, politica, predicado, rfm_versao, classificado_em, rfm_segmento)
        VALUES ($1,'ALL',$2,$3,$4,$5,'dinamico',$6,$7,$8,$9)
-       RETURNING id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em`,
+       RETURNING ${SEGMENTO_COLUNAS}`,
       [nome, JSON.stringify(filtros), JSON.stringify({}), req.auth.userId, origem, predicado ? JSON.stringify(predicado) : null, rfmVersao, classificadoEm, rfmSegmento]
     );
     await registrarAuditoria(pgPoolReal, {
@@ -8137,13 +8159,17 @@ function mapSegmentoRow(r) {
   return {
     id: String(r.id), nome: r.nome, match: r.match, filtros: r.filtros, exclusoes: r.exclusoes,
     criadoPor: r.criado_por, criadoEm: r.criado_em, atualizadoEm: r.atualizado_em,
+    // Origem e regra (segmentos vindos de Clientes/RFM); segmentos antigos são 'filtros', dinâmicos, sem regra RFM.
+    origem: r.origem || 'filtros', politica: r.politica || 'dinamico', predicado: r.predicado || null,
+    rfmVersao: r.rfm_versao || null, classificadoEm: r.classificado_em || null, rfmSegmento: r.rfm_segmento || null,
   };
 }
+const SEGMENTO_COLUNAS = 'id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em, origem, politica, predicado, rfm_versao, classificado_em, rfm_segmento';
 
 app.get('/api/admin/segments', requireAdmin, async (req, res) => {
   if (!pgPool) return res.json({ segmentos: [] });
   try {
-    const { rows } = await pgPool.query('SELECT id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em FROM segments ORDER BY criado_em DESC');
+    const { rows } = await pgPool.query(`SELECT ${SEGMENTO_COLUNAS} FROM segments ORDER BY criado_em DESC`);
     res.json({ segmentos: rows.map(mapSegmentoRow) });
   } catch (err) {
     console.error(`[CAMPANHAS] falha ao listar segmentos: ${err.message}`);
@@ -8158,7 +8184,7 @@ app.post('/api/admin/segments', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pgPool.query(
       `INSERT INTO segments (nome, match, filtros, exclusoes, criado_por) VALUES ($1,$2,$3,$4,$5)
-       RETURNING id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em`,
+       RETURNING ${SEGMENTO_COLUNAS}`,
       [String(nome).trim(), match === 'ANY' ? 'ANY' : 'ALL', JSON.stringify(filtros || []), JSON.stringify(exclusoes || {}), 'admin']
     );
     res.json({ segmento: mapSegmentoRow(rows[0]) });
@@ -8175,7 +8201,7 @@ app.put('/api/admin/segments/:id', requireAdmin, exigirRecurso('segments'), asyn
   try {
     const { rows } = await pgPool.query(
       `UPDATE segments SET nome=$1, match=$2, filtros=$3, exclusoes=$4, atualizado_em=now() WHERE id=$5
-       RETURNING id, nome, match, filtros, exclusoes, criado_por, criado_em, atualizado_em`,
+       RETURNING ${SEGMENTO_COLUNAS}`,
       [String(nome).trim(), match === 'ANY' ? 'ANY' : 'ALL', JSON.stringify(filtros || []), JSON.stringify(exclusoes || {}), req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'segmento não encontrado' });

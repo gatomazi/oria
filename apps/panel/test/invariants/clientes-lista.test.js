@@ -111,7 +111,7 @@ test('entrada por lista de permissão: valor fora dela cai no padrão, nunca é 
       page: 1, perPage: 100, ordem: 'compras_desc', inativoDias: null, busca: '', tipo: 'todos',
       // Filtros avançados (RFM/faixas): todos ausentes por padrão.
       segmentos: [], recenciaMin: null, recenciaMax: null, pedidosMin: null, pedidosMax: null, ltvMin: null, ltvMax: null,
-      ticketMin: null, ticketMax: null, primeiraDe: null, primeiraAte: null, ultimaDe: null, ultimaAte: null, marketing: null,
+      ticketMin: null, ticketMax: null, primeiraDe: null, primeiraAte: null, ultimaDe: null, ultimaAte: null, marketing: null, uf: null,
     });
   assert.equal(consulta({ tipo: 'sem_pedido' }).tipo, 'sem_pedido');
   assert.equal(consulta({ tipo: 'qualquer' }).tipo, 'todos', 'tipo fora da lista de permissão cai no padrão');
@@ -237,4 +237,12 @@ test('a resposta leva segmento e RFM; ordena por LTV', () => {
   const r = listarClientes(base, consulta({ ordem: 'ltv_desc' }));
   assert.equal(r.clientes[0].ltv, 5000);
   assert.deepEqual(r.clientes[1].rfm, { r: 5, f: 1, m: 3 });
+});
+
+test('filtro por UF: só sigla da lista de permissão; cliente sem UF nunca casa', () => {
+  assert.equal(consulta({ uf: 'rs' }).uf, 'RS');
+  assert.equal(consulta({ uf: 'XX' }).uf, null);
+  assert.equal(consulta({ uf: "RS' OR 1=1" }).uf, null);
+  const base = [comRfm(1, 'novos', { uf: 'RS' }), comRfm(2, 'novos', { uf: 'SC' }), comRfm(3, 'novos')];
+  assert.equal(listarClientes(base, consulta({ uf: 'RS' })).total, 1);
 });

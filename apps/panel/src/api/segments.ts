@@ -10,6 +10,12 @@ export interface Segmento {
   criadoPor: string | null;
   criadoEm: string;
   atualizadoEm: string;
+  // Origem e regra (segmentos vindos de Clientes/RFM); segmentos antigos são 'filtros', dinâmicos, sem regra RFM.
+  origem: 'filtros' | 'rfm' | 'clientes';
+  politica: 'dinamico';
+  rfmVersao: string | null;
+  classificadoEm: string | null;
+  rfmSegmento: string | null;
 }
 
 export interface SegmentoInput {

@@ -14,6 +14,7 @@
 const { REGRAS, SEGMENTO_INSUFICIENTE } = require('./rfm');
 const { diaValido, dataLocal } = require('./metricas');
 
+const UFS = Object.freeze(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
 const ORDENS = Object.freeze(['compras_desc', 'lucro_desc', 'inativos_primeiro', 'nome', 'ltv_desc']);
 // Valores aceitos em `segmento`: os da RFM, mais "sem_compra" (só cadastro, sem pedido válido — fora da RFM).
 const SEGMENTOS = Object.freeze([...REGRAS.map((r) => r.id), SEGMENTO_INSUFICIENTE.id, 'sem_compra']);
@@ -58,6 +59,8 @@ function normalizarConsulta(query = {}) {
     primeiraDe: diaOuNulo(query.primeiraDe), primeiraAte: diaOuNulo(query.primeiraAte),
     ultimaDe: diaOuNulo(query.ultimaDe), ultimaAte: diaOuNulo(query.ultimaAte),
     marketing,
+    // UF do endereço de entrega do pedido mais recente que a informa (captura real; lista de permissão).
+    uf: typeof query.uf === 'string' && UFS.includes(query.uf.toUpperCase()) ? query.uf.toUpperCase() : null,
   };
 }
 
@@ -103,6 +106,7 @@ function passaFiltrosAvancados(c, q) {
   if ((q.ticketMin != null || q.ticketMax != null) && !dentro(c.ticketMedioValido, q.ticketMin, q.ticketMax)) return false;
   if ((q.primeiraDe || q.primeiraAte) && !diaDentro(c.primeiraCompraEm, q.primeiraDe, q.primeiraAte)) return false;
   if ((q.ultimaDe || q.ultimaAte) && !diaDentro(c.ultimaCompraEm, q.ultimaDe, q.ultimaAte)) return false;
+  if (q.uf && c.uf !== q.uf) return false;
   if (q.marketing === 'sim' && !c.aceitaMarketing) return false;
   if (q.marketing === 'nao' && c.aceitaMarketing) return false;
   return true;
@@ -132,6 +136,7 @@ function paraTela(c) {
     pedidosValidos: c.pedidosValidos || 0,
     ltv: c.ltv == null ? null : c.ltv,
     ticketMedioValido: c.ticketMedioValido == null ? null : c.ticketMedioValido,
+    uf: c.uf || null,
   };
 }
 

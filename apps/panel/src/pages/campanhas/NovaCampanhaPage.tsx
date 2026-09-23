@@ -163,6 +163,17 @@ export function NovaCampanhaPage() {
       .catch(() => setSegmentos([]));
   }, []);
 
+  // Vindo de Clientes (`?segmento=ID`): já abre com a audiência do segmento salvo aplicada.
+  const segmentoDaUrl = params.get('segmento');
+  useEffect(() => {
+    if (!segmentoDaUrl || editarId || !segmentos) return;
+    const s = segmentos.find((x) => x.id === segmentoDaUrl);
+    if (!s) return;
+    setSegmentoSelecionado(s.id);
+    setAudiencia(audienceStateDeSalvo(s.match, s.filtros, s.exclusoes));
+    setNome((atual) => atual || s.nome);
+  }, [segmentoDaUrl, editarId, segmentos]);
+
   function aplicarSegmento(id: string) {
     setSegmentoSelecionado(id);
     if (!id) return;

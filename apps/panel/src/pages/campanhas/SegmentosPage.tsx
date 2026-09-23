@@ -120,6 +120,12 @@ export function SegmentosPage() {
           onRowClick={(s) => { setEditando(s); setDrawerAberto(true); }}
           columns={[
             { key: 'nome', label: 'Nome', render: (s) => s.nome, sortValue: (s) => s.nome },
+            {
+              key: 'origem', priority: 'low', label: 'Origem',
+              render: (s) => (s.origem === 'rfm' ? `RFM ${s.rfmVersao ?? ''}`.trim() : s.origem === 'clientes' ? 'Filtros de Clientes' : 'Construtor'),
+              sortValue: (s) => s.origem,
+            },
+            { key: 'politica', priority: 'low', label: 'Tipo', muted: true, render: () => 'Dinâmico' },
             { key: 'match', priority: 'low', label: 'Lógica', render: (s) => (s.match === 'ANY' ? 'Qualquer condição' : 'Todas as condições') },
             { key: 'filtros', label: 'Filtros', align: 'right', render: (s) => plural(s.filtros?.length || 0, 'filtro', 'filtros') },
             { key: 'criadoEm', priority: 'low', label: 'Criado em', align: 'right', muted: true, render: (s) => new Date(s.criadoEm).toLocaleDateString('pt-BR') },
