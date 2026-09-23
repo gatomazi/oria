@@ -107,7 +107,12 @@ test('página além do fim volta para a última; lista vazia tem 1 página', () 
 
 test('entrada por lista de permissão: valor fora dela cai no padrão, nunca é interpretado', () => {
   assert.deepEqual(consulta({ page: 'abc', per_page: '9999', ordem: 'DROP', inativoDias: '45', busca: 5 }),
-    { page: 1, perPage: 100, ordem: 'compras_desc', inativoDias: null, busca: '', tipo: 'todos' });
+    {
+      page: 1, perPage: 100, ordem: 'compras_desc', inativoDias: null, busca: '', tipo: 'todos',
+      // Filtros avançados (RFM/faixas): todos ausentes por padrão.
+      segmentos: [], recenciaMin: null, recenciaMax: null, pedidosMin: null, pedidosMax: null, ltvMin: null, ltvMax: null,
+      ticketMin: null, ticketMax: null, primeiraDe: null, primeiraAte: null, ultimaDe: null, ultimaAte: null, marketing: null,
+    });
   assert.equal(consulta({ tipo: 'sem_pedido' }).tipo, 'sem_pedido');
   assert.equal(consulta({ tipo: 'qualquer' }).tipo, 'todos', 'tipo fora da lista de permissão cai no padrão');
   assert.equal(consulta({ tipo: ['sem_pedido'] }).tipo, 'todos');
@@ -179,4 +184,57 @@ test('toda linha tem chave ÚNICA, mesmo com duas contas de cadastro com o mesmo
   assert.equal(chaves.length, 4, '1 do histórico + 3 de cadastro');
   // A mesma entrada sempre gera as mesmas chaves (a página não muda entre chamadas).
   assert.deepEqual(unirComCadastro(historico, cadastro, { loja: 'l' }).map((c) => c.customerKey), chaves);
+});
+
+test('filtros avançados: segmento, faixas e datas só aceitam valor da lista de permissão ou número/dia válido', () => {
+  const q = consulta({ segmento: 'novos,campeoes,DROP TABLE,novos', recenciaMin: '30', recenciaMax: '1e9', pedidosMin: '-1', ltvMin: '150.5', primeiraDe: '2026-02-30', ultimaAte: '2026-09-23', marketing: 'talvez' });
+  assert.deepEqual(q.segmentos, ['novos', 'campeoes'], 'só ids conhecidos, sem repetir');
+  assert.equal(q.recenciaMin, 30);
+  assert.equal(q.recenciaMax, null, 'notação científica não é número aceito');
+  assert.equal(q.pedidosMin, null, 'negativo não é aceito');
+  assert.equal(q.ltvMin, 150.5);
+  assert.equal(q.primeiraDe, null, 'data impossível é ignorada');
+  assert.equal(q.ultimaAte, '2026-09-23');
+  assert.equal(q.marketing, null);
+  assert.deepEqual(consulta({ segmento: ['novos', 'sem_compra'] }).segmentos, ['novos', 'sem_compra'], 'parâmetro repetido também vale');
+});
+
+function comRfm(i, segmento, extra = {}) {
+  return cliente(i, {
+    origem: 'pedido', totalCompras: 1, pedidosValidos: 1, ltv: 100 + i, ticketMedioValido: 100 + i,
+    segmento, segmentoNome: segmento, diasSemComprar: i, ultimaCompraEm: '2026-09-20T15:00:00Z', primeiraCompraEm: '2026-09-01T15:00:00Z', ...extra,
+  });
+}
+
+test('filtro por segmento devolve exatamente o público do segmento e o total reflete o filtro', () => {
+  const base = [comRfm(1, 'novos'), comRfm(2, 'novos'), comRfm(3, 'campeoes'), comRfm(4, 'perdidos'), cliente(5, { origem: 'cadastro' })];
+  const r = listarClientes(base, consulta({ segmento: 'novos' }));
+  assert.equal(r.total, 2);
+  assert.deepEqual(r.clientes.map((c) => c.segmento), ['novos', 'novos']);
+  assert.equal(listarClientes(base, consulta({ segmento: 'novos,campeoes' })).total, 3);
+  assert.equal(listarClientes(base, consulta({ segmento: 'sem_compra' })).total, 1, 'quem só tem cadastro casa só com sem_compra');
+});
+
+test('faixas combinam (E): recência, pedidos, LTV e datas', () => {
+  const base = [comRfm(10, 'novos'), comRfm(20, 'novos', { pedidosValidos: 3 }), comRfm(30, 'leais', { ltv: 900 })];
+  assert.equal(listarClientes(base, consulta({ recenciaMin: '15', recenciaMax: '25' })).total, 1);
+  assert.equal(listarClientes(base, consulta({ pedidosMin: '2' })).total, 1);
+  assert.equal(listarClientes(base, consulta({ ltvMin: '500' })).total, 1);
+  assert.equal(listarClientes(base, consulta({ recenciaMin: '5', ltvMax: '200', pedidosMax: '1' })).total, 1);
+  assert.equal(listarClientes(base, consulta({ ultimaDe: '2026-09-21' })).total, 0);
+  assert.equal(listarClientes(base, consulta({ ultimaDe: '2026-09-20', ultimaAte: '2026-09-20' })).total, 3);
+  assert.equal(listarClientes(base, consulta({ primeiraAte: '2026-08-31' })).total, 0);
+});
+
+test('faixa nunca casa cliente sem o campo (só cadastro não entra em recência/LTV)', () => {
+  const base = [comRfm(1, 'novos'), cliente(2, { origem: 'cadastro' })];
+  assert.equal(listarClientes(base, consulta({ recenciaMin: '0' })).total, 1);
+  assert.equal(listarClientes(base, consulta({ ltvMin: '0' })).total, 1);
+});
+
+test('a resposta leva segmento e RFM; ordena por LTV', () => {
+  const base = [comRfm(1, 'novos', { rfm: { r: 5, f: 1, m: 3 } }), comRfm(2, 'leais', { ltv: 5000 })];
+  const r = listarClientes(base, consulta({ ordem: 'ltv_desc' }));
+  assert.equal(r.clientes[0].ltv, 5000);
+  assert.deepEqual(r.clientes[1].rfm, { r: 5, f: 1, m: 3 });
 });
