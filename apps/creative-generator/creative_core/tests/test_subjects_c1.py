@@ -247,6 +247,18 @@ def test_given_no_interaction_then_it_comes_from_the_products_scene_intents_or_t
     assert plan["scene"]["interaction"] == "reading_together"
 
 
+def test_given_field_origin_then_it_prefers_the_per_field_record_and_falls_back_to_the_aggregate():
+    """Fase F.2.A: composition.field_origin is the single place that resolves ONE field's provenance."""
+    assert composition.field_origin(None, "wearer_roles") is None, "no semantic_context at all"
+    old_style = {"wearer_roles": ["child"], "source": "enrichment"}
+    assert composition.field_origin(old_style, "wearer_roles") == "product_enrichment", "no field_sources — old aggregate rules, unchanged"
+    mixed = {"wearer_roles": ["child"], "recommended_supporting_roles": ["father"], "source": "enrichment",
+             "field_sources": {"wearer_roles": "manual"}}
+    assert composition.field_origin(mixed, "wearer_roles") == "product", "explicit per-field record wins over the aggregate"
+    assert composition.field_origin(mixed, "recommended_supporting_roles") == "product_enrichment", "no per-field record for THIS field — falls back to the aggregate"
+    assert composition.field_origin(mixed, "scene_intents") == "product_enrichment", "unpopulated field, same fallback rule"
+
+
 def test_given_the_gaze_then_the_interaction_implies_it_unless_the_user_asked_for_another():
     assert _plan("c-duas-irmas")["scene"]["gaze"]["reason"] == "interaction:candid"
     walking = plan_creative(_explicit(interaction="walking"), router=ROUTER)
@@ -337,6 +349,28 @@ def test_given_an_enrichment_sourced_semantic_context_then_the_recommended_cast_
     request["products"][0]["semantic_context"]["source"] = "enrichment"
     plan = plan_creative(request, router=ROUTER)
     assert plan["subjects"][1]["source"] == "product_enrichment" and plan["provenance"]["scene.interaction"] == "product_enrichment"
+
+
+def test_given_a_partially_approved_proposal_then_only_the_accepted_fields_are_attributed_to_the_enrichment():
+    """Fase F.2.A audit: a partial approval (`recommended_supporting_roles`/`scene_intents` accepted,
+    `wearer_roles` preserved manual) used to flip the object's aggregate `source`, which made this SAME fixture's
+    primary subject (cast from `wearer_roles`) read as `product_enrichment` — wrong, since the lojista never
+    touched that field. `field_sources` is what the real merge (enrichment.merge / mergeSemanticContext) would
+    have written for exactly this decision."""
+    request = _fixture("a-pai-e-filha")
+    semantic = request["products"][0]["semantic_context"]
+    semantic["source"] = "enrichment"
+    semantic["field_sources"] = {
+        "wearer_roles": "manual", "relationship_themes": "manual",
+        "incompatible_auto_supporting_roles": "manual", "visible_text": "manual",
+        "recommended_supporting_roles": "enrichment", "scene_intents": "enrichment",
+    }
+    plan = plan_creative(request, router=ROUTER)
+    assert plan["subjects"][0]["source"] == "product", "wearer_roles was never accepted — stays attributed to the product, not the enrichment"
+    assert plan["subjects"][1]["source"] == "product_enrichment", "recommended_supporting_roles WAS accepted"
+    assert plan["provenance"]["scene.interaction"] == "product_enrichment", "scene_intents WAS accepted"
+    assert plan["provenance"]["semantics"] == "mixed", "populated fields genuinely disagree on origin"
+    assert contracts.validate("CreativePlan", plan) == []
 
 
 # ------------------------------------------------------------------ legacy stays legacy; frozen compiler v1

@@ -241,8 +241,19 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "incompatible_auto_supporting_roles": A(S(min_length=1, max_length=40), max_items=10),
         "scene_intents": A(S(min_length=1, max_length=40), max_items=10),
         "visible_text": A(S(min_length=1, max_length=200), max_items=10),
+        # Aggregate, kept for backward compatibility with every object written before Fase F.2.A (manual-only
+        # products, and any F.1 approval — both only ever had ONE source for the whole object). Still read as
+        # the fallback whenever `field_sources` doesn't cover a given field.
         "source": S(enum=("manual", "enrichment")),
         "confidence": N(minimum=0, maximum=1),
+        # Fase F.2.A — per-field provenance. Additive and optional: absent on every object written before this
+        # phase, and NEVER filled in retroactively for one (no inference from silence — see
+        # composition.py::field_origin). {field_name: "manual"|"enrichment"} / {field_name: 0..1}, keyed only by
+        # the 6 array fields above. The enum-of-values / range check for these two isn't expressible by the
+        # generic `M()` (map) field spec (string -> string only) — validated by enrichment.py instead, the same
+        # place that already owns the domain rule for which fields are mergeable at all.
+        "field_sources": O(nullable=True),
+        "field_confidence": O(nullable=True),
     },
     # Fase F.1 — Product Enrichment. A PROPOSAL, never applied automatically: `proposed` reuses
     # ProductSemanticContext as-is (the merge into the product writes exactly that shape, with
@@ -269,6 +280,13 @@ CONTRACTS: dict[str, dict[str, F]] = {
         # match and approval must be refused (§4, "exigir revalidação/revisão, sem aprovação silenciosa").
         "product_snapshot_hash": S(required=True, max_length=128),
         "created_at": S(required=True),
+        # Fase F.2.A — cost/observability (§4 of the brief). Additive, nullable: absent for every
+        # "fake" proposal (F.1's provider never had a cost) and for any object from before this
+        # phase. Deliberately narrow — model requested/served, prompt/schema version, TOKEN usage
+        # (never raw text), a cost estimate, attempts and latency. Never the raw provider response,
+        # never image bytes, never a credential — see enrichment.py's OpenAI provider for what
+        # actually populates this.
+        "provider_meta": O(nullable=True),
     },
     "CreativeProduct": {
         "id": ID,

@@ -12,7 +12,9 @@ server-to-server; browsers never do.
     POST /v1/feedback-snapshot {plan[, result_metadata, asset_sha256]} -> {snapshot: FeedbackSnapshot}   (pure — "Gostei / Não gostei")
     POST /v1/generations   {plan, references, openai_api_key[, generation_attempt, normalize_references]} -> CreativeResult
     POST /v1/copies        {request, openai_api_key}  -> {variants: CopyVariant[], usage}
-    POST /v1/enrichment/propose {product[, brand, niche, provider]} -> {proposal: EnrichmentProposal}   (pure, fake provider only — Fase F.1)
+    POST /v1/enrichment/propose {product[, brand, niche, provider, references]} -> {proposal: EnrichmentProposal}
+        (pure; `provider` "fake" (default) or "openai" — "openai" is implemented but makes no real
+        call this round: this route never wires a client, see _enrichment_propose)
 
 Security controls:
   * service-to-service auth: `Authorization: Bearer <CREATIVE_CORE_SERVICE_TOKEN>`,
@@ -283,16 +285,36 @@ class CreativeCoreService:
         return 200, {"draft": generation_draft_from_plan(self._persisted_plan(body))}
 
     def _enrichment_propose(self, environ: dict) -> tuple[int, dict]:
-        """Fase F.1 — a PROPOSAL about one product's semantic_context. Pure: no provider call beyond
-        the deterministic fake heuristic (no network, no key, no cost), no persistence — the panel
-        stores the returned envelope as a pending row and decides approval. `provider` defaults to
-        "fake" and, this phase, "fake" is the ONLY value accepted — a real provider is F.2, explicitly
-        out of scope here (see enrichment.py's module docstring)."""
-        body = self._read_json(environ, allowed={"product", "brand", "niche", "provider"}, required={"product"})
+        """A PROPOSAL about one product's semantic_context. Pure: no persistence — the panel stores
+        the returned envelope as a pending row and decides approval.
+
+        Fase F.2.A — `provider="openai"` is now accepted (validated against the same
+        `EnrichmentProposal.provider` enum the "fake" path always used), and `references` follows
+        the EXACT shape/validation `/v1/generations` already uses (`{"ref", "data_base64"}`, decoded
+        by magic bytes here — never a caller-supplied MIME label, never a URL: no SSRF surface).
+
+        This round still makes ZERO real OpenAI calls, structurally: this route deliberately does
+        NOT accept an `openai_api_key` field and never calls `self._client_factory` for this route,
+        so `enrichment.propose(..., client=None)` always refuses `provider="openai"` with a clean
+        INVALID_INPUT ("no client configured") before anything resembling a network call — see
+        enrichment.py's module note on `_OpenAIProvider` for the full reasoning. Wiring a real,
+        request-scoped client (mirroring `_generations`'/`_copies`' BYOK pattern) is explicit F.2.B
+        work, authorized separately."""
+        body = self._read_json(environ, allowed={"product", "brand", "niche", "provider", "references"}, required={"product"})
         provider = body.get("provider", "fake")
-        if provider != "fake":
-            raise GenerationError("INVALID_INPUT", {"errors": ["provider: only \"fake\" is available in this phase"]})
-        proposal = enrichment.propose(body["product"], brand=body.get("brand"), niche=body.get("niche"), provider=provider)
+        if provider not in enrichment._PROVIDER_NAMES:
+            raise GenerationError("INVALID_INPUT", {"errors": [f"provider: unknown ({provider})"]})
+        raw_refs = body.get("references") or []
+        if not isinstance(raw_refs, list) or len(raw_refs) > enrichment._MAX_REFERENCES:
+            raise GenerationError("INVALID_REFERENCE", {"reason": f"references must be a list of at most {enrichment._MAX_REFERENCES} items"})
+        references = []
+        for item in raw_refs:
+            if not isinstance(item, dict) or set(item) != {"ref", "data_base64"}:
+                raise GenerationError("INVALID_REFERENCE", {"reason": "each reference needs exactly ref and data_base64"})
+            decode_reference(str(item["data_base64"]))  # fail fast on a malformed reference — never a silent drop at this boundary
+            references.append({"data_base64": str(item["data_base64"])})
+        proposal = enrichment.propose(body["product"], brand=body.get("brand"), niche=body.get("niche"),
+                                      provider=provider, references=references, router=self._router)
         return 200, {"proposal": proposal}
 
     def _feedback_snapshot(self, environ: dict) -> tuple[int, dict]:

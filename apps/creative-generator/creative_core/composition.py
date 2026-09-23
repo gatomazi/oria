@@ -187,6 +187,22 @@ def _excluded(spec: dict, subjects: list) -> list[str]:
     return sorted({s["age_band"] for s in subjects if s["age_band"] in excluded})
 
 
+def field_origin(semantic: dict | None, field: str) -> str | None:
+    """Origin of one semantic_context field: 'product_enrichment' or 'product' (never both mixed here — this is a
+    single field, not the plan-level aggregate). Fase F.2.A: a partial enrichment approval (some fields accepted,
+    some preserved manual) must not paint every field with the same brush.
+
+    Reads `field_sources[field]` first (added in Fase F.2.A, one of "manual"/"enrichment" per field); falls back to
+    the old aggregate `source` ONLY when `field_sources` has no entry for this field — which is exactly what an
+    object written before Fase F.2.A looks like, so old plans keep behaving exactly as before. Never inferred
+    retroactively: a field with no evidence either way just inherits the aggregate, same as pre-F.2.A code did."""
+    if not semantic:
+        return None
+    per_field = semantic.get("field_sources") or {}
+    source = per_field.get(field) or semantic.get("source")
+    return "product_enrichment" if source == "enrichment" else "product"
+
+
 def resolve_interaction(requested: str | None, subjects: list, semantic: dict | None) -> tuple[str | None, str | None, list[str]]:
     """(interaction id, origin, warnings).
 
@@ -205,7 +221,7 @@ def resolve_interaction(requested: str | None, subjects: list, semantic: dict | 
         return requested, "user", [f"interaction_age_mismatch:{requested}:{band}" for band in _excluded(spec, subjects)]
     if count < 2:
         return None, None, []
-    origin = None if not semantic else ("product_enrichment" if semantic.get("source") == "enrichment" else "product")
+    origin = field_origin(semantic, "scene_intents")
     for intent in (semantic or {}).get("scene_intents") or []:
         candidate = CATALOG["intent_map"].get(intent)
         spec = INTERACTIONS.get(candidate or "")
@@ -332,10 +348,13 @@ def recommend(*, angle_id: str, products: list, persona: dict | None, persona_is
     recommended = [r for r in semantic.get("recommended_supporting_roles") or [] if r in DATA["roles"]["person_labels"]]
     if not recommended:
         return None
-    origin = "product_enrichment" if semantic.get("source") == "enrichment" else "product"
+    # Two independent fields drive two independent decisions below: which field was actually accepted from an
+    # enrichment proposal (vs. preserved manual) must not bleed into the other's attribution (Fase F.2.A fix).
+    wearer_origin = field_origin(semantic, "wearer_roles")
+    supporting_origin = field_origin(semantic, "recommended_supporting_roles")
     wearer_role = (semantic.get("wearer_roles") or [None])[0]
     if not persona_is_custom and wearer_role in DATA["roles"]["wearer_personas"]:
-        primary, primary_source = dict(DATA["roles"]["wearer_personas"][wearer_role]), origin
+        primary, primary_source = dict(DATA["roles"]["wearer_personas"][wearer_role]), wearer_origin
     else:
         primary, primary_source = dict(persona or {"label": "uma pessoa"}), persona_source
     role = recommended[0]
@@ -356,6 +375,6 @@ def recommend(*, angle_id: str, products: list, persona: dict | None, persona_is
                  product=product, prominence="hero", source=primary_source),
         _subject(1, supporting, role="supporting", band=s_band, age_source=s_src,
                  relation=role if role in RELATION_TYPES else None, relation_label=None, product=None,
-                 prominence="secondary", source=origin),
+                 prominence="secondary", source=supporting_origin),
     ]
     return subjects, {"role": role, "source": "product", "matched_role": role, "recommended": True}

@@ -1163,6 +1163,28 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "field_sources": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "field_confidence": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },

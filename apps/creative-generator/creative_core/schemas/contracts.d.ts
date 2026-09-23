@@ -106,6 +106,8 @@ export interface ProductSemanticContext {
   visible_text?: Array<string>;
   source?: "manual" | "enrichment";
   confidence?: number;
+  field_sources?: Record<string, unknown> | null;
+  field_confidence?: Record<string, unknown> | null;
 }
 
 export interface EnrichmentProposal {
@@ -119,6 +121,7 @@ export interface EnrichmentProposal {
   provider: "fake" | "openai";
   product_snapshot_hash: string;
   created_at: string;
+  provider_meta?: Record<string, unknown> | null;
 }
 
 export interface CreativeProduct {

@@ -215,5 +215,58 @@ def test_given_unexpected_internal_error_then_500_without_details():
     assert status == 500 and "passwd" not in json.dumps(body)
 
 
+# ------------------------------------------------------------------ Fase F.2.A: enrichment/propose (HTTP layer)
+_PRODUTO = {"id": "prod-1", "name": "Camiseta Pai e Filho", "type": "camiseta infantil", "description": "presente para brincar com o pai"}
+
+
+def test_given_no_provider_then_fake_is_used_over_http_exactly_as_before():
+    app, _ = _app()
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO})
+    assert status == 200 and body["proposal"]["provider"] == "fake"
+    assert body["proposal"]["provider_meta"] is None
+
+
+def test_given_an_unknown_provider_then_422_before_anything_else():
+    app, _ = _app()
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "midjourney"})
+    assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
+
+
+def test_given_provider_openai_over_http_then_it_refuses_cleanly_no_client_wired_this_round():
+    """The structural guarantee behind "zero real calls in Fase F.2.A": this route never constructs
+    an OpenAI client, so asking for provider=openai over the real HTTP surface always fails with a
+    clean, expected error — never a network attempt, never a silent fallback to "fake"."""
+    app, factory = _app()
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai"})
+    assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
+    assert factory.keys == [], "the BYOK client factory was never even touched for this route"
+
+
+def test_given_references_over_the_cap_then_422_before_validating_each_one():
+    app, _ = _app()
+    refs = [{"ref": "r", "data_base64": base64.b64encode(png_bytes()).decode()}] * 3
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "references": refs})
+    assert status == 422 and body["error"]["code"] == "INVALID_REFERENCE"
+
+
+def test_given_a_reference_that_is_not_a_real_image_then_422_same_as_generations():
+    app, _ = _app()
+    svg = [{"ref": "r", "data_base64": base64.b64encode(b"<svg/>").decode()}]
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "references": svg})
+    assert status == 422 and body["error"]["code"] == "INVALID_REFERENCE"
+
+
+def test_given_two_valid_references_then_they_pass_validation_and_only_fail_on_the_missing_client():
+    """Confirms the reference pipeline (decode, cap, shape) accepts exactly 2 real images — the
+    Fase C precedent bug's scenario — all the way through to the SAME "no client" refusal every
+    other openai request over HTTP gets; the failure is about the client, never about the images."""
+    app, _ = _app()
+    refs = [{"ref": "a", "data_base64": base64.b64encode(png_bytes()).decode()},
+            {"ref": "b", "data_base64": base64.b64encode(png_bytes(color=(10, 20, 30))).decode()}]
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai", "references": refs})
+    assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
+    assert "client" in " ".join(body["error"]["details"].get("errors", [])).lower()
+
+
 if __name__ == "__main__":
     run(globals())

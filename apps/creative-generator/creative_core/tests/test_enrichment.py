@@ -111,6 +111,53 @@ def test_given_no_current_semantic_context_then_merge_starts_from_empty_not_none
     assert mesclado["wearer_roles"] == ["adult"]
 
 
+# ------------------------------------------------------------------ Fase F.2.A: proveniência por campo (auditoria)
+def test_given_a_partial_approval_then_field_sources_marks_only_the_accepted_fields_as_enrichment():
+    """Achado da auditoria: antes desta fase, `mesclado["source"] = "enrichment"` reatribuía TODO o objeto,
+    mesmo campos preservados manualmente. `field_sources` agora registra a proveniência campo a campo."""
+    atual = {"wearer_roles": ["adult"], "relationship_themes": [], "recommended_supporting_roles": [],
+             "incompatible_auto_supporting_roles": [], "scene_intents": [], "visible_text": ["Feito à mão"],
+             "source": "manual", "confidence": None}
+    proposta = {"wearer_roles": ["adult", "child"], "relationship_themes": ["family"],
+                "recommended_supporting_roles": ["father"], "incompatible_auto_supporting_roles": [],
+                "scene_intents": ["playing"], "visible_text": [], "source": "enrichment", "confidence": 0.6}
+    mesclado = enrichment.merge(atual, proposta, ["relationship_themes", "scene_intents"])
+    assert mesclado["field_sources"]["relationship_themes"] == "enrichment"
+    assert mesclado["field_sources"]["scene_intents"] == "enrichment"
+    # Campos preservados (não aceitos): a proveniência registrada é a que o objeto JÁ tinha antes deste merge
+    # ("manual"), não a nova agregada — é exatamente o achado da auditoria sendo corrigido.
+    assert mesclado["field_sources"]["wearer_roles"] == "manual"
+    assert mesclado["field_sources"]["visible_text"] == "manual"
+    assert mesclado["field_confidence"]["relationship_themes"] == 0.6 and mesclado["field_confidence"]["scene_intents"] == 0.6
+    assert "wearer_roles" not in mesclado["field_confidence"], "campo não aceito não ganha confidence novo"
+    assert contracts.validate("ProductSemanticContext", mesclado) == []
+
+
+def test_given_a_fresh_product_with_no_prior_source_then_untouched_fields_get_no_field_sources_entry():
+    """Sem NENHUMA evidência prévia (produto novo, sem `source` algum), nada é inventado para os campos não
+    aceitos — a regra explícita de não introduzir inferência retroativa sem evidência."""
+    proposta = {"wearer_roles": ["adult"], "relationship_themes": ["family"], "recommended_supporting_roles": [],
+                "incompatible_auto_supporting_roles": [], "scene_intents": [], "visible_text": [], "confidence": 0.6}
+    mesclado = enrichment.merge(None, proposta, ["wearer_roles"])
+    assert mesclado["field_sources"] == {"wearer_roles": "enrichment"}
+    assert "relationship_themes" not in mesclado["field_sources"]
+
+
+def test_given_an_object_that_already_has_field_sources_then_a_new_partial_merge_preserves_the_old_entries():
+    atual = {"wearer_roles": ["child"], "relationship_themes": ["family"], "recommended_supporting_roles": [],
+             "incompatible_auto_supporting_roles": [], "scene_intents": [], "visible_text": [],
+             "source": "enrichment", "confidence": 0.5,
+             "field_sources": {"wearer_roles": "manual", "relationship_themes": "enrichment"},
+             "field_confidence": {"relationship_themes": 0.5}}
+    proposta = {"scene_intents": ["playing"], "confidence": 0.9}
+    mesclado = enrichment.merge(atual, proposta, ["scene_intents"])
+    assert mesclado["field_sources"]["wearer_roles"] == "manual", "entrada antiga preservada, não sobrescrita"
+    assert mesclado["field_sources"]["relationship_themes"] == "enrichment"
+    assert mesclado["field_sources"]["scene_intents"] == "enrichment"
+    assert mesclado["field_confidence"]["relationship_themes"] == 0.5, "confidence antiga preservada"
+    assert mesclado["field_confidence"]["scene_intents"] == 0.9
+
+
 # ------------------------------------------------------------------ snapshot hash (freshness check)
 def test_given_the_same_product_fields_then_the_hash_is_stable_and_changes_only_when_they_change():
     p1 = produto()

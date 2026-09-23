@@ -402,6 +402,46 @@ def test_given_where_the_supporting_person_came_from_then_the_subject_says_so():
     assert enriched["subjects"][1]["source"] == "product_enrichment" and enriched["provenance"]["subjects.s2"] == "product_enrichment"
 
 
+# ------------------------------------------------------------------ Fase F.2.A: per-field provenance (audit)
+def test_given_a_partially_approved_enrichment_then_each_subject_is_attributed_to_the_field_that_actually_drove_it():
+    """The audit scenario from the Fase F.2.A brief: `wearer_roles` is manual (lojista-confirmed), a proposal's
+    `relationship_themes`/`recommended_supporting_roles`/`scene_intents` are accepted — the merged object's
+    aggregate `source` becomes "enrichment" (mergeSemanticContext/enrichment.merge's documented behavior), but
+    the PLAN must not attribute the primary subject (cast from the untouched `wearer_roles`) to enrichment just
+    because some OTHER field on the same object was."""
+    request = _req("fixture-clean-single", "LIFESTYLE_COTIDIANO", plan_schema_version=2, prompt_version=2, seed=5)
+    request["products"][0]["semantic_context"] = {
+        "wearer_roles": ["child"], "relationship_themes": ["family"], "recommended_supporting_roles": ["father"],
+        "incompatible_auto_supporting_roles": [], "scene_intents": ["playing"], "visible_text": [],
+        "source": "enrichment", "confidence": 0.6,
+        "field_sources": {  # exactly what enrichment.merge()/mergeSemanticContext would have produced
+            "wearer_roles": "manual", "incompatible_auto_supporting_roles": "manual", "visible_text": "manual",
+            "relationship_themes": "enrichment", "recommended_supporting_roles": "enrichment", "scene_intents": "enrichment",
+        },
+    }
+    plan = plan_creative(request, router=ROUTER)
+    primary, supporting = plan["subjects"]
+    assert primary["source"] == "product", "cast from the manual wearer_roles — must not read as enrichment"
+    assert supporting["source"] == "product_enrichment", "cast from the accepted recommended_supporting_roles"
+    assert plan["provenance"]["semantics"] == "mixed", "the two fields genuinely disagree — not a single aggregate"
+    assert contracts.validate("CreativePlan", plan) == []
+
+
+def test_given_a_semantic_context_with_no_field_sources_then_provenance_falls_back_to_the_old_aggregate():
+    """Backward compatibility (explicit F.2.A requirement): an object written before this phase — only `source`/
+    `confidence`, no `field_sources` at all — must behave EXACTLY as it did before the fix, for every field."""
+    request = _req("fixture-clean-single", "LIFESTYLE_COTIDIANO", plan_schema_version=2, prompt_version=2, seed=5)
+    request["products"][0]["semantic_context"] = {
+        "wearer_roles": ["child"], "relationship_themes": ["family"], "recommended_supporting_roles": ["father"],
+        "incompatible_auto_supporting_roles": [], "scene_intents": ["playing"], "visible_text": [],
+        "source": "enrichment", "confidence": 0.6,
+    }
+    plan = plan_creative(request, router=ROUTER)
+    primary, supporting = plan["subjects"]
+    assert primary["source"] == "product_enrichment" and supporting["source"] == "product_enrichment"
+    assert plan["provenance"]["semantics"] == "product_enrichment"
+
+
 def test_given_the_field_source_map_then_only_strategy_and_products_are_required_from_the_user():
     assert required_user_fields() == ["strategy / objective", "products"]
     origins = {o for entry in FIELD_SOURCES.values() for o in entry["origins"]}

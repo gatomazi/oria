@@ -29,6 +29,12 @@ ERROR_CATALOG: dict[str, tuple[str, bool, str]] = {
     "CONTENT_POLICY_REJECTED": ("O provedor de IA recusou gerar este conteúdo.", False, "provider_policy"),
     "GENERATION_FAILED": ("Falha ao gerar o criativo.", True, "provider_error"),
     "ASSET_PROCESSING_FAILED": ("Falha ao processar a imagem gerada.", True, "asset"),
+    # Fase F.2.A: distinct from MODEL_UNAVAILABLE (the provider is reachable but reported the model
+    # unavailable) — this is a LOCAL configuration problem: every candidate the router resolved for
+    # the task is missing from this codebase's own versioned allowlist (see
+    # enrichment.py::_OPENAI_MODEL_ALLOWLIST). Never retryable by itself — retrying without fixing
+    # the allowlist/env var produces the same refusal.
+    "MODEL_NOT_ALLOWLISTED": ("Nenhum modelo configurado para esta tarefa está na lista aprovada.", False, "configuration"),
 }
 
 

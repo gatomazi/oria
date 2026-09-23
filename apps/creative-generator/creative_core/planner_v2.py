@@ -306,6 +306,29 @@ def _aggregate(origins: list[str]) -> str:
     return unique[0] if len(unique) == 1 else (MIXED if unique else "planner_default")
 
 
+_SEMANTIC_ARRAY_FIELDS = (
+    "wearer_roles", "relationship_themes", "recommended_supporting_roles",
+    "incompatible_auto_supporting_roles", "scene_intents", "visible_text",
+)
+
+
+def _semantics_source_summary(semantic: dict | None) -> str | None:
+    """Fase F.2.A: `plan["semantics_source"]` used to be one value derived straight from the aggregate
+    `semantic["source"]`, so a partial enrichment approval (some fields accepted, some preserved manual) painted
+    every populated field the same color. This now aggregates the REAL per-field origins through
+    `comp.field_origin` — which itself falls back to the old aggregate whenever a field has no `field_sources`
+    entry, so a semantic_context from before this phase collapses to exactly the single value it always
+    produced. One origin when every populated field agrees, `contracts.MIXED_ORIGIN` ("mixed", same constant
+    `_aggregate` above uses for subjects/scene) when they genuinely differ. With no populated field at all, falls
+    back to the old whole-object read (nothing to disagree about)."""
+    if not semantic:
+        return None
+    origins = [comp.field_origin(semantic, field) for field in _SEMANTIC_ARRAY_FIELDS if semantic.get(field)]
+    if origins:
+        return _aggregate(origins)
+    return "product_enrichment" if semantic.get("source") == "enrichment" else "product"
+
+
 def _age_origin(subject: dict) -> str:
     """Origin of the age evidence. Age the USER declared (subject age_band) is `user`; age read from a persona label or
     structured field the user or the brand provided is `persona`; age read from a label the planner itself generated
@@ -396,7 +419,6 @@ def build(
     limits = DATA["angle_people"].get(angle_id) or {}
     persona_source = _persona_origin(request, brand, niche)
     semantic = _semantic_of(products)
-    semantic_origin = None if not semantic else ("product_enrichment" if semantic.get("source") == "enrichment" else "product")
     supporting_info = None
     warnings: list[str] = []
 
@@ -421,7 +443,8 @@ def build(
                 angle_id=angle_id, products=products, persona=persona, people=people, people_needed=people_needed,
                 prompt_version=prompt_version, apparel=apparel, picks=picks, persona_source=persona_source,
                 pool_source=_pool_origin(brand, niche),
-                supporting_source=semantic_origin if supporting_info and supporting_info.get("source") == "product" else None)
+                supporting_source=comp.field_origin(semantic, "recommended_supporting_roles")
+                if supporting_info and supporting_info.get("source") == "product" else None)
 
     # Whoever wears an infant garment must be a child (structural, not a sentence in the prompt).
     subjects, wearer_fixes, recast = comp.enforce_infant_wearers(subjects, products, pool=pool, seed=seed)
@@ -484,5 +507,5 @@ def build(
         },
         "warnings": [f"{w['code']}:{w.get('theme')}:{w.get('supporting_role') or w.get('expected')}" for w in structured_warnings]
         + warnings + safety_warnings + ([f"people_count_risk:{count}"] if count >= 3 else []),
-        "semantics_source": semantic_origin,
+        "semantics_source": _semantics_source_summary(semantic),
     }
