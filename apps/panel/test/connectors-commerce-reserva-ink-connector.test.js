@@ -372,6 +372,24 @@ test('G.1 · getOrder exige providerOrderId', () => emA(async () => {
   await assert.rejects(r.connector.getOrder({}), TypeError);
 }));
 
+// Achado do smoke real (rodada J): sem integração Ink conectada, listOrders/getOrder liam
+// `pedidos_ink` direto (capability orders não precisa de token) e devolviam lista vazia — 0 pedidos
+// virava indistinguível de "Ink nunca foi conectado" para quem consome (reconciliation.js). Agora
+// os dois confirmam a integração conectada primeiro (sem usar o secretPort — só o portão de
+// conectividade da Fase B.1), e recusam antes de tocar o cache local.
+test('G.1 · listOrders/getOrder exigem integração Ink CONECTADA — nunca leem pedidos_ink de uma Organization sem integração', () => comContexto({ organizationId: F.ORG_A, storeId: F.STORE_A, origem: 'teste' }, async () => {
+  const poolSemIntegracao = poolCompleto({
+    lojas: [{ id: F.STORE_A, organization_id: F.ORG_A }],
+    integracoes: [], // nenhuma linha 'ink' pra esta Organization
+  });
+  const secretPort = createConnectorSecretPort({ pool: poolSemIntegracao, keyring: keyring() });
+  const registry = createConnectorRegistry({ integrations: createConnectorIntegrationPort({ pool: poolSemIntegracao }) });
+  registry.register(createReservaInkCommerceDescriptor({ secretPort, fetchImpl: async () => jsonRes(200, {}), ordersRepository: ordersRepositoryFake() }));
+  const r = registry.resolve('commerce', 'reserva_ink', ctxA);
+  await assert.rejects(r.connector.listOrders({ startDate: '2026-09-01', endDate: '2026-09-20' }), (err) => err.codigo === 'INTEGRATION_NOT_CONNECTED');
+  await assert.rejects(r.connector.getOrder({ providerOrderId: '1' }), (err) => err.codigo === 'INTEGRATION_NOT_CONNECTED');
+}));
+
 // ── Erros normalizados ─────────────────────────────────────────────────────────────────────────
 
 for (const status of [401, 403, 429, 500, 503]) {

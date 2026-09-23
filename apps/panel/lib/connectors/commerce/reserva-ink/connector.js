@@ -131,14 +131,27 @@ function createReservaInkCommerceConnector({ context, resolveIntegration, secret
   // Cache local (pedidos_ink/pedidos_ink_itens) — nunca a API da Ink: sem `clienteDaChamada()`,
   // sem token, sem `normalizarErro`. `startDate`/`endDate` são obrigatórios (mesma convenção ISO
   // puro do resto da Fase E/G) para nunca varrer o histórico inteiro por engano.
+  //
+  // Achado do smoke real (rodada J): mesmo sem token, o caminho ainda precisa confirmar que ESTA
+  // Organization tem uma integração Ink CONECTADA antes de confiar em `pedidos_ink` — senão "zero
+  // pedidos" vira indistinguível de "Ink nunca foi conectado, o cache nunca existiu" (§J.2.6:
+  // "sem divergências fabricadas"). `resolveIntegration()` já faz exatamente essa checagem
+  // (Organization/Store/status — Fase B.1) sem precisar do secretPort: chamado aqui só como
+  // portão de conectividade, o resultado nunca é usado (nenhum token entra neste caminho).
+  async function exigirIntegracaoConectada() {
+    await resolveIntegration();
+  }
+
   async function listOrders({ startDate, endDate, cursor, limit } = {}) {
     if (!startDate || !endDate) throw new TypeError('listOrders exige startDate e endDate');
+    await exigirIntegracaoConectada();
     const pagina = await ordersRepository.listOrders({ organizationId: context.organizationId, storeId: context.storeId, startDate, endDate, cursor, limit });
     return Object.freeze({ items: pagina.items.map((registro) => mapOrder(registro, context)), nextCursor: pagina.nextCursor });
   }
 
   async function getOrder({ providerOrderId } = {}) {
     if (!providerOrderId) throw new TypeError('getOrder exige providerOrderId');
+    await exigirIntegracaoConectada();
     const registro = await ordersRepository.getOrder({ organizationId: context.organizationId, storeId: context.storeId, providerOrderId });
     return registro ? mapOrder(registro, context) : null;
   }
