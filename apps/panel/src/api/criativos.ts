@@ -20,6 +20,11 @@ export interface CriativosStatus {
   postgres: boolean;
   core: { configured: boolean; reachable: boolean; versions: Record<string, unknown> | null };
   openaiKey: { configured: boolean; last4: string | null; updatedAt: string | null };
+  // Fase E — rollout operacional por Organization (nunca comercial). uiV2: a tela nova do gerador está
+  // liberada para esta conta. planV2: "Personalizar cena" (pessoas/interação) e ângulo personalizado exigem
+  // isso também — sem ele a UI V2 ainda funciona (recomendação, famílias), mas sem editar a cena.
+  uiV2: boolean;
+  planV2: boolean;
 }
 
 export interface CatalogAngle {
@@ -47,8 +52,19 @@ export interface Catalog {
     // Fase C: nomes para telas. Ausentes em core mais antigo.
     interactions?: { id: string; label: string; min_people: number; max_people: number }[];
     relations?: { id: string; label: string }[];
+    // Fase D/E: famílias de ângulo para a UI V2 (§7) — só label/description/reserved, nunca ids legados nem
+    // preset/hints internos. `action_movement` vem com reserved: true e não deve virar um cartão clicável.
+    angle_families?: AngleFamily[];
   };
   versions: Record<string, unknown>;
+}
+
+export type AngleFamilyId = 'connection' | 'lifestyle' | 'editorial_portrait' | 'product_focus' | 'creator_social' | 'product_no_person' | 'action_movement';
+export interface AngleFamily {
+  id: AngleFamilyId;
+  label: string;
+  description: string;
+  reserved: boolean;
 }
 
 export interface KitData {
@@ -76,10 +92,20 @@ export interface Product {
   createdAt: string;
 }
 
+export interface AngleRecommendation {
+  family: AngleFamilyId | null;
+  preset: string | null;
+  source: 'planner_default' | 'user' | null;
+  reason: string[];
+}
+
 export interface PlanSummary {
   strategy: Engine;
   product_mode: ProductMode;
   angle: { id: string; label: string } | null;
+  // Fase E: a recomendação REAL do motor para este plano — presente mesmo sem semantic_context (defaults
+  // honestos, sempre com `reason`). Nunca inventar isto na UI: se vier null, não existe recomendação a mostrar.
+  angle_recommendation: AngleRecommendation | null;
   placement: string;
   persona: string | null;
   scene: string;
@@ -160,6 +186,63 @@ export interface JobInput {
   gaze_mode?: string;
   seed?: number;
   scene_picks?: Record<string, number>;
+  // Ângulo personalizado (Fase D.1 + D.1.1) — nunca os dois juntos; quando presente, angle_ids vira ["auto"].
+  // custom_angle_id: escolha nova, resolvida no servidor. custom_angle_replay_of: id do criativo ORIGINAL para
+  // "Gerar de novo"/"Gerar variação" — o servidor lê o snapshot do plano persistido, nunca um objeto daqui.
+  custom_angle_id?: string;
+  custom_angle_replay_of?: string;
+  // Fase E (§7) — outra forma de "auto": família escolhida por cartão, sem ângulo customizado.
+  angle_family_hint?: { family: AngleFamilyId; preset?: string };
+}
+
+// Ângulos personalizados (Fase D) — CRUD em /angles. `definition` é o texto que de fato muda o prompt
+// (Enquadramento/Direção fotográfica/Iluminação/Composição/notas); tudo opcional, nada aqui interpreta a
+// linguagem natural (o core só compila o texto como veio — ver docs/features/creative-generator-fase-d1-1.md §3).
+export interface AngleDefinition {
+  framing?: string;
+  photographic_direction?: string;
+  lighting?: string;
+  composition?: string;
+  visual_notes?: string[];
+}
+export type PeopleMode = 'none' | 'optional' | 'required';
+export type GazeMode = 'camera' | 'interaction' | 'off_camera' | 'product';
+export interface CustomAngle {
+  id: string;
+  scope: 'organization' | 'store';
+  storeId: string | null;
+  slug: string;
+  name: string;
+  description: string | null;
+  family: AngleFamilyId;
+  peopleMode: PeopleMode;
+  preset: string | null;
+  definition: AngleDefinition;
+  allowedInteractions: string[] | null;
+  allowedProductModes: ProductMode[] | null;
+  defaultGaze: GazeMode | null;
+  active: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface AnglesResponse {
+  system: AngleFamily[];
+  organization: CustomAngle[];
+  store: CustomAngle[];
+}
+export interface AngleInput {
+  scope: 'organization' | 'store';
+  slug: string;
+  name: string;
+  description?: string | null;
+  family: AngleFamilyId;
+  peopleMode: PeopleMode;
+  preset?: string | null;
+  definition?: AngleDefinition;
+  allowedInteractions?: string[] | null;
+  allowedProductModes?: ProductMode[] | null;
+  defaultGaze?: GazeMode | null;
 }
 
 export interface CenaPessoa {
@@ -191,7 +274,9 @@ export interface Indisponivel {
 export interface CopiaDados {
   creativeId: string;
   jobId: string;
-  form: Partial<JobInput>;
+  // `custom_angle_preview` é só para a TELA mostrar (nome/família/definição) — nunca vai de volta no POST
+  // /jobs; o que volta é `form.custom_angle_replay_of` (já parte de JobInput). Ver requests.js/draft.js.
+  form: Partial<JobInput> & { custom_angle_preview?: CustomAngle };
   actions: { again: AcaoCena; variation: AcaoCena };
   carried: string[];
   unavailable: Indisponivel[];
@@ -253,6 +338,25 @@ export const getCopiaDados = (creativeId: string) => api<CopiaDados>(`${BASE}/it
 export const listHistory = () => api<{ items: (JobItem & { record: Record<string, unknown> | null })[] }>(`${BASE}/history`);
 export const generateCopies = (input: JobInput) =>
   api<{ variants: { funnel_stage: FunnelStage; primary_text: string; headline: string; description: string }[] }>(`${BASE}/copies`, json('POST', input));
+
+export const listAngles = () => api<AnglesResponse>(`${BASE}/angles`);
+export const createAngle = (input: AngleInput) => api<CustomAngle>(`${BASE}/angles`, json('POST', input));
+export const updateAngle = (id: string, input: Partial<AngleInput>) => api<CustomAngle>(`${BASE}/angles/${id}`, json('PUT', input));
+export const archiveAngle = (id: string) => api<{ id: string; active: false }>(`${BASE}/angles/${id}`, json('DELETE'));
+
+// Cadastro mínimo de ângulo personalizado (Fase E §8): a tela só pede Nome/Família/"como quer que a fotografia
+// pareça" — o slug (identidade dentro do escopo) sai do nome, sem pedir mais um campo. Servidor valida com a
+// mesma regra (`ANGLE_SLUG_RE`, routes/criativos.js); uma colisão de slug no mesmo escopo volta como erro comum.
+export function gerarSlug(nome: string): string {
+  const base = nome
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  const comInicio = /^[a-z0-9]/.test(base) ? base : `angulo-${base}`;
+  return (comInicio.length >= 2 ? comInicio : `${comInicio || 'angulo'}-x`).slice(0, 60);
+}
 
 export async function arquivoParaBase64(file: File): Promise<string> {
   const buf = await file.arrayBuffer();

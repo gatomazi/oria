@@ -10,6 +10,7 @@ import {
   type CriativosStatus,
 } from '../../api/criativos';
 import { GerarTab } from './GerarTab';
+import { GerarTabV2 } from './GerarTabV2';
 import { HistoricoTab, LotesTab } from './LotesTab';
 import { PerfisTab, PersonasTab, ProdutosTab } from './CadastrosTabs';
 
@@ -93,7 +94,9 @@ export function CriativosPage() {
         <>
           <TabList label="Seções do gerador" value={aba} onChange={setAba} items={abas} />
           {aba === 'gerar' && (catalog
-            ? <GerarTab status={status} catalog={catalog} copia={copia} onCopiaLida={() => setCopia(null)} onJobCriado={(id) => { setJobSelecionado(id); setAba('lotes'); }} />
+            ? (status.uiV2
+              ? <GerarTabV2 status={status} catalog={catalog} copia={copia} onCopiaLida={() => setCopia(null)} onJobCriado={(id) => { setJobSelecionado(id); setAba('lotes'); }} />
+              : <GerarTab status={status} catalog={catalog} copia={copia} onCopiaLida={() => setCopia(null)} onJobCriado={(id) => { setJobSelecionado(id); setAba('lotes'); }} />)
             : <Callout tone="info">Catálogo indisponível enquanto o serviço do gerador não responde.</Callout>)}
           {aba === 'lotes' && <LotesTab selecionado={jobSelecionado} onSelecionar={setJobSelecionado} onCopiar={copiarDados} />}
           {aba === 'historico' && <HistoricoTab onCopiar={copiarDados} />}
