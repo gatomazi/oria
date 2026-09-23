@@ -21,8 +21,10 @@ function filtrosDoPredicado(predicado) {
     if (frequencia.max != null) filtros.push({ field: 'quantidadePedidos', op: 'lte', value: frequencia.max });
   }
   if (valor) {
-    if (valor.min != null) filtros.push({ field: 'totalGasto', op: 'gte', value: valor.min });
-    if (valor.maxExclusivo != null) filtros.push({ field: 'totalGasto', op: 'lt', value: valor.maxExclusivo });
+    // 'ticket_medio' → filtro de ticket médio; a soma da janela (padrão) → total gasto.
+    const campo = valor.metrica === 'ticket_medio' ? 'ticketMedio' : 'totalGasto';
+    if (valor.min != null) filtros.push({ field: campo, op: 'gte', value: valor.min });
+    if (valor.maxExclusivo != null) filtros.push({ field: campo, op: 'lt', value: valor.maxExclusivo });
   }
   return filtros;
 }

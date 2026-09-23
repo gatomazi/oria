@@ -19,6 +19,8 @@ const senhas = h.sujeito('lib/auth/password.js');
 const { sqlProvisionarAppRole } = h.sujeito('lib/platform/app-role.js');
 const manifesto = h.sujeito('lib/platform/tenancy-manifest.js');
 const { inserir, limparCache, concederFeatures } = require('../helpers/linhas');
+const { agruparPedidosPorIdentidade } = h.sujeito('lib/clientes/identidade.js');
+const { filtrosDoPredicado } = h.sujeito('lib/clientes/segmento.js');
 
 const SERVER = path.join(h.RAIZ_SUJEITO, 'server.js');
 const MOCK = path.join(h.RAIZ_REPO, 'test', 'helpers', 'provider-mock.cjs');
@@ -172,6 +174,11 @@ test('resumo: universo só com compra válida; soma dos segmentos = universo; ca
   assert.equal(soma(rfm.segmentos, (s) => s.clientes), rfm.universo);
   assert.equal(rfm.suficiente, true);
   assert.equal(rfm.versao, 'rfm-v1');
+  assert.match(rfm.regraVersao, /^rfm-v1:[0-9a-f]{8}$/, 'a versão da regra (algoritmo + hash dos limiares) acompanha o resumo');
+  assert.deepEqual(rfm.configuracao.limitesRecenciaDias, [45, 90, 180, 365]);
+  assert.equal(rfm.valorAltoMetrica, 'ltv_janela');
+  assert.ok(rfm.segmentos.filter((s) => s.clientes > 0).every((s) => s.recenciaMedianaDias != null && s.frequenciaMediana != null));
+  assert.equal(cobertura.pedidosDuplicadosIgnorados, 0);
   assert.equal(indicadores.atual.clientes, 50);
   assert.equal(indicadores.atual.pedidos, 44 + 9 + 3 + 2);
   assert.equal(indicadores.atual.pedidosReembolsados, 1);
@@ -315,7 +322,7 @@ test('segmento RFM: definição vem do servidor, fica dinâmica com versão e da
   assert.ok(criar.json.segmento.filtros.every((f) => ['diasSemComprar', 'quantidadePedidos', 'totalGasto'].includes(f.field)), 'filtros vêm do predicado do servidor');
   const { rows: [linha] } = await sup.query('SELECT * FROM segments WHERE id = $1', [criar.json.segmento.id]);
   assert.equal(linha.origem, 'rfm');
-  assert.equal(linha.rfm_versao, 'rfm-v1');
+  assert.equal(linha.rfm_versao, resumo.rfm.regraVersao, 'o segmento guarda a versão da REGRA, não só a do algoritmo');
   assert.equal(linha.rfm_segmento, alvo.id);
   assert.equal(linha.politica, 'dinamico');
   assert.ok(linha.classificado_em);
@@ -348,4 +355,58 @@ test('segmento: recusa origem/segmento inválidos e filtro sem campo avaliável;
   assert.deepEqual(filtros.json.segmento.filtros.map((f) => f.field), ['quantidadePedidos', 'totalGasto']);
   const listaB = await b.req('GET', '/api/admin/segments');
   assert.ok(!listaB.texto.includes('Alto valor') && !listaB.texto.includes('Segunda compra'), 'segmento da A não aparece na B');
+});
+
+// Ida e volta com Campanhas: segmento RFM → linha persistida → filtros → prévia de audiência → contagem.
+// O esperado NÃO vem do motor de audiência: é recalculado aqui, direto das linhas de pedidos, com a semântica do
+// filtro de audiência (pedido pago inclusive troca, histórico inteiro, dias = 24h corridas).
+function audienciaEsperada(linhasDePedidos, filtros) {
+  const pagos = new Set(['paid', 'succeeded', 'free']);
+  const agora = Date.now();
+  const clientes = agruparPedidosPorIdentidade(linhasDePedidos).map((g) => {
+    const p = g.pedidos.filter((x) => pagos.has(x.payment_status));
+    const gasto = p.reduce((acc, x) => acc + Number(x.total_value), 0);
+    const ultima = p.reduce((m, x) => Math.max(m, new Date(x.criado_em).getTime()), 0);
+    return { compras: p.length, gasto, ticket: p.length ? gasto / p.length : null, dias: p.length ? Math.floor((agora - ultima) / 86_400_000) : null };
+  });
+  const cmp = (v, op, alvo) => v != null && (op === 'gte' ? v >= alvo : op === 'lte' ? v <= alvo : op === 'lt' ? v < alvo : op === 'gt' ? v > alvo : v === alvo);
+  const campo = { diasSemComprar: 'dias', quantidadePedidos: 'compras', totalGasto: 'gasto', ticketMedio: 'ticket' };
+  return clientes.filter((c) => filtros.every((f) => (f.field === 'diasSemComprar' && c.dias == null ? f.op === 'gte' || f.op === 'gt' : cmp(c[campo[f.field]], f.op, f.value)))).length;
+}
+
+test('ida e volta com Campanhas: para TODO segmento, o que foi persistido é a regra do servidor e a prévia bate com a contagem independente', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const { json: resumo } = await a.req('GET', '/api/admin/clientes/resumo');
+  const { rows: pedidosA } = await sup.query(
+    `SELECT buyer_documento, buyer_telefone, buyer_email, payment_status, total_value, criado_em FROM pedidos_ink WHERE organization_id = $1
+      AND COALESCE(NULLIF(buyer_documento,''), NULLIF(buyer_telefone,''), NULLIF(buyer_email,'')) IS NOT NULL ORDER BY criado_em DESC`, [ORG_A]
+  );
+  const comGente = resumo.rfm.segmentos.filter((s) => s.clientes > 0);
+  assert.ok(comGente.length >= 4, 'a base do teste cobre vários segmentos');
+  const somaDasPrevias = [];
+  for (const seg of comGente) {
+    const criar = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: `Ida e volta ${seg.id}`, origem: 'rfm', segmento: seg.id } });
+    assert.ok([200, 201].includes(criar.status), criar.texto);
+    // 1) o que ficou no banco (não a resposta): origem, política, regra, versão e a data de classificação.
+    const { rows: [linha] } = await sup.query('SELECT * FROM segments WHERE id = $1', [criar.json.segmento.id]);
+    assert.equal(linha.origem, 'rfm');
+    assert.equal(linha.politica, 'dinamico');
+    assert.equal(linha.rfm_segmento, seg.id);
+    assert.equal(linha.rfm_versao, resumo.rfm.regraVersao);
+    assert.ok(linha.classificado_em);
+    assert.deepEqual(linha.predicado, seg.predicado, 'a regra persistida é a que o resumo mostra');
+    // 2) os filtros persistidos são a tradução do predicado persistido (e só ele).
+    assert.deepEqual(linha.filtros, filtrosDoPredicado(linha.predicado));
+    // 3) a prévia, chamada com os filtros lidos do banco (o que a tela de Nova campanha faz), devolve a contagem esperada.
+    const prev = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: linha.match, filters: linha.filtros, exclusions: { semOptIn: false, numeroInvalido: false } } });
+    assert.equal(prev.status, 200, prev.texto);
+    assert.equal(prev.json.matched, audienciaEsperada(pedidosA, linha.filtros), `segmento ${seg.id}: prévia × contagem independente`);
+    // 4) contra a RFM: a diferença possível é só a documentada (quem só tem troca paga conta como comprador na audiência).
+    assert.ok(prev.json.matched >= seg.clientes && prev.json.matched - seg.clientes <= 2, `${seg.id}: RFM ${seg.clientes} × audiência ${prev.json.matched}`);
+    somaDasPrevias.push(prev.json.matched);
+  }
+  assert.ok(somaDasPrevias.every((n) => n > 0));
+  // Nada foi disparado nem publicado por este fluxo.
+  assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaigns')).rows[0].n, 0);
+  assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients')).rows[0].n, 0);
 });

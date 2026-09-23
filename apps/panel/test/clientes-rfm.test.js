@@ -226,3 +226,159 @@ test('identidade: pedidos ligados por documento, telefone ou e-mail viram uma pe
   assert.deepEqual(g1.motivosDeUniao, ['documento', 'telefone']);
   assert.deepEqual(g2.motivosDeUniao, ['email']);
 });
+
+// ── Calibração: configuração central, versão da regra, fronteiras exatas e determinismo ──────────────────────
+const { configuracaoEfetiva, regraVersao, mediana, PADROES: PADROES_RFM } = require('../lib/clientes/rfm');
+const { analisarPedidos, deduplicarPedidos } = require('../lib/clientes/analise');
+const { filtrosDoPredicado } = require('../lib/clientes/segmento');
+const { predicadoDaRegra } = require('../lib/clientes/rfm');
+const { calcularIndicadores } = require('../lib/clientes/metricas');
+
+test('versão da regra: estável para a mesma configuração e diferente para QUALQUER limiar que mude', () => {
+  const base = regraVersao(configuracaoEfetiva());
+  assert.match(base, /^rfm-v1:[0-9a-f]{8}$/);
+  assert.equal(regraVersao(configuracaoEfetiva()), base);
+  assert.equal(regraVersao(configuracaoEfetiva({ limitesRecenciaDias: [45, 90, 180, 365] })), base, 'mesmo valor explícito = mesma regra');
+  for (const mudanca of [
+    { janelaFrequenciaDias: 180 }, { limitesRecenciaDias: [30, 90, 180, 365] }, { percentilValorAlto: 0.8 },
+    { minClientes: 50 }, { minHistoricoDias: 120 }, { valorAltoMetrica: 'ticket_medio' },
+  ]) assert.notEqual(regraVersao(configuracaoEfetiva(mudanca)), base, JSON.stringify(mudanca));
+});
+
+test('configuração: validada num lugar só, com erro claro e sem alterar os padrões', () => {
+  assert.throws(() => configuracaoEfetiva({ janelaFrequenciaDias: 0 }), /janela/);
+  assert.throws(() => configuracaoEfetiva({ percentilValorAlto: 1 }), /percentil/);
+  assert.throws(() => configuracaoEfetiva({ percentilValorAlto: 0 }), /percentil/);
+  assert.throws(() => configuracaoEfetiva({ valorAltoMetrica: 'lucro' }), /métrica/);
+  assert.throws(() => configuracaoEfetiva({ minClientes: -1 }), /mínimos/);
+  assert.throws(() => configuracaoEfetiva({ limitesRecenciaDias: [10, 10, 20, 30] }), /crescentes/);
+  assert.equal(Object.isFrozen(configuracaoEfetiva()), true);
+  assert.deepEqual([...PADROES_RFM.limitesRecenciaDias], [45, 90, 180, 365], 'os padrões do rfm-v1 não foram tocados');
+});
+
+test('resultado carrega a versão da regra e a configuração usada (base dos snapshots)', () => {
+  const r = classificarRfm(baseSuficiente(), { asOf: AS_OF });
+  assert.equal(r.regraVersao, regraVersao(configuracaoEfetiva()));
+  assert.equal(r.configuracao.percentilValorAlto, 0.75);
+  assert.equal(classificarRfm(baseSuficiente(), { asOf: AS_OF, percentilValorAlto: 0.9 }).regraVersao === r.regraVersao, false);
+});
+
+test('determinismo: mesmo instante de referência → resultado idêntico, mesmo com a entrada embaralhada', () => {
+  const clientes = baseSuficiente();
+  clientes.push(cliente('r1', [pedido(5, 300), pedido(50, 300), pedido(100, 300)]));
+  const a = classificarRfm(clientes, { asOf: AS_OF });
+  const b = classificarRfm([...clientes].reverse().map((c) => ({ ...c, pedidos: [...c.pedidos].reverse() })), { asOf: AS_OF });
+  const resumo = (r) => JSON.stringify({ s: r.segmentos, c: r.clientes.map((c) => [c.id, c.segmento.id, c.escore, c.r, c.f, c.m]).sort((x, y) => (x[0] < y[0] ? -1 : 1)) });
+  assert.equal(resumo(a), resumo(b));
+  assert.equal(resumo(a), resumo(classificarRfm(clientes, { asOf: new Date(AS_OF) })));
+});
+
+test('fronteira de valor alto: M igual ao corte é ALTO; um centavo abaixo não é', () => {
+  const clientes = baseSuficiente();
+  const sondagem = classificarRfm(clientes, { asOf: AS_OF });
+  const corte = sondagem.valorAlto;
+  assert.ok(corte > 0);
+  const com = [...clientes, cliente('no-corte', [pedido(3, corte)]), cliente('abaixo', [pedido(3, Math.round((corte - 0.01) * 100) / 100)])];
+  // Inserir os dois clientes desloca o P75; fixa a fronteira comparando com a MESMA base ampliada.
+  const r = classificarRfm(com, { asOf: AS_OF });
+  const alto = porId(r, 'no-corte');
+  const baixo = porId(r, 'abaixo');
+  assert.ok(alto.m >= r.valorAlto === (alto.segmento.id === 'primeira_alto_valor'));
+  assert.ok(baixo.m >= r.valorAlto === (baixo.segmento.id === 'primeira_alto_valor'));
+  // Fronteira exata, sem depender do deslocamento: casaPredicado com M == corte / corte − 0.01.
+  const regra = REGRAS.find((x) => x.id === 'primeira_alto_valor');
+  const pred = predicadoDaRegra(regra, PADROES_RFM.limitesRecenciaDias, 150);
+  assert.equal(casaPredicado(pred, 3, 1, 150), true);
+  assert.equal(casaPredicado(pred, 3, 1, 149.99), false);
+});
+
+test('fronteira de fuso: 23:59 e 00:00 de São Paulo caem em dias diferentes (sem horário de verão)', () => {
+  const asOf = new Date('2026-09-23T15:00:00Z');
+  const ultimoSegundo = { criadoEm: '2026-09-23T02:59:59Z', valor: 10, paymentStatus: 'paid' }; // 22/09 23:59:59 local
+  const primeiroSegundo = { criadoEm: '2026-09-23T03:00:00Z', valor: 10, paymentStatus: 'paid' }; // 23/09 00:00:00 local
+  const r = classificarRfm([...baseSuficiente(), cliente('a', [ultimoSegundo]), cliente('b', [primeiroSegundo])], { asOf });
+  assert.equal(porId(r, 'a').r, 1);
+  assert.equal(porId(r, 'b').r, 0);
+  // Mesmas horas, mas o `asOf` em UTC já no dia seguinte local: a referência também é convertida para o fuso.
+  const noite = classificarRfm([...baseSuficiente(), cliente('c', [{ criadoEm: '2026-09-23T14:00:00Z', valor: 10, paymentStatus: 'paid' }])], { asOf: new Date('2026-09-24T02:30:00Z') });
+  assert.equal(porId(noite, 'c').r, 0, '24/09 02:30Z ainda é 23/09 23:30 em São Paulo');
+});
+
+test('fronteira da janela de frequência: compra a 365 dias conta; a 366 não', () => {
+  const clientes = baseSuficiente();
+  clientes.push(cliente('j365', [pedido(10, 100), pedido(365, 100)]));
+  clientes.push(cliente('j366', [pedido(10, 100), pedido(366, 100)]));
+  const r = classificarRfm(clientes, { asOf: AS_OF });
+  assert.equal(porId(r, 'j365').fJanela, 2);
+  assert.equal(porId(r, 'j366').fJanela, 1);
+  assert.equal(porId(r, 'j366').fVida, 2);
+});
+
+test('reembolso em português ("Reembolsado"), cancelado e pendente nunca viram compra válida', () => {
+  for (const status of ['Reembolsado', 'reembolsado', 'refunded', 'canceled', 'Cancelado', 'pending', 'waiting_payment', 'not_authorized', 'expired', 'dispute', 'chargeback', undefined, null, '']) {
+    assert.equal(pedidoValido({ criadoEm: diasAtras(3), valor: 10, paymentStatus: status }), false, String(status));
+  }
+});
+
+test('métrica de valor alto por ticket: recorrente com pedidos pequenos deixa de ser "valor alto" só por somar', () => {
+  const clientes = baseSuficiente(); // uma compra de R$ 80–120
+  clientes.push(cliente('recorrente-barato', [pedido(5, 60), pedido(40, 60), pedido(80, 60)])); // soma 180, ticket 60
+  const porSoma = classificarRfm(clientes, { asOf: AS_OF });
+  const porTicket = classificarRfm(clientes, { asOf: AS_OF, valorAltoMetrica: 'ticket_medio' });
+  assert.equal(porSoma.valorAltoMetrica, 'ltv_janela');
+  assert.equal(porTicket.valorAltoMetrica, 'ticket_medio');
+  assert.equal(porSoma.segmentos.find((s) => s.id === 'campeoes').predicado.valor.metrica, 'ltv_janela');
+  assert.equal(porTicket.segmentos.find((s) => s.id === 'campeoes').predicado.valor.metrica, 'ticket_medio');
+  assert.equal(porSoma.clientes.find((c) => c.id === 'recorrente-barato').segmento.id, 'campeoes', 'soma 180 passa do P75 da base');
+  assert.equal(porTicket.clientes.find((c) => c.id === 'recorrente-barato').segmento.id, 'leais', 'ticket 60 não passa');
+  assert.equal(porSoma.segmentos.reduce((a, s) => a + s.clientes, 0), porTicket.segmentos.reduce((a, s) => a + s.clientes, 0));
+  const filtros = filtrosDoPredicado(porTicket.segmentos.find((s) => s.id === 'campeoes').predicado);
+  assert.ok(filtros.some((f) => f.field === 'ticketMedio'), 'o segmento por ticket vira filtro de ticket médio');
+  assert.ok(!filtros.some((f) => f.field === 'totalGasto'));
+});
+
+test('medianas por segmento: recência e frequência (par e ímpar)', () => {
+  assert.equal(mediana([]), null);
+  assert.equal(mediana([5]), 5);
+  assert.equal(mediana([1, 3, 2]), 2);
+  assert.equal(mediana([1, 2, 3, 10]), 2.5);
+  const r = classificarRfm(baseSuficiente(), { asOf: AS_OF });
+  const seg = r.segmentos.find((s) => s.clientes > 1);
+  assert.ok(Number.isFinite(seg.recenciaMedianaDias) && Number.isFinite(seg.frequenciaMediana));
+});
+
+test('pedido duplicado (linha legada + linha da Store) conta UMA vez e é contado à parte', () => {
+  const linha = (id, extra = {}) => ({ loja: 'sul', ink_order_id: id, buyer_documento: '111', buyer_telefone: null, buyer_email: null, payment_status: 'paid', total_value: 100, criado_em: diasAtras(10), is_troca: false, ...extra });
+  const { unicas, duplicados } = deduplicarPedidos([linha(1), linha(1, { loja: null }), linha(2)]);
+  assert.equal(unicas.length, 2);
+  assert.equal(duplicados, 1);
+  const a = analisarPedidos([linha(1), linha(1, { loja: null }), linha(2)], { asOf: AS_OF, periodo: { de: '2026-09-01', ate: '2026-09-23' }, chaveDoContexto: 'sul' });
+  assert.equal(a.cobertura.pedidosDuplicadosIgnorados, 1);
+  assert.equal(a.cobertura.pedidosTotal, 2);
+  assert.equal(a.indicadores.atual.pedidos, 2, 'sem o desvio, seriam 3 pedidos e 300 de faturamento');
+  assert.equal(a.indicadores.atual.faturamento, 200);
+});
+
+test('empate de horário entre pedidos: o cliente (chave e nome) não depende da ordem de leitura', () => {
+  const t = diasAtras(4);
+  const l = (id, nome, doc) => ({ loja: 'sul', ink_order_id: id, buyer_nome: nome, buyer_documento: doc, buyer_telefone: '5199', buyer_email: null, payment_status: 'paid', total_value: 50, criado_em: t, is_troca: false });
+  const linhas = [l(10, 'Nome A', 'doc-a'), l(11, 'Nome B', 'doc-b')]; // ligados pelo telefone, mesmo instante
+  const a = analisarPedidos(linhas, { asOf: AS_OF, periodo: { de: '2026-09-01', ate: '2026-09-23' }, chaveDoContexto: 'sul' });
+  const b = analisarPedidos([...linhas].reverse(), { asOf: AS_OF, periodo: { de: '2026-09-01', ate: '2026-09-23' }, chaveDoContexto: 'sul' });
+  assert.equal(a.clientes.length, 1);
+  assert.equal(a.clientes[0].customerKey, b.clientes[0].customerKey);
+  assert.equal(a.clientes[0].nome, b.clientes[0].nome);
+  assert.equal(a.clientes[0].nome, 'Nome B', 'no empate vale o maior id da Ink');
+});
+
+test('indicadores: reembolso total em português entra em "pedidos reembolsados", fora do faturamento', () => {
+  const clientes = [c1('a', [
+    { criadoEm: '2026-09-05T15:00:00Z', valor: 100, paymentStatus: 'Reembolsado' },
+    { criadoEm: '2026-09-06T15:00:00Z', valor: 100, paymentStatus: 'refunded' },
+    { criadoEm: '2026-09-07T15:00:00Z', valor: 100, paymentStatus: 'paid' },
+  ])];
+  function c1(id, pedidos) { return { id, pedidos }; }
+  const r = calcularIndicadores(clientes, { de: '2026-09-01', ate: '2026-09-30' }, { primeiroPedidoEm: '2026-08-01T00:00:00Z' });
+  assert.equal(r.atual.pedidosReembolsados, 2);
+  assert.equal(r.atual.faturamento, 100);
+});

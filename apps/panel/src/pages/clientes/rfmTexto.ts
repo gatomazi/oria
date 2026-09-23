@@ -28,7 +28,7 @@ export function descreverPredicado(p: PredicadoRfm): { rotulo: string; texto: st
   }
   if (p.valor) {
     linhas.push({
-      rotulo: 'Valor comprado',
+      rotulo: p.valor.metrica === 'ticket_medio' ? 'Ticket médio' : 'Valor comprado',
       texto: p.valor.min != null ? `${moeda(p.valor.min)} ou mais` : `abaixo de ${moeda(p.valor.maxExclusivo ?? 0)}`,
     });
   }

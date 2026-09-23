@@ -21,6 +21,11 @@
 //
 // Base pequena ou histórico curto NÃO recebe categoria: `Dados insuficientes` no lugar de um rótulo enganoso.
 
+const crypto = require('node:crypto');
+
+// Versão do ALGORITMO (estrutura das regras). A versão da REGRA (`regraVersao`) = algoritmo + hash de toda a
+// configuração efetiva e da tabela de regras: mudou um limiar, mudou a versão. É ela que os snapshots e os segmentos
+// salvos registram, para uma contagem antiga poder ser reproduzida com exatamente a regra que a gerou.
 const VERSAO_ALGORITMO = 'rfm-v1';
 const STATUS_VALIDOS = Object.freeze(new Set(['paid', 'succeeded', 'free']));
 const FUSO_PADRAO = 'America/Sao_Paulo';
@@ -34,7 +39,46 @@ const PADROES = Object.freeze({
   minClientes: 30,
   minHistoricoDias: 90,
   percentilValorAlto: 0.75,
+  // O que "valor alto" mede: 'ltv_janela' = soma paga na janela (padrão histórico do rfm-v1) ou 'ticket_medio' = valor
+  // médio por pedido na janela. Alternativa documentada (docs/features/oria-clientes-rfm-fase0.md): a soma mistura
+  // frequência com valor e coloca quem comprou 3× quase sempre acima do corte de uma base de 1 compra.
+  valorAltoMetrica: 'ltv_janela',
 });
+const METRICAS_VALOR = Object.freeze(['ltv_janela', 'ticket_medio']);
+
+// Configuração efetiva e validada: o ÚNICO lugar onde os limiares são lidos. `opcoes` sobrescreve os padrões.
+function configuracaoEfetiva(opcoes = {}) {
+  const c = {
+    janelaFrequenciaDias: opcoes.janelaFrequenciaDias ?? PADROES.janelaFrequenciaDias,
+    limitesRecenciaDias: [...(opcoes.limitesRecenciaDias ?? PADROES.limitesRecenciaDias)],
+    minClientes: opcoes.minClientes ?? PADROES.minClientes,
+    minHistoricoDias: opcoes.minHistoricoDias ?? PADROES.minHistoricoDias,
+    percentilValorAlto: opcoes.percentilValorAlto ?? PADROES.percentilValorAlto,
+    valorAltoMetrica: opcoes.valorAltoMetrica ?? PADROES.valorAltoMetrica,
+  };
+  const l = c.limitesRecenciaDias;
+  if (l.length !== 4 || l.some((x, i) => !Number.isInteger(x) || x < 1 || (i > 0 && x <= l[i - 1]))) {
+    throw new Error('rfm: limites de recência devem ser 4 inteiros estritamente crescentes');
+  }
+  if (!Number.isInteger(c.janelaFrequenciaDias) || c.janelaFrequenciaDias < 1 || c.janelaFrequenciaDias > 3650) throw new Error('rfm: janela de frequência inválida');
+  if (!Number.isInteger(c.minClientes) || c.minClientes < 0 || !Number.isInteger(c.minHistoricoDias) || c.minHistoricoDias < 0) throw new Error('rfm: mínimos inválidos');
+  if (!(c.percentilValorAlto > 0 && c.percentilValorAlto < 1)) throw new Error('rfm: percentil de valor alto deve estar entre 0 e 1');
+  if (!METRICAS_VALOR.includes(c.valorAltoMetrica)) throw new Error('rfm: métrica de valor alto desconhecida');
+  return Object.freeze(c);
+}
+
+// Hash curto e estável da regra. Independe da ordem das chaves e não inclui dado de cliente.
+function regraVersao(config) {
+  const canonico = JSON.stringify({
+    algoritmo: VERSAO_ALGORITMO,
+    config: {
+      janelaFrequenciaDias: config.janelaFrequenciaDias, limitesRecenciaDias: config.limitesRecenciaDias, minClientes: config.minClientes,
+      minHistoricoDias: config.minHistoricoDias, percentilValorAlto: config.percentilValorAlto, valorAltoMetrica: config.valorAltoMetrica,
+    },
+    regras: REGRAS.map((r) => [r.id, r.tiers, r.f, r.mAlto]),
+  });
+  return `${VERSAO_ALGORITMO}:${crypto.createHash('sha256').update(canonico).digest('hex').slice(0, 8)}`;
+}
 
 const SEGMENTO_INSUFICIENTE = Object.freeze({ id: 'dados_insuficientes', nome: 'Dados insuficientes' });
 
@@ -79,6 +123,11 @@ function centavos(v) {
   return Math.round(v * 100) / 100;
 }
 
+// Somas em centavos INTEIROS: soma de float depende da ordem das parcelas e faria o mesmo conjunto de pedidos render
+// resultados diferentes (na 15ª casa) conforme a ordem de leitura. Inteiro é exato e comutativo.
+const emCentavos = (v) => Math.round(Number(v) * 100);
+const somaCentavos = (itens, f) => itens.reduce((acc, x) => acc + emCentavos(f(x)), 0) / 100;
+
 const formatadores = new Map();
 function diaLocal(data, fuso) {
   if (!formatadores.has(fuso)) {
@@ -115,6 +164,14 @@ function cortesQuintis(valores) {
   return [0.2, 0.4, 0.6, 0.8].map((p) => percentil(ordenados, p));
 }
 
+// Mediana simples (média dos dois centrais em quantidade par); null em conjunto vazio.
+function mediana(valores) {
+  if (!valores.length) return null;
+  const o = [...valores].sort((a, b) => a - b);
+  const meio = o.length >> 1;
+  return o.length % 2 ? o[meio] : (o[meio - 1] + o[meio]) / 2;
+}
+
 function faixaDeTier(tier, limites) {
   const inferior = tier === 1 ? 0 : limites[tier - 2] + 1;
   const superior = tier === 5 ? null : limites[tier - 1];
@@ -122,7 +179,7 @@ function faixaDeTier(tier, limites) {
 }
 
 // Predicado numérico da regra: recência em dias, frequência e valor. `valorAlto` é a fronteira P75 da base.
-function predicadoDaRegra(regra, limites, valorAlto) {
+function predicadoDaRegra(regra, limites, valorAlto, metrica = 'ltv_janela') {
   const primeira = faixaDeTier(regra.tiers[0], limites);
   const ultima = faixaDeTier(regra.tiers[regra.tiers.length - 1], limites);
   const predicado = {
@@ -130,8 +187,8 @@ function predicadoDaRegra(regra, limites, valorAlto) {
     frequencia: regra.f ? { min: regra.f.min ?? null, max: regra.f.max ?? null } : null,
     valor: null,
   };
-  if (regra.mAlto === true) predicado.valor = { min: valorAlto, maxExclusivo: null };
-  if (regra.mAlto === false) predicado.valor = { min: null, maxExclusivo: valorAlto };
+  if (regra.mAlto === true) predicado.valor = { metrica, min: valorAlto, maxExclusivo: null };
+  if (regra.mAlto === false) predicado.valor = { metrica, min: null, maxExclusivo: valorAlto };
   return predicado;
 }
 
@@ -155,14 +212,8 @@ function classificarRfm(clientes, opcoes = {}) {
   const asOf = opcoes.asOf instanceof Date ? opcoes.asOf : new Date(opcoes.asOf);
   if (!Number.isFinite(asOf.getTime())) throw new Error('rfm: `asOf` inválido');
   const fuso = opcoes.fuso || FUSO_PADRAO;
-  const janela = opcoes.janelaFrequenciaDias ?? PADROES.janelaFrequenciaDias;
-  const limites = opcoes.limitesRecenciaDias ?? PADROES.limitesRecenciaDias;
-  const minClientes = opcoes.minClientes ?? PADROES.minClientes;
-  const minHistorico = opcoes.minHistoricoDias ?? PADROES.minHistoricoDias;
-  const percentilAlto = opcoes.percentilValorAlto ?? PADROES.percentilValorAlto;
-  if (limites.length !== 4 || limites.some((l, i) => !Number.isInteger(l) || l < 1 || (i > 0 && l <= limites[i - 1]))) {
-    throw new Error('rfm: limites de recência devem ser 4 inteiros estritamente crescentes');
-  }
+  const config = configuracaoEfetiva(opcoes);
+  const { janelaFrequenciaDias: janela, limitesRecenciaDias: limites, minClientes, minHistoricoDias: minHistorico, percentilValorAlto: percentilAlto, valorAltoMetrica } = config;
   const limiteMs = asOf.getTime();
 
   const base = [];
@@ -183,10 +234,12 @@ function classificarRfm(clientes, opcoes = {}) {
     // Janela em dias de calendário: a compra de N dias atrás ainda conta em N ≤ janela.
     const naJanela = validos.filter((p) => diasDeCalendario(new Date(p.t), asOf, fuso) <= janela);
     const fJanela = naJanela.length;
-    const m = centavos(naJanela.reduce((acc, p) => acc + p.valor, 0));
-    const ltv = centavos(validos.reduce((acc, p) => acc + p.valor, 0));
+    const m = somaCentavos(naJanela, (p) => p.valor);
+    const ltv = somaCentavos(validos, (p) => p.valor);
     base.push({
       id: cliente.id, r, fJanela, fVida: validos.length, m, ltv,
+      // Valor de referência do corte "alto": soma da janela ou ticket médio da janela (a métrica é configurável).
+      v: valorAltoMetrica === 'ticket_medio' ? (fJanela ? centavos(m / fJanela) : 0) : m,
       primeiraCompraEm: new Date(primeira).toISOString(), ultimaCompraEm: new Date(ultima).toISOString(),
     });
   }
@@ -198,14 +251,14 @@ function classificarRfm(clientes, opcoes = {}) {
   else if (historicoDias < minHistorico) motivoInsuficiencia = `histórico curto: ${historicoDias} dia(s) observados, mínimo ${minHistorico}`;
   const suficiente = motivoInsuficiencia == null;
 
-  const mPositivos = base.map((c) => c.m).filter((m) => m > 0).sort((a, b) => a - b);
+  const mPositivos = base.map((c) => c.v).filter((v) => v > 0).sort((a, b) => a - b);
   const valorAlto = suficiente && mPositivos.length ? percentil(mPositivos, percentilAlto) : null;
   const cortesR = suficiente ? cortesQuintis(base.map((c) => c.r)) : null;
   const cortesM = suficiente ? cortesQuintis(base.map((c) => c.m)) : null;
 
   // Sem nenhum valor positivo na base, ninguém é "valor alto" (a fronteira fica inalcançável, e continua serializável).
   const fronteiraValor = valorAlto ?? Number.MAX_SAFE_INTEGER;
-  const regras = REGRAS.map((regra) => ({ regra, predicado: predicadoDaRegra(regra, limites, fronteiraValor) }));
+  const regras = REGRAS.map((regra) => ({ regra, predicado: predicadoDaRegra(regra, limites, fronteiraValor, valorAltoMetrica) }));
   const limiteSuperior = limites[limites.length - 1];
 
   const classificados = base.map((c) => {
@@ -215,7 +268,7 @@ function classificarRfm(clientes, opcoes = {}) {
     let segmento = SEGMENTO_INSUFICIENTE;
     let escore = null;
     if (suficiente) {
-      const achado = regras.find(({ predicado }) => casaPredicado(predicado, c.r, f, c.m));
+      const achado = regras.find(({ predicado }) => casaPredicado(predicado, c.r, f, c.v));
       segmento = achado ? { id: achado.regra.id, nome: achado.regra.nome } : SEGMENTO_INSUFICIENTE;
       escore = {
         r: 5 - cortesR.filter((corte) => c.r > corte).length,
@@ -227,7 +280,7 @@ function classificarRfm(clientes, opcoes = {}) {
   });
 
   const janelaCobreHistorico = historicoDias <= janela;
-  const totalReceita = classificados.reduce((acc, c) => acc + c.ltv, 0);
+  const totalReceita = somaCentavos(classificados, (c) => c.ltv);
   const ordemDosSegmentos = suficiente ? regras.map(({ regra }) => regra.id) : [SEGMENTO_INSUFICIENTE.id];
   const porSegmento = new Map(ordemDosSegmentos.map((id) => [id, []]));
   for (const c of classificados) porSegmento.get(c.segmento.id).push(c);
@@ -236,7 +289,7 @@ function classificarRfm(clientes, opcoes = {}) {
     const membros = porSegmento.get(id);
     const definicao = regras.find(({ regra }) => regra.id === id);
     const pedidos = membros.reduce((acc, c) => acc + c.fVida, 0);
-    const receita = centavos(membros.reduce((acc, c) => acc + c.ltv, 0));
+    const receita = somaCentavos(membros, (c) => c.ltv);
     return {
       id,
       nome: definicao ? definicao.regra.nome : SEGMENTO_INSUFICIENTE.nome,
@@ -251,15 +304,20 @@ function classificarRfm(clientes, opcoes = {}) {
       receita,
       pctReceita: totalReceita ? receita / totalReceita : 0,
       recenciaMediaDias: membros.length ? Math.round(membros.reduce((acc, c) => acc + c.r, 0) / membros.length) : null,
+      recenciaMedianaDias: mediana(membros.map((c) => c.r)),
+      frequenciaMediana: mediana(membros.map((c) => c.fVida)),
     };
   });
 
   return {
     versao: VERSAO_ALGORITMO,
+    regraVersao: regraVersao(config),
+    configuracao: config,
     asOf: asOf.toISOString(),
     fuso,
     janelaFrequenciaDias: janela,
     limitesRecenciaDias: [...limites],
+    valorAltoMetrica,
     valorAlto,
     suficiente,
     motivoInsuficiencia,
@@ -276,6 +334,6 @@ function classificarRfm(clientes, opcoes = {}) {
 }
 
 module.exports = {
-  classificarRfm, pedidoValido, diasDeCalendario, casaPredicado, predicadoDaRegra, percentil,
-  VERSAO_ALGORITMO, REGRAS, PADROES, SEGMENTO_INSUFICIENTE, STATUS_VALIDOS,
+  classificarRfm, pedidoValido, diasDeCalendario, casaPredicado, predicadoDaRegra, percentil, mediana, configuracaoEfetiva, regraVersao,
+  METRICAS_VALOR, VERSAO_ALGORITMO, REGRAS, PADROES, SEGMENTO_INSUFICIENTE, STATUS_VALIDOS,
 };

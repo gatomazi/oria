@@ -13,9 +13,13 @@
 //   taxa de recompra  clientes com ≥2 pedidos válidos NO PERÍODO ÷ clientes do período
 //   ticket médio      faturamento ÷ pedidos            receita por cliente  faturamento ÷ clientes
 //   1ª compra         clientes cujo primeiro pedido válido de toda a vida cai no período
-//   reembolsados      pedidos do período com pagamento `refunded` (fora do faturamento)
+//   reembolsados      pedidos do período com pagamento `refunded` ou "Reembolsado" (fora do faturamento)
 
 const { pedidoValido, diasDeCalendario } = require('./rfm');
+
+// A Ink devolve o status de pagamento ora em inglês (`refunded`), ora como rótulo em português ("Reembolsado"): o
+// mapeamento de entrada não cobre este último. Para o contador, os dois são reembolso total.
+const ehReembolsado = (status) => ['refunded', 'reembolsado'].includes(String(status || '').trim().toLowerCase());
 
 const FUSO_PADRAO = 'America/Sao_Paulo';
 const MS_DIA = 86400000;
@@ -60,6 +64,7 @@ function periodoAnterior({ de, ate }) {
 }
 
 function calcularPeriodo(clientes, { de, ate }, fuso) {
+  // Somas em centavos inteiros (exatas e independentes da ordem dos pedidos).
   let faturamento = 0;
   let pedidos = 0;
   let pedidosReembolsados = 0;
@@ -76,10 +81,10 @@ function calcularPeriodo(clientes, { de, ate }, fuso) {
     for (const p of validos) {
       const dia = dataLocal(new Date(p.criadoEm), fuso);
       if (primeiroDia == null || dia < primeiroDia) primeiroDia = dia;
-      if (dia >= de && dia <= ate) { noPeriodo += 1; valorNoPeriodo += Number(p.valor); }
+      if (dia >= de && dia <= ate) { noPeriodo += 1; valorNoPeriodo += Math.round(Number(p.valor) * 100); }
     }
     for (const p of cliente.pedidos || []) {
-      if (p.paymentStatus !== 'refunded') continue;
+      if (!ehReembolsado(p.paymentStatus)) continue;
       const dia = dataLocal(new Date(p.criadoEm), fuso);
       if (dia >= de && dia <= ate) pedidosReembolsados += 1;
     }
@@ -92,14 +97,14 @@ function calcularPeriodo(clientes, { de, ate }, fuso) {
   }
 
   return {
-    faturamento: centavos(faturamento),
+    faturamento: faturamento / 100,
     pedidos,
     clientes: clientesDoPeriodo,
     recorrentes,
     taxaRecompra: clientesDoPeriodo ? recorrentes / clientesDoPeriodo : null,
-    ticketMedio: pedidos ? centavos(faturamento / pedidos) : null,
-    receitaPorCliente: clientesDoPeriodo ? centavos(faturamento / clientesDoPeriodo) : null,
-    receitaRecorrente: centavos(receitaRecorrente),
+    ticketMedio: pedidos ? centavos(faturamento / 100 / pedidos) : null,
+    receitaPorCliente: clientesDoPeriodo ? centavos(faturamento / 100 / clientesDoPeriodo) : null,
+    receitaRecorrente: receitaRecorrente / 100,
     clientesPrimeiraCompra: primeiraCompra,
     pedidosReembolsados,
   };

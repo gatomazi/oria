@@ -34,7 +34,7 @@ export function SegmentoPanel({ rfm, selecionados, criando, onCriarCampanha, onV
           Clique na matriz ou na legenda para ver a regra do segmento, quantas pessoas ele reúne e criar uma campanha. Dá para marcar vários e comparar; a lista abaixo passa a mostrar só esse público.
         </p>
         <p className="cli-detalhe__nota">
-          Classificação <strong>{rfm.versao}</strong> em {new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })}, sobre {numero(rfm.universo)} clientes com compra válida. Janela de frequência: {rfm.janelaFrequenciaDias} dias.
+          Classificação <strong>{rfm.regraVersao}</strong> em {new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })}, sobre {numero(rfm.universo)} clientes com compra válida. Janela de frequência: {rfm.janelaFrequenciaDias} dias.
         </p>
       </aside>
     );
@@ -72,7 +72,7 @@ export function SegmentoPanel({ rfm, selecionados, criando, onCriarCampanha, onV
         <Par rotulo="Pedidos por cliente" valor={clientes ? decimal(pedidos / clientes) : '—'} />
         <Par rotulo="Ticket médio" valor={pedidos ? (formatValor(receita / pedidos) ?? '—') : '—'} />
         <Par rotulo="Receita" valor={formatValor(receita) ?? '—'} />
-        {unico && <Par rotulo="Recência média" valor={unico.recenciaMediaDias == null ? '—' : `${numero(unico.recenciaMediaDias)} dias`} />}
+        {unico && <Par rotulo="Recência (mediana)" valor={unico.recenciaMedianaDias == null ? '—' : `${numero(unico.recenciaMedianaDias)} dias`} />}
       </dl>
 
       {unico?.hipotese && (
@@ -92,7 +92,7 @@ export function SegmentoPanel({ rfm, selecionados, criando, onCriarCampanha, onV
       </div>
       {unico && (
         <p className="cli-detalhe__nota">
-          O segmento salvo é <strong>dinâmico</strong>: a audiência é reavaliada a cada uso, com a regra {rfm.versao} de {new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })}. Elegibilidade por canal (opt-in, número válido) é conferida na campanha.
+          O segmento salvo é <strong>dinâmico</strong>: a audiência é reavaliada a cada uso, com a regra {rfm.regraVersao} de {new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })}. Elegibilidade por canal (opt-in, número válido) é conferida na campanha.
         </p>
       )}
     </aside>

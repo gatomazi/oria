@@ -7589,7 +7589,7 @@ async function lerPedidosParaClientes() {
             buyer_uf, payment_status, order_status, total_value, criado_em, is_troca, frete, descontos, items_count
      FROM pedidos_ink
      WHERE organization_id = $1 AND ${escopo.sql}
-     ORDER BY criado_em DESC`,
+     ORDER BY criado_em DESC, ink_order_id DESC`,
     [orgDoContexto(), ...escopo.params]
   );
   return rows;
@@ -7676,7 +7676,7 @@ app.get('/api/admin/clientes/resumo', requireAdmin, async (req, res) => {
       periodo: analise.periodo,
       indicadores: analise.indicadores,
       rfm: {
-        versao: rfm.versao, classificadoEm: rfm.asOf, fuso: rfm.fuso, janelaFrequenciaDias: rfm.janelaFrequenciaDias,
+        versao: rfm.versao, regraVersao: rfm.regraVersao, configuracao: rfm.configuracao, valorAltoMetrica: rfm.valorAltoMetrica, classificadoEm: rfm.asOf, fuso: rfm.fuso, janelaFrequenciaDias: rfm.janelaFrequenciaDias,
         limitesRecenciaDias: rfm.limitesRecenciaDias, valorAlto: rfm.valorAlto, suficiente: rfm.suficiente,
         motivoInsuficiencia: rfm.motivoInsuficiencia, universo: rfm.universo, identidadesSemCompraValida: rfm.leadsSemCompraValida,
         historicoDias: rfm.historicoDias, janelaCobreHistorico: rfm.janelaCobreHistorico, segmentos: rfm.segmentos,
@@ -7841,7 +7841,7 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
       filtros = clientesSegmento.filtrosDoPredicado(predicado);
       observacoes = clientesSegmento.observacoesDoPredicado({ janelaCobreHistorico: analise.rfm.janelaCobreHistorico });
       rfmSegmento = seg.id;
-      rfmVersao = analise.rfm.versao;
+      rfmVersao = analise.rfm.regraVersao;
       classificadoEm = analise.rfm.asOf;
     } else if (corpo.origem === 'clientes') {
       const consulta = clientesLista.normalizarConsulta(corpo.filtros && typeof corpo.filtros === 'object' ? corpo.filtros : {});

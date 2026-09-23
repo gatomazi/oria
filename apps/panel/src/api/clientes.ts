@@ -96,7 +96,7 @@ export function listClientes(filtro: FiltroClientes) {
 export interface PredicadoRfm {
   recenciaDias: { min: number; max: number | null };
   frequencia: { min: number | null; max: number | null } | null;
-  valor: { min: number | null; maxExclusivo: number | null } | null;
+  valor: { metrica?: 'ltv_janela' | 'ticket_medio'; min: number | null; maxExclusivo: number | null } | null;
 }
 
 export interface SegmentoResumo {
@@ -113,6 +113,8 @@ export interface SegmentoResumo {
   receita: number;
   pctReceita: number;
   recenciaMediaDias: number | null;
+  recenciaMedianaDias: number | null;
+  frequenciaMediana: number | null;
 }
 
 export interface IndicadoresPeriodo {
@@ -137,6 +139,8 @@ export interface ResumoClientes {
   };
   rfm: {
     versao: string;
+    // Versão da REGRA: algoritmo + hash dos limiares. Muda quando qualquer limiar muda.
+    regraVersao: string;
     classificadoEm: string;
     fuso: string;
     janelaFrequenciaDias: number;

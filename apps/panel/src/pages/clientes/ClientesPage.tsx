@@ -267,7 +267,7 @@ export function ClientesPage() {
 
           <Card
             title="Matriz RFM"
-            description={`Classificação ${resumo.rfm.versao} em ${dataCurta(resumo.rfm.classificadoEm)} · ${numero(resumo.rfm.universo)} clientes com compra válida · janela de frequência ${resumo.rfm.janelaFrequenciaDias} dias · fonte: pedidos sincronizados. Não muda com o período dos indicadores.`}
+            description={`Classificação ${resumo.rfm.regraVersao} em ${dataCurta(resumo.rfm.classificadoEm)} · ${numero(resumo.rfm.universo)} clientes com compra válida · janela de frequência ${resumo.rfm.janelaFrequenciaDias} dias · fonte: pedidos sincronizados. Não muda com o período dos indicadores.`}
             action={(
               <div className="cli-segmentado" role="group" aria-label="Tamanho das células">
                 {(['clientes', 'receita'] as const).map((m) => (
@@ -332,6 +332,7 @@ export function ClientesPage() {
                   { key: 'pedidos', priority: 'low', label: 'Pedidos', align: 'right', firstSortDirection: 'desc', render: (s) => numero(s.pedidos), sortValue: (s) => s.pedidos },
                   { key: 'ppc', priority: 'low', label: 'Pedidos/cliente', align: 'right', firstSortDirection: 'desc', render: (s) => decimal(s.pedidosPorCliente), sortValue: (s) => s.pedidosPorCliente },
                   { key: 'ticket', priority: 'low', label: 'Ticket médio', align: 'right', firstSortDirection: 'desc', render: (s) => moeda(s.ticketMedio), sortValue: (s) => s.ticketMedio },
+                  { key: 'mediana', priority: 'low', label: 'Recência (mediana)', align: 'right', render: (s) => (s.recenciaMedianaDias == null ? '—' : `${numero(s.recenciaMedianaDias)} d`), sortValue: (s) => s.recenciaMedianaDias },
                   { key: 'receita', label: 'Receita líquida', align: 'right', firstSortDirection: 'desc', render: (s) => moeda(s.receita), sortValue: (s) => s.receita },
                   { key: 'pctReceita', label: '% da receita', align: 'right', firstSortDirection: 'desc', render: (s) => pct(s.pctReceita), sortValue: (s) => s.pctReceita },
                 ]}

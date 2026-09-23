@@ -31,8 +31,39 @@ function pedidoDaLinha(r) {
   };
 }
 
-// `linhas`: pedidos_ink em ordem `criado_em DESC`. `chaveDoContexto`: chave da Store para linhas sem `loja`.
-function agruparClientes(linhas, { chaveDoContexto }) {
+// Ordem canônica dos pedidos: mais recente primeiro e, no empate de horário, maior id da Ink primeiro. Sem o desempate,
+// dois pedidos no mesmo instante trocariam de lugar entre leituras e a chave/nome do cliente (do pedido mais recente)
+// mudariam sem que nada tivesse mudado.
+function compararPedidosRecentesPrimeiro(a, b) {
+  const ta = a.criado_em ? new Date(a.criado_em).getTime() : -Infinity;
+  const tb = b.criado_em ? new Date(b.criado_em).getTime() : -Infinity;
+  if (ta !== tb) return tb - ta;
+  const ia = Number(a.ink_order_id);
+  const ib = Number(b.ink_order_id);
+  if (Number.isFinite(ia) && Number.isFinite(ib) && ia !== ib) return ib - ia;
+  return 0;
+}
+
+// Um mesmo pedido da Ink nunca conta duas vezes: as chaves únicas (org, loja, id) e (org, store_id, id) são
+// independentes, então uma linha legada e outra da Store podem coexistir para o mesmo `ink_order_id`. Fica a primeira na
+// ordem canônica (a mais recente por `atualizado_em`, se vier; senão a primeira lida).
+function deduplicarPedidos(linhas) {
+  const vistos = new Set();
+  const unicas = [];
+  let duplicados = 0;
+  for (const r of linhas) {
+    if (r.ink_order_id == null) { unicas.push(r); continue; }
+    const chave = String(r.ink_order_id);
+    if (vistos.has(chave)) { duplicados += 1; continue; }
+    vistos.add(chave);
+    unicas.push(r);
+  }
+  return { unicas, duplicados };
+}
+
+// `linhas`: pedidos_ink em qualquer ordem. `chaveDoContexto`: chave da Store para linhas sem `loja`.
+function agruparClientes(linhasBrutas, { chaveDoContexto }) {
+  const linhas = [...linhasBrutas].sort(compararPedidosRecentesPrimeiro);
   const porLoja = new Map();
   for (const r of linhas) {
     if (!temIdentidade(r)) continue;
@@ -62,7 +93,7 @@ function agruparClientes(linhas, { chaveDoContexto }) {
   return clientes;
 }
 
-function coberturaDe(linhas, clientes) {
+function coberturaDe(linhas, clientes, duplicados = 0) {
   let primeiro = null;
   let ultimo = null;
   let semIdentidade = 0;
@@ -79,6 +110,7 @@ function coberturaDe(linhas, clientes) {
   }
   return {
     pedidosTotal: linhas.length,
+    pedidosDuplicadosIgnorados: duplicados,
     pedidosValidos: validos,
     pedidosSemIdentidade: semIdentidade,
     clientesIdentificados: clientes.length,
@@ -89,9 +121,10 @@ function coberturaDe(linhas, clientes) {
 
 // `hoje` (YYYY-MM-DD no fuso) só serve de teto do período; `asOf` é a data de CLASSIFICAÇÃO da RFM e não muda
 // quando o usuário troca o período dos indicadores.
-function analisarPedidos(linhas, { asOf, periodo, fuso = FUSO_PADRAO, chaveDoContexto, opcoesRfm = {} }) {
+function analisarPedidos(linhasLidas, { asOf, periodo, fuso = FUSO_PADRAO, chaveDoContexto, opcoesRfm = {} }) {
+  const { unicas: linhas, duplicados } = deduplicarPedidos([...linhasLidas].sort(compararPedidosRecentesPrimeiro));
   const clientes = agruparClientes(linhas, { chaveDoContexto });
-  const cobertura = coberturaDe(linhas, clientes);
+  const cobertura = coberturaDe(linhas, clientes, duplicados);
   const rfm = classificarRfm(clientes, { asOf, fuso, ...opcoesRfm });
   const indicadores = calcularIndicadores(clientes, periodo, { fuso, primeiroPedidoEm: cobertura.primeiroPedidoEm });
   const classificacaoPorId = new Map(rfm.clientes.map((c) => [c.id, c]));
@@ -101,4 +134,4 @@ function analisarPedidos(linhas, { asOf, periodo, fuso = FUSO_PADRAO, chaveDoCon
 // Chave de junção com a lista de Clientes (a mesma `loja + customerKey` que ela usa).
 const chaveDeJuncao = (loja, customerKey) => `${loja}\u0000${customerKey}`;
 
-module.exports = { analisarPedidos, agruparClientes, coberturaDe, pedidoDaLinha, chaveDeJuncao, dataLocal };
+module.exports = { analisarPedidos, agruparClientes, deduplicarPedidos, compararPedidosRecentesPrimeiro, coberturaDe, pedidoDaLinha, chaveDeJuncao, dataLocal };
