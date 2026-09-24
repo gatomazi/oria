@@ -316,6 +316,11 @@ export function ClientesPage() {
                 Janela de frequência de {resumo.rfm.janelaFrequenciaDias} dias: cobertura <strong>não confirmada</strong> ({numero(cob.historicoObservadoDias)} dias observados{cob.coberturaConfirmadaDias != null ? `, ${numero(cob.coberturaConfirmadaDias)} confirmados por backfill` : ', nenhum confirmado por backfill'}). Amostra suficiente para classificar ({numero(resumo.rfm.universo)} compradores) não significa histórico completo.
               </p>
             )}
+            {resumo.rfm.historicoObservadoDias <= resumo.rfm.limitesRecenciaDias[3] && (
+              <p className="ds-form-note">
+                Histórico observado de {numero(resumo.rfm.historicoObservadoDias)} dias, menor que o corte de “Perdidos” ({numero(resumo.rfm.limitesRecenciaDias[3])} dias sem comprar): esse segmento só pode aparecer depois de mais de {numero(resumo.rfm.limitesRecenciaDias[3])} dias de histórico. Seu tamanho zero hoje é consequência do histórico, não do comportamento dos clientes.
+              </p>
+            )}
             {!resumo.rfm.janelaAbrangeHistoricoObservado && (
               <p className="ds-form-note">A janela de frequência ({resumo.rfm.janelaFrequenciaDias} dias) é menor que o histórico observado ({numero(resumo.rfm.historicoObservadoDias)} dias): compras mais antigas contam no LTV, não na frequência.</p>
             )}
