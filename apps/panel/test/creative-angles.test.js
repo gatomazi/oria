@@ -228,7 +228,7 @@ test('isolamento: outra Organization não lista, não edita e não arquiva o ân
 });
 
 // ------------------------------------------------------------------ migration 0034
-const SQL_0034 = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0034-creative-angles.up.sql'), 'utf8');
+const SQL_0034 = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0037-creative-angles.up.sql'), 'utf8');
 const SQL = SQL_0034.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
 
 test('migration 0034: uma tabela nova, aditiva, com identidade própria por escopo', () => {
@@ -248,6 +248,6 @@ test('migration 0034: RLS habilitada e FORÇADA com a policy canônica; a tabela
   const manifesto = require('../lib/platform/tenancy-manifest');
   assert.ok(manifesto.TABELAS_PLATAFORMA.some((t) => t.tabela === 'creative_angles' && t.colunaTenant === 'organization_id'));
   assert.ok(manifesto.nomesSobRls().includes('creative_angles'));
-  const down = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0034-creative-angles.down.sql'), 'utf8');
+  const down = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0037-creative-angles.down.sql'), 'utf8');
   assert.match(down.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n').trim(), /^DROP TABLE IF EXISTS creative_angles;$/);
 });

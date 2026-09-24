@@ -497,7 +497,7 @@ test('draft sem plano é 409, criativo inexistente é 404 e id inválido é 400'
 
 // ── migration 0033 ───────────────────────────────────────────────────────────────────────────────────────────────
 
-const SQL_0033 = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0033-creative-feedback.up.sql'), 'utf8');
+const SQL_0033 = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0036-creative-feedback.up.sql'), 'utf8');
 const SQL = SQL_0033.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
 
 test('migration 0033: uma tabela nova, aditiva, com chave de upsert e sem mexer no que existe', () => {
@@ -532,6 +532,6 @@ test('migration 0033: colunas de consulta para ângulo, objetivo, contexto, inte
   }
   assert.match(SQL, /USING GIN \(product_ids\)/);
   assert.doesNotMatch(SQL, /\b(prompt_text|openai|api_key|token|senha|password)\b/i, 'a tabela não guarda prompt nem segredo');
-  const down = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0033-creative-feedback.down.sql'), 'utf8');
+  const down = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0036-creative-feedback.down.sql'), 'utf8');
   assert.match(down.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n').trim(), /^DROP TABLE IF EXISTS creative_feedback;$/);
 });
