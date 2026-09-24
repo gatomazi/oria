@@ -155,6 +155,14 @@ test('troca paga: RFM exclui (fora do universo); o filtro genérico a conta como
   assert.deepEqual(r.exata, r.matriz);
 });
 
+test('quem só tem pedido cancelado NUNCA é "Perdidos": o filtro genérico o incluiria ("nunca comprou" casa com "há mais de N dias"), a Audiência exata não', () => {
+  const linhas = [...fundo(ASOF), linha({ ref: 'SO-CANCELADO', quando: recente, pay: 'canceled' })];
+  const r = tresLeituras(linhas, ASOF, salvar(linhas, ASOF, 'perdidos'));
+  assert.ok(r.legado.includes('SO-CANCELADO'), 'legado: diasSemComprar nulo casa com "gte 366"');
+  assert.ok(!r.exata.includes('SO-CANCELADO') && !r.matriz.includes('SO-CANCELADO'), 'exata = matriz: não é comprador válido');
+  assert.deepEqual(r.exata, r.matriz);
+});
+
 const STATUS = [
   { ref: 'S-pago-pedido-cancelado', pay: 'paid', order: 'canceled', rfm: true, legado: true, nota: 'RISCO: pagamento válido com pedido encerrado conta como compra (decisão pendente com o número real)' },
   { ref: 'S-pago-pedido-devolvido', pay: 'paid', order: 'returned', rfm: true, legado: true, nota: 'RISCO: idem, devolvido' },

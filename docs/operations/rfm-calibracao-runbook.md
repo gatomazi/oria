@@ -67,3 +67,13 @@ Abra o `.md` e confira, **nesta ordem** (o restante só vale se estas passarem):
 | `a sessão não está em modo somente leitura` | o servidor ignorou `default_transaction_read_only`; use uma role/réplica de leitura |
 | `a Organization não tem Store visível` | UUID errado, ou RLS sem permissão para a role usada |
 | `recuso gravar … NÃO é ignorado pelo Git` | escreva em `apps/panel/relatorios-privados/` ou fora do repositório |
+
+## 6. Checklist de acesso (o que o proprietário precisa providenciar — sem enviar credenciais)
+
+- [ ] Réplica de leitura (ou role somente leitura) com `SELECT` em `organizations`, `stores`, `pedidos_ink`, `pedidos_backfill_jobs`.
+- [ ] A `DATABASE_URL` dessa role, exportada **apenas no terminal de quem executa** (nunca em chat, ticket, commit ou log).
+- [ ] O UUID da Organization da loja (o `--listar-organizacoes` ajuda a confirmar pelo volume de pedidos).
+- [ ] Janela combinada e um destino para o `.md`/`.json` fora do Git (agregados; sem nome, e-mail, telefone ou documento).
+- [ ] Confirmação de que nenhum backfill será iniciado por causa do relatório (o script é somente leitura).
+
+CLI verificada na Rodada 5 contra o banco sintético local: `--listar-organizacoes`, `--organization`, `--store` (opcional), `--as-of`, `--json`, `--md` e `--confirmo-host` funcionam como descrito; fora de localhost e sem confirmação o script recusa **antes** de abrir qualquer conexão.
