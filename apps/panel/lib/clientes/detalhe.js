@@ -144,7 +144,7 @@ function montarDetalhe({ cliente, classificacao, rfm, itensPorPedido, campanhas,
     rfm: classificacao
       ? {
         segmento: classificacao.segmento, escore: classificacao.escore, r: classificacao.r, f: classificacao.f, fVida: classificacao.fVida,
-        m: classificacao.m, versao: rfm.versao, asOf: rfm.asOf, suficiente: rfm.suficiente, motivoInsuficiencia: rfm.motivoInsuficiencia,
+        m: classificacao.m, versao: rfm.versao, asOf: rfm.asOf, amostraSuficiente: rfm.amostraSuficiente, motivoInsuficiencia: rfm.motivoInsuficiencia,
       }
       : null,
     indicadores,

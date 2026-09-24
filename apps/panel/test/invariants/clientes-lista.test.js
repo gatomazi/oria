@@ -246,3 +246,28 @@ test('filtro por UF: só sigla da lista de permissão; cliente sem UF nunca casa
   const base = [comRfm(1, 'novos', { uf: 'RS' }), comRfm(2, 'novos', { uf: 'SC' }), comRfm(3, 'novos')];
   assert.equal(listarClientes(base, consulta({ uf: 'RS' })).total, 1);
 });
+
+const { podeIncluirCadastro, dependeDeRfm } = h.sujeito('lib/clientes/lista.js');
+
+test('cadastro da Ink só entra se nenhum filtro o exclui (segmento RFM, faixas de compra e UF exigem pedido)', () => {
+  assert.equal(podeIncluirCadastro(consulta()), true);
+  assert.equal(podeIncluirCadastro(consulta({ tipo: 'sem_pedido' })), true);
+  assert.equal(podeIncluirCadastro(consulta({ tipo: 'com_pedido' })), false);
+  assert.equal(podeIncluirCadastro(consulta({ segmento: 'novos' })), false);
+  assert.equal(podeIncluirCadastro(consulta({ segmento: 'novos,sem_compra' })), true, 'sem_compra inclui quem só tem cadastro');
+  for (const q of [{ ltvMin: '10' }, { ticketMax: '10' }, { recenciaMin: '5' }, { primeiraDe: '2026-01-01' }, { ultimaAte: '2026-09-01' }, { uf: 'RS' }]) {
+    assert.equal(podeIncluirCadastro(consulta(q)), false, JSON.stringify(q));
+  }
+  // Filtros que o cadastro PODE satisfazer não o excluem.
+  assert.equal(podeIncluirCadastro(consulta({ marketing: 'sim' })), true);
+  assert.equal(podeIncluirCadastro(consulta({ pedidosMax: '0' })), true);
+  assert.equal(podeIncluirCadastro(consulta({ busca: 'ana' })), true);
+});
+
+test('dependência da RFM: filtro/ordem que só existe na classificação nunca pode ser "degradado" para lista sem o filtro', () => {
+  assert.equal(dependeDeRfm(consulta()), false);
+  assert.equal(dependeDeRfm(consulta({ busca: 'ana', tipo: 'com_pedido' })), false);
+  for (const q of [{ segmento: 'novos' }, { ltvMin: '1' }, { ticketMin: '1' }, { pedidosMin: '2' }, { primeiraDe: '2026-01-01' }, { recenciaMax: '30' }, { ordem: 'ltv_desc' }]) {
+    assert.equal(dependeDeRfm(consulta(q)), true, JSON.stringify(q));
+  }
+});

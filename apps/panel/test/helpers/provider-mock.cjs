@@ -287,5 +287,13 @@ globalThis.fetch = async function fetchComMock(entrada, init = {}) {
       auth: headers.get('authorization'), corpo, query: url.search,
     })}\n`);
   }
+  // Controle de teste (arquivo JSON relido a cada chamada): o cadastro de clientes da Ink pode ficar lento ou fora do ar
+  // para provar que isso não contamina a lista de Clientes. Ausente = comportamento de sempre.
+  if (url.hostname === 'api.reserva.ink' && url.pathname === '/v1/stores/customers' && process.env.PROVIDER_MOCK_CONTROL) {
+    let controle = {};
+    try { controle = JSON.parse(fs.readFileSync(process.env.PROVIDER_MOCK_CONTROL, 'utf8')); } catch { controle = {}; }
+    if (controle.clientesCadastro === 'lento') await new Promise((r) => setTimeout(r, Number(controle.atrasoMs) || 3000));
+    if (controle.clientesCadastro === 'falha') return json({ error: 'indisponível (simulado)' }, 503);
+  }
   return responder(url, metodo, corpo, headers.get('authorization'));
 };

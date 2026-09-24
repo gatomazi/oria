@@ -244,17 +244,20 @@ function classificarRfm(clientes, opcoes = {}) {
     });
   }
 
-  const historicoDias = primeiroPedido == null ? 0 : diasDeCalendario(new Date(primeiroPedido), asOf, fuso);
+  const historicoObservadoDias = primeiroPedido == null ? 0 : diasDeCalendario(new Date(primeiroPedido), asOf, fuso);
   const universo = base.length;
   let motivoInsuficiencia = null;
   if (universo < minClientes) motivoInsuficiencia = `base pequena: ${universo} cliente(s) com compra, mínimo ${minClientes}`;
-  else if (historicoDias < minHistorico) motivoInsuficiencia = `histórico curto: ${historicoDias} dia(s) observados, mínimo ${minHistorico}`;
-  const suficiente = motivoInsuficiencia == null;
+  else if (historicoObservadoDias < minHistorico) motivoInsuficiencia = `histórico curto: ${historicoObservadoDias} dia(s) observados, mínimo ${minHistorico}`;
+  // `amostraSuficiente` é um critério ESTATÍSTICO mínimo para classificar (≥ minClientes compradores e ≥ minHistoricoDias de
+  // histórico observado). NÃO afirma que o histórico é completo: isso é `cobertura` (lib/clientes/cobertura.js), que exige
+  // backfill confirmado. Uma loja pode ter amostra suficiente com só 260 dias observados e nenhum backfill.
+  const amostraSuficiente = motivoInsuficiencia == null;
 
   const mPositivos = base.map((c) => c.v).filter((v) => v > 0).sort((a, b) => a - b);
-  const valorAlto = suficiente && mPositivos.length ? percentil(mPositivos, percentilAlto) : null;
-  const cortesR = suficiente ? cortesQuintis(base.map((c) => c.r)) : null;
-  const cortesM = suficiente ? cortesQuintis(base.map((c) => c.m)) : null;
+  const valorAlto = amostraSuficiente && mPositivos.length ? percentil(mPositivos, percentilAlto) : null;
+  const cortesR = amostraSuficiente ? cortesQuintis(base.map((c) => c.r)) : null;
+  const cortesM = amostraSuficiente ? cortesQuintis(base.map((c) => c.m)) : null;
 
   // Sem nenhum valor positivo na base, ninguém é "valor alto" (a fronteira fica inalcançável, e continua serializável).
   const fronteiraValor = valorAlto ?? Number.MAX_SAFE_INTEGER;
@@ -267,7 +270,7 @@ function classificarRfm(clientes, opcoes = {}) {
     const f = c.r <= limiteSuperior ? Math.max(1, c.fJanela) : c.fJanela;
     let segmento = SEGMENTO_INSUFICIENTE;
     let escore = null;
-    if (suficiente) {
+    if (amostraSuficiente) {
       const achado = regras.find(({ predicado }) => casaPredicado(predicado, c.r, f, c.v));
       segmento = achado ? { id: achado.regra.id, nome: achado.regra.nome } : SEGMENTO_INSUFICIENTE;
       escore = {
@@ -279,9 +282,9 @@ function classificarRfm(clientes, opcoes = {}) {
     return { ...c, f, segmento, escore };
   });
 
-  const janelaCobreHistorico = historicoDias <= janela;
+  const janelaAbrangeHistoricoObservado = historicoObservadoDias <= janela;
   const totalReceita = somaCentavos(classificados, (c) => c.ltv);
-  const ordemDosSegmentos = suficiente ? regras.map(({ regra }) => regra.id) : [SEGMENTO_INSUFICIENTE.id];
+  const ordemDosSegmentos = amostraSuficiente ? regras.map(({ regra }) => regra.id) : [SEGMENTO_INSUFICIENTE.id];
   const porSegmento = new Map(ordemDosSegmentos.map((id) => [id, []]));
   for (const c of classificados) porSegmento.get(c.segmento.id).push(c);
 
@@ -319,15 +322,15 @@ function classificarRfm(clientes, opcoes = {}) {
     limitesRecenciaDias: [...limites],
     valorAltoMetrica,
     valorAlto,
-    suficiente,
+    amostraSuficiente,
     motivoInsuficiencia,
     universo,
     leadsSemCompraValida,
-    historicoDias,
+    historicoObservadoDias,
     primeiroPedidoEm: primeiroPedido == null ? null : new Date(primeiroPedido).toISOString(),
     // Com a janela cobrindo todo o histórico observado, F/M da janela = frequência/LTV de toda a vida, e o
     // predicado vira filtro de campanha EXATO; senão ele é aproximado (o filtro de audiência não tem janela).
-    janelaCobreHistorico,
+    janelaAbrangeHistoricoObservado,
     clientes: classificados,
     segmentos,
   };

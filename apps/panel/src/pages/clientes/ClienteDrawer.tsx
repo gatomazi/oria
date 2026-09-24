@@ -170,7 +170,7 @@ export function ClienteDrawer({ customerKey, nomeInicial, onClose }: Props) {
           <section aria-label="Classificação RFM">
             <h3 className="cli-drawer__secao">Classificação RFM</h3>
             {dados.rfm ? (
-              dados.rfm.suficiente && dados.rfm.escore ? (
+              dados.rfm.amostraSuficiente && dados.rfm.escore ? (
                 <>
                   <dl className="cli-pares">
                     <Par rotulo="Recência" valor={`${numero(dados.rfm.r)} dias · nota ${dados.rfm.escore.r}/5`} />

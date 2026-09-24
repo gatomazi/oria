@@ -29,12 +29,12 @@ function filtrosDoPredicado(predicado) {
   return filtros;
 }
 
-function observacoesDoPredicado({ janelaCobreHistorico }) {
+function observacoesDoPredicado({ janelaAbrangeHistoricoObservado }) {
   const observacoes = [
     'A recência do filtro conta 24h corridas; a RFM conta dias de calendário. Clientes na fronteira de uma faixa podem divergir em 1 dia.',
     'O filtro de audiência soma todo o histórico de pedidos pagos, inclusive troca; a RFM só conta pedidos válidos sem troca.',
   ];
-  if (!janelaCobreHistorico) observacoes.push('A janela de frequência da RFM é menor que o histórico: o filtro, sem janela, pode incluir pessoas a mais.');
+  if (!janelaAbrangeHistoricoObservado) observacoes.push('A janela de frequência da RFM é menor que o histórico: o filtro, sem janela, pode incluir pessoas a mais.');
   return observacoes;
 }
 

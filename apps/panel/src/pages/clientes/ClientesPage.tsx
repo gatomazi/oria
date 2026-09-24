@@ -15,6 +15,7 @@ import {
 import { ClienteDrawer } from './ClienteDrawer';
 import { GrupoBadge, RfmMatriz, type MetricaMatriz } from './RfmMatriz';
 import { SegmentoPanel } from './SegmentoPanel';
+import { concluirCarga, exibicao, iniciarCarga, totalEsperadoDaMatriz, type CargaLista } from './listaEstado';
 import { ESTADO_INICIAL, gravarFiltros, lerFiltros, ROTULOS_AVANCADOS, temAvancados, UF_LISTA, type EstadoFiltros } from './filtrosUrl';
 import { estiloDe } from './rfmSegmentos';
 import { dataCurta, dataHora, decimal, dia, numero, pct } from './rfmTexto';
@@ -89,8 +90,9 @@ export function ClientesPage() {
 
   const [resumo, setResumo] = useState<ResumoClientes | null>(null);
   const [erroResumo, setErroResumo] = useState('');
-  const [lista, setLista] = useState<ListaDeClientes | null>(null);
-  const [erroLista, setErroLista] = useState('');
+  // A lista só é EXIBIDA quando a carga é da chave atual (ver listaEstado.ts): nada de linhas/total de outro filtro.
+  const [carga, setCarga] = useState<CargaLista<ListaDeClientes> | null>(null);
+  const [tentativa, setTentativa] = useState(0);
   const [aberto, setAberto] = useState<{ chave: string; nome: string | null } | null>(null);
   const [criando, setCriando] = useState(false);
   const [exportando, setExportando] = useState<{ quantidade: number } | null>(null);
@@ -115,21 +117,24 @@ export function ClientesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(carregarResumo, [carregarResumo, escopo]);
 
-  const chaveLista = JSON.stringify([escopo, filtros, buscaAplicada]);
+  const chaveLista = JSON.stringify([escopo, filtros, buscaAplicada, tentativa]);
+  const vista = exibicao(carga, chaveLista);
+  const lista: ListaDeClientes | null = vista.modo === 'ok' ? vista.dados : null;
+  const erroLista = vista.modo === 'erro' ? vista.erro : '';
   useEffect(() => {
     let atual = true;
-    setErroLista('');
+    setCarga(iniciarCarga(chaveLista));
     listClientes({
       page: filtros.pagina, perPage: CLIENTES_POR_PAGINA, ordem: filtros.ordem, busca: buscaAplicada, inativoDias: filtros.inatividade,
       tipo: filtros.tipo, segmentos: filtros.segmentos, avancados: filtros.avancados,
     })
       .then((r) => {
         if (!atual) return;
-        setLista(r);
+        setCarga((c) => concluirCarga(c, chaveLista, { dados: r }));
         // O servidor devolve a página real (a lista pode ter encolhido com o filtro).
         if (r.page !== filtros.pagina) atualizar({ pagina: r.page }, { manterPagina: true });
       })
-      .catch((err: Error) => { if (atual) setErroLista(err.message); });
+      .catch((err: Error) => { if (atual) setCarga((c) => concluirCarga(c, chaveLista, { erro: err.message })); });
     return () => { atual = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveLista]);
@@ -219,7 +224,17 @@ export function ClientesPage() {
 
   const clientes = lista?.clientes ?? [];
   const cob = resumo?.cobertura;
-  const historicoConfirmado = cob?.backfill?.status === 'concluido';
+
+  // Matriz × lista: mesma regra e mesmo dia de classificação. Se a lista foi classificada em outro dia ou com outra regra
+  // que a matriz (base mudou/virou o dia entre as duas leituras), recarrega a matriz em vez de deixar as duas divergirem.
+  const diaDaMatriz = resumo ? new Date(resumo.rfm.classificadoEm).toLocaleDateString('en-CA', { timeZone: resumo.rfm.fuso }) : null;
+  const desalinhada = !!(lista && resumo && lista.rfm?.disponivel && (lista.rfm.regraVersao !== resumo.rfm.regraVersao || lista.rfm.diaClassificacao !== diaDaMatriz));
+  useEffect(() => { if (desalinhada) carregarResumo(); }, [desalinhada, carregarResumo]);
+  const clientesPorSegmento = Object.fromEntries(segmentos.map((sg) => [sg.id, sg.clientes]));
+  const outrosFiltros = !!buscaAplicada.trim() || !!filtros.inatividade || temAvancados(filtros.avancados) || filtros.tipo === 'sem_pedido';
+  const totalEsperado = totalEsperadoDaMatriz(filtros.segmentos as string[], clientesPorSegmento, outrosFiltros);
+  // Cobertura confirmada = backfill CONCLUÍDO (não basta "há muitos dias observados").
+  const historicoConfirmado = !!cob?.backfillConfirmado;
 
   return (
     <PageStack>
@@ -248,10 +263,9 @@ export function ClientesPage() {
         <>
           {!historicoConfirmado && (
             <Callout tone="warning" title="Cobertura histórica não confirmada">
-              {cob.backfill
-                ? `O último backfill de pedidos está "${cob.backfill.status}" (desde ${dia(String(cob.backfill.desde).slice(0, 10))}).`
-                : 'Nenhum backfill de pedidos foi registrado para esta loja.'}{' '}
-              Os números abaixo cobrem só os pedidos já sincronizados ({cob.primeiroPedidoEm ? `desde ${dataCurta(cob.primeiroPedidoEm)}` : 'nenhum'}); não os trate como o histórico completo da loja.
+              {cob.leitura}{' '}
+              {cob.ultimoBackfillStatus && cob.ultimoBackfillStatus !== 'concluido' ? `O último backfill está "${cob.ultimoBackfillStatus}". ` : ''}
+              Os números cobrem só os pedidos já sincronizados ({cob.primeiroPedidoEm ? `desde ${dataCurta(cob.primeiroPedidoEm)}` : 'nenhum'}); não os trate como o histórico completo da loja.
             </Callout>
           )}
           {cob.pedidosSemIdentidade > 0 && (
@@ -278,7 +292,7 @@ export function ClientesPage() {
               </div>
             )}
           >
-            {!resumo.rfm.suficiente ? (
+            {!resumo.rfm.amostraSuficiente ? (
               <Callout tone="warning" title="Dados insuficientes para classificar com segurança">
                 {resumo.rfm.motivoInsuficiencia}. Mostrar segmentos de recompra com pouca base ou histórico curto seria enganoso; as sugestões de campanha ficam ocultas até haver cobertura.
               </Callout>
@@ -296,8 +310,13 @@ export function ClientesPage() {
                 />
               </div>
             )}
-            {!resumo.rfm.janelaCobreHistorico && (
-              <p className="ds-form-note">A janela de frequência ({resumo.rfm.janelaFrequenciaDias} dias) é menor que o histórico observado ({numero(resumo.rfm.historicoDias)} dias): compras mais antigas contam no LTV, não na frequência.</p>
+            {!cob.coberturaJanelaConfirmada && (
+              <p className="ds-form-note">
+                Janela de frequência de {resumo.rfm.janelaFrequenciaDias} dias: cobertura <strong>não confirmada</strong> ({numero(cob.historicoObservadoDias)} dias observados{cob.coberturaConfirmadaDias != null ? `, ${numero(cob.coberturaConfirmadaDias)} confirmados por backfill` : ', nenhum confirmado por backfill'}). Amostra suficiente para classificar ({numero(resumo.rfm.universo)} compradores) não significa histórico completo.
+              </p>
+            )}
+            {!resumo.rfm.janelaAbrangeHistoricoObservado && (
+              <p className="ds-form-note">A janela de frequência ({resumo.rfm.janelaFrequenciaDias} dias) é menor que o histórico observado ({numero(resumo.rfm.historicoObservadoDias)} dias): compras mais antigas contam no LTV, não na frequência.</p>
             )}
             {resumo.rfm.identidadesSemCompraValida > 0 && (
               <p className="ds-form-note">
@@ -306,7 +325,7 @@ export function ClientesPage() {
             )}
           </Card>
 
-          {resumo.rfm.suficiente && (
+          {resumo.rfm.amostraSuficiente && (
             <Card flush title="Distribuição por segmento" description="Tabela equivalente à matriz. Números do histórico observado até a data de classificação.">
               <DataTable
                 label="Distribuição de clientes por segmento RFM"
@@ -385,6 +404,22 @@ export function ClientesPage() {
 
         {avancadosAbertos && <FiltrosAvancadosForm valor={filtros.avancados} onChange={(avancados) => atualizar({ avancados })} />}
 
+        {resumo && cob && lista && (
+          <div className="cli-universo">
+            <p className="ds-form-note">
+              {numero(cob.clientesIdentificados)} pessoas com pedido = {numero(resumo.rfm.universo)} compradores válidos classificados (a matriz) + {numero(resumo.rfm.identidadesSemCompraValida)} sem compra válida.
+              {' '}Quem só tem cadastro na Ink entra apenas quando nenhum filtro exige pedido e a Ink responde.
+              {totalEsperado != null && lista.total === totalEsperado && ` Confere com a matriz: ${numero(totalEsperado)} no(s) segmento(s) selecionado(s).`}
+            </p>
+            {totalEsperado != null && lista.total !== totalEsperado && (
+              <Callout tone="warning" title="A lista e a matriz divergem">
+                A lista traz {numero(lista.total)} e a matriz {numero(totalEsperado)} para o(s) segmento(s) selecionado(s). A base pode ter mudado desde a classificação de {dataCurta(resumo.rfm.classificadoEm)}; a matriz está sendo recarregada.
+              </Callout>
+            )}
+            {lista.cadastro.motivoOmitido && <p className="ds-form-note">O cadastro da Ink não foi consultado: o filtro escolhido só existe para quem tem pedido.</p>}
+          </div>
+        )}
+
         {chipsAtivos.length > 0 && (
           <div className="cli-chips" role="group" aria-label="Filtros ativos">
             {chipsAtivos.map((c) => (
@@ -402,8 +437,8 @@ export function ClientesPage() {
         )}
         {lista?.cadastro.parcial && <p className="ds-form-note">Cadastro carregado parcialmente: a loja tem mais clientes do que o limite lido de uma vez.</p>}
 
-        {erroLista && <ErrorState description={erroLista} />}
-        {!erroLista && !lista && <Skeleton variant="table" rows={8} />}
+        {erroLista && <ErrorState description={erroLista} onRetry={() => setTentativa((t) => t + 1)} />}
+        {vista.modo === 'carregando' && <div aria-busy="true" aria-live="polite"><Skeleton variant="table" rows={8} /></div>}
         {!erroLista && lista && (!clientes.length ? (
           <EmptyState
             title="Nenhum cliente encontrado"

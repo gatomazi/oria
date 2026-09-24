@@ -29,3 +29,6 @@ tmp/
 .DS_Store
 .idea/
 .vscode/
+
+# Relatórios de calibração da RFM (agregados, mas privados da loja): nunca versionar
+apps/panel/relatorios-privados/

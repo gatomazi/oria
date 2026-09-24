@@ -23,6 +23,7 @@ const clientesMetricas = require('./lib/clientes/metricas');
 const clientesDetalhe = require('./lib/clientes/detalhe');
 const clientesExportacao = require('./lib/clientes/exportacao');
 const clientesSegmento = require('./lib/clientes/segmento');
+const clientesCobertura = require('./lib/clientes/cobertura');
 const financeiroDespesas = require('./lib/financeiro/despesas');
 const { resolverMidiaDaOrganizacao } = require('./lib/financeiro/midia');
 const custosPrecos = require('./lib/custos/precos');
@@ -7550,13 +7551,34 @@ app.get('/api/admin/clientes/lista', requireAdmin, async (req, res) => {
 
   try {
     const consulta = clientesLista.normalizarConsulta(req.query);
-    // Recência/segmento/LTV vêm da RFM (mesma regra do resumo). Falha nela não derruba a lista: volta ao agregado simples.
-    let historico = await buscarClientesAgregados();
-    try { historico = enriquecerComRfm(historico, await analisarClientesDaStore()); } catch (err) { console.error(`[CLIENTES] RFM indisponível para a lista: ${err.message}`); }
+    // UMA leitura de pedidos alimenta o agregado da lista e a RFM: a mesma população da matriz.
+    let analise = null;
+    try { analise = await analisarClientesDaStore(); } catch (err) { console.error(`[CLIENTES] análise RFM falhou para a lista: ${err.message}`); }
+    let historico = await buscarClientesAgregados(analise ? analise.linhas : null);
+    // Recência/segmento/LTV vêm da RFM (mesma regra do resumo). Se ela falhar e o pedido DEPENDE dela (segmento, faixas de
+    // LTV/ticket/datas), devolver a lista sem o filtro seria enganoso: erro verdadeiro. Sem esses filtros, segue local.
+    let rfm = { disponivel: false, regraVersao: null, classificadoEm: null, diaClassificacao: null, amostraSuficiente: false };
+    try {
+      if (!analise) throw new Error('análise indisponível');
+      historico = enriquecerComRfm(historico, analise);
+      rfm = {
+        disponivel: true, regraVersao: analise.rfm.regraVersao, classificadoEm: analise.rfm.asOf,
+        diaClassificacao: clientesMetricas.dataLocal(new Date(analise.rfm.asOf), FUSO_ORGANIZACAO), amostraSuficiente: analise.rfm.amostraSuficiente,
+      };
+    } catch (err) {
+      console.error(`[CLIENTES] RFM indisponível para a lista: ${err.message}`);
+      if (clientesLista.dependeDeRfm(consulta)) {
+        return res.status(503).json({ error: 'a classificação RFM não está disponível agora; tente de novo em instantes', codigo: 'RFM_INDISPONIVEL' });
+      }
+    }
     let base = historico;
     let cadastro = { incluido: false, disponivel: true, parcial: false, atualizadoEm: null };
 
-    if (consulta.tipo !== 'com_pedido') {
+    // Filtro que já exclui quem só tem cadastro (segmento RFM, LTV, datas…): a Ink nem é consultada — ela não muda o resultado
+    // e uma Ink lenta ou fora do ar não pode atrasar nem "avisar" sobre uma lista que ela não afeta.
+    if (consulta.tipo !== 'com_pedido' && !clientesLista.podeIncluirCadastro(consulta)) {
+      cadastro = { ...cadastro, motivoOmitido: 'filtro_exige_pedido' };
+    } else if (consulta.tipo !== 'com_pedido') {
       try {
         const registro = await cadastroDeClientesDaStore();
         base = clientesLista.unirComCadastro(historico, registro.clientes, { loja: chaveDaStore() });
@@ -7569,7 +7591,7 @@ app.get('/api/admin/clientes/lista', requireAdmin, async (req, res) => {
       }
     }
 
-    res.json({ ...clientesLista.listarClientes(base, consulta), cadastro });
+    res.json({ ...clientesLista.listarClientes(base, consulta), cadastro, rfm });
   } catch (err) {
     console.error(`[CLIENTES] falha ao listar clientes paginados: ${err.message}`);
     res.status(500).json({ error: 'não foi possível ler os clientes' });
@@ -7586,7 +7608,7 @@ async function lerPedidosParaClientes() {
   const escopo = escopoDaStore(2);
   const { rows } = await pgPool.query(
     `SELECT loja, ink_order_id, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing,
-            buyer_uf, payment_status, order_status, total_value, criado_em, is_troca, frete, descontos, items_count
+            buyer_uf, payment_status, order_status, total_value, criado_em, is_troca, frete, descontos, items_count, lucro_operacional
      FROM pedidos_ink
      WHERE organization_id = $1 AND ${escopo.sql}
      ORDER BY criado_em DESC, ink_order_id DESC`,
@@ -7629,11 +7651,19 @@ async function coberturaDeSincronizacao() {
      WHERE organization_id = $1 AND ${escopo.sql} ORDER BY criado_em DESC LIMIT 1`,
     [orgDoContexto(), ...escopo.params]
   );
+  // Só um job CONCLUÍDO confirma cobertura: `concluidoDesde` é o menor `desde` entre eles (o intervalo lido por inteiro).
+  const concluidos = await pgPool.query(
+    `SELECT MIN(desde) AS desde FROM pedidos_backfill_jobs WHERE organization_id = $1 AND ${escopo.sql} AND status = 'concluido'`,
+    [orgDoContexto(), ...escopo.params]
+  );
   const job = backfill.rows[0] || null;
   return {
     ultimoSyncEm: sync.rows[0] ? sync.rows[0].ultimo_sync_em : null,
     backfill: job
-      ? { status: job.status, desde: job.desde, pedidosProcessados: job.pedidos_processados, atualizadoEm: job.atualizado_em }
+      ? {
+        status: job.status, desde: job.desde, pedidosProcessados: job.pedidos_processados, atualizadoEm: job.atualizado_em,
+        concluidoDesde: concluidos.rows[0] && concluidos.rows[0].desde ? concluidos.rows[0].desde : null,
+      }
       : null,
   };
 }
@@ -7677,11 +7707,19 @@ app.get('/api/admin/clientes/resumo', requireAdmin, async (req, res) => {
       indicadores: analise.indicadores,
       rfm: {
         versao: rfm.versao, regraVersao: rfm.regraVersao, configuracao: rfm.configuracao, valorAltoMetrica: rfm.valorAltoMetrica, classificadoEm: rfm.asOf, fuso: rfm.fuso, janelaFrequenciaDias: rfm.janelaFrequenciaDias,
-        limitesRecenciaDias: rfm.limitesRecenciaDias, valorAlto: rfm.valorAlto, suficiente: rfm.suficiente,
+        limitesRecenciaDias: rfm.limitesRecenciaDias, valorAlto: rfm.valorAlto, amostraSuficiente: rfm.amostraSuficiente,
         motivoInsuficiencia: rfm.motivoInsuficiencia, universo: rfm.universo, identidadesSemCompraValida: rfm.leadsSemCompraValida,
-        historicoDias: rfm.historicoDias, janelaCobreHistorico: rfm.janelaCobreHistorico, segmentos: rfm.segmentos,
+        historicoObservadoDias: rfm.historicoObservadoDias, janelaAbrangeHistoricoObservado: rfm.janelaAbrangeHistoricoObservado, segmentos: rfm.segmentos,
       },
-      cobertura: { ...analise.cobertura, ...sync, fonte: 'pedidos_ink: cache local alimentado por webhook, sync horário e backfill — não é consulta ao vivo à Ink' },
+      cobertura: {
+        ...analise.cobertura, ...sync,
+        // Cobertura ≠ amostra suficiente: só backfill CONCLUÍDO confirma o intervalo (lib/clientes/cobertura.js).
+        ...clientesCobertura.semanticaDeCobertura({
+          primeiroPedidoEm: analise.cobertura.primeiroPedidoEm, asOf: rfm.asOf, fuso: FUSO_ORGANIZACAO, janelaFrequenciaDias: rfm.janelaFrequenciaDias,
+          backfill: sync.backfill ? { ultimoStatus: sync.backfill.status, concluidoDesde: sync.backfill.concluidoDesde } : null,
+        }),
+        fonte: 'pedidos_ink: cache local alimentado por webhook, sync horário e backfill — não é consulta ao vivo à Ink',
+      },
       lacunas: [
         'Reembolso parcial não é rastreado: só o reembolso total (`refunded`) sai do faturamento e da RFM.',
         'Pedidos sem documento, telefone e e-mail não podem ser atribuídos a um cliente e ficam fora dos indicadores.',
@@ -7834,12 +7872,12 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
       }
       const analise = await analisarClientesDaStore();
       const seg = analise.rfm.segmentos.find((s) => s.id === corpo.segmento);
-      if (!analise.rfm.suficiente) return res.status(409).json({ error: `dados insuficientes para classificar: ${analise.rfm.motivoInsuficiencia}` });
+      if (!analise.rfm.amostraSuficiente) return res.status(409).json({ error: `dados insuficientes para classificar: ${analise.rfm.motivoInsuficiencia}` });
       if (!seg || !seg.predicado) return res.status(404).json({ error: 'segmento RFM não encontrado' });
       origem = 'rfm';
       predicado = seg.predicado;
       filtros = clientesSegmento.filtrosDoPredicado(predicado);
-      observacoes = clientesSegmento.observacoesDoPredicado({ janelaCobreHistorico: analise.rfm.janelaCobreHistorico });
+      observacoes = clientesSegmento.observacoesDoPredicado({ janelaAbrangeHistoricoObservado: analise.rfm.janelaAbrangeHistoricoObservado });
       rfmSegmento = seg.id;
       rfmVersao = analise.rfm.regraVersao;
       classificadoEm = analise.rfm.asOf;
@@ -7897,17 +7935,24 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
 // ON CONFLICT (organization_id, campaign_id, customer_key) de campaign_recipients). Trade-off consciente: no caso
 // raro de duas pessoas diferentes compartilharem telefone/email de família em pedidos distintos,
 // elas passam a contar como 1 "cliente" — prioriza nunca duplicar envio sobre esse risco raro.
-async function buscarClientesAgregados() {
+//
+// `linhasPrelidas` (opcional): as MESMAS linhas de `lerPedidosParaClientes`, já em ordem `criado_em DESC`. A lista de
+// Clientes passa as linhas que também alimentam a RFM: matriz, lista e drawer enxergam exatamente o mesmo conjunto de
+// pedidos (uma leitura só, sem janela para um webhook mudar o histórico entre duas consultas).
+async function buscarClientesAgregados(linhasPrelidas = null) {
   const escopo = escopoDaStore(2);
-  const { rows } = await pgPool.query(
-    `SELECT loja, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing,
-            buyer_uf, payment_status, total_value, criado_em, lucro_operacional, is_troca
-     FROM pedidos_ink
-     WHERE organization_id = $1 AND ${escopo.sql}
-       AND COALESCE(NULLIF(buyer_documento,''), NULLIF(buyer_telefone,''), NULLIF(buyer_email,'')) IS NOT NULL
-     ORDER BY criado_em DESC`,
-    [orgDoContexto(), ...escopo.params]
-  );
+  const temIdentidade = (r) => !!(r.buyer_documento || r.buyer_telefone || r.buyer_email);
+  const rows = linhasPrelidas
+    ? linhasPrelidas.filter(temIdentidade)
+    : (await pgPool.query(
+      `SELECT loja, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing,
+              buyer_uf, payment_status, total_value, criado_em, lucro_operacional, is_troca
+       FROM pedidos_ink
+       WHERE organization_id = $1 AND ${escopo.sql}
+         AND COALESCE(NULLIF(buyer_documento,''), NULLIF(buyer_telefone,''), NULLIF(buyer_email,'')) IS NOT NULL
+       ORDER BY criado_em DESC`,
+      [orgDoContexto(), ...escopo.params]
+    )).rows;
 
   // Identidade nunca cruza lojas diferentes (mesmo documento podendo se repetir em 2 lojas
   // distintas, cada loja mantém seus próprios registros de cliente) — agrupa por loja primeiro.

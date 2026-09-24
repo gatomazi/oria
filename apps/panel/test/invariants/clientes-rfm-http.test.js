@@ -18,6 +18,10 @@ const h = require('./harness');
 const senhas = h.sujeito('lib/auth/password.js');
 const { sqlProvisionarAppRole } = h.sujeito('lib/platform/app-role.js');
 const manifesto = h.sujeito('lib/platform/tenancy-manifest.js');
+const runtime = h.sujeito('lib/platform/tenant-runtime.js');
+const { createIntegrationResolver } = h.sujeito('lib/platform/integrations.js');
+const { createSecretStore } = h.sujeito('lib/secrets/store.js');
+const { createKeyring } = h.sujeito('lib/secrets/keyring.js');
 const { inserir, limparCache, concederFeatures } = require('../helpers/linhas');
 const { agruparPedidosPorIdentidade } = h.sujeito('lib/clientes/identidade.js');
 const { filtrosDoPredicado } = h.sujeito('lib/clientes/segmento.js');
@@ -41,6 +45,12 @@ let sup;
 let filho;
 let base;
 let ordemInk = 1000;
+let arquivoControle;
+let arquivoLogMock;
+const controleDoMock = (c) => fs.writeFileSync(arquivoControle, JSON.stringify(c));
+const chamadasAoCadastro = () => (fs.existsSync(arquivoLogMock)
+  ? fs.readFileSync(arquivoLogMock, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((c) => c.caminho === '/v1/stores/customers').length
+  : 0);
 
 const diasAtras = (n) => new Date(Date.now() - n * 86_400_000).toISOString();
 
@@ -104,6 +114,13 @@ test.before(async () => {
   await pessoa('cli-b@teste.oria', ORG_B);
   limparCache();
   for (const org of [ORG_A, ORG_B]) await concederFeatures(sup, org, { whatsapp: true });
+  // Ink CONECTADA na Organization A (token de teste): o cadastro de clientes passa a ser consultado, e o mock pode ficar
+  // lento/fora do ar sob controle do teste.
+  const fachada = runtime.criarPoolTenant(sup);
+  const resolver = createIntegrationResolver({
+    pool: fachada, segredos: createSecretStore({ pool: fachada, keyring: createKeyring({ ENCRYPTION_MASTER_KEY: MESTRA }) }), env: {}, logger: { warn() {}, error() {} },
+  });
+  await runtime.comContexto({ organizationId: ORG_A, loja: LOJA[ORG_A] }, () => resolver.gravarSegredo('ink', 'api_token', 'inkA-token-de-teste-clientes'));
 
   // Org A: 44 clientes de uma compra (recência 10..~200 dias), 3 recorrentes fortes, um cliente unido por
   // telefone+documento, um cancelado, um reembolsado e uma troca (nenhum deles vira compra válida).
@@ -128,6 +145,9 @@ test.before(async () => {
   await pedido(ORG_B, { doc: '50000000001', nome: 'Exclusivo B', dias: 3 });
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oria-cli-srv-'));
+  arquivoControle = path.join(dir, 'controle-mock.json');
+  arquivoLogMock = path.join(dir, 'mock.jsonl');
+  controleDoMock({});
   const processo = await h.subirProcessoDoPainel((porta) => spawn(process.execPath, ['--require', MOCK, SERVER], {
     cwd: h.RAIZ_SUJEITO,
     env: {
@@ -135,7 +155,7 @@ test.before(async () => {
       PORT: String(porta), NODE_ENV: 'development', NODE_PATH: path.join(h.RAIZ_REPO, 'node_modules'),
       DATABASE_URL: h.urlComUsuario(db.url, ROLE, SENHA_ROLE), DB_ENFORCE_APP_ROLE: '1', ENCRYPTION_MASTER_KEY: MESTRA,
       ADMIN_SESSION_SECRET: crypto.randomBytes(32).toString('base64url'),
-      PROVIDER_MOCK_LOG: path.join(dir, 'mock.jsonl'),
+      PROVIDER_MOCK_LOG: arquivoLogMock, PROVIDER_MOCK_CONTROL: arquivoControle,
     },
   }), { aoLer: () => {}, limiteMs: 30000 });
   filho = processo.filho;
@@ -172,7 +192,7 @@ test('resumo: universo só com compra válida; soma dos segmentos = universo; ca
   assert.equal(rfm.universo, 50);
   assert.equal(rfm.identidadesSemCompraValida, 3, 'cancelado, reembolsado e só-troca não são compradores');
   assert.equal(soma(rfm.segmentos, (s) => s.clientes), rfm.universo);
-  assert.equal(rfm.suficiente, true);
+  assert.equal(rfm.amostraSuficiente, true);
   assert.equal(rfm.versao, 'rfm-v1');
   assert.match(rfm.regraVersao, /^rfm-v1:[0-9a-f]{8}$/, 'a versão da regra (algoritmo + hash dos limiares) acompanha o resumo');
   assert.deepEqual(rfm.configuracao.limitesRecenciaDias, [45, 90, 180, 365]);
@@ -409,4 +429,122 @@ test('ida e volta com Campanhas: para TODO segmento, o que foi persistido é a r
   // Nada foi disparado nem publicado por este fluxo.
   assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaigns')).rows[0].n, 0);
   assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients')).rows[0].n, 0);
+});
+
+// ── Matriz × lista × cadastro remoto ────────────────────────────────────────────────────────────────
+// A Ink (cadastro de quem nunca pediu) pode ficar fora do ar ou lenta. Isso nunca pode: bloquear pedidos locais já
+// sincronizados, contaminar a lista de um segmento RFM, nem ser cacheado como se fosse resposta boa.
+const listaDe = (nav, q) => nav.req('GET', `/api/admin/clientes/lista?per_page=100&${q}`);
+
+test('lista × cadastro da Ink: falha → pedidos locais intactos e falha declarada; segmento RFM nem consulta a Ink; recuperação volta ao normal', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const { json: resumo } = await a.req('GET', '/api/admin/clientes/resumo');
+  const novos = resumo.rfm.segmentos.find((x) => x.id === 'novos');
+  const comPedido = (await listaDe(a, 'tipo=com_pedido')).json.total;
+  assert.equal(comPedido, resumo.rfm.universo + resumo.rfm.identidadesSemCompraValida, 'pessoas com pedido = compradores classificados + sem compra válida');
+
+  // 1) Ink fora do ar: tipo=todos segue com os pedidos locais e declara a falha.
+  controleDoMock({ clientesCadastro: 'falha' });
+  const falha = await listaDe(a, 'tipo=todos');
+  assert.equal(falha.status, 200, falha.texto);
+  assert.equal(falha.json.cadastro.disponivel, false);
+  assert.equal(falha.json.cadastro.incluido, false);
+  assert.equal(falha.json.total, comPedido, 'os pedidos já sincronizados não são bloqueados nem escondidos');
+
+  // 2) Com chip de segmento, a Ink NÃO é consultada: total = segmento, sem alerta de cadastro, mesmo com a Ink fora do ar.
+  const antes = chamadasAoCadastro();
+  const seg = await listaDe(a, 'tipo=todos&segmento=novos');
+  assert.equal(seg.status, 200, seg.texto);
+  assert.equal(chamadasAoCadastro(), antes, 'o cadastro da Ink não foi consultado');
+  assert.equal(seg.json.total, novos.clientes);
+  assert.equal(seg.json.cadastro.disponivel, true, 'nenhum alerta de "cadastro indisponível" numa lista que a Ink não afeta');
+  assert.equal(seg.json.cadastro.motivoOmitido, 'filtro_exige_pedido');
+  assert.ok(seg.json.clientes.every((c) => c.segmento === 'novos'), 'nenhuma linha de outro segmento');
+
+  // 3) Ink LENTA: a lista de segmento responde rápido (não espera a Ink).
+  controleDoMock({ clientesCadastro: 'lento', atrasoMs: 2500 });
+  const t0 = Date.now();
+  const rapida = await listaDe(a, 'tipo=todos&segmento=novos&ltvMin=0');
+  assert.equal(rapida.status, 200, rapida.texto);
+  assert.ok(Date.now() - t0 < 1500, `lista de segmento levou ${Date.now() - t0} ms com a Ink lenta`);
+  assert.equal(rapida.json.total, novos.clientes);
+
+  // 4) Recuperação: a falha anterior NÃO foi cacheada; o cadastro volta e "só cadastro" reaparece.
+  controleDoMock({});
+  const ok = await listaDe(a, 'tipo=todos');
+  assert.equal(ok.json.cadastro.incluido, true, 'recuperou: cadastro incluído');
+  assert.equal(ok.json.cadastro.disponivel, true);
+  const soCadastro = (await listaDe(a, 'tipo=sem_pedido')).json;
+  assert.ok(soCadastro.total >= 1 && soCadastro.clientes.every((c) => c.origem === 'cadastro' && c.segmento === null));
+  assert.equal(ok.json.total, comPedido + soCadastro.total);
+});
+
+test('matriz × lista × drawer: mesmo segmento, mesma regra e mesmo dia de classificação', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const { json: resumo } = await a.req('GET', '/api/admin/clientes/resumo');
+  const diaMatriz = new Intl.DateTimeFormat('en-CA', { timeZone: resumo.rfm.fuso }).format(new Date(resumo.rfm.classificadoEm));
+  for (const seg of resumo.rfm.segmentos.filter((x) => x.clientes > 0)) {
+    const l = (await listaDe(a, `tipo=com_pedido&segmento=${seg.id}`)).json;
+    assert.equal(l.total, seg.clientes, `lista × matriz em ${seg.id}`);
+    assert.equal(l.rfm.regraVersao, resumo.rfm.regraVersao);
+    assert.equal(l.rfm.diaClassificacao, diaMatriz);
+    // O drawer do primeiro cliente da lista usa a MESMA definição de segmento.
+    const d = await a.req('POST', '/api/admin/clientes/detalhe', { corpo: { customerKey: l.clientes[0].customerKey } });
+    assert.equal(d.json.rfm.segmento.id, seg.id, `drawer × lista em ${seg.id}`);
+    assert.equal(d.json.rfm.versao, resumo.rfm.versao);
+  }
+});
+
+test('lista: filtro que depende da RFM nunca devolve lista SEM o filtro; sem dependência, lista segue local', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  // Segmento inexistente cai fora da lista de permissão: o filtro é ignorado (não vira consulta livre)…
+  const ignorado = await listaDe(a, 'tipo=com_pedido&segmento=inexistente');
+  assert.equal(ignorado.status, 200);
+  // …e um segmento válido sem ninguém devolve ZERO, nunca a lista inteira.
+  const { json: resumo } = await a.req('GET', '/api/admin/clientes/resumo');
+  const vazio = resumo.rfm.segmentos.find((x) => x.clientes === 0);
+  if (vazio) {
+    const l = await listaDe(a, `tipo=com_pedido&segmento=${vazio.id}`);
+    assert.equal(l.json.total, 0);
+    assert.equal(l.json.clientes.length, 0);
+  }
+});
+
+test('cobertura: amostra suficiente ≠ histórico confirmado; só backfill CONCLUÍDO confirma (e por quantos dias)', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const sp = (n) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(Date.now() - n * 86_400_000));
+  const antes = (await a.req('GET', '/api/admin/clientes/resumo?dias=tudo')).json;
+  assert.equal(antes.rfm.amostraSuficiente, true, 'critério estatístico atendido…');
+  assert.equal(antes.cobertura.backfillConfirmado, false, '…mas nenhum backfill: cobertura NÃO confirmada');
+  assert.equal(antes.cobertura.cobertura365Confirmada, false);
+  assert.equal(antes.cobertura.coberturaConfirmadaDias, null);
+  assert.ok(antes.cobertura.historicoObservadoDias > 100, 'há histórico observado');
+  assert.match(antes.cobertura.leitura, /Nenhum backfill concluído/);
+  assert.equal('suficiente' in antes.rfm, false, 'o nome ambíguo foi aposentado');
+
+  // Job em andamento/falho não confirma nada.
+  await sup.query(`INSERT INTO pedidos_backfill_jobs (organization_id, store_id, loja, desde, status) VALUES ($1, $2, NULL, $3, 'falhou')`, [ORG_A, STORE_A, sp(400)]);
+  const falho = (await a.req('GET', '/api/admin/clientes/resumo')).json.cobertura;
+  assert.equal(falho.backfillConfirmado, false);
+  assert.equal(falho.ultimoBackfillStatus, 'falhou');
+
+  // Concluído cobrindo 200 dias: confirmado, mas menos que a janela de 365.
+  await sup.query(`INSERT INTO pedidos_backfill_jobs (organization_id, store_id, loja, desde, status) VALUES ($1, $2, NULL, $3, 'concluido')`, [ORG_A, STORE_A, sp(200)]);
+  const parcial = (await a.req('GET', '/api/admin/clientes/resumo')).json.cobertura;
+  assert.equal(parcial.backfillConfirmado, true);
+  assert.equal(parcial.coberturaConfirmadaDias, 200);
+  assert.equal(parcial.cobertura365Confirmada, false);
+  assert.equal(parcial.coberturaJanelaConfirmada, false);
+
+  // Outra Organization não herda a confirmação da A.
+  const b = await navegador().entrar('cli-b@teste.oria');
+  assert.equal((await b.req('GET', '/api/admin/clientes/resumo')).json.cobertura.backfillConfirmado, false);
+
+  // Concluído desde 400 dias: a janela de 365 fica confirmada.
+  await sup.query(`INSERT INTO pedidos_backfill_jobs (organization_id, store_id, loja, desde, status) VALUES ($1, $2, NULL, $3, 'concluido')`, [ORG_A, STORE_A, sp(400)]);
+  const completo = (await a.req('GET', '/api/admin/clientes/resumo')).json.cobertura;
+  assert.equal(completo.coberturaConfirmadaDias, 400, 'vale o MENOR `desde` entre os jobs concluídos');
+  assert.equal(completo.cobertura365Confirmada, true);
+  assert.equal(completo.coberturaJanelaConfirmada, true);
+  assert.equal(completo.backfillConcluidoDesde, sp(400));
 });

@@ -191,6 +191,26 @@ function unirComCadastro(historico, cadastro, { loja } = {}) {
   return [...historico.map((h) => ({ ...h, origem: 'pedido' })), ...soCadastro];
 }
 
+// O cadastro da Ink (quem nunca pediu) só pode entrar no resultado se NENHUM filtro o exclui. Segmento RFM, recência, LTV,
+// ticket, datas de compra e UF exigem dado de pedido: quem só tem cadastro nunca casa. Nesses casos consultar a Ink é
+// trabalho inútil — e, pior, uma Ink lenta ou fora do ar travaria ou "avisaria" sobre uma lista que ela não pode afetar.
+function podeIncluirCadastro(consulta) {
+  const q = { segmentos: [], ...consulta };
+  if (q.tipo === 'com_pedido') return false;
+  if (q.segmentos.length && !q.segmentos.includes('sem_compra')) return false;
+  const exigemPedido = ['recenciaMin', 'recenciaMax', 'ltvMin', 'ltvMax', 'ticketMin', 'ticketMax', 'primeiraDe', 'primeiraAte', 'ultimaDe', 'ultimaAte', 'uf'];
+  if (exigemPedido.some((k) => q[k] != null)) return false;
+  return true;
+}
+
+// Filtros/ordem que só existem na classificação RFM. Sem ela, a resposta seria uma lista SEM o filtro aplicado — enganosa —,
+// então a rota devolve erro em vez de degradar. Sem esses filtros, a lista segue com os dados locais de pedidos.
+function dependeDeRfm(consulta) {
+  const q = { segmentos: [], ...consulta };
+  const campos = ['ltvMin', 'ltvMax', 'ticketMin', 'ticketMax', 'pedidosMin', 'pedidosMax', 'primeiraDe', 'primeiraAte', 'ultimaDe', 'ultimaAte', 'recenciaMin', 'recenciaMax'];
+  return q.segmentos.length > 0 || q.ordem === 'ltv_desc' || campos.some((k) => q[k] != null);
+}
+
 // Filtra e ordena a base INTEIRA (antes de fatiar). Reusada pela exportação: o CSV leva exatamente o público da lista.
 function selecionarClientes(clientes, consulta) {
   const { ordem, inativoDias, busca, tipo = 'todos' } = consulta;
@@ -238,4 +258,4 @@ function listarClientes(clientes, consulta) {
   };
 }
 
-module.exports = { normalizarConsulta, listarClientes, selecionarClientes, paraTela, unirComCadastro, ORDENS, TIPOS, SEGMENTOS, INATIVIDADES, POR_PAGINA_PADRAO, POR_PAGINA_MAXIMA };
+module.exports = { normalizarConsulta, listarClientes, selecionarClientes, podeIncluirCadastro, dependeDeRfm, paraTela, unirComCadastro, ORDENS, TIPOS, SEGMENTOS, INATIVIDADES, POR_PAGINA_PADRAO, POR_PAGINA_MAXIMA };

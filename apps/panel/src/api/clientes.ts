@@ -41,7 +41,9 @@ export type TipoClientes = 'todos' | 'com_pedido' | 'sem_pedido';
 
 export interface ListaDeClientes {
   clientes: Cliente[];
-  cadastro: { incluido: boolean; disponivel: boolean; parcial: boolean; atualizadoEm: string | null };
+  cadastro: { incluido: boolean; disponivel: boolean; parcial: boolean; atualizadoEm: string | null; motivoOmitido?: 'filtro_exige_pedido' };
+  // Regra e dia da classificação com que a LISTA foi calculada (a matriz mostra os seus; devem coincidir).
+  rfm?: { disponivel: boolean; regraVersao: string | null; classificadoEm: string | null; diaClassificacao: string | null; amostraSuficiente: boolean };
   page: number;
   perPage: number;
   totalPages: number;
@@ -146,12 +148,12 @@ export interface ResumoClientes {
     janelaFrequenciaDias: number;
     limitesRecenciaDias: number[];
     valorAlto: number | null;
-    suficiente: boolean;
+    amostraSuficiente: boolean;
     motivoInsuficiencia: string | null;
     universo: number;
     identidadesSemCompraValida: number;
-    historicoDias: number;
-    janelaCobreHistorico: boolean;
+    historicoObservadoDias: number;
+    janelaAbrangeHistoricoObservado: boolean;
     segmentos: SegmentoResumo[];
   };
   cobertura: {
@@ -162,7 +164,18 @@ export interface ResumoClientes {
     primeiroPedidoEm: string | null;
     ultimoPedidoEm: string | null;
     ultimoSyncEm: string | null;
-    backfill: { status: string; desde: string; pedidosProcessados: number; atualizadoEm: string } | null;
+    backfill: { status: string; desde: string; pedidosProcessados: number; atualizadoEm: string; concluidoDesde: string | null } | null;
+    // Cobertura ≠ amostra suficiente: só backfill CONCLUÍDO confirma o intervalo (lib/clientes/cobertura.js).
+    historicoObservadoDias: number;
+    ultimoBackfillStatus: string | null;
+    backfillConfirmado: boolean;
+    backfillConcluidoDesde: string | null;
+    coberturaConfirmadaDias: number | null;
+    cobertura365Confirmada: boolean;
+    coberturaJanelaConfirmada: boolean;
+    janelaObservadaAbrange365: boolean;
+    leitura: string;
+    pedidosDuplicadosIgnorados: number;
     fonte: string;
   };
   lacunas: string[];
@@ -212,7 +225,7 @@ export interface DetalheCliente {
     segmento: { id: SegmentoRfmId; nome: string };
     escore: { r: number; f: number; m: number } | null;
     r: number; f: number; fVida: number; m: number;
-    versao: string; asOf: string; suficiente: boolean; motivoInsuficiencia: string | null;
+    versao: string; asOf: string; amostraSuficiente: boolean; motivoInsuficiencia: string | null;
   } | null;
   indicadores: {
     ltv: number; pedidosPagos: number; ticketMedio: number | null; primeiraCompraEm: string | null; ultimaCompraEm: string | null;

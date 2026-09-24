@@ -133,3 +133,6 @@
   .cli-item { grid-template-columns: 36px minmax(0, 1fr); }
   .cli-item__valor { grid-column: 2; }
 }
+
+.cli-universo { display: flex; flex-direction: column; gap: var(--space-2); }
+.cli-universo > p { margin: 0; }

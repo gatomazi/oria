@@ -54,7 +54,7 @@ test('universo: cliente sem compra válida não entra e é contado à parte', ()
 
 test('a soma de todos os segmentos é igual ao universo classificado', () => {
   const r = classificarRfm(baseSuficiente(), { asOf: AS_OF });
-  assert.equal(r.suficiente, true);
+  assert.equal(r.amostraSuficiente, true);
   assert.equal(r.segmentos.reduce((acc, s) => acc + s.clientes, 0), r.universo);
   assert.equal(Math.round(r.segmentos.reduce((acc, s) => acc + s.pctBase, 0) * 1e6) / 1e6, 1);
   assert.equal(Math.round(r.segmentos.reduce((acc, s) => acc + s.pctReceita, 0) * 1e6) / 1e6, 1);
@@ -149,7 +149,7 @@ test('janela de frequência: pedidos fora da janela contam na vida, não em F/M'
   assert.equal(c.fVida, 2);
   assert.equal(c.m, 100);
   assert.equal(c.ltv, 400);
-  assert.equal(r.janelaCobreHistorico, false);
+  assert.equal(r.janelaAbrangeHistoricoObservado, false);
 });
 
 test('resultado não depende da ordem de entrada nem de empates (mesmo valor → mesma nota)', () => {
@@ -165,7 +165,7 @@ test('resultado não depende da ordem de entrada nem de empates (mesmo valor →
 
 test('base pequena: Dados insuficientes, sem rótulo de recompra', () => {
   const r = classificarRfm(baseSuficiente().slice(0, 10), { asOf: AS_OF });
-  assert.equal(r.suficiente, false);
+  assert.equal(r.amostraSuficiente, false);
   assert.match(r.motivoInsuficiencia, /base pequena/);
   assert.ok(r.clientes.every((c) => c.segmento.id === 'dados_insuficientes' && c.escore === null));
   assert.deepEqual(r.segmentos.map((s) => s.id), ['dados_insuficientes']);
@@ -175,7 +175,7 @@ test('base pequena: Dados insuficientes, sem rótulo de recompra', () => {
 test('histórico curto: Dados insuficientes mesmo com base grande', () => {
   const clientes = Array.from({ length: 60 }, (_, i) => cliente(`c${i}`, [pedido(i % 30, 100)]));
   const r = classificarRfm(clientes, { asOf: AS_OF });
-  assert.equal(r.suficiente, false);
+  assert.equal(r.amostraSuficiente, false);
   assert.match(r.motivoInsuficiencia, /histórico curto/);
   assert.ok(r.clientes.every((c) => c.segmento.id === 'dados_insuficientes'));
 });
@@ -183,7 +183,7 @@ test('histórico curto: Dados insuficientes mesmo com base grande', () => {
 test('base sem nenhum cliente com compra: universo vazio, insuficiente, sem exceção', () => {
   const r = classificarRfm([], { asOf: AS_OF });
   assert.equal(r.universo, 0);
-  assert.equal(r.suficiente, false);
+  assert.equal(r.amostraSuficiente, false);
   assert.equal(r.valorAlto, null);
 });
 
@@ -207,8 +207,8 @@ test('saída carrega versão, asOf, fuso, janela e cobertura para reprodutibilid
   assert.equal(r.asOf, AS_OF.toISOString());
   assert.equal(r.fuso, 'America/Sao_Paulo');
   assert.equal(r.janelaFrequenciaDias, 365);
-  assert.equal(r.historicoDias, 205);
-  assert.equal(r.janelaCobreHistorico, true);
+  assert.equal(r.historicoObservadoDias, 205);
+  assert.equal(r.janelaAbrangeHistoricoObservado, true);
 });
 
 test('identidade: pedidos ligados por documento, telefone ou e-mail viram uma pessoa (transitivo), com motivo', () => {
