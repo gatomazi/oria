@@ -254,4 +254,47 @@ ordem, erro 409 da prévia, troca de segmento sem resquício da regra anterior e
 
 ## 6. Testes, commits e pendências
 
-(Preenchido ao final da rodada — ver a seção "Rodada 5" de `oria-clientes-rfm-fase0.md` e o relatório executivo.)
+### 6.1 Testes realmente executados (nada aqui é "verde" por extrapolação)
+
+| Execução | Resultado |
+|---|---|
+| Suítes relacionadas `clientes-*` (unitárias) | 156/156 |
+| `clientes-audiencia-rfm` (novo) / `-status-financeiro` (novo) / `-rfm-equivalencia` (novo) | 45/45 · 19/19 · 4/4 |
+| `invariants/clientes-rfm-http` (HTTP com RLS, 2 Organizations) | 23/23 (5 novos + 3 atualizados) |
+| Compat. do motor genérico (`operacao-store-nativa`, `store-nativa-dogfooding`, `clientes-lista`, `clientes-cadastro`) | 111/111 |
+| Playwright `qa-rfm-ui` · `qa-rfm-audiencia` · `smoke-lista` · `smoke-viewport` | 158/158 · 57/57 · 13/13 · 38/38 |
+| `tsc -b --noEmit` · `npm run build` | limpos |
+| `suites.mjs verify` · `check-contracts` · `repo:self-check` | OK |
+| **`npm test` integral, 1ª execução** (container próprio, sobre `11dc2b5`) | **1.883 testes · 1.882 passaram · 1 falha · 0 cancelados · 0 ignorados** |
+
+**A única falha da 1ª execução integral era real e minha:** o negative control `clientes/chave-da-store-ausente` (PED-02) aplicava a
+violação numa linha que a extração do agregado moveu de `server.js` para `lib/clientes/agregado.js`. O controle foi reapontado
+(`08f8423`) e o ciclo de 5 passos dele passou depois (fatias 1–4 + cobertura: 126/128; as 2 restantes — INV-12 e OP-05 — são de
+infraestrutura e passaram isoladas 4/4).
+
+**Não houve uma execução integral limpa depois de `08f8423`.** A 2ª execução integral rodou com o **load average da máquina entre 140 e 210**
+(outras sessões rodando suítes ao mesmo tempo): timeouts de 100–275 s, uma cascata de testes de 0,06 ms que caem em série depois de um
+timeout e, por fim, travou; foi encerrada (só o processo desta sessão). Os arquivos afetados foram reexecutados isoladamente:
+`operacao-store-nativa`, `ops22-creative-dual-read` **passam**; `product-performance-service › ReportCache` falha **por temporização**
+(o teste usa TTL de 50 ms e, sob carga, a 1ª chamada leva mais que isso) — arquivo que esta rodada não tocou e que passou na 1ª execução.
+**Pendente:** uma execução integral (`npm test`) e as fatias de CI (`panel-pure` ×2, `panel-db` ×4 sob `oria_app`) em máquina estável.
+
+### 6.2 Commits locais (todos em `feature/clientes-rfm`, nada enviado)
+
+`fcca228` audiência exata + agregado puro + matriz por tabela · `caf8dd5` UI (cartão RFM, revisão que reavalia, QA de jornada) · `ccff637`
+desempenho (resultado idêntico) + benchmark + matriz financeira + copy · `11dc2b5` teste do "só cancelado" + checklist do runbook ·
+`08f8423` negative control PED-02 + resumo na fase 0. (Rodada 4: `1eba49e`, `18d0724`, `9b4ee29`.)
+
+### 6.3 Pendências que exigem decisão do proprietário
+
+1. **Acesso de leitura autorizado à base real** (checklist no runbook) → calibração; sem isso nenhum limiar muda.
+2. **A × B** do corte de valor (B = recalcular na prévia/execução) junto com snapshots — não ativado.
+3. **`paid` com pedido encerrado** e **reembolso parcial** (§2.1): decidir com o número real.
+4. **Hook `pre-commit` global** sem config no repositório: manter (política no CI) ou adicionar `.pre-commit-config.yaml` (§4.1).
+5. **Snapshots/materialização** para o gargalo O(N) por requisição (§3).
+6. **Segmentos RFM antigos** ("avaliação aproximada"): manter como estão ou migrar por escolha do usuário caso a caso.
+7. Risco registrado: o motor **genérico** ainda descarta campo desconhecido em silêncio (mantido por não alterar campanhas antigas).
+
+### 6.4 O que continua faltando antes de merge/deploy
+
+Calibração real (para eventual mudança de limiares) e CI remoto verde; a suíte integral limpa em ambiente estável. **Release não liberado.**
