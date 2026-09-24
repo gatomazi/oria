@@ -689,3 +689,213 @@ do comando.
 duas rodadas anteriores, não foi executada — fica como **gate obrigatório antes de abrir PR, fazer
 merge ou deploy**, nunca declarada como aprovada nem como pré-requisito de rodada de desenvolvimento.
 Nenhum push, merge ou deploy foi feito nesta rodada.
+
+---
+
+# Rodada 5 — "Preparação da entrega para dogfooding com Use Sul"
+
+Rodada de fechamento: gate final completo, verificação de integração com `origin/main`, smoke
+curto e publicação da branch. **Sem desenvolvimento de funcionalidade** — nenhuma fase, integração
+ou regra nova nesta rodada, por instrução explícita.
+
+## 1. Gate final — os 6 shards completos, sequenciais, com recursos isolados
+
+Comandos exatos extraídos de `.github/workflows/ci.yml` (fonte de verdade). Cada shard `db` rodou
+contra um container Postgres com nome exclusivo desta rodada (`TEST_PG_CONTAINER` explícito) — ver
+§1.1 sobre por que isso deixou de ser opcional.
+
+| Shard | Comando | Resultado |
+|---|---|---|
+| pure 1/2 | `panel-suite.mjs --group pure --shards 2 --index 1` | **97/97** (554s — máquina compartilhada) |
+| pure 2/2 | `panel-suite.mjs --group pure --shards 2 --index 2` | **713/713** (26,5s) |
+| db 1/4 | `panel-suite.mjs --group db --shards 4 --index 1 --app-role` | **259/259** (878s) |
+| db 2/4 | `panel-suite.mjs --group db --shards 4 --index 2 --app-role` | **192/192** (862s, após correção — ver §1.1) |
+| db 3/4 | `panel-suite.mjs --group db --shards 4 --index 3 --app-role` | **241/241** (723s, após correção — ver §1.1) |
+| db 4/4 | `panel-suite.mjs --group db --shards 4 --index 4 --app-role` | **285/285** (1069s) |
+
+`--app-role` conecta como `oria_app` (NOSUPERUSER/NOBYPASSRLS), o mesmo papel de produção — é o que
+faz este gate valer como verificação de RLS, não um teste `db` genérico. Os negative controls (TD-001,
+INV-01/02/09/11/13/21/23/28/... — ciclo "passa → viola → FALHA → restaura → passa") estão distribuídos
+dentro dos shards `db` (não são um shard à parte); `suites.mjs verify --shards 4 --pure-shards 2`
+confirmou a partição como completa e sem sobreposição antes de rodar qualquer shard.
+
+**Total: 1.787 testes, zero falhas.**
+
+### 1.1 Causa raiz de duas falhas iniciais (registrado por transparência — não é regressão)
+
+Os shards `db 2/4` e `db 3/4` falharam nas primeiras tentativas (`ECONNREFUSED` / `Connection
+terminated unexpectedly`, em cascata a partir de um ponto aleatório da suíte). Investigado ANTES de
+classificar como flake, conforme prática já estabelecida nesta sessão:
+
+- **`db 2/4`**: o nome do container de teste é derivado só de `--group`+`--index`
+  (`oria-test-pg-db-2`), sem qualquer identificador de sessão/worktree. Outra sessão do Claude Code
+  rodando na mesma máquina compartilhada, em outro worktree, executou o mesmo shard `db 2/4` do
+  MESMO jeito — mesmo nome de container — e a limpeza do processo dela (`docker rm -f` ao final do
+  próprio run) derrubou o container que o meu processo ainda estava usando no meio do run. Confirmado
+  via `docker events`: `container kill … signal=9` → `die exitCode=137` → `destroy`, no exato instante
+  em que a conexão caiu. Uma terceira sessão foi flagrada rodando o mesmo shard, mesmo nome, enquanto
+  eu investigava.
+- **`db 3/4`**: mesma causa raiz na tentativa seguinte (colisão de nome com outra sessão), mas desta
+  vez o processo-pai (`panel-suite.mjs`) morreu e deixou o `test-db.mjs`/`node --test` filho órfão
+  ainda rodando, sem ninguém para agregar o resultado final — limpo manualmente (`kill -9` na árvore
+  de processos + `docker rm -f`) antes de re-rodar.
+
+**Correção aplicada nesta rodada (só para as execuções LOCAIS desta rodada, nada no repositório)**:
+`TEST_PG_CONTAINER` explícito e único por shard (`oria-test-pg-jornada-db2`, `-db3b`, `-db4`), garantindo
+que nenhuma outra sessão na mesma máquina possa endereçar o mesmo container. Depois da correção,
+ambos os shards passaram limpos e isolados (192/192 e 241/241). **Não é uma falha de código** — é uma
+lacuna de isolamento do NOME do container de teste quando várias sessões rodam o mesmo grupo/índice
+na mesma máquina ao mesmo tempo; não afeta CI real (cada job de CI tem sua própria máquina).
+
+## 2. Migrations, self-check, contracts, typecheck, build
+
+| Check | Resultado |
+|---|---|
+| `migrate:up` do zero (banco efêmero) | ✅ 34 migrations aplicadas |
+| `migrate:up` de novo, mesmo banco (idempotência) | ✅ `No migrations to run! Migrations complete!` |
+| `repo:self-check` | ✅ 747 arquivos, snapshots do histórico legado conferem, `apps/panel` é deployable só |
+| `contracts:check` | ✅ 3 contratos, 2 cópias idênticas byte a byte |
+| `typecheck` (`tsc -b --noEmit`) | ✅ limpo |
+| `build` (`tsc -b && vite build`) | ✅ limpo |
+
+## 3. Integração com `origin/main`
+
+`origin/main` avançou **69 commits** desde que o branch nasceu (`f8f784e` → `ecc0e12`) — outras
+rodadas/sessões mergearam trabalho enquanto esta rodada rodava. `HEAD` desta branch tem 17 commits.
+
+- **191 arquivos** tocados em `origin/main` desde o merge-base; **21 arquivos** tocados neste branch.
+- **1 arquivo em comum**: `apps/panel/server.js`.
+- `git merge-tree --write-tree origin/main HEAD`: **exit 0, sem conflito**.
+- Verificação manual do resultado real do merge (não só o exit code): confirmado que a árvore
+  mesclada contém as duas adições independentes lado a lado — `storeAtual` (chegou por `origin/main`,
+  Fase C) e `sincronizarCatalogoCanonicoDaOrganizacao`/scheduler do catálogo (deste branch, Gate A) —
+  sem perda nem duplicação.
+
+**Zero risco de conflito no momento desta rodada.** Nenhuma outra branch de feature foi mergeada a
+`main` depois do branch nascer além do que já está contado nesses 69 commits.
+
+## 4. Smoke final curto
+
+Ambiente: servidor local efêmero (`scripts/dev/smoke-jornada-oportunidades-local.cjs`) — 1
+Organization, catálogo de 7 produtos, GA4 mockado (`mock-ga4-multi-item.cjs`), banco descartável.
+Nunca toca produção.
+
+A extensão Claude-in-Chrome ficou sem resposta durante a rodada (falha de infraestrutura local —
+`executeScript`/`document_idle` nunca resolviam, mesmo em aba nova e vazia; não é sintoma da
+aplicação). Depois de confirmar isso com tentativas mínimas (sem insistir no mesmo caminho, conforme
+prática de não entrar em loop com ferramenta de navegador), o smoke foi validado por HTTP direto +
+leitura de código:
+
+| Verificação | Resultado |
+|---|---|
+| Login (`POST /api/admin/login`) + sessão + Organization resolvida | ✅ 200 |
+| Sync automático (`POST /catalog-sync` → `GET /catalog-sync/status`) fecha em estado terminal, nunca "syncing" para sempre | ✅ `state:"failed"`, `errorCode:"INTEGRATION_NOT_CONNECTED"` (esperado — Ink não conectada neste smoke) |
+| Distinção de fontes em `/journey/opportunities` (GA4 disponível × Commerce não conectado, nunca 500) | ✅ `productFunnel.available:true`, `commerceReconciliation.status:"not_connected"` |
+| Oportunidades reais computadas, com `evidenceStrength` (nunca "confiança") | ✅ 2 sinais reais (`low_view_to_cart`, `low_cart_to_checkout`), rótulo `"suficiente"` |
+| CTA abre o produto certo | ✅ rastreado ponta a ponta no código: API devolve `product.id` → `JornadaCompraPage.tsx:42` monta `?productId=<id>` → `DesempenhoProdutosPage.tsx:286` abre o drawer exatamente desse produto e limpa a URL |
+| Título "Prioridades de hoje" com período de semanas | ✅ confirmado ainda presente após o rebase de 69 commits — descrição nomeia o período selecionado, título é o nome do recurso (achado já registrado na Rodada 3) |
+| Layout responsivo (mobile) | ✅ confirmado por inspeção de CSS: `grid-template-columns: repeat(auto-fill, minmax(280px, 1fr))`, sem largura fixa, sem scroll horizontal forçado — comentário no próprio arquivo documenta teste em 390px real |
+
+**Pendência real**: confirmação visual em navegador não foi possível nesta rodada por falha da
+extensão Claude-in-Chrome (não da aplicação). Recomendado antes do rollout, quando a extensão
+voltar a responder — smoke de 5 minutos, mesmo script acima.
+
+## 5. Publicação
+
+- `git push -u origin feature/jornada-valor-cliente` — **não foi bloqueado**, publicado com sucesso.
+- PR aberto: ver link no relatório de conclusão desta rodada (mensagem final da sessão).
+- **Nenhum merge, nenhum deploy.**
+
+## 6. Procedimento de rollout — dogfooding exclusivo da Use Sul
+
+### 6.1 Habilitar a feature só para a Organization da Use Sul
+
+A feature `analytics_product_performance` hoje só está no plano `internal` (migration
+`0033-entitlement-product-performance`). Para o piloto real, a via correta é um **override por
+Organization** — nunca mudar o plano `internal` nem conceder a todas as Organizations.
+
+Mecanismo real de produção (`organization_entitlement_overrides`, resolvido por
+`entitlements_efetivos()` — override tem precedência sobre o plano; exige Organization `active` e
+assinatura `active`; ausência nega):
+
+```
+PUT /api/platform/organizations/:organizationId/entitlements/analytics_product_performance
+Body: { "permitido": true, "motivo": "Dogfooding piloto Jornada de Valor — Use Sul" }
+```
+
+(rota do Oria Admin — `apps/platform-admin/lib/app.js`, `organizations.definirOverride`). Para
+achar o `organizationId` da Use Sul: `GET /api/platform/organizations?busca=Use+Sul` (ou a tela de
+busca do Oria Admin).
+
+Para reverter (rollback de habilitação, sem tocar em nenhum deploy):
+
+```
+DELETE /api/platform/organizations/:organizationId/entitlements/analytics_product_performance
+```
+
+### 6.2 Acompanhar o primeiro sync real
+
+- `GET /api/admin/product-analytics/catalog-sync/status` (como a Organization da Use Sul, ou via
+  ferramenta interna com o mesmo contexto) — observar `state` sair de `never_synced` →
+  `syncing:true` → `succeeded`/`failed`, e `lastRun.pagesProcessed`/`productsSeen` crescendo.
+- O disparo é automático: acontece na hora em que a integração Ink passa a `connected` (sem esperar
+  o lojista clicar em nada) — ver Gate A/Rodada 2. Se a Use Sul já estava conectada antes desta
+  rodada, o job horário (`catalogo-canonico`, guard `catalogSyncNecessario`) cobre o "recovery" no
+  próximo tick, até 1h — não é preciso disparo manual.
+- Logs a observar (prefixos já usados no código, buscar no agregador de logs pela
+  `organization_id` da Use Sul): `[CATALOG_SYNC]`, `[CATALOG_SYNC_SCHEDULER]`.
+
+### 6.3 Verificar cobertura GA4 ↔ catálogo
+
+- `GET /api/admin/product-analytics/products` (campo `coverage` da resposta) ou
+  `GET /api/admin/product-analytics/journey/opportunities` (campo `sources.productFunnel`) —
+  confirmar `available:true` e uma taxa de cobertura de identidade plausível (não perto de zero, o
+  que indicaria GA4 `item_id` sem correspondência no catálogo).
+- Sinal `identity_coverage_low` (um dos 5 diagnósticos) é o mesmo alarme automático: se aparecer nas
+  primeiras "Prioridades de hoje" da Use Sul, é o próprio produto avisando que a cobertura está
+  abaixo do esperado — não precisa de verificação manual separada além de olhar a tela.
+
+### 6.4 Conferir os primeiros diagnósticos
+
+- Abrir "Prioridades de hoje" (`/admin/jornada-compra`) com a sessão da Use Sul — confirmar que os
+  produtos citados existem de fato no catálogo dela (CTA abre o produto certo — verificado no smoke,
+  §4) e que a `evidenceStrength` bate com o volume real (`"suficiente"` só acima dos mínimos
+  configurados — ver `MIN_SAMPLES_PADRAO` em `opportunity-diagnostics.js`).
+
+### 6.5 Observar respostas 429 da Ink
+
+- `commerce_catalog_sync_logs.error_code` — buscar `INK_RATE_LIMITED` (código estável definido em
+  `lib/ink/retry.js`) nos runs de sync da Use Sul.
+- Um catálogo grande faz muitas páginas; se a Use Sul tiver um catálogo consideravelmente maior que o
+  cenário de 85k já testado (Rodada 4), 429 é esperado ocasionalmente — o retry com backoff já trata
+  isso (não é uma falha a escalar sozinha); só escalar se o sync ficar preso em `failed` repetidamente
+  com esse código.
+
+### 6.6 Rollback simples
+
+Dois níveis, do mais simples ao mais amplo:
+
+1. **Revogar só a feature da Use Sul** (não mexe em deploy nenhum): `DELETE
+   /api/platform/organizations/:organizationId/entitlements/analytics_product_performance` (§6.1).
+   A tela de Jornada de Valor volta a responder 403 `feature_nao_disponivel` para essa Organization;
+   nenhum dado é apagado (catálogo sincronizado e identidades resolvidas ficam no banco, prontos se o
+   piloto for retomado).
+2. **Reverter o deploy** (só se o problema for da aplicação, não da feature): skill
+   `fury-rollback` já documentada no ambiente — cria um novo deploy forward com a versão anterior
+   (não existe `fury deployments rollback` na CLI).
+
+## 7. O que falta — pendências reais
+
+- **Confirmação visual em navegador** (§4) — bloqueada pela extensão Claude-in-Chrome nesta rodada,
+  não pela aplicação. Recomendado antes do início do dogfooding.
+- **PR ainda não mergeado** — aberto, aguardando revisão humana. Nenhum merge/deploy foi feito.
+- **Piloto real contra a Organization da Use Sul** — ainda não iniciado; este documento é o
+  procedimento, não a execução dele.
+- Pendências já registradas nas rodadas 3/4 e não re-abertas nesta rodada (sem mudança de escopo):
+  429/backoff proativo em varreduras muito longas, orçamento de chamadas configurável por tenant no
+  scheduler.
+
+## 8. Registro explícito
+
+Nenhuma fase, integração ou funcionalidade nova nesta rodada — só gate, integração, smoke e
+publicação, exatamente como pedido. Nenhum merge, nenhum deploy.
