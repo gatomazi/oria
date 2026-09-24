@@ -255,16 +255,31 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
   // Um único efeito busca a recomendação/prévia REAL do motor sempre que o que ela representaria muda —
   // nunca uma segunda cópia da lógica de montagem. Pequeno atraso (não em cada tecla) só para não disparar
   // uma chamada de rede a cada caractere digitado no texto livre.
+  //
+  // G.1 — achado do smoke visual: `clearTimeout` só cancela o disparo ENQUANTO ele ainda não saiu — uma
+  // vez que `previewJob` já está em voo, trocar de seleção de novo não cancela a promise anterior. Sem
+  // guarda, uma resposta mais LENTA de uma seleção mais ANTIGA podia chegar depois de uma mais RÁPIDA de
+  // uma seleção mais NOVA e sobrescrever a prévia — exatamente o que a rodada de multipeça exige nunca
+  // acontecer ("respostas assíncronas antigas não devem substituir a prévia da seleção mais nova"). `ignorar`
+  // marca esta execução do efeito como obsoleta assim que uma nova começa (ou o componente desmonta);
+  // aplicado tanto ao sucesso quanto ao erro, para um erro antigo também não pisar num resultado novo.
   useEffect(() => {
     if (origem) return;
     const input = montarInput();
-    if (!input) { setPreview(null); return; }
+    if (!input) { setPreview(null); setOcupado(false); return; }
     setErro('');
+    // `ocupado` liga JÁ AQUI, não só quando o fetch sai (dentro do setTimeout) — fecha a janela em que
+    // "Gerar assim"/"Gerar N criativos" ficavam clicáveis mostrando a prévia ANTERIOR enquanto uma
+    // seleção mais nova já estava agendada para buscar uma prévia diferente (achado do smoke visual).
+    setOcupado(true);
+    let ignorar = false;
     const temporizador = setTimeout(() => {
-      setOcupado(true);
-      previewJob(input).then((r) => setPreview({ total: r.total, first: r.first })).catch((e: Error) => setErro(e.message)).finally(() => setOcupado(false));
+      previewJob(input)
+        .then((r) => { if (!ignorar) setPreview({ total: r.total, first: r.first }); })
+        .catch((e: Error) => { if (!ignorar) setErro(e.message); })
+        .finally(() => { if (!ignorar) setOcupado(false); });
     }, 350);
-    return () => clearTimeout(temporizador);
+    return () => { ignorar = true; clearTimeout(temporizador); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, productId, brandInput, escolha, interaction, personaMode, contextMode, geo, gazeMode, placements, quantity, intent, stage, texto, origem]);
 

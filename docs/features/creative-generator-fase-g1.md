@@ -109,6 +109,55 @@ extraída para `src/pages/criativos/criativosMotorInput.mjs` pelo mesmo motivo d
   e os 25 testes direcionados abaixo cobrindo a lógica de montagem de request byte-a-byte. Registrado
   como lacuna explícita, não como "verificado".
 
+## Aceite visual (rodada seguinte, antes de G.2)
+
+Smoke test real: worktree isolado, ambiente local próprio (Postgres efêmero dedicado
+`oria-g2-smoke`, migrations reais, Organization/Store/assinatura seedadas — nunca tocando bancos de
+outra sessão), core Python real (`python3 -m creative_core.service`, dev server wsgiref) e o painel
+real (`node server.js`) — nada simulado. Login real pela tela (usuário/senha bootstrapados via
+`auth:bootstrap-owner`, nunca contornando autenticação). BYOK nunca configurado para esta
+Organization de teste — os botões "Gerar assim"/"Gerar N criativos" ficaram estruturalmente
+desabilitados (`!status.openaiKey.configured`) durante todo o teste; nenhum clique neles foi dado de
+qualquer forma. Zero chamada OpenAI.
+
+**Cobertura**:
+- **Ângulos Limpos**: produto → `/preview` real → card de recomendação com família/razão reais →
+  "Texto na imagem: nenhum (imagem limpa)" confirmado, inclusive depois de vir de outro motor.
+- **Remarketing**: os 7 cartões de intent renderizam com rótulo+descrição corretos; escolher
+  cada intent muda `Etapa do funil` de acordo com `ETAPA_POR_INTENT` (ex.: `cart` → BOFU,
+  `social_proof`/`site_visitor` → MOFU) e o texto padrão real vem de `communication.json` (não
+  inventado — conferido campo a campo). Personalizar reflete no payload de `/preview` em tempo real
+  (`headline` customizado aparece exatamente no corpo POST capturado via `fetch` interceptado).
+- **Funil**: TOFU/MOFU/BOFU com rótulos "descoberta/consideração/decisão"; Selos/Chips/Barra de
+  busca aparecem só fora do TOFU, exatamente como o contrato exige; `Modo limpo` usa semântica
+  booleana (`Desligado`/`Sempre`), distinta do enum do Remarketing.
+- **Troca de motor**: verificada nos dois sentidos (Remarketing→Ângulos Limpos e entre intents/
+  etapas) — produto e família preservados, objetivo/texto sempre reiniciados, nunca um resíduo do
+  motor anterior.
+- **Payload real**: `/preview` inspecionado via `fetch` interceptado — o corpo bate exatamente com o
+  que `montarInput()` deveria produzir em cada caso (campos vazios nunca presentes, `remarketing`/
+  `funnel_stage`/`funnel` corretos por motor).
+- **Mobile 390px**: **não verificado** — `resize_window` (em duas tentativas, incluindo uma aba
+  nova) não alterou a superfície de renderização real disponível a este agente nesta sessão
+  (screenshot sempre voltou no tamanho desktop, confirmado também por `window.innerWidth`/
+  `outerWidth` divergentes entre si). Limitação do ambiente de automação disponível, registrada
+  honestamente — não testada como se tivesse sido.
+
+**Defeito real encontrado e corrigido**: a prévia usava `setTimeout` + `previewJob(...).then(...)`
+sem proteção contra respostas fora de ordem — uma resposta mais lenta de uma seleção mais antiga
+podia sobrescrever a prévia de uma seleção mais nova já exibida (e o botão "Gerar assim" não ficava
+bloqueado durante a janela de debounce antes do fetch sair, só durante o fetch em si). Corrigido em
+`GerarTabV2.tsx`: uma flag `ignorar` por execução do efeito descarta qualquer resposta (sucesso ou
+erro) que chegue depois que uma seleção mais nova já começou, e `ocupado` liga assim que o input
+muda (não só quando o fetch de fato sai), fechando a janela em que os botões de gerar ficavam
+clicáveis com uma prévia potencialmente desatualizada na tela. Verificado com troca rápida
+(5 cliques consecutivos sem espera) — o estado final da prévia sempre bateu com a última seleção.
+Isto é exatamente o invariante #4/caso de teste #8 que a G.2 (abaixo) também exige — resolvido uma
+vez, no efeito compartilhado, antes de estendê-lo para multipeça.
+
+Screenshots preservados em `docs/features/g1-smoke-evidence/` (3 capturas: Remarketing
+Personalizar/Carrinho, troca rápida de intent, Ângulos Limpos depois de trocar de motor).
+
 ## Resultado dos testes direcionados
 
 - `apps/panel/test/criativos-v2-motor-input.test.js` — 15 testes, 15 passam: `remarketingOptions`/
