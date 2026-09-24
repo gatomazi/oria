@@ -10,7 +10,7 @@ import {
   type AudienciaOperador,
   type AudienciaPreviewResultado,
 } from '../../api/campanhas';
-import { AudienciaResumo, AvisoCorteDaAudiencia, RfmFiltroCard } from './AudienciaResumo';
+import { AudienciaResumo, AvisoCorteDaAudiencia, RfmAproximadoCard, RfmFiltroCard } from './AudienciaResumo';
 
 // Construtor de audiência compartilhado entre Segmentos (Fase 3) e a Etapa 2 do wizard de Nova
 // Campanha (Fase 4) — mesma UI, mesmo contrato de filtro/exclusão, só o estado é controlado por
@@ -29,6 +29,7 @@ const CAMPO_LABEL: Record<AudienciaCampo, string> = {
   recebeuCampanhaNosUltimosDias: 'Recebeu campanha nos últimos X dias',
   // Não aparece na lista de campos: o segmento RFM vem de Clientes e é exibido em cartão próprio (somente leitura).
   rfm: 'Segmento RFM',
+  todosClientes: 'Todos os clientes',
 };
 
 const CAMPOS_NUMERICOS: AudienciaCampo[] = ['diasSemComprar', 'quantidadePedidos', 'totalGasto', 'ticketMedio'];
@@ -55,25 +56,23 @@ function parseNumeroBr(valor: string): number {
   return Number(valor.trim().replace(',', '.'));
 }
 
-function filtroFormParaApi(f: FiltroForm): AudienciaFiltro | null {
+// Uma linha NUNCA é descartada em silêncio (isso alargava a audiência): incompleta ou inválida, vai como está (valor nulo/vazio) e
+// o servidor a recusa com a causa (AUDIENCIA_FILTRO_INVALIDO); a tela mostra a mensagem e bloqueia a Revisão/envio.
+function filtroFormParaApi(f: FiltroForm): AudienciaFiltro {
   if (CAMPOS_NUMERICOS.includes(f.field)) {
-    const n = parseNumeroBr(f.value);
-    if (!f.value.trim() || Number.isNaN(n)) return null;
-    return { field: f.field, op: f.op, value: n };
+    const n = f.value.trim() ? parseNumeroBr(f.value) : Number.NaN;
+    return { field: f.field, op: f.op, value: Number.isNaN(n) ? null : n };
   }
   if (CAMPOS_BOOLEANOS.includes(f.field)) {
     return { field: f.field, value: f.value !== 'false' };
   }
   if (f.field === 'recebeuCampanhaNosUltimosDias') {
-    const n = parseNumeroBr(f.value);
-    if (!f.value.trim() || Number.isNaN(n)) return null;
-    return { field: f.field, value: { dias: n } };
+    const n = f.value.trim() ? parseNumeroBr(f.value) : Number.NaN;
+    return { field: f.field, value: { dias: Number.isNaN(n) ? null : n } };
   }
   if (f.field === 'uf') {
-    if (!f.value.trim()) return null;
     return { field: f.field, value: f.value.trim().toUpperCase() };
   }
-  if (!f.value.trim()) return null;
   return { field: f.field, value: { campanhaId: f.value.trim() } };
 }
 
@@ -82,6 +81,11 @@ export interface AudienceState {
   // Segmento de origem RFM: condição OBRIGATÓRIA (vale mesmo com "Qualquer condição"), avaliada pelo servidor com a mesma
   // classificação da matriz de Clientes. Somente leitura aqui: nunca vira uma linha de texto que possa ser descartada.
   rfm: AudienciaFiltroRfmValor | null;
+  // "Todos os clientes": escolha explícita (sem nenhuma outra condição). Lista vazia NÃO significa "todos": é uma audiência
+  // incompleta que o servidor recusa (AUDIENCIA_SEM_FILTRO).
+  todosClientes: boolean;
+  // Confirmação de uso de um segmento RFM salvo com avaliação aproximada (ver `rfmAproximado` da prévia).
+  aproximadoConfirmado: boolean;
   filtros: FiltroForm[];
   semOptIn: boolean;
   numeroInvalido: boolean;
@@ -93,7 +97,9 @@ export function audienceStateVazio(): AudienceState {
   return {
     match: 'ALL',
     rfm: null,
-    filtros: [filtroFormVazio()],
+    todosClientes: false,
+    aproximadoConfirmado: false,
+    filtros: [],
     semOptIn: true,
     numeroInvalido: true,
     compradoNosUltimosDias: '',
@@ -101,23 +107,23 @@ export function audienceStateVazio(): AudienceState {
   };
 }
 
-export function audienceStateDeSalvo(match: 'ALL' | 'ANY', filtros: AudienciaFiltro[], exclusoes: AudienciaExclusoes): AudienceState {
+export function audienceStateDeSalvo(match: 'ALL' | 'ANY', filtros: AudienciaFiltro[], exclusoes: AudienciaExclusoes, aproximadoConfirmado = false): AudienceState {
   const filtroRfm = filtros.find((f) => f.field === 'rfm');
-  const demais = filtros.filter((f) => f.field !== 'rfm');
+  const todos = filtros.some((f) => f.field === 'todosClientes');
+  const demais = filtros.filter((f) => f.field !== 'rfm' && f.field !== 'todosClientes');
   return {
     match,
     rfm: filtroRfm ? (filtroRfm.value as AudienciaFiltroRfmValor) : null,
-    // Com segmento RFM e sem condições adicionais não há linha vazia: o cartão do segmento já é a audiência.
-    filtros: demais.length
-      ? demais.map((f) => ({
-          field: f.field,
-          op: (f.op as AudienciaOperador) || 'gte',
-          value:
-            typeof f.value === 'object' && f.value
-              ? String((f.value as Record<string, unknown>).campanhaId ?? (f.value as Record<string, unknown>).dias ?? '')
-              : String(f.value ?? ''),
-        }))
-      : filtroRfm ? [] : [filtroFormVazio()],
+    todosClientes: todos && !filtroRfm && !demais.length,
+    aproximadoConfirmado,
+    filtros: demais.map((f) => ({
+      field: f.field,
+      op: (f.op as AudienciaOperador) || 'gte',
+      value:
+        typeof f.value === 'object' && f.value
+          ? String((f.value as Record<string, unknown>).campanhaId ?? (f.value as Record<string, unknown>).dias ?? '')
+          : String(f.value ?? ''),
+    })),
     semOptIn: exclusoes.semOptIn !== false,
     numeroInvalido: exclusoes.numeroInvalido !== false,
     compradoNosUltimosDias: exclusoes.compradoNosUltimosDias != null ? String(exclusoes.compradoNosUltimosDias) : '',
@@ -130,7 +136,8 @@ export function audienceStateParaApi(s: AudienceState): { match: 'ALL' | 'ANY'; 
     match: s.match,
     filtros: [
       ...(s.rfm ? [{ field: 'rfm' as const, op: 'segmento' as unknown as AudienciaOperador, value: s.rfm }] : []),
-      ...s.filtros.map(filtroFormParaApi).filter((f): f is AudienciaFiltro => f !== null),
+      ...(s.todosClientes && !s.rfm && !s.filtros.length ? [{ field: 'todosClientes' as const, value: true }] : []),
+      ...s.filtros.map(filtroFormParaApi),
     ],
     exclusoes: {
       semOptIn: s.semOptIn,
@@ -147,7 +154,7 @@ function FiltroRow({ filtro, onChange, onRemove }: { filtro: FiltroForm; onChang
   return (
     <div className="ad-filtro-row">
       <select className="ds-select" aria-label="Campo do filtro" value={filtro.field} onChange={(e) => onChange({ ...filtroFormVazio(), field: e.target.value as AudienciaCampo })}>
-        {Object.entries(CAMPO_LABEL).filter(([valor]) => valor !== 'rfm').map(([valor, label]) => (
+        {Object.entries(CAMPO_LABEL).filter(([valor]) => valor !== 'rfm' && valor !== 'todosClientes').map(([valor, label]) => (
           <option key={valor} value={valor}>{label}</option>
         ))}
       </select>
@@ -201,6 +208,15 @@ export function AudienceBuilder({ loja, state, onChange, onPreview }: AudienceBu
     // `vigente` descarta respostas de uma configuração que já não é a atual (troca rápida de filtro, resposta lenta ou fora de
     // ordem): a tela nunca mostra a contagem de um filtro antigo sob o filtro novo.
     let vigente = true;
+    // Audiência ainda sem nenhuma condição e sem "todos os clientes" marcado: não há o que calcular (o servidor recusaria como
+    // AUDIENCIA_SEM_FILTRO). Não é "todos": a Revisão e o envio ficam bloqueados até haver uma condição ou a confirmação explícita.
+    if (!state.rfm && !state.todosClientes && state.filtros.length === 0) {
+      setPreview(null);
+      setPreviewErro('');
+      setPreviewCarregando(false);
+      onPreview?.(null);
+      return undefined;
+    }
     const timer = setTimeout(() => {
       setPreviewCarregando(true);
       setPreviewErro('');
@@ -226,6 +242,18 @@ export function AudienceBuilder({ loja, state, onChange, onPreview }: AudienceBu
     <div className="ad-segmento-form">
       {state.rfm && <RfmFiltroCard filtro={state.rfm} preview={preview} />}
       {state.rfm && <AvisoCorteDaAudiencia preview={preview} />}
+      {preview?.rfmAproximado && (
+        <RfmAproximadoCard info={preview.rfmAproximado} confirmado={state.aproximadoConfirmado} onConfirmar={(v) => onChange({ ...state, aproximadoConfirmado: v })} />
+      )}
+      {!state.rfm && state.filtros.length === 0 && (
+        <div className="ad-todos-card">
+          <p className="pc-nota">Nenhuma condição definida: até você adicionar uma condição (ou escolher um segmento), a audiência fica vazia — ela nunca vira "todos os clientes" por padrão.</p>
+          <label className="ad-checkbox-row">
+            <input type="checkbox" checked={state.todosClientes} onChange={(e) => onChange({ ...state, todosClientes: e.target.checked })} />
+            Usar todos os clientes com pedido (as exclusões abaixo continuam valendo)
+          </label>
+        </div>
+      )}
 
       <Field label={state.rfm ? 'Condições adicionais' : 'Quem deve receber?'} hint={state.rfm ? 'O segmento RFM acima vale sempre; estas condições atuam sobre ele.' : undefined}>
         <select className="ds-select" value={state.match} onChange={(e) => onChange({ ...state, match: e.target.value as 'ALL' | 'ANY' })}>
@@ -243,7 +271,7 @@ export function AudienceBuilder({ loja, state, onChange, onPreview }: AudienceBu
             onRemove={() => onChange({ ...state, filtros: state.filtros.filter((_, idx) => idx !== i) })}
           />
         ))}
-        <Button variant="secondary" onClick={() => onChange({ ...state, filtros: [...state.filtros, filtroFormVazio()] })}>
+        <Button variant="secondary" onClick={() => onChange({ ...state, todosClientes: false, filtros: [...state.filtros, filtroFormVazio()] })}>
           + Adicionar filtro
         </Button>
       </div>

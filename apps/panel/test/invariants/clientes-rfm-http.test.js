@@ -491,7 +491,7 @@ test('Audiência exata: o filtro RFM é OBRIGATÓRIO mesmo com match ANY (um OU 
   const excl = { semOptIn: false, numeroInvalido: false };
   const membros = (await a.req('GET', `/api/admin/clientes/lista?tipo=com_pedido&per_page=100&segmento=${seg.id}`)).json.clientes;
   // UF inexistente + ANY: só o segmento RFM não basta para entrar — a condição adicional também vale sobre o público RFM.
-  const nenhum = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ANY', filters: [filtroRfm, { field: 'uf', op: 'eq', value: 'ZZ' }], exclusions: excl } });
+  const nenhum = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ANY', filters: [filtroRfm, { field: 'uf', op: 'eq', value: 'SC' }], exclusions: excl } }); // UF válida sem nenhum comprador
   assert.equal(nenhum.json.matched, 0);
   const soOptIn = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ANY', filters: [filtroRfm, { field: 'optIn', value: true }], exclusions: excl } });
   assert.equal(soOptIn.json.matched, membros.filter((m) => m.aceitaMarketing).length);
@@ -516,7 +516,8 @@ test('Audiência exata: filtro RFM em erro é 409 acionável (nunca "todos os cl
     assert.match(r.json.error, /segmento|regra|Clientes/i);
   }
   const dois = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: [bom, bom], exclusions: excl } });
-  assert.equal(dois.status, 409);
+  assert.equal(dois.status, 400, 'mais de um segmento RFM: recusado pelo contrato único (Rodada 6)');
+  assert.equal(dois.json.codigo, 'AUDIENCIA_FILTRO_INVALIDO');
 
   // Iniciar uma campanha com esse filtro falha ANTES de criar destinatários e a campanha segue em rascunho.
   const camp = await a.req('POST', '/api/admin/campaigns', { corpo: { nome: 'Campanha com filtro RFM quebrado', templateNome: 'tpl_teste', audienceDefinition: { match: 'ALL', filtros: [ruins[2][1]], exclusoes: {} } } });
@@ -566,6 +567,188 @@ test('Audiência exata: multi-tenant — o mesmo filtro RFM avaliado na Organiza
     assert.equal(previaB.status, 409, 'a B não tem base suficiente para essa regra: erro acionável, nunca a base da A');
   }
   assert.ok(!(await b.req('GET', '/api/admin/segments')).texto.includes('Só da A'));
+});
+
+// ── Rodada 6: motor genérico fail-closed (campo, operador, tipo, valor) ─────────────────────────────────
+const SEM_EXCLUSAO = { semOptIn: false, numeroInvalido: false };
+const previa = (nav, corpo) => nav.req('POST', '/api/admin/campaigns/audience/preview', { corpo });
+
+test('Audiência fail-closed: campo desconhecido, operador/tipo inválido e condição mista falham com erro tipado — nunca "todos os clientes"', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const todos = (await a.req('GET', '/api/admin/clientes/lista?tipo=com_pedido&per_page=1')).json.total;
+  assert.ok(todos > 50);
+  const casos = [
+    ['campo desconhecido', [{ field: 'cidade', op: 'eq', value: 'POA' }]],
+    ['operador inválido', [{ field: 'totalGasto', op: 'between', value: 10 }]],
+    ['tipo inválido', [{ field: 'diasSemComprar', op: 'gte', value: '45' }]],
+    ['UF inexistente', [{ field: 'uf', value: 'XX' }]],
+    ['mista válida + inválida', [{ field: 'diasSemComprar', op: 'lte', value: 90 }, { field: 'campoQueNaoExiste', value: 1 }]],
+  ];
+  for (const [nome, filters] of casos) {
+    for (const match of ['ALL', 'ANY']) {
+      const r = await previa(a, { match, filters, exclusions: SEM_EXCLUSAO });
+      assert.equal(r.status, 400, `${nome}/${match}: ${r.texto}`);
+      assert.equal(r.json.codigo, 'AUDIENCIA_FILTRO_INVALIDO');
+      assert.ok(r.json.detalhes.length >= 1 && r.json.detalhes[0].motivo, 'aponta campo/operador/motivo');
+      assert.equal(r.json.matched, undefined, `${nome}/${match}: nenhuma contagem (muito menos ${todos}) acompanha o erro`);
+    }
+  }
+  const semMatch = await previa(a, { filters: [{ field: 'uf', value: 'RS' }], exclusions: SEM_EXCLUSAO });
+  assert.equal(semMatch.status, 400, '`match` ausente não vira ALL em silêncio');
+  const exclusaoRuim = await previa(a, { match: 'ALL', filters: [{ field: 'uf', value: 'RS' }], exclusions: { semOptIn: 'false' } });
+  assert.equal(exclusaoRuim.status, 400, 'exclusão com tipo errado é recusada');
+});
+
+test('Audiência universal só quando EXPLÍCITA: lista vazia é erro; "todosClientes" sozinho devolve todos, sujeito às exclusões comerciais', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const vazia = await previa(a, { match: 'ALL', filters: [], exclusions: SEM_EXCLUSAO });
+  assert.equal(vazia.status, 400);
+  assert.equal(vazia.json.codigo, 'AUDIENCIA_SEM_FILTRO');
+  assert.equal((await previa(a, { match: 'ALL', exclusions: SEM_EXCLUSAO })).status, 400, 'sem `filters` também');
+  const explicito = await previa(a, { match: 'ALL', filters: [{ field: 'todosClientes', value: true }], exclusions: SEM_EXCLUSAO });
+  assert.equal(explicito.status, 200, explicito.texto);
+  const pessoas = (await a.req('GET', '/api/admin/clientes/lista?tipo=com_pedido&per_page=1')).json.total;
+  assert.equal(explicito.json.matched, pessoas, '"todos" = todas as pessoas com pedido');
+  const comExclusoes = await previa(a, { match: 'ALL', filters: [{ field: 'todosClientes', value: true }], exclusions: { semOptIn: true, numeroInvalido: true } });
+  assert.ok(comExclusoes.json.eligible < comExclusoes.json.matched, 'as exclusões comerciais continuam valendo');
+  assert.equal((await previa(a, { match: 'ALL', filters: [{ field: 'todosClientes', value: true }, { field: 'uf', value: 'RS' }], exclusions: SEM_EXCLUSAO })).status, 400, 'combinar "todos" com outra condição é ambíguo');
+});
+
+test('definição NOVA inválida é recusada na criação/edição (segmento e campanha) e nada é gravado', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const antesSeg = (await sup.query('SELECT count(*)::int AS n FROM segments')).rows[0].n;
+  const antesCamp = (await sup.query('SELECT count(*)::int AS n FROM campaigns')).rows[0].n;
+  const ruim = { match: 'ALL', filtros: [{ field: 'cidade', value: 'POA' }], exclusoes: {} };
+  const s1 = await a.req('POST', '/api/admin/segments', { corpo: { nome: 'inválido', ...ruim } });
+  assert.equal(s1.status, 400, s1.texto);
+  assert.equal(s1.json.codigo, 'AUDIENCIA_FILTRO_INVALIDO');
+  assert.equal((await a.req('POST', '/api/admin/segments', { corpo: { nome: 'vazio', match: 'ALL', filtros: [], exclusoes: {} } })).status, 400, 'segmento sem condição');
+  const boa = await a.req('POST', '/api/admin/segments', { corpo: { nome: 'R6 válido', match: 'ALL', filtros: [{ field: 'uf', value: 'RS' }], exclusoes: {} } });
+  assert.equal(boa.status, 200, boa.texto);
+  const put = await a.req('PUT', `/api/admin/segments/${boa.json.segmento.id}`, { corpo: { nome: 'R6 válido', ...ruim } });
+  assert.equal(put.status, 400);
+  assert.deepEqual((await sup.query('SELECT filtros FROM segments WHERE id = $1', [boa.json.segmento.id])).rows[0].filtros, [{ field: 'uf', value: 'RS' }], 'a edição inválida não alterou o segmento');
+  const c1 = await a.req('POST', '/api/admin/campaigns', { corpo: { nome: 'campanha inválida', audienceDefinition: ruim } });
+  assert.equal(c1.status, 400, c1.texto);
+  const rascunho = await a.req('POST', '/api/admin/campaigns', { corpo: { nome: 'rascunho sem audiência ainda', audienceDefinition: { match: 'ALL', filtros: [], exclusoes: {} } } });
+  assert.equal(rascunho.status, 200, 'rascunho ainda sem condição é permitido (nunca é enviado)');
+  const id = rascunho.json.campanha.id;
+  try {
+    const agendar = await a.req('PUT', `/api/admin/campaigns/${id}`, { corpo: { nome: 'x', templateNome: 'tpl_teste', status: 'scheduled', agendadaPara: '2031-01-01T10:00:00Z', audienceDefinition: { match: 'ALL', filtros: [], exclusoes: {} } } });
+    assert.equal(agendar.status, 400, 'agendar sem condição explícita é recusado');
+    assert.equal(agendar.json.codigo, 'AUDIENCIA_SEM_FILTRO');
+    assert.equal((await sup.query('SELECT status FROM campaigns WHERE id = $1', [id])).rows[0].status, 'draft');
+  } finally {
+    await sup.query('DELETE FROM campaigns WHERE id = $1', [id]);
+    await sup.query('DELETE FROM segments WHERE id = $1', [boa.json.segmento.id]);
+  }
+  assert.equal((await sup.query('SELECT count(*)::int AS n FROM segments')).rows[0].n, antesSeg);
+  assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaigns')).rows[0].n, antesCamp);
+});
+
+test('definição LEGADA inválida no banco (nunca reescrita): Revisão mostra o erro e o envio é bloqueado ANTES de criar destinatários', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const legadas = [
+    { nome: 'legada campo desconhecido', def: { match: 'ALL', filtros: [{ field: 'segmentoAntigo', value: 'vip' }], exclusoes: {} } },
+    { nome: 'legada mista', def: { match: 'ANY', filtros: [{ field: 'diasSemComprar', op: 'gte', value: 30 }, { field: 'cidade', value: 'POA' }], exclusoes: {} } },
+    { nome: 'legada sem condição', def: { match: 'ALL', filtros: [], exclusoes: {} } },
+    { nome: 'legada vazia', def: {} },
+  ];
+  const criadas = [];
+  try {
+    for (const l of legadas) {
+      const { rows: [c] } = await sup.query(
+        `INSERT INTO campaigns (organization_id, store_id, loja, nome, template_nome, audience_definition, status, criado_por) VALUES ($1,$2,$3,$4,'tpl_teste',$5,'draft','admin') RETURNING id, audience_definition`,
+        [ORG_A, STORE_A, LOJA[ORG_A], l.nome, JSON.stringify(l.def)]
+      );
+      criadas.push(c.id);
+      const antes = JSON.stringify(c.audience_definition);
+      const rev = await previa(a, { match: l.def.match, filters: l.def.filtros, exclusions: l.def.exclusoes });
+      assert.equal(rev.status, 400, `${l.nome}: a Revisão recebe o erro verdadeiro (${rev.texto})`);
+      const inicio = await a.req('POST', `/api/admin/campaigns/${c.id}/start`);
+      assert.equal(inicio.status, 400, `${l.nome}: ${inicio.texto}`);
+      assert.match(inicio.json.codigo, /AUDIENCIA_(FILTRO_INVALIDO|SEM_FILTRO)/);
+      assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients WHERE campaign_id = $1', [c.id])).rows[0].n, 0, `${l.nome}: nenhum destinatário`);
+      const { rows: [depois] } = await sup.query('SELECT status, audience_definition FROM campaigns WHERE id = $1', [c.id]);
+      assert.equal(depois.status, 'draft');
+      assert.equal(JSON.stringify(depois.audience_definition), antes, `${l.nome}: a definição antiga NÃO foi reescrita`);
+    }
+  } finally {
+    for (const id of criadas) await sup.query('DELETE FROM campaigns WHERE id = $1', [id]);
+  }
+});
+
+test('definição LEGADA válida e conhecida segue funcionando (compat): prévia idêntica à contagem independente', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const legado = [{ field: 'diasSemComprar', op: 'lte', value: 90 }, { field: 'quantidadePedidos', op: 'gte', value: 1 }, { field: 'uf', value: 'RS' }];
+  for (const match of ['ALL', 'ANY']) {
+    const r = await previa(a, { match, filters: legado, exclusions: SEM_EXCLUSAO });
+    assert.equal(r.status, 200, r.texto);
+    assert.equal(typeof r.json.matched, 'number');
+  }
+  const { rows: pedidosA } = await sup.query(
+    `SELECT buyer_documento, buyer_telefone, buyer_email, payment_status, total_value, criado_em FROM pedidos_ink WHERE organization_id = $1
+      AND COALESCE(NULLIF(buyer_documento,''), NULLIF(buyer_telefone,''), NULLIF(buyer_email,'')) IS NOT NULL ORDER BY criado_em DESC`, [ORG_A]);
+  const soNumericos = legado.slice(0, 2);
+  const r = await previa(a, { match: 'ALL', filters: soNumericos, exclusions: SEM_EXCLUSAO });
+  assert.equal(r.json.matched, audienciaEsperada(pedidosA, soNumericos), 'compat: mesma contagem de antes da Rodada 6');
+});
+
+test('segmento RFM legado ("avaliação aproximada"): preservado, sinalizado e executar exige revisão/confirmação explícita; agendamento idem', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const { json: resumo } = await a.req('GET', '/api/admin/clientes/resumo');
+  const alvo = resumo.rfm.segmentos.find((x) => x.id === 'hibernando') || resumo.rfm.segmentos.find((x) => x.clientes > 3);
+  const genericos = filtrosDoPredicado(alvo.predicado);
+  const { rows: [seg] } = await sup.query(
+    `INSERT INTO segments (organization_id, nome, match, filtros, exclusoes, criado_por, origem, politica, predicado, rfm_versao, classificado_em, rfm_segmento)
+     VALUES ($1,'RFM legado aproximado','ALL',$2,'{}','admin','rfm','dinamico',$3,$4,now(),$5) RETURNING id, filtros`,
+    [ORG_A, JSON.stringify(genericos), JSON.stringify(alvo.predicado), resumo.rfm.regraVersao, alvo.id]
+  );
+  const antes = JSON.stringify(seg.filtros);
+  const camposCamp = { nome: 'campanha do RFM aproximado', templateNome: 'tpl_teste', segmentoId: String(seg.id) };
+  const def = { match: 'ALL', filtros: genericos, exclusoes: {} };
+  let campId = null;
+  try {
+    // 1) a prévia funciona como sempre e SINALIZA a avaliação aproximada (a tela mostra o aviso e a confirmação)
+    const p = await previa(a, { match: 'ALL', filters: genericos, exclusions: SEM_EXCLUSAO });
+    assert.equal(p.status, 200, p.texto);
+    assert.equal(p.json.rfmAproximado.segmentoId, String(seg.id));
+    assert.equal(p.json.rfmAproximado.rfmSegmento, alvo.id);
+    // um filtro genérico QUALQUER (não é cópia de segmento RFM) não é sinalizado
+    assert.equal((await previa(a, { match: 'ALL', filters: [{ field: 'uf', value: 'RS' }], exclusions: SEM_EXCLUSAO })).json.rfmAproximado, undefined);
+    // 2) rascunho é permitido; agendar SEM confirmar é recusado (409) e nada muda
+    const criada = await a.req('POST', '/api/admin/campaigns', { corpo: { ...camposCamp, audienceDefinition: def } });
+    assert.equal(criada.status, 200, criada.texto);
+    campId = criada.json.campanha.id;
+    const semConfirmar = await a.req('PUT', `/api/admin/campaigns/${campId}`, { corpo: { ...camposCamp, status: 'scheduled', agendadaPara: '2031-01-01T10:00:00Z', audienceDefinition: def } });
+    assert.equal(semConfirmar.status, 409, semConfirmar.texto);
+    assert.equal(semConfirmar.json.codigo, 'RFM_SEGMENTO_APROXIMADO');
+    assert.match(semConfirmar.json.error, /avaliação aproximada/);
+    assert.equal((await sup.query('SELECT status FROM campaigns WHERE id = $1', [campId])).rows[0].status, 'draft');
+    // 3) iniciar SEM confirmar é recusado ANTES de criar destinatários
+    const inicio = await a.req('POST', `/api/admin/campaigns/${campId}/start`);
+    assert.equal(inicio.status, 409, inicio.texto);
+    assert.equal(inicio.json.codigo, 'RFM_SEGMENTO_APROXIMADO');
+    assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients WHERE campaign_id = $1', [campId])).rows[0].n, 0);
+    // 4) mesma definição sem `segmentoId` (campanha antiga): reconhecida por definição idêntica
+    const semId = await a.req('PUT', `/api/admin/campaigns/${campId}`, { corpo: { nome: camposCamp.nome, templateNome: 'tpl_teste', status: 'scheduled', agendadaPara: '2031-01-01T10:00:00Z', audienceDefinition: def } });
+    assert.equal(semId.status, 409, 'campanha antiga (sem segmento_id) também é reconhecida');
+    // 5) confirmação explícita libera o AGENDAMENTO (data futura: nada é enviado) — e a definição do segmento continua intacta
+    const confirmada = await a.req('PUT', `/api/admin/campaigns/${campId}`, { corpo: { ...camposCamp, status: 'scheduled', agendadaPara: '2031-01-01T10:00:00Z', audienceDefinition: { ...def, aproximadoConfirmado: true } } });
+    assert.equal(confirmada.status, 200, confirmada.texto);
+    assert.equal((await sup.query('SELECT filtros FROM segments WHERE id = $1', [seg.id])).rows[0].filtros.length, genericos.length);
+    assert.equal(JSON.stringify((await sup.query('SELECT filtros FROM segments WHERE id = $1', [seg.id])).rows[0].filtros), antes, 'o segmento legado NÃO foi migrado');
+    // 6) a via exata continua disponível e NÃO reaproveita o legado
+    const exato = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Recriado exato', origem: 'rfm', segmento: alvo.id } });
+    assert.ok([200, 201].includes(exato.status), exato.texto);
+    assert.equal(exato.json.segmento.filtros[0].field, 'rfm');
+    assert.notEqual(exato.json.segmento.id, String(seg.id));
+    assert.equal((await previa(a, { match: 'ALL', filters: exato.json.segmento.filtros, exclusions: SEM_EXCLUSAO })).json.rfmAproximado, undefined, 'na via exata não há aviso de aproximação');
+  } finally {
+    if (campId) await sup.query('DELETE FROM campaigns WHERE id = $1', [campId]);
+    await sup.query('DELETE FROM segments WHERE id = $1', [seg.id]);
+  }
+  assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients')).rows[0].n, 0, 'nada foi criado para envio');
 });
 
 // ── Matriz × lista × cadastro remoto ────────────────────────────────────────────────────────────────

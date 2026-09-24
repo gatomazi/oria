@@ -42,23 +42,8 @@ export function AvisoSegmentoRfm({ segmentoId }: { segmentoId: string }) {
     } catch { /* toast em api() */ } finally { setCriando(false); }
   }
 
-  // Segmento RFM salvo ANTES da avaliação exata: a Audiência usa filtros genéricos (troca paga conta como compra, sem janela de 365
-  // dias, 24h corridas) e pode diferir da matriz. Não é reescrito; o caminho é criar um segmento novo (avaliação exata).
-  if (estado.equivalencia === 'aproximada') {
-    return (
-      <Callout
-        tone="warning"
-        title="Segmento RFM com avaliação aproximada"
-        action={<Button size="sm" variant="secondary" disabled={criando} onClick={criarComCorteAtual}>{criando ? 'Criando…' : 'Criar segmento com avaliação exata'}</Button>}
-      >
-        <p className="cli-aviso">
-          Este segmento foi salvo com filtros genéricos: a Audiência conta troca paga como compra, usa 24 horas corridas em vez de dia de calendário e não aplica
-          a janela de 365 dias. O público pode ser diferente do que a matriz de Clientes mostra.
-        </p>
-        <p className="cli-aviso cli-aviso--nota">Nada foi alterado neste segmento. O novo segmento usa o corte de hoje ({rotuloCorte(estado.atual.corte)}).</p>
-      </Callout>
-    );
-  }
+  // Segmento salvo com filtros genéricos ("avaliação aproximada"): o aviso e a confirmação vivem no cartão da própria Audiência
+  // (RfmAproximadoCard), que também cobre campanhas antigas sem `segmento_id`. Aqui só o corte salvo × de hoje.
 
   return (
     <Callout

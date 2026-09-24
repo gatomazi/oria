@@ -187,7 +187,9 @@ test('G · ReportCache: mesma chave (org/store/provider/período) reaproveita; c
   await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'cache_provider' });
   const { registry, chamadasFeitas } = registryComAnalytics([item('c1')]);
   const { createReportCache } = h.sujeito('lib/product-analytics/product-performance-service.js');
-  const cache = createReportCache({ ttlMs: 50 });
+  // Relógio CONTROLÁVEL (não `sleep`): sob carga de máquina, a 1ª chamada pode durar mais que um TTL de 50 ms reais e o "cache hit" falharia.
+  let relogio = 1_000_000;
+  const cache = createReportCache({ ttlMs: 50, agora: () => relogio });
   const svc = createProductPerformanceService({ pool: pool(), registry, catalogRepository: createCommerceCatalogRepository({ pool: pool() }), reportCache: cache });
   const entrada = { organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider: 'cache_provider' }, ...PERIODO };
 
@@ -198,7 +200,10 @@ test('G · ReportCache: mesma chave (org/store/provider/período) reaproveita; c
   await svc.getProductPerformance({ ...entrada, endDate: '2026-09-21' }); // período diferente: cache miss
   assert.equal(chamadasFeitas(), 2);
 
-  await new Promise((r) => setTimeout(r, 60)); // TTL de 50ms expira
+  relogio += 49; // ainda dentro do TTL: continua servindo do cache
+  await svc.getProductPerformance(entrada);
+  assert.equal(chamadasFeitas(), 2);
+  relogio += 2; // 51 ms desde a busca: o TTL de 50 ms expirou
   await svc.getProductPerformance(entrada);
   assert.equal(chamadasFeitas(), 3); // expirou: busca de novo, nunca serve dado velho além do TTL
 }));

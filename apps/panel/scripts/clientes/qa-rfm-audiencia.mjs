@@ -156,7 +156,7 @@ try {
     // ── 5. "Montar filtros manualmente" depois de um segmento RFM ─────────────────────────────────────
     await page.locator('.ad-segmento-form').locator('xpath=ancestor::div[contains(@class,"tn-form")]').first().locator('select').first().selectOption('');
     await page.waitForTimeout(700);
-    ok('"Montar filtros manualmente" remove a condição RFM (não fica oculta atrás do seletor)', (await page.locator('.ad-rfm-card').count()) === 0 && (await page.locator('[aria-label="Campo do filtro"]').count()) === 1);
+    ok('"Montar filtros manualmente" remove a condição RFM (não fica oculta atrás do seletor) e NÃO vira "todos os clientes"', (await page.locator('.ad-rfm-card').count()) === 0 && (await page.locator('.ad-todos-card').count()) === 1 && !(await page.locator('.ad-todos-card input[type="checkbox"]').isChecked()));
 
     ok('sem erro de JavaScript', erros.length === 0, erros.slice(0, 2).join(' | '));
     const camps = await (await ctx.request.get(`${BASE}/api/admin/campaigns`)).json();

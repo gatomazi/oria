@@ -344,9 +344,13 @@ test('Campanhas · outra Store não vê, não lê e não edita a campanha de C',
 
 test('Campanhas · a prévia de audiência funciona na Store nativa (sem chave legada, sem provider externo obrigatório)', async () => {
   const c = await entrar('C');
-  const r = await c.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: [], exclusions: {} } });
+  // Rodada 6: "todos os clientes" só existe se for escolhido de forma explícita; lista vazia é erro, não audiência universal.
+  const r = await c.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: [{ field: 'todosClientes', value: true }], exclusions: {} } });
   assert.equal(r.status, 200, r.texto);
   assert.equal(typeof r.json.matched, 'number');
+  const vazia = await c.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: [], exclusions: {} } });
+  assert.equal(vazia.status, 400, vazia.texto);
+  assert.equal(vazia.json.codigo, 'AUDIENCIA_SEM_FILTRO');
 });
 
 // ── Recuperação e automações (sem webhook) ────────────────────────────────────────────────────

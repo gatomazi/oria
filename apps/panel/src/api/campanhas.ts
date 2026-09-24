@@ -17,7 +17,9 @@ export type AudienciaCampo =
   | 'naoRecebeuCampanha'
   | 'recebeuCampanhaNosUltimosDias'
   // Segmento de origem RFM (Rodada 5): condição OBRIGATÓRIA avaliada pela mesma classificação da matriz de Clientes.
-  | 'rfm';
+  | 'rfm'
+  // "Todos os clientes": só existe se for escolhido de forma explícita (sozinho; sujeito às exclusões).
+  | 'todosClientes';
 
 export interface AudienciaFiltroRfmValor {
   segmento: string;
@@ -74,6 +76,8 @@ export interface AudienciaPreviewResultado {
     recebeuCampanhaRecentemente: number;
   };
   rfm?: AudienciaRfmResumo;
+  // Presente quando a definição é a cópia de um segmento RFM salvo com filtros genéricos (avaliação aproximada).
+  rfmAproximado?: { segmentoId: string; nome: string; rfmSegmento: string };
 }
 
 export function previewAudiencia(match: 'ALL' | 'ANY', filters: AudienciaFiltro[], exclusions: AudienciaExclusoes) {
@@ -100,6 +104,8 @@ export interface AudienceDefinition {
   // últimos não usam `indice` (cada template só tem no máximo 1 de cada).
   variaveis?: { indice: number; fonte: string; variavelFixa?: string; alvo?: 'corpo' | 'header' | 'botao' }[];
   mediaAssetId?: number | null;
+  // Confirmação explícita de que o público de um segmento RFM "aproximado" pode divergir da matriz e ainda assim será usado.
+  aproximadoConfirmado?: boolean;
   sampleLocation?: { nome: string; endereco: string; latitude: number; longitude: number } | null;
 }
 

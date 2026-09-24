@@ -1,8 +1,11 @@
-import { Callout, StatusBadge } from '../../components/ds';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button, Callout, StatusBadge } from '../../components/ds';
 import type { AudienciaFiltroRfmValor, AudienciaPreviewResultado } from '../../api/campanhas';
 import { rotuloCorte } from '../clientes/AvisoSegmentoRfm';
 import { dataHora, descreverPredicado, numero } from '../clientes/rfmTexto';
 import { plural } from '../../lib/format';
+import { criarSegmentoRfm, type SegmentoRfmId } from '../../api/clientes';
 
 // Por que cada pessoa foi excluída DEPOIS de entrar na população comercial. A ordem é a do servidor: cada excluído tem UM motivo.
 export function motivosDeExclusao(b: AudienciaPreviewResultado['breakdown']): { rotulo: string; n: number }[] {
@@ -87,6 +90,42 @@ export function AvisoCorteDaAudiencia({ preview }: { preview: AudienciaPreviewRe
         {rfm.pessoasNoSegmentoDeHoje != null ? ` O segmento de hoje teria ${numero(rfm.pessoasNoSegmentoDeHoje)} pessoas; esta audiência tem ${numero(rfm.universos.segmento)}.` : ''}
       </p>
       <p className="cli-aviso cli-aviso--nota">O segmento salvo não é reescrito. Para usar o corte de hoje, crie um novo segmento em Clientes.</p>
+    </Callout>
+  );
+}
+
+// Segmento RFM salvo ANTES da avaliação exata (filtros genéricos): o público pode divergir da matriz. Executar exige uma escolha
+// explícita — recriar na via exata, ou confirmar que quer usar o público aproximado. Nada é migrado sozinho.
+export function RfmAproximadoCard({ info, confirmado, onConfirmar }: {
+  info: NonNullable<AudienciaPreviewResultado['rfmAproximado']>;
+  confirmado: boolean;
+  onConfirmar: (v: boolean) => void;
+}) {
+  const navigate = useNavigate();
+  const [criando, setCriando] = useState(false);
+  async function recriar() {
+    setCriando(true);
+    try {
+      const nome = `${info.nome.replace(/^RFM · /, 'RFM · ')} · avaliação exata`.slice(0, 120);
+      const r = await criarSegmentoRfm(nome, info.rfmSegmento as SegmentoRfmId);
+      navigate(`/admin/campanhas/nova?segmento=${encodeURIComponent(r.segmento.id)}`);
+    } catch { /* toast em api() */ } finally { setCriando(false); }
+  }
+  return (
+    <Callout
+      tone="warning"
+      title="Segmento RFM com avaliação aproximada"
+      action={<Button size="sm" variant="secondary" disabled={criando} onClick={recriar}>{criando ? 'Criando…' : 'Recriar na avaliação exata'}</Button>}
+    >
+      <p className="cli-aviso">
+        Esta audiência é a cópia do segmento “{info.nome}”, salvo com filtros genéricos: conta troca paga como compra, usa 24 horas corridas e não aplica a janela de
+        365 dias. O público pode ser diferente do que a matriz de Clientes mostra. Nada foi alterado no segmento.
+      </p>
+      <label className="ad-checkbox-row">
+        <input type="checkbox" checked={confirmado} onChange={(e) => onConfirmar(e.target.checked)} />
+        Entendo que o público é aproximado e quero usá-lo assim
+      </label>
+      {!confirmado && <p className="cli-aviso cli-aviso--nota">Enquanto isso não for confirmado (ou o segmento recriado), agendar e enviar ficam bloqueados.</p>}
     </Callout>
   );
 }

@@ -19,6 +19,7 @@ const clientesLista = require('./lib/clientes/lista');
 const clientesCadastro = require('./lib/clientes/cadastro');
 const clientesAgregado = require('./lib/clientes/agregado');
 const clientesAudienciaRfm = require('./lib/clientes/audiencia-rfm');
+const audienciaFiltros = require('./lib/campanhas/audiencia-filtros');
 const clientesAnalise = require('./lib/clientes/analise');
 const clientesMetricas = require('./lib/clientes/metricas');
 const clientesDetalhe = require('./lib/clientes/detalhe');
@@ -7922,6 +7923,8 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
       if (consulta.segmentos.length) return res.status(400).json({ error: 'para salvar um segmento RFM use origem "rfm"; filtros combinados não levam segmento' });
       const convertido = clientesSegmento.filtrosDaConsulta(consulta);
       if (!convertido.filtros.length) return res.status(400).json({ error: 'nenhum filtro que o construtor de audiência saiba avaliar' });
+      // Definição gerada no servidor também passa pelo contrato único (ex.: UF inválida deixa de virar segmento).
+      audienciaFiltros.validarDefinicaoAudiencia({ match: 'ALL', filtros: convertido.filtros, exclusoes: {} });
       origem = 'clientes';
       filtros = convertido.filtros;
       naoConvertidos = convertido.naoConvertidos;
@@ -7954,6 +7957,7 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
     });
     res.status(201).json({ segmento: mapSegmentoRow(rows[0]), politica: 'dinamico', origem, predicado, observacoes, naoConvertidos });
   } catch (err) {
+    if (responderErroDeAudiencia(res, err)) return;
     console.error(`[CLIENTES] falha ao criar segmento: ${err.message}`);
     res.status(500).json({ error: 'não foi possível criar o segmento' });
   }
@@ -7998,21 +8002,23 @@ async function buscarClientesAgregados(linhasPrelidas = null) {
 // produto/categoria comprada, cupom e ticket médio por variação ficam de fora por falta de
 // captura desse dado em pedidos_ink (não inventados). UF entrou depois (buyer_uf, vem direto de
 // shipping_address.state da Ink) pra permitir campanhas sazonais por estado.
-const AUDIENCIA_CAMPOS_FILTRO = [
-  'diasSemComprar', 'quantidadePedidos', 'totalGasto', 'ticketMedio', 'uf',
-  'optIn', 'temCarrinhoAbandonado', 'recebeuCampanha', 'naoRecebeuCampanha', 'recebeuCampanhaNosUltimosDias',
-];
+// A lista de campos/operadores/tipos válidos vive em lib/campanhas/audiencia-filtros.js (contrato único, fail-closed).
 
 // Reexecuta os filtros no backend, nunca no navegador (spec, "Contagem da audiência"). Usada por
 // dois consumidores: o preview (só quer a contagem, clientes nunca chegam ao frontend) e o
 // disparo real da campanha (Fase 5, precisa da lista de elegíveis pra montar o snapshot em
 // campaign_recipients) — por isso sempre calcula e devolve `elegiveis`; quem só quer a contagem
 // (calcularAudienciaCampanha, abaixo) simplesmente ignora o array.
-async function avaliarAudienciaCampanha(loja, matchTipo, filtrosBrutos, exclusoes) {
+async function avaliarAudienciaCampanha(loja, matchBruto, filtrosBrutos, exclusoesBrutas) {
+  // Contrato ÚNICO e fail-closed (lib/campanhas/audiencia-filtros.js): campo, operador, tipo e valor de CADA condição, `match` e
+  // exclusões são validados ANTES de qualquer avaliação. Defeito LANÇA `ErroAudienciaFiltro` — nunca descarta condição em silêncio,
+  // nunca avalia só parte de um AND/OR e nunca vira "todos os clientes". Audiência universal só com `todosClientes` explícito.
+  const definicao = audienciaFiltros.validarDefinicaoAudiencia({ match: matchBruto, filtros: filtrosBrutos, exclusoes: exclusoesBrutas });
+  const { rfm: filtroRfm, filtros, exclusoes } = definicao;
+  const matchTipo = definicao.match;
   // Segmento de origem RFM: um filtro `rfm` OBRIGATÓRIO (mesmo com match ANY), avaliado pela MESMA classificação da matriz de
   // Clientes — mesmas linhas, mesmo `asOf`, mesma regra e corte salvo (lib/clientes/audiencia-rfm.js). Qualquer defeito LANÇA:
   // nunca degrada para "todos os clientes". As demais condições e as exclusões de contato atuam sobre esse público.
-  const { rfm: filtroRfm, demais: filtros } = clientesAudienciaRfm.separarFiltros(filtrosBrutos);
   let clientes;
   let rfmResumo = null;
   if (filtroRfm) {
@@ -8103,22 +8109,20 @@ async function avaliarAudienciaCampanha(loja, matchTipo, filtrosBrutos, exclusoe
         return historico.some((h) => h.sentAt && new Date(h.sentAt).getTime() >= limite);
       }
       default:
-        return false;
+        // Inalcançável: `validarDefinicaoAudiencia` já recusou campo desconhecido. Se um dia acontecer, falha — não devolve `false`.
+        throw new audienciaFiltros.ErroAudienciaFiltro(audienciaFiltros.CODIGO_INVALIDO, `campo de audiência não avaliável: ${field}`, [{ campo: field, operador: null, motivo: 'campo não avaliável' }]);
     }
   }
 
-  const filtrosValidos = (filtros || []).filter((f) => f && AUDIENCIA_CAMPOS_FILTRO.includes(f.field));
+  // Sem condições restantes só quando a audiência é o segmento RFM (a base já é o segmento) ou "todos os clientes" explícito.
   const matched = clientes.filter((cliente) => {
-    if (!filtrosValidos.length) return true;
-    return matchTipo === 'ANY' ? filtrosValidos.some((f) => avaliarFiltro(cliente, f)) : filtrosValidos.every((f) => avaliarFiltro(cliente, f));
+    if (!filtros.length) return true;
+    return matchTipo === 'ANY' ? filtros.some((f) => avaliarFiltro(cliente, f)) : filtros.every((f) => avaliarFiltro(cliente, f));
   });
 
   // Exclusões sempre por cima do que já deu match — nunca dentro da lógica ALL/ANY (spec: seção
   // separada de "Exclusões", com "sem opt-in"/"números inválidos" já marcados por padrão).
-  const semOptIn = exclusoes?.semOptIn !== false;
-  const numeroInvalido = exclusoes?.numeroInvalido !== false;
-  const compradoNosUltimosDias = exclusoes?.compradoNosUltimosDias ?? null;
-  const recebeuCampanhaNasUltimasHoras = exclusoes?.recebeuCampanhaNasUltimasHoras ?? null;
+  const { semOptIn, numeroInvalido, compradoNosUltimosDias, recebeuCampanhaNasUltimasHoras } = exclusoes;
 
   const breakdown = { optOut: 0, numeroInvalido: 0, compradoRecentemente: 0, recebeuCampanhaRecentemente: 0 };
   const elegiveis = [];
@@ -8149,16 +8153,55 @@ async function calcularAudienciaCampanha(loja, matchTipo, filtros, exclusoes) {
   return contagem;
 }
 
+// Segmentos RFM de "avaliação aproximada" (Rodada 3/4: 4 filtros genéricos em vez do filtro `rfm`) continuam existindo como estão.
+// Executar uma campanha a partir de um deles exige revisão explícita: `audience_definition.aproximadoConfirmado === true` (o usuário
+// viu que o público pode divergir da matriz) — ou recriar o segmento na via exata. Reconhece o segmento pelo id (`segmento_id`) ou
+// por definição idêntica (campanhas antigas não guardam o id). Devolve o segmento ou null.
+async function segmentoRfmAproximadoDaDefinicao(filtros, segmentoId = null) {
+  if (!pgPool || !Array.isArray(filtros) || !filtros.length || filtros.some((f) => f && f.field === 'rfm')) return null;
+  const { rows } = await pgPool.query(
+    `SELECT id, nome, rfm_segmento FROM segments
+      WHERE origem = 'rfm' AND NOT (filtros @> '[{"field":"rfm"}]'::jsonb)
+        AND (($1::text IS NOT NULL AND id::text = $1::text) OR filtros = $2::jsonb)
+      ORDER BY id LIMIT 1`,
+    [segmentoId == null ? null : String(segmentoId), JSON.stringify(filtros)]
+  );
+  return rows[0] || null;
+}
+
+async function exigirRevisaoDeSegmentoRfmAproximado(definicao, segmentoId) {
+  const def = definicao && typeof definicao === 'object' ? definicao : {};
+  if (def.aproximadoConfirmado === true) return;
+  const seg = await segmentoRfmAproximadoDaDefinicao(def.filtros, segmentoId);
+  if (!seg) return;
+  const err = new audienciaFiltros.ErroAudienciaFiltro('RFM_SEGMENTO_APROXIMADO',
+    `Esta audiência vem do segmento RFM "${seg.nome}", salvo com filtros genéricos (avaliação aproximada): o público pode divergir da matriz de Clientes. `
+    + 'Recrie o segmento na avaliação exata (em Clientes) ou confirme explicitamente, na Audiência, que quer usar o público aproximado.', [{ campo: 'segmento', operador: null, motivo: 'avaliação aproximada' }]);
+  err.status = 409;
+  throw err;
+}
+
+// Erro de definição (400/409) numa rota de criação/edição: resposta acionável, sem gravar nada.
+function responderErroDeAudiencia(res, err) {
+  if (err instanceof audienciaFiltros.ErroAudienciaFiltro || err instanceof clientesAudienciaRfm.ErroAudienciaRfm) {
+    res.status(err.status).json({ error: err.message, codigo: err.codigo, detalhes: err.detalhes });
+    return true;
+  }
+  return false;
+}
+
 app.post('/api/admin/campaigns/audience/preview', requireAdmin, async (req, res) => {
   const { match, filters, exclusions } = req.body || {};
   const loja = lojaLegadaDoContextoOuNula();
   if (!pgPool) return res.status(503).json({ error: 'audiência de campanha exige Postgres configurado' });
   try {
-    const resultado = await calcularAudienciaCampanha(loja, match === 'ANY' ? 'ANY' : 'ALL', filters || [], exclusions || {});
-    res.json(resultado);
+    const resultado = await calcularAudienciaCampanha(loja, match, filters, exclusions);
+    const aproximado = await segmentoRfmAproximadoDaDefinicao(filters);
+    res.json({ ...resultado, ...(aproximado ? { rfmAproximado: { segmentoId: String(aproximado.id), nome: aproximado.nome, rfmSegmento: aproximado.rfm_segmento } } : {}) });
   } catch (err) {
     // Filtro RFM em erro é um estado verdadeiro e acionável (409), nunca uma audiência sem o filtro.
     if (err instanceof clientesAudienciaRfm.ErroAudienciaRfm) return res.status(err.status).json({ error: err.message, codigo: err.codigo });
+    if (err instanceof audienciaFiltros.ErroAudienciaFiltro) return res.status(err.status).json({ error: err.message, codigo: err.codigo, detalhes: err.detalhes });
     console.error(`[CAMPANHAS] falha ao calcular audiência: ${err.message}`);
     res.status(500).json({ error: 'não foi possível calcular a audiência' });
   }
@@ -8193,13 +8236,16 @@ app.post('/api/admin/segments', requireAdmin, async (req, res) => {
   if (!nome || !String(nome).trim()) return res.status(400).json({ error: 'nome é obrigatório' });
   if (!pgPool) return res.status(503).json({ error: 'segmentos exigem Postgres configurado' });
   try {
+    // Definição NOVA: validada pelo contrato fail-closed (campo, operador, tipo, valor); nada é gravado se houver problema.
+    audienciaFiltros.validarDefinicaoAudiencia({ match, filtros, exclusoes });
     const { rows } = await pgPool.query(
       `INSERT INTO segments (nome, match, filtros, exclusoes, criado_por) VALUES ($1,$2,$3,$4,$5)
        RETURNING ${SEGMENTO_COLUNAS}`,
-      [String(nome).trim(), match === 'ANY' ? 'ANY' : 'ALL', JSON.stringify(filtros || []), JSON.stringify(exclusoes || {}), 'admin']
+      [String(nome).trim(), match, JSON.stringify(filtros), JSON.stringify(exclusoes || {}), 'admin']
     );
     res.json({ segmento: mapSegmentoRow(rows[0]) });
   } catch (err) {
+    if (responderErroDeAudiencia(res, err)) return;
     console.error(`[CAMPANHAS] falha ao criar segmento: ${err.message}`);
     res.status(500).json({ error: 'não foi possível criar o segmento' });
   }
@@ -8210,14 +8256,16 @@ app.put('/api/admin/segments/:id', requireAdmin, exigirRecurso('segments'), asyn
   if (!nome || !String(nome).trim()) return res.status(400).json({ error: 'nome é obrigatório' });
   if (!pgPool) return res.status(503).json({ error: 'segmentos exigem Postgres configurado' });
   try {
+    audienciaFiltros.validarDefinicaoAudiencia({ match, filtros, exclusoes });
     const { rows } = await pgPool.query(
       `UPDATE segments SET nome=$1, match=$2, filtros=$3, exclusoes=$4, atualizado_em=now() WHERE id=$5
        RETURNING ${SEGMENTO_COLUNAS}`,
-      [String(nome).trim(), match === 'ANY' ? 'ANY' : 'ALL', JSON.stringify(filtros || []), JSON.stringify(exclusoes || {}), req.params.id]
+      [String(nome).trim(), match, JSON.stringify(filtros), JSON.stringify(exclusoes || {}), req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'segmento não encontrado' });
     res.json({ segmento: mapSegmentoRow(rows[0]) });
   } catch (err) {
+    if (responderErroDeAudiencia(res, err)) return;
     console.error(`[CAMPANHAS] falha ao editar segmento: ${err.message}`);
     res.status(500).json({ error: 'não foi possível editar o segmento' });
   }
@@ -8535,6 +8583,24 @@ app.get('/api/admin/campaigns/:id', requireAdmin, exigirRecurso('campaigns'), as
   }
 });
 
+// Definição de audiência recebida numa campanha NOVA/editada: se traz condições (`match`/`filtros`) — ou se vai ser AGENDADA —
+// é validada pelo contrato fail-closed. Rascunho sem audiência ainda é permitido (`{}`), mas nunca é enviado: `/start` e o agendador
+// recusam definição sem condição explícita. Agendar também exige a revisão de segmento RFM aproximado.
+async function validarAudienciaDaCampanha(audienceDefinition, { agendando, segmentoId }) {
+  const def = audienceDefinition && typeof audienceDefinition === 'object' && !Array.isArray(audienceDefinition) ? audienceDefinition : {};
+  const temCondicoes = def.match !== undefined || def.filtros !== undefined;
+  if (temCondicoes || agendando) {
+    try {
+      audienciaFiltros.validarDefinicaoAudiencia({ match: def.match, filtros: def.filtros, exclusoes: def.exclusoes });
+    } catch (err) {
+      // Rascunho ainda sem condição é normal (o usuário está montando a audiência); condição INVÁLIDA nunca é gravada, e agendar/enviar
+      // sem condição explícita é recusado.
+      if (agendando || !(err instanceof audienciaFiltros.ErroAudienciaFiltro) || err.codigo !== audienciaFiltros.CODIGO_SEM_FILTRO) throw err;
+    }
+  }
+  if (agendando) await exigirRevisaoDeSegmentoRfmAproximado(def, segmentoId);
+}
+
 app.post('/api/admin/campaigns', requireAdmin, async (req, res) => {
   const { nome, descricao, templateNome, segmentoId, audienceDefinition } = req.body || {};
   const loja = lojaLegadaDoContextoOuNula();
@@ -8545,6 +8611,7 @@ app.post('/api/admin/campaigns', requireAdmin, async (req, res) => {
   if (mensagemWebId === undefined) return res.status(400).json({ error: 'mensagem inválida' });
   if (!pgPool) return res.status(503).json({ error: 'campanhas exigem Postgres configurado' });
   try {
+    await validarAudienciaDaCampanha(audienceDefinition, { agendando: false, segmentoId });
     const { rows } = await pgPool.query(
       `INSERT INTO campaigns (store_id, loja, nome, descricao, template_nome, segmento_id, audience_definition, status, criado_por, tamanho_lote, mensagem_web_id)
        VALUES ($10,$1,$2,$3,$4,$5,$6,'draft',$7,$8,$9) RETURNING ${CAMPAIGN_SELECT_COLS}`,
@@ -8552,6 +8619,7 @@ app.post('/api/admin/campaigns', requireAdmin, async (req, res) => {
     );
     res.json({ campanha: mapCampanhaRow(rows[0]) });
   } catch (err) {
+    if (responderErroDeAudiencia(res, err)) return;
     console.error(`[CAMPANHAS] falha ao criar campanha: ${err.message}`);
     res.status(500).json({ error: 'não foi possível criar a campanha' });
   }
@@ -8573,6 +8641,7 @@ app.put('/api/admin/campaigns/:id', requireAdmin, exigirRecurso('campaigns'), as
     if (!CAMPAIGN_STATUS_EDITAVEL.has(atual.rows[0].status)) {
       return res.status(409).json({ error: 'campanha já iniciada não pode ser editada' });
     }
+    await validarAudienciaDaCampanha(audienceDefinition, { agendando: novoStatus === 'scheduled', segmentoId });
     const { rows } = await pgPool.query(
       `UPDATE campaigns SET nome=$1, descricao=$2, template_nome=$3, segmento_id=$4, audience_definition=$5,
          status=$6, agendada_para=$7, tamanho_lote=$8, mensagem_web_id=$10, atualizado_em=now()
@@ -8582,6 +8651,7 @@ app.put('/api/admin/campaigns/:id', requireAdmin, exigirRecurso('campaigns'), as
     );
     res.json({ campanha: mapCampanhaRow(rows[0]) });
   } catch (err) {
+    if (responderErroDeAudiencia(res, err)) return;
     console.error(`[CAMPANHAS] falha ao editar campanha: ${err.message}`);
     res.status(500).json({ error: 'não foi possível editar a campanha' });
   }
@@ -8692,7 +8762,10 @@ async function iniciarDisparoCampanha(campanha) {
   }
 
   const chaveDaCampanha = campanha.loja || campanha.store_id;
-  const resultado = await avaliarAudienciaCampanha(chaveDaCampanha, def.match === 'ANY' ? 'ANY' : 'ALL', def.filtros || [], def.exclusoes || {});
+  // Antes de avaliar/criar qualquer destinatário: segmento RFM aproximado exige revisão explícita (ver acima). A definição inválida
+  // ou sem condição explícita é recusada por `avaliarAudienciaCampanha` (fail-closed).
+  await exigirRevisaoDeSegmentoRfmAproximado(def, campanha.segmento_id);
+  const resultado = await avaliarAudienciaCampanha(chaveDaCampanha, def.match, def.filtros, def.exclusoes);
   const variaveisMapa = Array.isArray(def.variaveis) ? def.variaveis : [];
   const mediaAssetId = modoWeb ? null : def.mediaAssetId || null;
   // Campos personalizados: lidos 1x por campanha (não por cliente) e interpolados com as
@@ -8768,7 +8841,7 @@ app.post('/api/admin/campaigns/:id/start', requireAdmin, exigirRecurso('campaign
     res.json({ ok: true, totalRecipients, primeiroLote });
   } catch (err) {
     console.error(`[CAMPANHAS] falha ao iniciar campanha: ${err.message}`);
-    res.status(err.status || 500).json({ error: err.status ? err.message : 'não foi possível iniciar a campanha' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'não foi possível iniciar a campanha', ...(err.codigo ? { codigo: err.codigo, detalhes: err.detalhes } : {}) });
   }
 });
 
@@ -15159,6 +15232,7 @@ const CAMPANHA_LOTE_TAMANHO = 10;
 
 // Campanhas 'scheduled' cuja hora chegou viram 'preparing' (snapshot de destinatários) — mesma
 // função usada pelo endpoint /start, só que disparada pelo relógio em vez de um clique.
+const agendadasBloqueadasJaLogadas = new Set();
 async function iniciarCampanhasAgendadasVencidas() {
   const { rows } = await pgPool.query(
     `SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns WHERE status = 'scheduled' AND agendada_para <= now() ORDER BY agendada_para ASC LIMIT 5`
@@ -15167,7 +15241,13 @@ async function iniciarCampanhasAgendadasVencidas() {
     try {
       await iniciarDisparoCampanha(campanha);
     } catch (err) {
-      console.error(`[CAMPANHAS_FILA] falha ao iniciar campanha agendada ${campanha.id}: ${err.message}`);
+      // Definição de audiência recusada (fail-closed): a campanha continua 'scheduled', sem destinatários, até alguém corrigir/confirmar
+      // na Revisão. O log sai UMA vez por campanha+causa, não a cada ciclo do agendador.
+      const chaveLog = `${campanha.id}:${err.codigo || err.message}`;
+      if (!agendadasBloqueadasJaLogadas.has(chaveLog)) {
+        agendadasBloqueadasJaLogadas.add(chaveLog);
+        console.error(`[CAMPANHAS_FILA] campanha agendada ${campanha.id} NÃO iniciada${err.codigo ? ` (${err.codigo})` : ''}: ${err.message}`);
+      }
     }
   }
 }

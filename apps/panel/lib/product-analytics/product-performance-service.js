@@ -384,7 +384,9 @@ function compararComNullPorUltimo(a, b, direcao) {
 // INSTÂNCIA do service (nunca uma variável de módulo/global — cada `createProductPerformanceService`
 // tem o seu, criado aqui só se o chamador não injetar um próprio para compartilhar entre requests
 // no `cmd/`). Pior caso de cache frio é idêntico a não ter cache nenhum; nunca inventa dado.
-function createReportCache({ ttlMs = 15 * 60 * 1000 } = {}) {
+// `agora` (opcional) injeta o relógio: testes de TTL usam um relógio controlável em vez de `sleep` (com a máquina carregada, uma
+// espera real de dezenas de ms mede a carga, não o TTL). Padrão: `Date.now`.
+function createReportCache({ ttlMs = 15 * 60 * 1000, agora: relogio = Date.now } = {}) {
   const cache = new Map(); // chave -> { linhas, expiraEm }
   // `escopoCache` (opcional, ver ga4/connector.js `getCacheScope`) entra na chave: property/conta
   // trocada dentro do TTL nunca reaproveita o relatório da anterior, mesmo com
@@ -394,7 +396,7 @@ function createReportCache({ ttlMs = 15 * 60 * 1000 } = {}) {
 
   async function obter(escopo, buscar) {
     const chave = chaveDe(escopo);
-    const agora = Date.now();
+    const agora = relogio();
     const emCache = cache.get(chave);
     if (emCache && emCache.expiraEm > agora) return emCache.linhas;
     const linhas = await buscar();

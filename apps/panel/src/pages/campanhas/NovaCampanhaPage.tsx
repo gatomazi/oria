@@ -164,10 +164,12 @@ export function NovaCampanhaPage() {
   // ver AudienceBuilder/SegmentosPage) — carregar 1x e deixar o wizard aplicar por cima do que
   // já estiver montado na etapa Audiência.
   useEffect(() => {
+    // Recarrega quando o `?segmento=` muda (ex.: "Recriar na avaliação exata" cria um segmento NOVO e navega para ele sem remontar
+    // a página): sem isto, a lista antiga não conhece o segmento novo e a tela seguiria com a audiência anterior.
     listSegmentos()
       .then((data) => setSegmentos(data.segmentos))
       .catch(() => setSegmentos([]));
-  }, []);
+  }, [params.get('segmento')]);
 
   // Vindo de Clientes (`?segmento=ID`): já abre com a audiência do segmento salvo aplicada.
   const segmentoDaUrl = params.get('segmento');
@@ -209,7 +211,7 @@ export function NovaCampanhaPage() {
         setTamanhoLote(c.tamanhoLote ? String(c.tamanhoLote) : '');
         const def = c.audienceDefinition as AudienceDefinition;
         if (def?.match) {
-          const audState = audienceStateDeSalvo(def.match, def.filtros || [], def.exclusoes || {});
+          const audState = audienceStateDeSalvo(def.match, def.filtros || [], def.exclusoes || {}, !!def.aproximadoConfirmado);
           setAudiencia(audState);
           // Recalcula a audiência de imediato (não espera o usuário visitar a etapa 2) — é o que
           // alimenta os números no resumo compilado exibido antes do wizard.
@@ -246,7 +248,8 @@ export function NovaCampanhaPage() {
       });
     return () => { vigente = false; };
   }, [emRevisao, carregandoInicial, audienciaPayload]);
-  const audienciaBloqueia = emRevisao && (revisaoAud == null || revisaoAud.estado !== 'ok');
+  const aproximadoNaoConfirmado = !!audienciaPreview?.rfmAproximado && !audiencia.aproximadoConfirmado;
+  const audienciaBloqueia = emRevisao && (revisaoAud == null || revisaoAud.estado !== 'ok' || aproximadoNaoConfirmado);
 
   const templateSelecionado = templates?.find((t) => t.name === templateNome) || null;
   const textosTemplate = templateSelecionado ? extrairTextosComponentes(templateSelecionado.components) : null;
@@ -331,19 +334,50 @@ export function NovaCampanhaPage() {
       match,
       filtros,
       exclusoes,
+      // Só grava a confirmação quando ela foi dada (nunca `false` "por padrão").
+      ...(audiencia.aproximadoConfirmado ? { aproximadoConfirmado: true } : {}),
       variaveis: variaveis.map((v) => ({ indice: v.indice, fonte: v.fonte, variavelFixa: v.fonte === 'fixo' ? v.valorFixo : undefined, alvo: v.alvo })),
       mediaAssetId: precisaMedia || modoWeb ? mediaAssetId : null,
     };
   }
 
-  function salvar(status: 'draft' | 'scheduled') {
+  // Reavaliação IMEDIATAMENTE antes de agendar/enviar: o público pode ter mudado desde a última prévia, e uma definição que já não
+  // pode ser calculada (regra RFM mudou, condição inválida, segmento aproximado sem confirmação) bloqueia com a causa. Devolve o
+  // resultado ou null (e já mostra o erro).
+  async function reavaliarAntesDeConfirmar(): Promise<AudienciaPreviewResultado | null> {
+    const { match, filtros, exclusoes } = audienceStateParaApi(audiencia);
+    try {
+      const agora = await previewAudiencia(match, filtros, exclusoes);
+      if (agora.rfmAproximado && !audiencia.aproximadoConfirmado) {
+        const texto = `A audiência vem do segmento RFM "${agora.rfmAproximado.nome}" com avaliação aproximada: confirme o uso do público aproximado na etapa Audiência ou recrie o segmento na avaliação exata.`;
+        setRevisaoAud({ estado: 'erro', mensagem: texto });
+        setMsg({ texto, erro: true });
+        return null;
+      }
+      setAvisoRevisao(audienciaPreview && agora.eligible !== audienciaPreview.eligible
+        ? `A audiência foi reavaliada agora: ${plural(agora.eligible, 'destinatário elegível', 'destinatários elegíveis')} (antes ${audienciaPreview.eligible}).`
+        : '');
+      setAudienciaPreview(agora);
+      setRevisaoAud({ estado: 'ok' });
+      return agora;
+    } catch (err) {
+      setAudienciaPreview(null);
+      setRevisaoAud({ estado: 'erro', mensagem: (err as Error).message });
+      setMsg({ texto: (err as Error).message, erro: true });
+      return null;
+    }
+  }
+
+  async function salvar(status: 'draft' | 'scheduled') {
     if (!nome.trim()) { setMsg({ texto: 'Nome da campanha é obrigatório.', erro: true }); setStep(0); return; }
     if (status === 'scheduled' && !agendarData) { setMsg({ texto: 'Escolha data e hora do agendamento.', erro: true }); return; }
     if (tamanhoLoteInvalido) { setMsg({ texto: 'Tamanho do lote deve ser um número inteiro maior que zero.', erro: true }); return; }
     setSalvando(true);
     setMsg(null);
+    if (status === 'scheduled' && !(await reavaliarAntesDeConfirmar())) { setSalvando(false); return; }
     const input = {
       nome: nome.trim(), descricao: descricao.trim() || null, templateNome, mensagemWebId,
+      segmentoId: segmentoSelecionado || null,
       audienceDefinition: montarAudienceDefinition(),
       tamanhoLote: tamanhoLoteValor,
       ...(status === 'scheduled' ? { status: 'scheduled' as const, agendadaPara: new Date(agendarData).toISOString() } : {}),
@@ -375,20 +409,14 @@ export function NovaCampanhaPage() {
     try {
       const input = {
         nome: nome.trim(), descricao: descricao.trim() || null, templateNome, mensagemWebId,
+        segmentoId: segmentoSelecionado || null,
         audienceDefinition: montarAudienceDefinition(), tamanhoLote: tamanhoLoteValor,
       };
       const data = campanhaId ? await editarCampanha(campanhaId, input) : await criarCampanha(input);
       setCampanhaId(data.campanha.id);
       setStatusAtual(data.campanha.status);
-      // Última reavaliação ANTES de pedir a confirmação: o público pode ter mudado desde a prévia. Se não for possível calcular
-      // (ex.: regra RFM mudou), não abre a confirmação.
-      const { match, filtros, exclusoes } = audienceStateParaApi(audiencia);
-      const agora = await previewAudiencia(match, filtros, exclusoes);
-      setAvisoRevisao(audienciaPreview && agora.eligible !== audienciaPreview.eligible
-        ? `A audiência foi reavaliada agora: ${plural(agora.eligible, 'destinatário elegível', 'destinatários elegíveis')} (antes ${audienciaPreview.eligible}).`
-        : '');
-      setAudienciaPreview(agora);
-      setRevisaoAud({ estado: 'ok' });
+      // Última reavaliação ANTES de pedir a confirmação: se não for possível calcular (ex.: regra RFM mudou), não abre a confirmação.
+      if (!(await reavaliarAntesDeConfirmar())) return;
       setEnviarDialogAberto(true);
     } catch (err) {
       setMsg({ texto: (err as Error).message, erro: true });
