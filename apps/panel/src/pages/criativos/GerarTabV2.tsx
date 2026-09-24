@@ -31,22 +31,30 @@ import {
   type CopiaDados,
   type CriativosStatus,
   type Catalog,
+  type Engine,
+  type FunnelStage,
   type GazeMode,
   type JobInput,
   type PlanSummary,
   type Product,
   type ProfileRow,
+  type RemarketingIntent,
 } from '../../api/criativos';
 import { plural } from '../../lib/format';
+import { ENGINE_LABEL, FUNNEL_STAGE_LABEL, INTENT_DESCRICAO, INTENT_LABEL, type TextoMotor } from './criativosMotores';
+import { CHAVES_FUNIL, CHAVES_REMARKETING, funnelOptions, lista_de, remarketingOptions, restoDe, texto_de, TEXTO_MOTOR_VAZIO } from './criativosMotorInput.mjs';
 
 // Fase E — UI V2 do gerador (Ângulos Limpos, produto único): "backend rico, planner inteligente, UI simples".
 // A tela inicial não expõe age_band, pose_risk, semantic_context, ids de relation, provenance, compiler,
 // política de menores nem JSON bruto — isso continua só no backend. Contexto/pessoas/olhar entram em
-// "Personalizar cena"; o resto é 2-4 decisões: produto → recomendação real do motor → Gerar assim, ou ajustar.
+// "Personalizar cena"; o resto é poucas decisões: motor → produto → objetivo (Remarketing/Funil) →
+// recomendação real do motor → Gerar assim, ou ajustar.
 //
-// Remarketing e Funil por Criativo continuam só na tela V1 (aba "Gerar" quando a conta não tem a flag, ou o
-// motor legado quando ela tem): a V2 simplifica exatamente o fluxo que o comando descreveu — Ângulos Limpos,
-// produto único, sem headline/CTA na arte.
+// Fase G.1 — Remarketing e Funil por Criativo entram na MESMA experiência (este arquivo), não mais só
+// em GerarTab.tsx (V1). Ângulos Limpos continua exatamente como era: produto único, sem objetivo, sem
+// texto na arte. V1 não foi tocada — quem não tem a flag `uiV2` continua vendo o formulário antigo, com
+// os três motores, como sempre. Multipeça fica fora desta rodada (G.2): esta tela é sempre
+// `product_mode: "single_product"`.
 
 // ------------------------------------------------------------------ traduções (nunca a tela "entende", só rotula códigos que o motor já devolve)
 const RAZAO_LABEL: Record<string, string> = {
@@ -68,29 +76,46 @@ function textoRazao(reason: string[], interactions: { id: string; label: string 
 
 const GAZE_LABEL: Record<GazeMode, string> = { camera: 'para a câmera', interaction: 'para a interação', off_camera: 'longe da câmera', product: 'para o produto' };
 
-// A tela nunca inventa uma recomendação: só mostra quando `angle_recommendation` realmente veio do plano.
-function CardSugestao({ rec, familias, interactions, ocupado, onGerarAssim, onPersonalizar }: {
+// Resumo do overlay (headline/subheadline/CTA) tal como o motor realmente calculou — nunca inventado na
+// tela. `null`/vazio = "nenhum texto na arte" (Ângulos Limpos, ou modo limpo ativo).
+function resumoOverlay(overlay: PlanSummary['overlay']): string | null {
+  if (!overlay.allowed) return null;
+  const partes = [overlay.headline, overlay.subheadline, overlay.cta].filter(Boolean);
+  return partes.length ? partes.join(' · ') : null;
+}
+
+// A tela nunca inventa uma recomendação: só mostra quando o preview de fato veio do motor.
+function CardSugestao({ rec, familias, interactions, preview, ocupado, onGerarAssim, onPersonalizar }: {
   rec: PlanSummary['angle_recommendation'];
   familias: AngleFamily[];
   interactions: { id: string; label: string }[];
+  preview: PlanSummary;
   ocupado: boolean;
   onGerarAssim: () => void;
   onPersonalizar: () => void;
 }) {
-  if (!rec || !rec.family) return null;
-  const familia = familias.find((f) => f.id === rec.family);
-  const razao = textoRazao(rec.reason, interactions);
-  const geral = rec.source !== 'planner_default' || rec.reason.length === 0;
+  const familia = rec?.family ? familias.find((f) => f.id === rec.family) : null;
+  const razao = rec ? textoRazao(rec.reason, interactions) : '';
+  const geral = !rec || rec.source !== 'planner_default' || rec.reason.length === 0;
+  const overlay = resumoOverlay(preview.overlay);
   return (
     <Card title="Sugestão para esta estampa">
-      <p className="criativos-v2__sugestao">
-        <strong>{familia?.label || rec.family}</strong>
-        {razao && <> · {razao}</>}
-      </p>
+      {familia && (
+        <p className="criativos-v2__sugestao">
+          <strong>{familia.label}</strong>
+          {razao && <> · {razao}</>}
+        </p>
+      )}
+      {overlay && (
+        <p className="criativos-v2__sugestao-nota">
+          <strong>Texto na arte:</strong> {overlay}
+        </p>
+      )}
       {geral && <p className="criativos-v2__sugestao-nota">Sugestão geral — cadastre o significado da estampa para uma recomendação mais precisa.</p>}
+      {preview.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.warnings.join(', ')}</Callout>}
       <FormActions>
         <Button disabled={ocupado} onClick={onGerarAssim}>Gerar assim</Button>
-        <Button variant="secondary" disabled={ocupado} onClick={onPersonalizar}>Personalizar cena</Button>
+        <Button variant="secondary" disabled={ocupado} onClick={onPersonalizar}>Personalizar</Button>
       </FormActions>
     </Card>
   );
@@ -124,12 +149,14 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
 }) {
   const familias = useMemo(() => (catalog.catalog.angle_families || []).filter((f) => !f.reserved), [catalog]);
   const interactions = catalog.catalog.interactions || [];
+  const motoresDisponiveis = (Object.keys(ENGINE_LABEL) as Engine[]).filter((e) => status.engines.includes(e));
 
   const [produtos, setProdutos] = useState<Product[]>([]);
   const [marcas, setMarcas] = useState<ProfileRow[]>([]);
   const [angulos, setAngulos] = useState<AnglesResponse | null>(null);
   const [cargaErro, setCargaErro] = useState('');
 
+  const [engine, setEngine] = useState<Engine | null>(motoresDisponiveis.length === 1 ? motoresDisponiveis[0] : null);
   const [productId, setProductId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ total: number; first: PlanSummary } | null>(null);
   const [erro, setErro] = useState('');
@@ -145,6 +172,13 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
   const [placements, setPlacements] = useState<string[]>(['FEED_4X5']);
   const [quantity, setQuantity] = useState(1);
 
+  // G.1 — Objetivo (só Remarketing/Funil) e o texto/CTA de "Personalizar" (idem). Ângulos Limpos nunca
+  // usa nenhum dos dois: o motor não aceita `remarketing`/`funnel` (o core recusa com INVALID_INPUT).
+  const [intent, setIntent] = useState<RemarketingIntent>('site_visitor');
+  const [stage, setStage] = useState<FunnelStage>('TOFU');
+  const [texto, setTexto] = useState<TextoMotor>(TEXTO_MOTOR_VAZIO);
+  const [extras, setExtras] = useState<{ remarketing?: Record<string, unknown>; funnel?: Record<string, unknown> }>({});
+
   const [origem, setOrigem] = useState<CopiaDados | null>(null);
   const [criar, setCriar] = useState<CriarAnguloState>(ESTADO_CRIAR_ANGULO_INICIAL);
 
@@ -154,16 +188,30 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
       .catch((e: Error) => setCargaErro(e.message));
   }, []);
 
-  // Copiar dados também funciona na V2: mesmo produto, mesma escolha de ângulo (custom_angle_replay_of quando
-  // houver), "Gerar de novo"/"Gerar variação" continuam do jeito que já existiam.
+  // Copiar dados também funciona na V2, nos três motores: mesmo produto, mesmo motor, mesma escolha de
+  // ângulo (custom_angle_replay_of quando houver) e — novo em G.1 — o mesmo objetivo/texto do criativo
+  // original. "Gerar de novo"/"Gerar variação" continuam do jeito que já existiam.
   useEffect(() => {
     if (!copia) return;
     const f = copia.form;
     setOrigem(copia);
+    setEngine(f.engine ?? null);
     setProductId((f.product_ids || [])[0] || null);
     if (f.custom_angle_replay_of) setEscolha({ tipo: 'custom', id: f.custom_angle_replay_of });
     setPlacements(f.placements || ['FEED_4X5']);
     setInteraction(f.interaction || '');
+    const r = (f.remarketing || {}) as Record<string, unknown>;
+    const fu = (f.funnel || {}) as Record<string, unknown>;
+    const fonte = f.engine === 'REMARKETING' ? r : fu;
+    setIntent((r.intent as RemarketingIntent) ?? 'site_visitor');
+    setStage(f.funnel_stage ?? 'TOFU');
+    setTexto({
+      headline: texto_de(fonte.headline), subheadline: texto_de(fonte.subheadline), cta: texto_de(fonte.cta),
+      benefits: lista_de(fonte.benefits), badges: lista_de(fu.badges), chips: lista_de(fu.chips), search: texto_de(fu.search_bar_text),
+      density: texto_de(fonte.text_density), emphasis: texto_de(fonte.cta_emphasis),
+      cleanMode: f.engine === 'REMARKETING' ? texto_de(r.clean_mode) : fu.clean_mode === true ? 'always' : '',
+    });
+    setExtras({ remarketing: f.remarketing as Record<string, unknown> | undefined, funnel: f.funnel as Record<string, unknown> | undefined });
     setPersonalizar(true);
     if (onCopiaLida) onCopiaLida();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -178,10 +226,13 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
 
   const anguloEscolhido = escolha.tipo === 'custom' ? [...(angulos?.organization || []), ...(angulos?.store || [])].find((a) => a.id === escolha.id) : null;
 
+  // A MESMA função monta tanto o request de geração quanto o de prévia — "a prévia reflete exatamente o
+  // request que será enviado a /jobs" (G.1 §2) deixa de ser uma promessa e vira estruturalmente verdade:
+  // não existem dois caminhos que podem divergir.
   function montarInput(): JobInput | null {
-    if (!productId || !brandInput) return null;
+    if (!engine || !productId || !brandInput) return null;
     const base: JobInput = {
-      engine: 'CLEAN_ANGLES', product_mode: 'single_product', product_ids: [productId],
+      engine, product_mode: 'single_product', product_ids: [productId],
       angle_ids: ['auto'], placements, quantity, quality: 'medium', brand: brandInput,
       persona: { mode: personaMode }, context: { mode: contextMode === 'geographic' ? 'geographic' : contextMode },
       copy: { generate: false },
@@ -191,24 +242,31 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     if (gazeMode) base.gaze_mode = gazeMode;
     if (escolha.tipo === 'family') base.angle_family_hint = { family: escolha.family, ...(escolha.preset ? { preset: escolha.preset } : {}) };
     else if (escolha.tipo === 'custom') base.custom_angle_id = escolha.id;
+    if (engine === 'REMARKETING') {
+      base.remarketing = remarketingOptions(texto, intent, restoDe(extras.remarketing, CHAVES_REMARKETING));
+    }
+    if (engine === 'FUNNEL_VISUAL') {
+      base.funnel_stage = stage;
+      base.funnel = funnelOptions(texto, stage, restoDe(extras.funnel, CHAVES_FUNIL));
+    }
     return base;
   }
 
-  // Ao trocar de produto: busca a recomendação REAL do motor via /preview (sem custo, sem chamar a OpenAI) —
-  // nunca inventada na tela. Funciona numa geração nova, não só depois de Copiar dados.
+  // Um único efeito busca a recomendação/prévia REAL do motor sempre que o que ela representaria muda —
+  // nunca uma segunda cópia da lógica de montagem. Pequeno atraso (não em cada tecla) só para não disparar
+  // uma chamada de rede a cada caractere digitado no texto livre.
   useEffect(() => {
-    if (!productId || !brandInput || origem) return;
-    setPreview(null);
+    if (origem) return;
+    const input = montarInput();
+    if (!input) { setPreview(null); return; }
     setErro('');
-    setOcupado(true);
-    const input: JobInput = {
-      engine: 'CLEAN_ANGLES', product_mode: 'single_product', product_ids: [productId], angle_ids: ['auto'],
-      placements: ['FEED_4X5'], quantity: 1, quality: 'medium', brand: brandInput, persona: { mode: 'automatic' },
-      context: { mode: 'automatic' }, copy: { generate: false },
-    };
-    previewJob(input).then((r) => setPreview({ total: r.total, first: r.first })).catch((e: Error) => setErro(e.message)).finally(() => setOcupado(false));
+    const temporizador = setTimeout(() => {
+      setOcupado(true);
+      previewJob(input).then((r) => setPreview({ total: r.total, first: r.first })).catch((e: Error) => setErro(e.message)).finally(() => setOcupado(false));
+    }, 350);
+    return () => clearTimeout(temporizador);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId, brandInput]);
+  }, [engine, productId, brandInput, escolha, interaction, personaMode, contextMode, geo, gazeMode, placements, quantity, intent, stage, texto, origem]);
 
   function gerar() {
     const input = montarInput();
@@ -228,6 +286,22 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
 
   function selecionarFamilia(family: AngleFamilyId) {
     setEscolha({ tipo: 'family', family });
+  }
+
+  // Troca de motor (G.1 §3): nunca transporta texto/objetivo de um motor pro outro de forma incoerente —
+  // um `intent` de Remarketing não significa nada em Funil, e vice-versa. Produto, marca, família/ângulo
+  // personalizado, cena e contexto SÃO preservados: são escolhas motor-agnósticas no backend (confirmado
+  // na inspeção de contratos, docs/features/creative-generator-fase-g1.md §1) e continuam válidas.
+  function trocarMotor(novo: Engine) {
+    setEngine(novo);
+    setIntent('site_visitor');
+    setStage('TOFU');
+    setTexto(TEXTO_MOTOR_VAZIO);
+    setExtras({});
+    setOrigem(null);
+    setPreview(null);
+    setErro('');
+    if (novo === 'CLEAN_ANGLES') setPersonalizar(false);
   }
 
   async function salvarAngulo() {
@@ -256,13 +330,24 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
   if (cargaErro) return <Callout tone="danger" title="Não foi possível carregar os cadastros">{cargaErro}</Callout>;
 
   const outrosAngulos = [...(angulos?.organization || []), ...(angulos?.store || [])].filter((a) => a.active);
-  const pronto = Boolean(productId && brandInput);
+  const pronto = Boolean(engine && productId && brandInput);
   const rec = preview?.first.angle_recommendation ?? null;
 
   return (
     <div className="criativos-layout">
       <FormStack wide onSubmit={(e) => e.preventDefault()}>
-        <FormSection title="1. Produto">
+        {motoresDisponiveis.length > 1 && (
+          <FormSection title="1. Tipo de criativo">
+            <RadioCardGroup<Engine>
+              name="engine" legend="Motor" hideLegend columns={1}
+              value={engine}
+              onChange={trocarMotor}
+              options={motoresDisponiveis.map((e) => ({ value: e, title: ENGINE_LABEL[e].title, description: ENGINE_LABEL[e].description }))}
+            />
+          </FormSection>
+        )}
+
+        <FormSection title={motoresDisponiveis.length > 1 ? '2. Produto' : '1. Produto'}>
           {produtos.length === 0 && <Callout tone="info">Cadastre produtos na aba Produtos.</Callout>}
           <div role="radiogroup" aria-label="Produto" className="criativos-lista-check">
             {produtos.map((p) => (
@@ -287,17 +372,38 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
           </Card>
         )}
 
+        {pronto && engine === 'REMARKETING' && !origem && (
+          <FormSection title="3. Objetivo">
+            <RadioCardGroup<RemarketingIntent>
+              name="intent" legend="Intenção de remarketing" hideLegend columns={1}
+              value={intent}
+              onChange={(v) => { setIntent(v); setPersonalizar(false); }}
+              options={catalog.catalog.remarketing_intents.map((i) => ({ value: i, title: INTENT_LABEL[i], description: INTENT_DESCRICAO[i] }))}
+            />
+          </FormSection>
+        )}
+        {pronto && engine === 'FUNNEL_VISUAL' && !origem && (
+          <FormSection title="3. Objetivo">
+            <RadioCardGroup<FunnelStage>
+              name="stage" legend="Etapa do funil" hideLegend columns={1}
+              value={stage}
+              onChange={(v) => { setStage(v); setPersonalizar(false); }}
+              options={catalog.catalog.funnel_stages.map((s) => ({ value: s, title: FUNNEL_STAGE_LABEL[s].title, description: FUNNEL_STAGE_LABEL[s].description }))}
+            />
+          </FormSection>
+        )}
+
         {pronto && !origem && !personalizar && (
           ocupado && !preview ? <Card title="Sugestão para esta estampa"><p>Calculando a recomendação do motor…</p></Card>
-            : rec ? (
-              <CardSugestao rec={rec} familias={familias} interactions={interactions} ocupado={ocupado}
-                onGerarAssim={gerar} onPersonalizar={() => { if (rec.family) setEscolha({ tipo: 'family', family: rec.family }); setPersonalizar(true); }} />
+            : preview ? (
+              <CardSugestao rec={rec} familias={familias} interactions={interactions} preview={preview.first} ocupado={ocupado}
+                onGerarAssim={gerar} onPersonalizar={() => { if (rec?.family) setEscolha({ tipo: 'family', family: rec.family }); setPersonalizar(true); }} />
             ) : erro ? <Callout tone="danger" title="Não foi possível calcular a recomendação">{erro}</Callout> : null
         )}
 
         {pronto && (personalizar || origem) && (
           <>
-            <FormSection title="2. Estilo">
+            <FormSection title="Estilo">
               <RadioCardGroup<AngleFamilyId>
                 name="familia" legend="Família do ângulo" hideLegend columns={2}
                 // Um ângulo personalizado selecionado não é "desta família" para fins de escolha — mostrar um
@@ -318,7 +424,44 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               </Disclosure>
             </FormSection>
 
-            <FormSection title="3. Personalizar cena">
+            {(engine === 'REMARKETING' || engine === 'FUNNEL_VISUAL') && (
+              <FormSection title="Texto e detalhes" description="Vazio usa o texto padrão do motor para este objetivo. Benefícios, selos e chips só entram se você informar.">
+                <FormGrid>
+                  <Field label="Headline" optional><Input maxLength={120} value={texto.headline} onChange={(e) => setTexto({ ...texto, headline: e.target.value })} /></Field>
+                  <Field label="Subheadline" optional><Input maxLength={200} value={texto.subheadline} onChange={(e) => setTexto({ ...texto, subheadline: e.target.value })} /></Field>
+                  <Field label="CTA" optional><Input maxLength={60} value={texto.cta} onChange={(e) => setTexto({ ...texto, cta: e.target.value })} /></Field>
+                  <Field label="Densidade de texto" optional>
+                    <Select value={texto.density} onChange={(e) => setTexto({ ...texto, density: e.target.value })}>
+                      <option value="">Pela etapa</option>
+                      {catalog.catalog.text_densities.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </Select>
+                  </Field>
+                  <Field label="Ênfase do CTA" optional>
+                    <Select value={texto.emphasis} onChange={(e) => setTexto({ ...texto, emphasis: e.target.value })}>
+                      <option value="">Pela etapa</option>
+                      {catalog.catalog.cta_emphases.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </Select>
+                  </Field>
+                  <Field label="Modo limpo" optional>
+                    <Select value={texto.cleanMode} onChange={(e) => setTexto({ ...texto, cleanMode: e.target.value })}>
+                      <option value="">{engine === 'REMARKETING' ? 'Automático' : 'Desligado'}</option>
+                      <option value="always">Sempre</option>
+                      {engine === 'REMARKETING' && <option value="never">Nunca</option>}
+                    </Select>
+                  </Field>
+                </FormGrid>
+                <Field label="Benefícios (1 por linha, até 3)" optional><Textarea rows={3} value={texto.benefits} onChange={(e) => setTexto({ ...texto, benefits: e.target.value })} /></Field>
+                {engine === 'FUNNEL_VISUAL' && stage !== 'TOFU' && (
+                  <FormGrid>
+                    <Field label="Selos (1 por linha)" optional><Textarea rows={2} value={texto.badges} onChange={(e) => setTexto({ ...texto, badges: e.target.value })} /></Field>
+                    <Field label="Chips (1 por linha)" optional><Textarea rows={2} value={texto.chips} onChange={(e) => setTexto({ ...texto, chips: e.target.value })} /></Field>
+                    <Field label="Barra de busca" optional><Input maxLength={80} value={texto.search} onChange={(e) => setTexto({ ...texto, search: e.target.value })} /></Field>
+                  </FormGrid>
+                )}
+              </FormSection>
+            )}
+
+            <FormSection title="Personalizar cena">
               <FormGrid>
                 <Field label="Interação" optional>
                   <Select value={interaction} onChange={(e) => setInteraction(e.target.value)}>
@@ -376,16 +519,21 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
       </FormStack>
 
       <div className="criativos-layout__preview">
-        <Card title="Prévia" description="Resumo do plano do primeiro criativo.">
-          {!preview && !rec && <p>Escolha um produto para ver a recomendação.</p>}
+        <Card title="Prévia" description="Resumo do plano do primeiro criativo — sempre o mesmo request que seria enviado a /jobs.">
+          {!preview && !rec && <p>Escolha um produto{engine !== 'CLEAN_ANGLES' ? ' e um objetivo' : ''} para ver a recomendação.</p>}
           {preview && (
             <dl className="criativos-resumo">
               <dt>Ângulo</dt><dd>{preview.first.angle?.label}</dd>
               {rec?.family && <><dt>Família</dt><dd>{familias.find((f) => f.id === rec.family)?.label || rec.family}</dd></>}
               {anguloEscolhido && <><dt>Ângulo personalizado</dt><dd>{anguloEscolhido.name} (v{anguloEscolhido.version})</dd></>}
+              {preview.first.funnel_stage && (<><dt>Etapa do funil</dt><dd>{FUNNEL_STAGE_LABEL[preview.first.funnel_stage].title} · {FUNNEL_STAGE_LABEL[preview.first.funnel_stage].description}</dd></>)}
+              {preview.first.remarketing_intent && (<><dt>Intenção</dt><dd>{INTENT_LABEL[preview.first.remarketing_intent]}</dd></>)}
+              {preview.first.layout && (<><dt>Layout</dt><dd>{preview.first.layout}</dd></>)}
               <dt>Formato</dt><dd>{preview.first.placement}</dd>
               <dt>Cena</dt><dd>{preview.first.scene} <StatusBadge tone="info" label={preview.first.context_provider} /></dd>
               <dt>Persona</dt><dd>{preview.first.persona || '—'}</dd>
+              <dt>Texto na imagem</dt><dd>{resumoOverlay(preview.first.overlay) || 'nenhum (imagem limpa)'}</dd>
+              <dt>Quantidade</dt><dd>{preview.total}</dd>
             </dl>
           )}
           {preview && preview.first.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.first.warnings.join(', ')}</Callout>}
