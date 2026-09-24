@@ -450,3 +450,84 @@ Com o catálogo, a identidade e o gatilho automático agora fechados, o próximo
 deixou de ser backend: é rodar o Gate F completo (suíte + RLS + contracts) numa janela sem
 contenção de máquina, e — se vier verde — abrir o PR desta branch pra revisão. Não há mais nenhuma
 peça estrutural faltando pra isso; o que falta é validação, não código novo.
+
+---
+
+# Rodada 3 — "Preparação do piloto"
+
+**Escopo:** curto, de preparação — sem nova fase de desenvolvimento funcional. Teste de escala direcionado, auditoria de agendamento/concorrência, validação de mensagens da tela, testes direcionados. **Sem push, merge ou deploy.**
+
+**Commits locais desta rodada:**
+```
+3463a66 fix(panel): harden the catalog-sync lease against real-scale duration and crash recovery
+ea6a678 test(panel): add an 85k-product scale harness for sync/bootstrap/opportunities
+de3992a fix(panel): correct misleading empty-state text in "Prioridades de hoje"
+```
+
+## 1. Teste de escala (~85 mil produtos, sem API real da Ink)
+
+Script novo `scripts/dev/scale-test-catalog-85k.cjs`: registry fake (nunca a Ink real) gerando 85.000 produtos em 850 páginas de 100 — o mesmo limite que `catalog-sync.js` usa de verdade — contra Postgres real efêmero. Mede tempo, heap/rss e volume de queries por fase.
+
+| Fase | Tempo | Queries | Heap Δ | Observação |
+|---|---|---|---|---|
+| 1. `runCatalogSync` (full sync) | **~110s** (110-111s em duas execuções) | 1704 (2 por página + desativação + log) | -0,3MB | O(páginas), nunca O(produtos) — confirmado |
+| 2. `bootstrapCommerceIdentities` | **~105-124s** | **4** (constante, batch SQL) | ~0MB | O(1) em número de queries; o tempo vem do volume real das linhas (85k produtos + 170k variantes), não de N+1 |
+| 3. `getOpportunities` (`/journey/opportunities`) | **>23 minutos, interrompido deliberadamente sem terminar** | não medido (não terminou) | não medido | **Gargalo crítico — ver abaixo** |
+
+**Sem API real da Ink em nenhuma fase** — confirmado (registry 100% fake, ver script).
+
+### O gargalo crítico
+
+`opportunity-diagnostics.js#paginarDesempenhoCompleto` chama `productPerformanceService.getProductPerformance` em páginas de 200 — para 85k produtos, ~425 chamadas internas. **Cada uma dessas chamadas** roda `resolveAndPersist` (`product-performance-service.js`) contra o conjunto **INTEIRO** de itemIds observados pelo GA4 (nunca só os da página) — ou seja, a resolução de identidade de ~20.000 ids é refeita **~425 vezes**, uma por página interna, em vez de uma vez só. Pior: `reconciliationService.reconcileProductPerformance` faz a **MESMA** varredura paginada de forma **independente** (sua própria `agregarAnalyticsCompleto`), dobrando o problema — duas passagens completas e redundantes sobre o catálogo inteiro por chamada ao endpoint.
+
+Isto é um problema **pré-existente** (existe desde a Fase G — `resolveAndPersist` dentro de `getProductPerformance` nunca foi projetado para ser chamado em loop sobre o catálogo inteiro) e **não foi introduzido por nenhuma das duas rodadas de Jornada de Valor**. Corrigir direito exige mudar como `product-performance-service.js` participa de uma varredura completa (cachear a resolução de identity por chamada, ou dar ao chamador um jeito de resolver 1x e reaproveitar) — **exatamente o tipo de mudança que esta rodada pediu explicitamente para NÃO fazer** ("não faça uma grande refatoração"). Registrado aqui como o achado central, não corrigido às cegas.
+
+**Por que isto ameaça o piloto:** se a Organization piloto tiver um catálogo desta ordem de grandeza, abrir a Jornada de Compra faria a chamada a `/journey/opportunities` travar por dezenas de minutos ou nunca responder dentro de um timeout HTTP razoável — a tela ficaria com "Prioridades de hoje" carregando indefinidamente. **Não testado**: o comportamento com um catálogo pequeno/médio (centenas a poucos milhares de produtos), que é provavelmente a faixa real do piloto — aí o mesmo N× redundante é pequeno o bastante pra não doer. **Recomendação:** antes de habilitar esta tela pra uma Organization real, confirmar o tamanho real do catálogo dela; se for da ordem de dezenas de milhares pra cima, o piloto não deve começar sem essa correção.
+
+## 2. Auditoria de agendamento (concorrência, leases, restart, 429)
+
+- **Lease TTL curto demais pro tamanho real de um sync** (achado, corrigido — commit `3463a66`): `syncCommerceCatalog` chamava `runCatalogSync` sem `ttlMs` explícito, usando o default de `leases.js` (`ttlPara(0)` = 30min, pensado pra jobs curtos). Sem heartbeat/renovação do lease (`job_leases.ate` é fixo desde a aquisição — ver `migrations/sql/0016-job-leases.up.sql`), um sync real mais lento que 30 minutos (rede real da Ink, não o fake local — o teste de escala mostrou ~110s SEM rede real) teria o lease expirado enquanto ainda roda, permitindo um segundo sync concorrente da mesma Organization. **Corrigido**: `catalogSyncLeaseTtlMs` explícito (default 3h).
+- **Recuperação após restart quebrada** (achado, corrigido — commit `3463a66`): se o processo cai NO MEIO de um sync, a linha em `commerce_catalog_sync_logs` fica `running` pra sempre (`fecharLog` nunca roda). `catalogSyncNecessario` tratava QUALQUER linha `running` como "não precisa" — travando o scheduler automático pra aquela Organization pra sempre, mesmo com o lease real já expirado havia muito tempo. **Corrigido**: linha `running` mais velha que o TTL do próprio lease agora é tratada como órfã, e o scheduler tenta de novo.
+- **Múltiplas Organizations, concorrência**: `JOBS.executarPorOrganizacao` já processa uma Organization POR VEZ, sequencialmente, com rodízio (`emRodizio`) entre ciclos — nunca dispara N syncs em paralelo. Auditado, sem mudança necessária.
+- **Falha parcial**: já tratada corretamente desde a Fase D — upserts de páginas anteriores ficam, desativação nunca roda em falha parcial. Auditado, sem mudança necessária.
+- **429/backoff**: `lib/ink/retry.js` já envolve TODA chamada GET da Ink (incluindo `listProductsWithVariants`) com até 2 retries curtos (400ms, 1200ms) em 429/502/503/504. **Não auditado/testado nesta rodada**: se a API real aplicar rate limit mais agressivo que esses 2 retries aguentam ao longo de 850 páginas sequenciais, o sync inteiro falha/fica parcial (nenhum "pacing" proativo entre páginas). **Não é um bug identificado** (sem visibilidade sobre os limites reais da Ink), mas é uma lacuna de robustez conhecida — recomendo confirmar o rate limit real da conta piloto antes do primeiro sync de produção.
+
+## 3. Mensagens da tela (Prioridades de hoje)
+
+Auditados e corrigidos dois problemas concretos (commit `de3992a`), nenhum novo texto/regra de diagnóstico inventado:
+
+- **"Conectar Commerce sozinho não garante dados comportamentais"** — confirmado um problema real: como `reconciliationService.reconcileProductPerformance` sempre depende de GA4 E Commerce ao mesmo tempo, a mensagem antiga ("Sem fonte conectada... Conecte o GA4 e/ou o Commerce") aparecia mesmo quando o Commerce JÁ estava conectado e só faltava o GA4 — dizendo pro lojista conectar algo que ele já tinha feito. Reescrita pra nunca afirmar o estado de uma integração específica que o sinal não prova, e pra deixar claro que a maioria dos sinais depende do GA4.
+- **Catálogo não sincronizado / GA4 ausente / dados insuficientes / ausência de oportunidades** — os quatro estados já eram distinguidos corretamente antes desta rodada (rodada 2, Gate B/D) — confirmado, sem mudança necessária além do item acima.
+- **Título "Prioridades de hoje" com período de várias semanas** — confirmado que o card nunca mostrava o período junto do título, o que podia soar como "só dados de hoje" com o filtro em semanas. Adicionado o período selecionado na descrição do card (o nome "Prioridades de hoje" continua como está — é o nome do recurso, não uma afirmação de "só dados de hoje", mesmo padrão de outros produtos com widgets "de hoje" que resumem uma janela maior).
+
+## 4. Testes
+
+Só testes direcionados, nenhuma suíte completa (mantido como pendência pré-merge, conforme combinado):
+
+| Suite | Resultado |
+|---|---|
+| `catalog-sync-necessario.test.js` (4 testes novos: running recente/órfão/override + isolamento por Organization dedicada) | **10/10** |
+| `catalog-sync-automatico.test.js` (revalidado após o fix de lease TTL) | **2/2** |
+| `product-analytics-http.test.js` | **31/31** |
+| `opportunity-diagnostics.test.js` | **21/21** |
+| `tsc -b --noEmit` | limpo |
+| `vite build` | limpo |
+
+**Achado operacional durante os testes (não é bug de código):** rodar `catalog-sync-necessario.test.js` CONCORRENTEMENTE com o teste de escala de 85k (mesmo container Postgres) derrubou a conexão do teste de escala ("Connection terminated unexpectedly") — contenção de recursos entre os dois, erro meu de execução, não um bug do sistema sob teste. Corrigido rodando os dois em sequência, nunca em paralelo, pro resto da rodada. Da mesma forma, rodar 8 arquivos de teste (cada um sobe um Postgres efêmero + migrations) em sequência numa única invocação causou UM timeout transitório de boot de servidor em `product-analytics-http.test.js` (contenção real da máquina, que tem outras sessões/worktrees ativos ao mesmo tempo) — confirmado como falso alarme ao rodar o mesmo arquivo isolado logo em seguida (31/31, limpo).
+
+## 5. Avaliação objetiva — o que falta pro piloto
+
+**Bloqueador real, não contornável sem mais trabalho:**
+- **O gargalo de `/journey/opportunities` em catálogos grandes** (seção 1). Se o catálogo real da Organization piloto for da mesma ordem de grandeza dos ~85 mil produtos referenciados desde a Fase D, a tela trava. Isto PRECISA de uma correção (fora do escopo desta rodada por instrução explícita) antes de habilitar a feature pra essa Organization — ou confirmação de que o catálogo real dela é pequeno o bastante pra o problema não aparecer na prática.
+
+**Resolvido nesta rodada, já seguro pro piloto:**
+- Lease TTL realista pro tamanho real de um sync.
+- Recuperação automática depois de um crash do processo no meio de um sync.
+- Mensagens da tela não afirmam mais o estado errado de uma integração.
+
+**Pendências já conhecidas, sem mudança nesta rodada:**
+- Suíte completa (6 shards) + RLS + `contracts:check` + `repo:self-check` — continua `not_run`, gate obrigatório antes de PR/merge/deploy.
+- 429/backoff proativo contra a API real da Ink em varreduras longas — sem dado real sobre o rate limit da conta piloto pra saber se é necessário.
+- Validação com Organization de produção real — ainda sem credencial/autorização nesta sessão.
+
+**Recomendação objetiva:** o piloto pode começar com uma Organization de catálogo pequeno/médio (a validação de escala mostrou que as fases 1 e 2 — sync e bootstrap — são rápidas e seguras em qualquer tamanho testado). **Não deve começar** com uma Organization cujo catálogo real se aproxime da escala de 85 mil produtos sem primeiro resolver o gargalo da seção 1 — abrir "Jornada de Compra" pra essa Organization hoje resultaria numa tela travada, não numa experiência quebrada de forma sutil.
