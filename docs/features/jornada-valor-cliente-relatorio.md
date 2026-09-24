@@ -531,3 +531,161 @@ Só testes direcionados, nenhuma suíte completa (mantido como pendência pré-m
 - Validação com Organization de produção real — ainda sem credencial/autorização nesta sessão.
 
 **Recomendação objetiva:** o piloto pode começar com uma Organization de catálogo pequeno/médio (a validação de escala mostrou que as fases 1 e 2 — sync e bootstrap — são rápidas e seguras em qualquer tamanho testado). **Não deve começar** com uma Organization cujo catálogo real se aproxime da escala de 85 mil produtos sem primeiro resolver o gargalo da seção 1 — abrir "Jornada de Compra" pra essa Organization hoje resultaria numa tela travada, não numa experiência quebrada de forma sutil.
+
+---
+
+# Rodada 4 — "Corrigir o gargalo real da Jornada de Valor (85 mil produtos)"
+
+**Comando:** `ORIA_RODADA_PERFORMANCE_JORNADA_85K.md`. Autorização explícita do usuário pra modificar
+`product-performance-service.js` e serviços adjacentes, preservando contratos existentes.
+
+## 1. Branch, HEAD, working tree, commits
+
+Branch `feature/jornada-valor-cliente`, worktree exclusivo `/Users/gtomazi/projects/oria-jornada-valor`,
+`git status` limpo antes e depois. Nenhuma outra branch/worktree tocado.
+
+```
+97d460a test(panel): benchmark opportunities with 85k products (before/after)
+c468d4e perf(panel): reuse analytics context for opportunities and reconciliation
+364a088 perf(panel): resolve product identities once per analytics computation
+```
+
+## 2. Causa raiz verificada e estratégia adotada
+
+**Causa raiz** (confirmada lendo o código, não só o relatório anterior): `opportunity-diagnostics.js#paginarDesempenhoCompleto`
+chamava `productPerformanceService.getProductPerformance` em páginas de 200 (~425 chamadas pra 85 mil
+produtos). **Cada chamada** rodava `getProductPerformance`'s lógica INTEIRA do zero — inclusive
+`resolveAndPersist` sobre o conjunto COMPLETO de ~20 mil itemIds observados no período, e uma
+passagem de agregação sobre o relatório GA4 inteiro. `reconciliationService.reconcileProductPerformance`
+fazia uma SEGUNDA varredura completa e independente do mesmo tipo, dobrando o custo.
+
+**Estratégia** (Gate 1 do comando, aplicada nos 3 arquivos):
+
+1. `product-performance-service.js` ganhou `prepareStoreAnalytics` — relatório GA4 (ReportCache,
+   sem mudança), resolução de identidade e agregação por produto, tudo **uma vez só**. `getProductPerformance`
+   passou a aceitar essa agregação já pronta como parâmetro interno opcional (`entrada.aggregation`)
+   — **contrato HTTP e paginado inalterado**; sem esse parâmetro, computa como sempre computou.
+2. `reconciliation.js#agregarAnalyticsCompleto` passou a computar a agregação **uma vez** e
+   reaproveitá-la em todas as páginas do catálogo que `GET /reconciliation` precisa varrer (contrato
+   dessa rota **inalterado** — mesmos itens, mesma ordem). O lado Commerce virou `getCommerceUnitsAggregation`,
+   reaproveitável.
+3. `opportunity-diagnostics.js` **parou de tocar o catálogo inteiro**: os sinais 1-3 e 5 leem o Map
+   de `prepareStoreAnalytics` direto (O(itemIds)); o sinal 4 cruza esse Map com `getCommerceUnitsAggregation`
+   (O(pedidos pagos), nunca O(catálogo)); só os vencedores finais (depois de rankear e cortar em
+   `limit`) têm nome/imagem resolvidos, em UM `catalogRepository.getByIds` em lote.
+
+Complexidade resultante: **O(itemIds + produtos-commerce-ativos + candidatos finais)** — nunca mais
+O(páginas × itemIds), exatamente o critério arquitetural do comando.
+
+## 3. Chamadas de resolução de identidade — antes/depois
+
+| | Antes | Depois |
+|---|---|---|
+| Por chamada a `getOpportunities` (85k produtos, 20k itemIds) | ~425-850 (1-2 por página interna × 2 passagens independentes) | **1-2** (medido: 2 na chamada fria, 1 na quente — a diferença é o sinal de divergência checando produtos sem atividade GA4 no período) |
+| Escala com o catálogo? | Sim — O(páginas) | **Não** — O(1) por chamada, independente do catálogo |
+
+## 4. Queries e chamadas repetidas por página — antes/depois
+
+**Antes:** nunca medido com precisão — a chamada não terminava em 23+ minutos, tornando a contagem
+exata impraticável de capturar; a análise de código confirma centenas a milhares de queries (cada
+página fazendo, no mínimo, 1 query de resolução de identidade + 1 de catálogo).
+
+**Depois** (medido, `getOpportunities` completo, 85k produtos): **4 queries SQL** na chamada fria, **2
+na chamada quente** — nenhuma delas repetida por página, porque não há mais paginação de catálogo
+neste caminho.
+
+## 5. Tempo de `/journey/opportunities` — 85k produtos / 20k itemIds
+
+| Cenário | Antes | Depois |
+|---|---|---|
+| Frio (cache de relatório GA4 vazio) | **>23 minutos, nunca terminou** (interrompido deliberadamente na rodada anterior) | **6,49s** |
+| Quente (mesmo período, relatório já cacheado) | não aplicável (nunca chegou a terminar pra medir) | **5,61s** |
+
+**Meta de engenharia do comando: até 30s com cache aquecido.** Atingida com folga — inclusive **na
+chamada FRIA**, que já fica bem abaixo dos 30s sem depender de nenhum aquecimento prévio.
+
+## 6. Tempo para catálogo pequeno/médio
+
+Cenário separado (2.000 produtos, 800 itemIds GA4, 150 pedidos pagos, mesmo formato): **109ms**.
+Praticamente instantâneo — confirma que o custo agora escala com o volume de ATIVIDADE (itemIds
+observados, pedidos pagos), não com o tamanho do catálogo.
+
+## 7. Pico de memória e tamanho do payload
+
+| Fase | Heap PICO | RSS PICO | Payload (JSON) |
+|---|---|---|---|
+| `runCatalogSync` (85k) | 36,4MB | 112,5MB | — |
+| `bootstrapCommerceIdentities` (85k) | 7,5MB | 80,4MB | — |
+| `getOpportunities` frio (85k) | 56,9MB | 122,5MB | 4,1KB |
+| `getOpportunities` quente (85k) | 50,5MB | 137,8MB | 4,1KB |
+| `getOpportunities` (2k) | 12,1MB | 76,7MB | 4,1KB |
+
+Nenhum pico chega perto de ser um problema num processo Node típico (centenas de MB disponíveis) —
+e o payload de resposta é pequeno e CONSTANTE (~4KB, já que "Prioridades de hoje" sempre devolve no
+máximo `limit` oportunidades, nunca o catálogo inteiro).
+
+## 8. Comparação dos diagnósticos — prova de que a mediana/cobertura não mudaram indevidamente
+
+**Nunca uma segunda fórmula:** `calcularItemRatios` (itemRatios), `classificarDivergencia` (limiar de
+divergência) e a fórmula de baseline/mediana/`confiabilidade`/`forcaDaEvidencia` são os MESMOS
+usados antes — só a forma de ALIMENTAR essas funções mudou (de "linha de catálogo" pra "entrada do
+Map de agregação"), nunca a matemática em si. `classificarDivergencia` e o `DIVERGENCE_TOLERANCE_PADRAO`
+(10%) agora são exportados de `reconciliation.js` e reaproveitados — `GET /reconciliation` e o sinal
+`units_divergent_ga4_commerce` usam **exatamente a mesma regra**, nunca podem divergir silenciosamente.
+
+**Prova por teste** (25 testes unitários puros, `opportunity-diagnostics.test.js`): todas as
+asserções de negócio da rodada anterior preservadas — baseline nunca puxado pelo próprio produto
+ruim, produto acima do baseline nunca vira oportunidade, volume abaixo do mínimo nunca vira
+oportunidade, não-monotonicidade de contagem nunca quebra, denominador zero nunca vira
+Infinity/NaN, degradação honesta por fonte, `evidenceStrength` nunca "confidence", ranking correto
+num universo de 250+ produtos. **Três casos NOVOS**, adicionados especificamente pra esta correção:
+produto com venda Commerce e ZERO atividade GA4 no período mas identidade já resolvida
+historicamente continua virando candidato a divergência (nunca excluído — exigência explícita do
+comando); o mesmo caso SEM identidade nenhuma corretamente fica fora do sinal (não dá pra comparar);
+um candidato cujo produto some do catálogo entre a agregação e a resolução final é descartado, nunca
+aparece quebrado. Mais um teste de concorrência/reentrância (duas Organizations diferentes na MESMA
+instância de serviço, chamadas concorrentes, nunca cruzam dado; duas chamadas concorrentes da mesma
+Organization devolvem resultado idêntico).
+
+**Prova por integração real** (`product-analytics-http.test.js`, 31/31 — processo real, Postgres
+real, GA4 mock real): `/products`, `/coverage`, `/summary`, `/reconciliation` e `/journey/opportunities`
+continuam com o mesmo comportamento observável de antes (nenhuma assertiva pré-existente precisou
+mudar, exceto a que já tinha mudado nas rodadas anteriores por outro motivo).
+
+## 9. Testes direcionados e invariantes executados
+
+| Suite | Resultado |
+|---|---|
+| `opportunity-diagnostics.test.js` (reescrito pro contrato novo + 4 testes novos: identidade histórica, sem identidade, produto sumiu do catálogo, concorrência/reentrância) | **25/25** |
+| `product-performance-service.test.js` (não modificado nas asserções — checagem de não-regressão do refactor) | **35/35** |
+| `reconciliation.test.js` (idem) | **12/12** |
+| `catalog-sync.test.js`, `journey-analytics-service.test.js`, `product-identity-resolver.test.js`, `catalog-sync-necessario.test.js`, `catalog-sync-automatico.test.js` (não tocados — checagem de que nada ao redor quebrou) | **66/66** agregado |
+| `product-analytics-http.test.js` (processo real completo — `/products`, `/coverage`, `/summary`, `/reconciliation`, `/journey/opportunities`, `/catalog-sync*`) | **31/31** |
+| `tsc -b --noEmit` | limpo |
+| `vite build` | limpo (nenhuma mudança de frontend nesta rodada — não pedida, não feita) |
+
+**Total desta rodada: 173/173 testes, zero falhas.** Somado às rodadas anteriores da mesma feature,
+474 testes direcionados passando (301 + 173), nunca a suíte completa.
+
+## 10. O que falta para o piloto — catálogos grandes já podem usar a tela sem travar?
+
+**Sim.** O bloqueador registrado no fim da rodada anterior ("não deve começar com uma Organization
+cujo catálogo real se aproxime de ~85 mil produtos sem resolver o gargalo primeiro") **está resolvido**:
+medido, com os MESMOS 85 mil produtos/20 mil itemIds/2 mil pedidos do teste de escala anterior,
+`/journey/opportunities` responde em segundos, não minutos, com folga confortável sob a meta de 30s
+do comando.
+
+**Pendências que continuam (não mudaram nesta rodada, registradas nas rodadas anteriores):**
+- Suíte completa (6 shards) + RLS + `contracts:check` + `repo:self-check` — `not_run`.
+- Piloto real contra Organization de produção — sem credencial/autorização nesta sessão.
+- 429/backoff proativo da API real da Ink em varreduras longas (Gate A, rodada de preparação do
+  piloto) — sem mudança nesta rodada, continua como lacuna conhecida de robustez, não de
+  correção.
+- Orçamento de chamadas configurável por tenant no scheduler automático — idem.
+
+## 11. Registro explícito
+
+**A suíte completa de 6 shards continua `not_run`.** Por instrução explícita do usuário nesta e nas
+duas rodadas anteriores, não foi executada — fica como **gate obrigatório antes de abrir PR, fazer
+merge ou deploy**, nunca declarada como aprovada nem como pré-requisito de rodada de desenvolvimento.
+Nenhum push, merge ou deploy foi feito nesta rodada.
