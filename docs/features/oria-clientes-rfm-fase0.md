@@ -302,3 +302,35 @@ Limiares só serão propostos depois de conferir distribuição real, suficiênc
 3. **`order_status` conflitante** e **reembolso parcial**: decidir com o número real.
 4. Só então: snapshots versionados (`as_of`, `regraVersao`, corte efetivo, contagens reconciliáveis), job diário idempotente, segmento congelado e ações do drawer.
 5. Execução integral em CI antes de qualquer merge.
+
+## Rodada 4 — UI RFM noturna
+
+Só interface e leitura: **nenhum limiar, snapshot, job diário, migração ou opção B** foi tocado; a regra continua `rfm-v1:c35267c2`. Todos os números abaixo vêm da fixture **sintética** local (`scripts/clientes/seed-sintetico-rfm.mjs`), nunca da loja.
+
+### R4.1 Decisão de layout
+
+O treemap foi abandonado: segmentos pequenos viravam quadrados sem nome. No lugar, o **RFM Explorer** (`RfmExplorer.tsx`):
+
+- 11 linhas sempre visíveis, na ordem de precedência da regra, agrupadas por ciclo de vida (Fidelidade, Primeira compra, Atenção, Risco, Inativos), com total por grupo. A ordem não muda ao alternar Clientes/Receita.
+- Cada linha é um `<button aria-pressed>` com nome completo, descrição curta, barra proporcional (maior valor = trilha inteira) e coluna fixa de números (`N clientes`, `% da base`, `% da receita`).
+- Segmento pequeno: barra com marca mínima de 2 px (declarada na legenda); o número ao lado é o dado. `0 clientes`/`0,0%` continuam listados com explicação (Perdidos: "Ainda não pode existir: só N dias de histórico (precisa de mais de 365)"). Percentual > 0 que arredondaria a zero aparece como `< 0,1%`.
+- Painel do segmento: sticky ao lado no desktop; embutido sob a linha selecionada em ≤ 720 px (sem rodapé fixo).
+- Painel: nome, etapa, resumo, contagens, critérios R/F/V com o corte em vigor e a data, métricas com tooltip, hipótese de campanha, CTA "Criar campanha com este segmento" (desabilitado com 0 clientes, com o motivo), "Ver clientes"/"Exportar", nota dinâmico × corte fixo e alerta de corte defasado.
+- Também: KPIs compactos em 390, filtros básicos × avançados (recolhidos no celular), dica de rolagem da tabela, drawer com rodapé de um primário no máximo (WhatsApp/e-mail marcados como externos).
+- Transformações em `rfmDistribuicao.ts` (funções puras, testadas); nenhum número é recalculado no cliente.
+
+### R4.2 QA visual e funcional
+
+`apps/panel/scripts/clientes/qa-rfm-ui.mjs` (Playwright; axe-core opcional): 1440×900, 1280×800, 768×1024, 390×844, 549 e 320 (viewport do Playwright). Por viewport: 11 linhas com nome completo, sem rolagem horizontal da página, alvos ≥ 44 px no celular, barras proporcionais à API (Clientes e Receita), aria-label, contraste AA (padrão e selecionado), teclado (Tab/Enter/Espaço, foco visível), menor segmento selecionado, alternância sem novas requisições, axe sem serious/critical. Só no desktop: fluxos (Ver clientes → busca → drawer → fechar mantém filtros; CTA → Audiência → voltar) e estados (carregando, 503 + recuperação, segmento 0, vários segmentos, org vazia, amostra insuficiente, corte defasado com pedidos inseridos e removidos ao final), reduced-motion.
+
+Resultado final: **158/158**. Achados corrigidos no caminho: alvos de 32–40 px no celular (`.cli-segmentado`, "Limpar" do painel), "0,0%" enganoso em segmento não vazio, 6 KPIs em 5+1 no tablet, "1 dias" no drawer, "< 0,1%" quebrando em 3 linhas a 320 px, tag "< 1%" redundante ao lado do percentual. Capturas e `resultado.json` em `apps/panel/relatorios-privados/rfm-ui-noturna/` (ignorado pelo Git; dados sintéticos, sem PII).
+
+### R4.3 Testes
+
+- `test/clientes-rfm-distribuicao.test.js` (13): 11 linhas incl. zeros e < 1%, nomes completos, larguras lineares, marca mínima, ordem estável ao alternar métrica, agrupamento, seleção, explicações de zero, aria-label.
+- Suítes relacionadas (`clientes-*`): 76/76. `smoke-lista` 13/13, `smoke-viewport` 36/36, `tsc` limpo.
+- Suíte completa local (`npm test`, Postgres efêmero em container próprio `oria-rfm-ui-suite`, sem app-role): **1810 testes, 1810 passaram, 0 falhas, 0 cancelados, 0 ignorados**, execução única e integral. Não é CI: o CI remoto não foi executado.
+
+### R4.4 Não tocado / pendências
+
+Limiares, base real, opção B, snapshots, job diário, CI remoto e deploy. Calibração real segue dependendo de acesso autorizado (R3.4). O erro "cadastro da Ink não respondeu" visível na lista em ambiente local é o mock sem cadastro, estado honesto e intencional.
