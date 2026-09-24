@@ -548,3 +548,64 @@ test('cobertura: amostra suficiente ≠ histórico confirmado; só backfill CONC
   assert.equal(completo.coberturaJanelaConfirmada, true);
   assert.equal(completo.backfillConcluidoDesde, sp(400));
 });
+
+// ── Segmento dinâmico × corte de valor materializado (Etapa 3) ─────────────────────────────────────────
+test('segmento RFM salvo: pessoas dinâmicas, corte de valor materializado — novos pedidos movem o P75, a divergência aparece e NADA é reescrito', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const { json: r0 } = await a.req('GET', '/api/admin/clientes/resumo');
+  const criar = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Corte materializado', origem: 'rfm', segmento: 'novos' } });
+  assert.ok([200, 201].includes(criar.status), criar.texto);
+  const id = criar.json.segmento.id;
+  const { rows: [antes] } = await sup.query('SELECT filtros, predicado, rfm_versao, classificado_em FROM segments WHERE id = $1', [id]);
+  const corteSalvo = antes.predicado.valor.maxExclusivo;
+  assert.equal(corteSalvo, r0.rfm.valorAlto);
+
+  // Estado logo depois de salvar: sem divergência.
+  const e0 = (await a.req('GET', '/api/admin/clientes/segmentos/estado')).json;
+  const mine0 = e0.segmentos.find((x) => x.id === id);
+  assert.equal(mine0.divergente, false);
+  assert.equal(mine0.salvo.corte.valor, corteSalvo);
+  assert.equal(mine0.mesmaRegraVersao, true);
+
+  // Chegam 30 pedidos grandes de gente nova: o P75 da base sobe.
+  for (let i = 0; i < 30; i += 1) await pedido(ORG_A, { doc: `7000000${String(i).padStart(4, '0')}`, tel: `5197${String(3000000 + i)}`, email: `g${i}@a.com`, nome: `Grande ${i}`, dias: 3 + (i % 5), valorItem: 1200 + i });
+  const { json: r1 } = await a.req('GET', '/api/admin/clientes/resumo');
+  assert.ok(r1.rfm.valorAlto > r0.rfm.valorAlto, `P75 ${r0.rfm.valorAlto} → ${r1.rfm.valorAlto}`);
+  assert.equal(r1.rfm.regraVersao, r0.rfm.regraVersao, 'mesma versão da regra: o hash não cobre o corte');
+
+  const e1 = (await a.req('GET', '/api/admin/clientes/segmentos/estado')).json;
+  const mine = e1.segmentos.find((x) => x.id === id);
+  assert.equal(mine.divergente, true);
+  assert.equal(mine.mesmaRegraVersao, true);
+  assert.equal(mine.salvo.corte.valor, corteSalvo, 'o corte salvo é o de quando foi salvo');
+  assert.equal(mine.atual.corte.valor, r1.rfm.valorAlto, 'o corte efetivo é o P75 de hoje');
+  assert.deepEqual(mine.diferencas.map((d) => d.campo), ['valor.maxExclusivo']);
+  assert.equal(mine.politica.corteDeValor, 'materializado');
+  assert.equal(e1.classificadoEm.slice(0, 10) >= r0.rfm.classificadoEm.slice(0, 10), true);
+
+  // Nada foi reescrito silenciosamente: a linha salva é a mesma.
+  const { rows: [depois] } = await sup.query('SELECT filtros, predicado, rfm_versao, classificado_em FROM segments WHERE id = $1', [id]);
+  assert.deepEqual(depois, antes);
+
+  // A Audiência usa o corte SALVO (número persistido), não o percentil de hoje: bate com a contagem independente feita com o corte salvo.
+  const { rows: pedidosA } = await sup.query(
+    `SELECT buyer_documento, buyer_telefone, buyer_email, payment_status, total_value, criado_em FROM pedidos_ink WHERE organization_id = $1
+      AND COALESCE(NULLIF(buyer_documento,''), NULLIF(buyer_telefone,''), NULLIF(buyer_email,'')) IS NOT NULL ORDER BY criado_em DESC`, [ORG_A]);
+  const prev = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: depois.filtros, exclusions: { semOptIn: false, numeroInvalido: false } } });
+  assert.equal(prev.json.matched, audienciaEsperada(pedidosA, depois.filtros), 'a prévia aplica o corte salvo');
+  const novosHoje = r1.rfm.segmentos.find((x) => x.id === 'novos').clientes;
+  assert.notEqual(prev.json.matched, novosHoje, 'com o corte defasado, a audiência salva difere do segmento de hoje: por isso a divergência é exibida');
+
+  // Criar de novo com a regra de HOJE gera um segmento NOVO (o antigo não é reescrito).
+  const novo = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Corte atual', origem: 'rfm', segmento: 'novos' } });
+  assert.equal(novo.status, 201, novo.texto);
+  assert.notEqual(novo.json.segmento.id, id);
+  assert.equal(novo.json.predicado.valor.maxExclusivo, r1.rfm.valorAlto);
+  const e2 = (await a.req('GET', '/api/admin/clientes/segmentos/estado')).json;
+  assert.equal(e2.segmentos.find((x) => x.id === novo.json.segmento.id).divergente, false);
+  assert.equal(e2.segmentos.find((x) => x.id === id).divergente, true, 'o antigo continua defasado, e visível');
+
+  // Outra Organization não vê segmentos da A.
+  const b = await navegador().entrar('cli-b@teste.oria');
+  assert.equal((await b.req('GET', '/api/admin/clientes/segmentos/estado')).json.segmentos.length, 0);
+});

@@ -9,6 +9,7 @@ import { listTemplates, testarTemplate, type WhatsappTemplate } from '../../api/
 import { listMedia, uploadMedia, type MediaAsset } from '../../api/media';
 import { criarCampanha, editarCampanha, getCampanha, iniciarCampanha, previewAudiencia, type AudienceDefinition } from '../../api/campanhas';
 import { listSegmentos, type Segmento } from '../../api/segments';
+import { AvisoSegmentoRfm } from '../clientes/AvisoSegmentoRfm';
 import { AudienceBuilder, audienceStateDeSalvo, audienceStateParaApi, audienceStateVazio, type AudienceState } from './AudienceBuilder';
 import { PreviewMensagemWeb } from '../../components/PreviewMensagemWeb';
 import { getWhatsappWebResumo, listarMensagensWeb, type MensagemWeb, type WhatsappWebResumo } from '../../api/whatsappWeb';
@@ -499,6 +500,9 @@ export function NovaCampanhaPage() {
                   ))}
                 </select>
               </Field>
+            )}
+            {segmentoSelecionado && segmentos?.find((sg) => sg.id === segmentoSelecionado)?.origem === 'rfm' && (
+              <AvisoSegmentoRfm segmentoId={segmentoSelecionado} />
             )}
             <AudienceBuilder loja={loja} state={audiencia} onChange={setAudiencia} onPreview={setAudienciaPreview} />
           </div>

@@ -382,3 +382,85 @@ test('indicadores: reembolso total em português entra em "pedidos reembolsados"
   assert.equal(r.atual.pedidosReembolsados, 2);
   assert.equal(r.atual.faturamento, 100);
 });
+
+// ── Segmento dinâmico × corte de valor materializado (relógio controlado) ─────────────────────────────
+const { estadoDoSegmentoSalvo, corteDoPredicado } = require('../lib/clientes/segmento');
+
+test('o P75 muda com novos pedidos SEM mudar a versão da regra: o corte salvo fica defasado e a divergência é calculada', () => {
+  const base = baseSuficiente();
+  const r0 = classificarRfm(base, { asOf: AS_OF });
+  const novos0 = r0.segmentos.find((s) => s.id === 'novos');
+  const salvo = { predicado: novos0.predicado, regraVersao: r0.regraVersao, classificadoEm: r0.asOf, rfmSegmento: 'novos' };
+
+  // Mesma base, mesmo instante: nada diverge.
+  const igual = estadoDoSegmentoSalvo(salvo, classificarRfm(base, { asOf: AS_OF }));
+  assert.equal(igual.divergente, false);
+  assert.deepEqual(igual.diferencas, []);
+  assert.equal(igual.pessoas.comRegraSalva, igual.pessoas.comRegraAtual);
+
+  // Chegam 25 pedidos grandes recentes (novos clientes de alto valor): o P75 sobe. A configuração é a mesma → mesma versão.
+  const maisPedidos = [...base, ...Array.from({ length: 25 }, (_, i) => cliente(`grande${i}`, [pedido(2 + (i % 5), 900 + i)]))];
+  const r1 = classificarRfm(maisPedidos, { asOf: AS_OF });
+  assert.ok(r1.valorAlto > r0.valorAlto, `P75 ${r0.valorAlto} → ${r1.valorAlto}`);
+  assert.equal(r1.regraVersao, r0.regraVersao, 'o hash cobre a configuração, não o corte: a versão NÃO denuncia a mudança');
+
+  const estado = estadoDoSegmentoSalvo(salvo, r1);
+  assert.equal(estado.mesmaRegraVersao, true);
+  assert.equal(estado.divergente, true, 'o corte salvo não é mais o percentil de hoje');
+  assert.deepEqual(estado.diferencas.map((d) => d.campo), ['valor.maxExclusivo']);
+  assert.equal(estado.salvo.corte.valor, r0.valorAlto);
+  assert.equal(estado.atual.corte.valor, r1.valorAlto);
+  assert.equal(estado.salvo.corte.sentido, 'abaixo_de');
+  assert.equal(estado.politica.corteDeValor, 'materializado');
+  assert.equal(estado.politica.pessoas, 'dinamico');
+  // As pessoas: pela regra salva (corte antigo, mais baixo) entra gente que pela regra de hoje é "Novos"… ou o contrário.
+  assert.notEqual(estado.pessoas.comRegraSalva, estado.pessoas.comRegraAtual);
+  // O que foi salvo NÃO foi reescrito por dentro da função.
+  assert.equal(salvo.predicado.valor.maxExclusivo, r0.valorAlto);
+});
+
+test('o P75 também pode cair; segmento sem corte de valor não diverge por isso, só se a regra de recência/frequência mudar', () => {
+  const base = baseSuficiente();
+  const r0 = classificarRfm(base, { asOf: AS_OF });
+  const baratos = [...base, ...Array.from({ length: 80 }, (_, i) => cliente(`barato${i}`, [pedido(3 + (i % 20), 10)]))];
+  const r1 = classificarRfm(baratos, { asOf: AS_OF });
+  assert.ok(r1.valorAlto < r0.valorAlto);
+  const aguardando = r0.segmentos.find((s) => s.id === 'aguardando_recompra');
+  assert.equal(aguardando.predicado.valor, null, 'esse segmento não usa valor');
+  const est = estadoDoSegmentoSalvo({ predicado: aguardando.predicado, regraVersao: r0.regraVersao, classificadoEm: r0.asOf, rfmSegmento: 'aguardando_recompra' }, r1);
+  assert.equal(est.divergente, false, 'o corte de valor não entra na regra deste segmento');
+  assert.equal(est.salvo.corte, null);
+  // Mudar a configuração (limites de recência) diverge E muda a versão da regra.
+  const r2 = classificarRfm(base, { asOf: AS_OF, limitesRecenciaDias: [30, 60, 120, 270] });
+  const est2 = estadoDoSegmentoSalvo({ predicado: aguardando.predicado, regraVersao: r0.regraVersao, classificadoEm: r0.asOf, rfmSegmento: 'aguardando_recompra' }, r2);
+  assert.equal(est2.divergente, true);
+  assert.equal(est2.mesmaRegraVersao, false);
+  assert.ok(est2.diferencas.some((d) => d.campo === 'recencia.min'));
+});
+
+test('relógio: com o tempo a recência avança, mas o corte de valor só muda quando a base muda', () => {
+  const base = baseSuficiente();
+  const hoje = classificarRfm(base, { asOf: AS_OF });
+  const daqui40 = classificarRfm(base, { asOf: new Date(AS_OF.getTime() + 40 * 86_400_000) });
+  assert.equal(daqui40.regraVersao, hoje.regraVersao);
+  // Mesmos pedidos, 40 dias depois: as mesmas compras continuam dentro da janela de 365 dias e o P75 não se move.
+  assert.equal(daqui40.valorAlto, hoje.valorAlto);
+  const novos = hoje.segmentos.find((s) => s.id === 'novos');
+  const est = estadoDoSegmentoSalvo({ predicado: novos.predicado, regraVersao: hoje.regraVersao, classificadoEm: hoje.asOf, rfmSegmento: 'novos' }, daqui40);
+  assert.equal(est.divergente, false, 'a regra é numérica: o tempo passar não altera o predicado');
+  assert.ok(Number.isInteger(est.pessoas.comRegraSalva) && Number.isInteger(est.pessoas.comRegraAtual), 'contagens presentes');
+  assert.notEqual(est.pessoas.comRegraAtual, hoje.segmentos.find((s) => s.id === 'novos').clientes, 'menos gente é "Novos" 40 dias depois: as PESSOAS são dinâmicas');
+});
+
+test('métrica de valor diferente: a contagem pela regra salva não é comparável e diz por quê', () => {
+  const base = baseSuficiente();
+  const r0 = classificarRfm(base, { asOf: AS_OF });
+  const rTicket = classificarRfm(base, { asOf: AS_OF, valorAltoMetrica: 'ticket_medio' });
+  const novos = r0.segmentos.find((s) => s.id === 'novos');
+  const est = estadoDoSegmentoSalvo({ predicado: novos.predicado, regraVersao: r0.regraVersao, classificadoEm: r0.asOf, rfmSegmento: 'novos' }, rTicket);
+  assert.equal(est.divergente, true);
+  assert.equal(est.pessoas.comRegraSalva, null);
+  assert.match(est.pessoas.motivoSemContagemSalva, /métrica de valor mudou/);
+  assert.equal(corteDoPredicado(null), null);
+  assert.equal(corteDoPredicado({ valor: null }), null);
+});

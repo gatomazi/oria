@@ -143,6 +143,7 @@ export interface ResumoClientes {
     versao: string;
     // Versão da REGRA: algoritmo + hash dos limiares. Muda quando qualquer limiar muda.
     regraVersao: string;
+    configuracao?: { percentilValorAlto: number; valorAltoMetrica: string };
     classificadoEm: string;
     fuso: string;
     janelaFrequenciaDias: number;
@@ -268,4 +269,25 @@ export function criarSegmentoDeFiltros(nome: string, filtros: Record<string, str
 
 export function exportarClientes(filtros: Record<string, string>, quantidadeConfirmada: number) {
   return apiArquivoPost('/api/admin/clientes/exportar', { filtros, quantidadeConfirmada });
+}
+
+// ── Segmento RFM salvo × classificação de hoje ───────────────────────────────────────────────────────
+// Pessoas dinâmicas (reavaliadas a cada uso), corte de valor MATERIALIZADO no número salvo: a divergência é exibida, nada é reescrito.
+export interface CorteDeValor { metrica: 'ltv_janela' | 'ticket_medio'; valor: number; sentido: 'a_partir_de' | 'abaixo_de' }
+
+export interface EstadoSegmentoRfm {
+  id: string;
+  nome: string;
+  rfmSegmento: SegmentoRfmId;
+  salvo: { regraVersao: string | null; classificadoEm: string | null; corte: CorteDeValor | null; predicado: PredicadoRfm | null };
+  atual: { regraVersao: string; classificadoEm: string; corte: CorteDeValor | null; predicado: PredicadoRfm | null; amostraSuficiente: boolean };
+  mesmaRegraVersao: boolean;
+  divergente: boolean;
+  diferencas: { campo: string; salvo: number | string | null; atual: number | string | null }[];
+  pessoas: { comRegraSalva: number | null; comRegraAtual: number | null; motivoSemContagemSalva: string | null };
+  politica: { pessoas: 'dinamico'; corteDeValor: 'materializado'; texto: string };
+}
+
+export function getEstadoSegmentosRfm() {
+  return api<{ classificadoEm: string; regraVersao: string; amostraSuficiente: boolean; segmentos: EstadoSegmentoRfm[] }>('/api/admin/clientes/segmentos/estado');
 }

@@ -3,6 +3,7 @@ import type { ResumoClientes, SegmentoResumo } from '../../api/clientes';
 import { formatValor } from '../../lib/format';
 import { GrupoBadge } from './RfmMatriz';
 import { decimal, descreverPredicado, numero, pct } from './rfmTexto';
+import { rotuloCorte } from './AvisoSegmentoRfm';
 
 interface Props {
   rfm: ResumoClientes['rfm'];
@@ -92,7 +93,9 @@ export function SegmentoPanel({ rfm, selecionados, criando, onCriarCampanha, onV
       </div>
       {unico && (
         <p className="cli-detalhe__nota">
-          O segmento salvo é <strong>dinâmico</strong>: a audiência é reavaliada a cada uso, com a regra {rfm.regraVersao} de {new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })}. Elegibilidade por canal (opt-in, número válido) é conferida na campanha.
+          O segmento salvo tem <strong>pessoas dinâmicas</strong> (a audiência é reavaliada a cada uso) e <strong>corte de valor fixado</strong>
+          {unico.predicado?.valor ? ` em ${rotuloCorte({ metrica: unico.predicado.valor.metrica ?? 'ltv_janela', valor: (unico.predicado.valor.min ?? unico.predicado.valor.maxExclusivo) as number, sentido: unico.predicado.valor.min != null ? 'a_partir_de' : 'abaixo_de' })} (P{Math.round((rfm.configuracao?.percentilValorAlto ?? 0.75) * 100)} de {new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })})` : ' (este segmento não usa corte de valor)'}
+          , regra {rfm.regraVersao}. Se novos pedidos moverem o percentil, o segmento salvo mantém o corte até você criar outro; a Audiência mostra a divergência. Elegibilidade por canal (opt-in, número válido) é conferida na campanha.
         </p>
       )}
     </aside>

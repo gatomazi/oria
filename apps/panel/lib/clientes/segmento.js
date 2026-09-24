@@ -61,4 +61,61 @@ function filtrosDaConsulta(consulta) {
   return { filtros, naoConvertidos };
 }
 
-module.exports = { filtrosDoPredicado, filtrosDaConsulta, observacoesDoPredicado };
+// ── Segmento RFM salvo × classificação de HOJE ───────────────────────────────────────────────────────
+// Um segmento RFM salvo é DINÂMICO nas pessoas (a audiência é reavaliada a cada uso com os filtros persistidos), mas o corte de
+// valor "alto" é um percentil da população (P75) que foi MATERIALIZADO em número no momento em que o segmento foi salvo
+// (ex.: totalGasto < 242,73). Quando novos pedidos mudam o P75, a regra (`regraVersao`) continua a mesma — o hash cobre a
+// configuração, não o corte —, mas o número salvo deixou de ser o percentil de hoje. Esta função torna a divergência VISÍVEL
+// (regra, `asOf`, corte salvo × corte efetivo, pessoas em cada leitura) sem reescrever nada: quem decide atualizar é o usuário.
+const { casaPredicado } = require('./rfm');
+
+function camposDoPredicado(p) {
+  if (!p) return {};
+  return {
+    'recencia.min': p.recenciaDias ? p.recenciaDias.min : null,
+    'recencia.max': p.recenciaDias ? p.recenciaDias.max : null,
+    'frequencia.min': p.frequencia ? p.frequencia.min : null,
+    'frequencia.max': p.frequencia ? p.frequencia.max : null,
+    'valor.metrica': p.valor ? (p.valor.metrica || 'ltv_janela') : null,
+    'valor.min': p.valor ? p.valor.min : null,
+    'valor.maxExclusivo': p.valor ? p.valor.maxExclusivo : null,
+  };
+}
+
+function corteDoPredicado(p) {
+  if (!p || !p.valor) return null;
+  const valor = p.valor.min != null ? p.valor.min : p.valor.maxExclusivo;
+  return valor == null ? null : { metrica: p.valor.metrica || 'ltv_janela', valor, sentido: p.valor.min != null ? 'a_partir_de' : 'abaixo_de' };
+}
+
+// `salvo`: { predicado, regraVersao, classificadoEm, rfmSegmento }. `rfm`: resultado de `classificarRfm` de agora.
+function estadoDoSegmentoSalvo(salvo, rfm) {
+  const atualDef = rfm.segmentos.find((x) => x.id === salvo.rfmSegmento) || null;
+  const atualPredicado = atualDef ? atualDef.predicado : null;
+  const a = camposDoPredicado(salvo.predicado);
+  const b = camposDoPredicado(atualPredicado);
+  const diferencas = Object.keys(a).filter((k) => a[k] !== b[k]).map((k) => ({ campo: k, salvo: a[k], atual: b[k] === undefined ? null : b[k] }));
+  const mesmaMetrica = (a['valor.metrica'] || null) === (b['valor.metrica'] || null);
+  // Pessoas hoje: (i) segundo a regra SALVA (o que a Audiência devolve se a base fosse só RFM) e (ii) segundo a regra de hoje.
+  let comRegraSalva = null;
+  if (salvo.predicado && mesmaMetrica) comRegraSalva = rfm.clientes.filter((c) => casaPredicado(salvo.predicado, c.r, c.f, c.v)).length;
+  return {
+    salvo: { regraVersao: salvo.regraVersao || null, classificadoEm: salvo.classificadoEm || null, corte: corteDoPredicado(salvo.predicado), predicado: salvo.predicado },
+    atual: { regraVersao: rfm.regraVersao, classificadoEm: rfm.asOf, corte: corteDoPredicado(atualPredicado), predicado: atualPredicado, amostraSuficiente: rfm.amostraSuficiente },
+    mesmaRegraVersao: (salvo.regraVersao || null) === rfm.regraVersao,
+    divergente: diferencas.length > 0,
+    diferencas,
+    pessoas: {
+      comRegraSalva,
+      comRegraAtual: atualDef ? atualDef.clientes : null,
+      motivoSemContagemSalva: comRegraSalva == null ? (mesmaMetrica ? 'sem predicado salvo' : 'a métrica de valor mudou; a contagem pela regra salva não é comparável') : null,
+    },
+    politica: {
+      pessoas: 'dinamico',
+      corteDeValor: 'materializado',
+      texto: 'As pessoas são reavaliadas a cada uso com os filtros salvos; o corte de valor fica fixo no número salvo até um novo segmento ser criado.',
+    },
+  };
+}
+
+module.exports = { filtrosDoPredicado, filtrosDaConsulta, observacoesDoPredicado, estadoDoSegmentoSalvo, corteDoPredicado };

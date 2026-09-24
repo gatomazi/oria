@@ -58,6 +58,9 @@ try {
   const tocavel = (seletor) => page.evaluate((sel) => {
     const els = [...document.querySelectorAll(sel)];
     return els.map((el) => {
+      // Traz o elemento para o meio da tela (como o usuário faria ao rolar): uma barra fixa no topo não conta como "cobertura"
+      // de um botão que está só passando por baixo dela. Rodapé/cabeçalho fixos do drawer já estão sempre visíveis.
+      if (!el.closest('.ds-drawer')) el.scrollIntoView({ block: 'center', inline: 'nearest' });
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return { ok: true, pulado: true };
       // Fora da viewport (precisa rolar) não é "coberto": só confere o que está visível.
@@ -170,6 +173,9 @@ try {
   await page.screenshot({ path: path.join(OUT, '08-audiencia.png'), fullPage: true });
   await semRolagemHorizontal('etapa Audiência');
 
+  // Aviso do segmento RFM: regra, data da classificação, corte salvo e corte de hoje (pessoas dinâmicas, corte materializado).
+  const aviso = await page.locator('.ds-callout', { hasText: 'Segmento RFM' }).first().innerText().catch(() => '');
+  ok('Audiência exibe regra, data, corte salvo e corte de hoje do segmento RFM', /Regra rfm-v1:[0-9a-f]{8}/.test(aviso) && /classificado em/.test(aviso) && /corte salvo/.test(aviso) && /Hoje \(/.test(aviso) && /corte SALVO/.test(aviso), aviso.replace(/\s+/g, ' ').slice(0, 160));
   // O que a tela mostra × o que foi persistido × a prévia calculada pelo servidor.
   const tela = await page.evaluate(() => [...document.querySelectorAll('[aria-label="Campo do filtro"]')].map((sel) => {
     const linha = sel.closest('div');

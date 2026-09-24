@@ -152,7 +152,8 @@ export function ClientesPage() {
     if (!resumo) return;
     setCriando(true);
     try {
-      const nome = `RFM · ${s.nome} · ${dia(resumo.rfm.classificadoEm.slice(0, 10))}`;
+      // Data no fuso da Organização (dataCurta), nunca o dia UTC do ISO: à noite o UTC já é "amanhã".
+      const nome = `RFM · ${s.nome} · ${dataCurta(resumo.rfm.classificadoEm)}`;
       const r = await criarSegmentoRfm(nome, s.id);
       toast(r.reaproveitado ? 'Segmento já existia com esta regra: reaproveitado.' : 'Segmento dinâmico criado.', 'sucesso');
       navigate(`/admin/campanhas/nova?segmento=${encodeURIComponent(r.segmento.id)}`);

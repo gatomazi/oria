@@ -7849,6 +7849,33 @@ app.post('/api/admin/clientes/exportar', requireAdmin, async (req, res) => {
   }
 });
 
+// Estado dos segmentos RFM salvos frente à classificação de HOJE (só leitura, nada é reescrito): regra, `asOf`, corte de valor
+// salvo × corte efetivo e pessoas em cada leitura. O segmento é dinâmico nas pessoas, mas o corte de valor é materializado.
+app.get('/api/admin/clientes/segmentos/estado', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'segmentos exigem Postgres configurado' });
+  try {
+    const analise = await analisarClientesDaStore();
+    const { rows } = await pgPool.query(
+      `SELECT id, nome, rfm_segmento, rfm_versao, classificado_em, predicado FROM segments WHERE origem = 'rfm' ORDER BY criado_em DESC`
+    );
+    res.json({
+      classificadoEm: analise.rfm.asOf,
+      regraVersao: analise.rfm.regraVersao,
+      amostraSuficiente: analise.rfm.amostraSuficiente,
+      segmentos: rows.map((r) => ({
+        id: String(r.id), nome: r.nome, rfmSegmento: r.rfm_segmento,
+        ...clientesSegmento.estadoDoSegmentoSalvo(
+          { predicado: r.predicado, regraVersao: r.rfm_versao, classificadoEm: r.classificado_em, rfmSegmento: r.rfm_segmento },
+          analise.rfm,
+        ),
+      })),
+    });
+  } catch (err) {
+    console.error(`[CLIENTES] falha ao calcular estado dos segmentos RFM: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível comparar os segmentos salvos com a classificação atual' });
+  }
+});
+
 // Salva o público como segmento de Campanhas. A definição é RECALCULADA aqui, a partir da RFM/consulta atuais: o
 // cliente nunca envia o predicado. Fica dinâmica (reavaliada a cada uso) e registra origem, versão e data de classificação.
 app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
