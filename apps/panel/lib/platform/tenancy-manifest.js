@@ -304,6 +304,16 @@ const TABELAS_PLATAFORMA = Object.freeze([
   // Fase F.1 · propostas de Product Enrichment (migration 0036). Filho de creative_products (tenant-owned,
   // vem antes na ordem de criação); nunca aplica sozinha — aprovar é o que grava em creative_products.
   Object.freeze({ tabela: 'creative_enrichment_proposals', colunaTenant: 'organization_id' }),
+  // Fase D · catálogo canônico de Commerce (lib/connectors/*, lib/product-analytics/catalog-sync.js).
+  // Nasce com organization_id/store_id explícitos — nunca teve `loja`. Ordem importa: variants e o
+  // log de sync são filhos de commerce_products só pela FK composta, não pela regra 'pai' (essa é
+  // exclusiva de TABELAS_TENANT — ver tenancy-schema.test.js).
+  Object.freeze({ tabela: 'commerce_products', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'commerce_product_variants', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'commerce_catalog_sync_logs', colunaTenant: 'organization_id' }),
+  // Fase F · Product Identity (lib/product-analytics/product-identity-resolver.js). Mesmo motivo:
+  // nasce com organization_id/store_id explícitos, filha de commerce_products só por FK composta.
+  Object.freeze({ tabela: 'product_external_identities', colunaTenant: 'organization_id' }),
 ]);
 
 // Globais DECLARADAS. Não recebem RLS. A role da aplicação acessa só as de identidade

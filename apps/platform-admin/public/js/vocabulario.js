@@ -18,6 +18,7 @@ export const FEATURES = Object.freeze([
   'meta_ads',
   'google_ads',
   'analytics_ga4',
+  'analytics_product_performance',
   'catalog',
   'exchanges',
   'refunds',
@@ -32,6 +33,7 @@ export const ROTULO_FEATURE = Object.freeze({
   meta_ads: 'Meta Ads',
   google_ads: 'Google Ads',
   analytics_ga4: 'Analytics (GA4)',
+  analytics_product_performance: 'Desempenho de Produtos',
   catalog: 'Catálogo',
   exchanges: 'Trocas',
   refunds: 'Reembolsos',
@@ -44,7 +46,7 @@ export const GRUPOS_DE_FEATURES = Object.freeze([
   Object.freeze({ titulo: 'Comunicação', features: Object.freeze(['whatsapp', 'instagram', 'advancedAutomations']) }),
   Object.freeze({ titulo: 'Financeiro', features: Object.freeze(['financial']) }),
   Object.freeze({ titulo: 'Criativos', features: Object.freeze(['creative_generator']) }),
-  Object.freeze({ titulo: 'Mídia e analytics', features: Object.freeze(['meta_ads', 'google_ads', 'analytics_ga4']) }),
+  Object.freeze({ titulo: 'Mídia e analytics', features: Object.freeze(['meta_ads', 'google_ads', 'analytics_ga4', 'analytics_product_performance']) }),
   // Em transição para capacidade do Connector Ink: continuam no formulário enquanto o painel as
   // conferir como entitlement. Ver docs/architecture/features-vs-connectors.md § Plano de retirada.
   Object.freeze({ titulo: 'Loja (Connector Ink)', features: Object.freeze(['catalog', 'exchanges', 'refunds']) }),

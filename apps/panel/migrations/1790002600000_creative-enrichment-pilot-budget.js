@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const sql = (sentido) => fs.readFileSync(path.join(__dirname, 'sql', `0038-creative-enrichment-pilot-budget.${sentido}.sql`), 'utf8');
+const sql = (sentido) => fs.readFileSync(path.join(__dirname, 'sql', `0041-creative-enrichment-pilot-budget.${sentido}.sql`), 'utf8');
 
 exports.shorthands = undefined;
 exports.up = (pgm) => { pgm.sql(sql('up')); };

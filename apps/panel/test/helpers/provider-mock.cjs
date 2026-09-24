@@ -58,19 +58,38 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     if (metodo === 'PATCH') return json({ product: { id: Number(m[1]), collections: (JSON.parse(corpo || '{}').collections || []) } });
     return json({ product: { id: Number(m[1]), name: `Produto ${m[1]}`, main_image_url: null } });
   }
+  if (p === '/v1/stores/customers' && metodo === 'GET') {
+    // A: já pediu (mesmo documento/telefone do pedido do mock). B: só cadastro, nunca pediu.
+    const A = { id: base + 500, first_name: 'Cliente', last_name: tag, email: `c${tag.toLowerCase()}@exemplo.com`, phone: '11999990000', document: '12345678901', accepts_marketing: true };
+    const B = { id: base + 501, first_name: 'Cadastro', last_name: tag, email: `n${tag.toLowerCase()}@exemplo.com`, phone: '11888880000', document: '99999999999', accepts_marketing: false };
+    // Com `page` o cadastro vem em 2 páginas (A, depois B); sem `page` é a chamada antiga da lista de 100.
+    const pagina = new URL(url, 'http://ink.invalid').searchParams.get('page');
+    if (!pagina) return json({ customers: [A], total_pages: 1 });
+    // Token de teste com `cadastro-falha`: a Ink recusa a leitura paginada do cadastro (fora do ar).
+    if (String(auth || '').includes('cadastro-falha')) return json({ error: 'indisponível' }, 503);
+    return json({ customers: Number(pagina) === 1 ? [A] : [B], page: Number(pagina), total_pages: 2 });
+  }
   if (p === '/v1/stores/product_types') return json({ product_types: [{ id: base + 10, name: 'Camiseta' }] });
   if (p === '/v1/stores/collections' && metodo === 'GET') {
     // Só a Store D traz product_ids na lista (como a Ink de verdade; o painel devolve só a contagem). As demais
     // seguem vazias: o job de categorias em lote lê esta lista para saber o que já está associado.
     const ids = tag === 'D' ? [base + 1, base + 2, base + 3] : [];
-    return json({ collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: ids }], total_pages: 1 });
+    // Com `page` na query a Ink pagina: o mock devolve 3 páginas de 20 itens e ecoa a página pedida.
+    const pagina = new URL(url, 'http://ink.invalid').searchParams.get('page');
+    return json(pagina
+      ? { collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: ids }], page: Number(pagina), total_pages: 3, total_count: 60 }
+      : { collections: [{ id: base + 100, name: `Categoria ${tag}`, product_ids: ids }], total_pages: 1 });
   }
   if (p === '/v1/stores/collections' && metodo === 'POST') {
     return json({ collection: { id: base + 101, name: JSON.parse(corpo || '{}').name || `Categoria ${tag} nova` } }, 201);
   }
   if ((m = p.match(/^\/v1\/stores\/collections\/(\d+)$/))) return json({ collection: { id: Number(m[1]), name: `Categoria ${tag}`, product_ids: [] } });
   if (p === '/v1/stores/product_clusters') {
-    return json({ product_clusters: [{ id: base + 200, default_product_id: base + 1, product_ids: [base + 1, base + 2] }], total_pages: 1 });
+    const pagina = new URL(url, 'http://ink.invalid').searchParams.get('page');
+    const cluster = { id: base + 200, default_product_id: base + 1, product_ids: [base + 1, base + 2] };
+    return json(pagina
+      ? { product_clusters: [cluster], page: Number(pagina), total_pages: 3, total_count: 60 }
+      : { product_clusters: [cluster], total_pages: 1 });
   }
   if ((m = p.match(/^\/v1\/stores\/product_clusters\/(\d+)$/))) {
     return json({ product_cluster: { id: Number(m[1]), default_product_id: base + 1, product_ids: [base + 1, base + 2] } });
@@ -207,12 +226,84 @@ function responder(url, metodo, corpo, auth) {
       return json({ accountSummaries: props.length ? [{ displayName: 'Conta GA', propertySummaries: props.map((i) => ({ property: `properties/${id(i)}`, displayName: `Site ${i}` })) }] : [] });
     }
     case 'analyticsdata.googleapis.com': {
-      // runReport: UMA combinação de UTM, com números proporcionais ao id da propriedade — prova de
-      // qual propriedade foi consultada (e, portanto, de qual Store).
-      const m = p.match(/properties\/(\d+):runReport/);
-      const escala = m ? Number(m[1].slice(-3)) : 1;
-      const linha = { dimensionValues: ['instagram', 'paid_social', 'bf26', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala, escala - 1, 5, escala * 10].map((value) => ({ value: String(value) })) };
-      return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
+      // ── Product Analytics (rodada H→I, lib/connectors/analytics/ga4/) ──────────────────────────
+      // GET properties/{id}/metadata: item-scoped completo (itemId/itemName + as 5 métricas de
+      // item) — nenhum teste legado chama este endpoint, então não há comportamento a preservar.
+      // Rodada K: também traz as dimensões/métricas de aquisição (sessionManual*) e transactionId —
+      // sempre "existem" na propriedade mock; COMPATIBLE ou não é decidido no checkCompatibility.
+      if (metodo === 'GET' && /\/properties\/\d+\/metadata$/.test(p)) {
+        return json({
+          dimensions: [
+            { apiName: 'itemId' }, { apiName: 'itemName' },
+            { apiName: 'sessionManualSource' }, { apiName: 'sessionManualMedium' }, { apiName: 'sessionManualCampaignName' },
+            { apiName: 'transactionId' },
+          ],
+          metrics: [
+            'itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue',
+            'sessions', 'ecommercePurchases', 'totalRevenue', 'transactions', 'purchaseRevenue',
+          ].map((apiName) => ({ apiName })),
+        });
+      }
+      // POST properties/{id}:checkCompatibility: tudo compatível (o mock não simula propriedade
+      // incompatível — isso já tem cobertura própria em test/connectors-analytics-ga4-*.test.js).
+      if (metodo === 'POST' && /:checkCompatibility$/.test(p)) {
+        return json({
+          dimensionCompatibilities: [
+            'itemId', 'itemName', 'sessionManualSource', 'sessionManualMedium', 'sessionManualCampaignName', 'transactionId',
+          ].map((apiName) => ({ dimensionMetadata: { apiName }, compatibility: 'COMPATIBLE' })),
+          metricCompatibilities: [
+            'itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue',
+            'sessions', 'ecommercePurchases', 'totalRevenue', 'transactions', 'purchaseRevenue',
+          ].map((apiName) => ({ metricMetadata: { apiName }, compatibility: 'COMPATIBLE' })),
+        });
+      }
+      const m = p.match(/properties\/(\d+):runReport$/);
+      if (m) {
+        const propertyId = m[1];
+        const escala = Number(propertyId.slice(-3)) || 1;
+        // O corpo decide o formato — 4 formas distintas, na ordem em que são checadas: item-scoped
+        // (Product Analytics), transactionId (Rodada K, lookup pontual), aquisição por canal/campanha
+        // (Rodada K, 3 dimensões) e, por último, o runReport legado (UTM/consolidado, 5 dimensões) —
+        // comportamento LEGADO original, intocado, pra não quebrar teste nenhum.
+        let corpoJson = {};
+        try { corpoJson = JSON.parse(corpo || '{}'); } catch { /* corpo não é JSON: trata como legado */ }
+        const dimNomes = (corpoJson.dimensions || []).map((d) => d.name);
+        const itemScoped = dimNomes.includes('itemId');
+        const transactionScoped = dimNomes.length === 1 && dimNomes[0] === 'transactionId';
+        const acquisitionScoped = dimNomes.length === 3
+          && dimNomes[0] === 'sessionManualSource' && dimNomes[1] === 'sessionManualMedium' && dimNomes[2] === 'sessionManualCampaignName';
+
+        if (itemScoped) {
+          // Números proporcionais ao id da propriedade — mesma prova de "qual property foi
+          // consultada" que o runReport legado já usa (escala vem do id).
+          const linha = {
+            dimensionValues: [{ value: `sku-mock-${propertyId}` }, { value: `Produto Mock ${propertyId}` }],
+            metricValues: [escala * 10, escala * 2, escala, Math.max(1, Math.floor(escala / 2)), escala * 9.9].map((value) => ({ value: String(value) })),
+          };
+          return json({ rows: [linha], rowCount: 1 });
+        }
+        if (transactionScoped) {
+          // A transação "existe" no GA4 mock só quando o transactionId pedido contém `ga4-encontrada`
+          // — qualquer outro valor (incl. um providerOrderId real do Commerce que nunca foi
+          // propagado) devolve `rows: []`, provando o caminho "não encontrada" sem inventar match.
+          const idPedido = corpoJson.dimensionFilter?.filter?.stringFilter?.value || '';
+          if (!idPedido.includes('ga4-encontrada')) return json({ rows: [] });
+          const linha = { dimensionValues: [{ value: idPedido }], metricValues: [{ value: '1' }, { value: String(escala * 9.9) }] };
+          return json({ rows: [linha], rowCount: 1 });
+        }
+        if (acquisitionScoped) {
+          // 2 linhas: 1 canal pago com sessão/campanha reais, 1 "(not set)" (tráfego sem UTM manual)
+          // — prova que o mapper preserva "(not set)" como veio, nunca traduz pra null nem descarta.
+          const linhas = [
+            { dimensionValues: ['instagram', 'paid_social', `campanha-mock-${propertyId}`].map((value) => ({ value })), metricValues: [escala * 5, escala, escala * 45.5].map((value) => ({ value: String(value) })) },
+            { dimensionValues: ['(not set)', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala * 2, 0, 0].map((value) => ({ value: String(value) })) },
+          ];
+          return json({ rows: linhas, rowCount: linhas.length });
+        }
+        const linha = { dimensionValues: ['instagram', 'paid_social', 'bf26', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala, escala - 1, 5, escala * 10].map((value) => ({ value: String(value) })) };
+        return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
+      }
+      return json({}, 404);
     }
     case 'api.openai.com':
       // Chave "inválida" (o texto contém `invalid`): a OpenAI a recusa com 401, como faria de verdade.

@@ -61,10 +61,35 @@ test('Rotas · endereço que não existe mostra "Página não encontrada" (nunca
   assert.match(ler('pages/PaginaNaoEncontrada.tsx'), /Página não encontrada/);
 });
 
+test('Clientes · a tela pagina no servidor (25 por página) e não ordena só a página pelo cabeçalho', () => {
+  const fonte = ler('pages/clientes/ClientesPage.tsx');
+  assert.match(fonte, /const CLIENTES_POR_PAGINA = 25;/);
+  assert.match(fonte, /listClientes\(\{ page: pagina, perPage: CLIENTES_POR_PAGINA, ordem, busca: buscaAplicada, inativoDias: inatividade, tipo \}\)/, 'pede só a página atual, com busca/ordem/filtros');
+  assert.match(fonte, /<option value="sem_pedido">Só cadastro \(nunca pediu\)<\/option>/, 'filtro de quem só tem cadastro');
+  assert.match(fonte, /lista\.cadastro\.disponivel/, 'avisa quando o cadastro da Ink não respondeu');
+  assert.match(fonte, /c\.origem === 'cadastro' \? 'Só cadastro' : 'Sem compra'/, 'a linha diz se é só cadastro');
+  assert.match(fonte, /<Pagination[\s\S]*?onPrev=[\s\S]*?onNext=/, 'rodapé de paginação');
+  assert.match(fonte, /sortable=\{false\}/, 'ordenar pelo cabeçalho reordenaria só a página e enganaria');
+  assert.match(fonte, /rowKey=\{\(c, i\) => c\.loja \+ ':' \+ c\.customerKey \+ ':' \+ i\}/, 'a chave da linha leva a posição: chave repetida duplicaria linhas ao trocar de filtro');
+  assert.doesNotMatch(fonte, /getCustomers|cruzarComCompras/, 'a base é o histórico de pedidos, não a 1ª página do cadastro da Ink');
+  assert.match(ler('api/clientes.ts'), /\/api\/admin\/clientes\/lista\?/);
+});
+
 test('WhatsApp · o card avisa quando a Meta recusa o token, sem sugerir que está tudo conectado', () => {
   const fonte = ler('pages/integracoes/WhatsappRemetenteCard.tsx');
   assert.match(fonte, /Token recusado pela Meta/);
   assert.match(fonte, /dados\.tokenInvalidoEm/);
+});
+
+test('Categorias e Agrupamentos · listas longas são paginadas (25 por página) e mostram o rodapé de paginação', () => {
+  for (const [arquivo, chamada] of [['pages/categorias/CategoriasPage.tsx', 'listCategorias'], ['pages/agrupamentos/AgrupamentosPage.tsx', 'listAgrupamentos']]) {
+    const fonte = ler(arquivo);
+    assert.match(fonte, new RegExp(`${chamada}\\(\\{ page: pagina, perPage: \\w+ \\}\\)`), `${arquivo} pede só a página atual`);
+    assert.match(fonte, /<Pagination[\s\S]*?onPrev=[\s\S]*?onNext=/, `${arquivo} mostra o rodapé de paginação`);
+    assert.match(fonte, /useEffect\(carregar, \[lojaReal, pagina\]\)/, `${arquivo} recarrega ao trocar de página`);
+  }
+  assert.match(ler('pages/categorias/CategoriasPage.tsx'), /const CATEGORIAS_POR_PAGINA = 25;/);
+  assert.match(ler('pages/agrupamentos/AgrupamentosPage.tsx'), /const AGRUPAMENTOS_POR_PAGINA = 25;/);
 });
 
 test('Trocas · o status da troca aparece em português (nunca o código cru da Ink)', () => {
@@ -79,4 +104,13 @@ test('Trocas · o status da troca aparece em português (nunca o código cru da 
 
 test('Categorias · a listagem usa a contagem (product_count), não o array completo de ids', () => {
   assert.match(ler('pages/categorias/CategoriasPage.tsx'), /c\.product_count \?\? \(c\.product_ids \|\| \[\]\)\.length/);
+});
+
+test('Sidebar · Clientes tem item de navegação (a rota existia, mas nada levava até ela)', () => {
+  const nav = ler('shell/nav.ts');
+  assert.match(nav, /key: 'clientes', label: 'Clientes', href: '\/admin\/clientes'/, 'Clientes é item da sidebar');
+  assert.ok(/'clientes':|\bclientes:/.test(nav.slice(nav.indexOf('NAV_ICON_PATHS'))), 'e tem ícone');
+  // Como item de navegação ele fica ativo pelo href; uma entrada em ROUTE_CONTEXT o trataria como "fora do menu" (sem destaque).
+  assert.doesNotMatch(nav, /match: \/\^\\\/admin\\\/clientes/, 'Clientes não é mais rota fora do menu');
+  assert.match(ler('App.tsx'), /path="\/admin\/clientes"/, 'a rota continua registrada');
 });

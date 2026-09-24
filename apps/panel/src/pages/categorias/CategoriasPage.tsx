@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, ConfirmDialog, DataTable, EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge } from '../../components/ds';
-import { formatData } from '../../lib/format';
+import { Button, ConfirmDialog, DataTable, EmptyState, ErrorState, PageHeader, Pagination, Skeleton, StatusBadge } from '../../components/ds';
+import { formatData, plural } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { listCategorias, bulkAtivarCategorias, bulkExcluirCategorias, type Categoria } from '../../api/categorias';
 import { ModalNovaCategoria } from './ModalNovaCategoria';
@@ -13,12 +13,17 @@ import '../../trocas-nova.css';
 import '../../produtos.css';
 import '../../categorias.css';
 
+const CATEGORIAS_POR_PAGINA = 25;
+
 // Porte de src/categorias.js (piloto — Fase 2, docs/plan.md).
 export function CategoriasPage() {
   const lojaSelecionada = useLojaAtiva() ?? '';
   const lojaReal = lojaSelecionada;
 
   const [categorias, setCategorias] = useState<Categoria[] | null>(null);
+  const [pagina, setPagina] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalCategorias, setTotalCategorias] = useState<number | null>(null);
   const [erro, setErro] = useState('');
   const [modalAberto, setModalAberto] = useState(false);
   const [modalLoteAberto, setModalLoteAberto] = useState(false);
@@ -31,12 +36,21 @@ export function CategoriasPage() {
     setErro('');
     setCategorias(null);
     setSelecionadas(new Set());
-    listCategorias()
-      .then((data) => setCategorias((data.categorias || []).slice().sort((a, b) => a.position - b.position)))
+    listCategorias({ page: pagina, perPage: CATEGORIAS_POR_PAGINA })
+      .then((data) => {
+        const lista = data.categorias || [];
+        // Excluir tudo o que restava na última página deixa a página vazia: volta uma.
+        if (lista.length === 0 && pagina > 1) { setPagina(pagina - 1); return; }
+        setCategorias(lista.slice().sort((a, b) => a.position - b.position));
+        setTotalPaginas(data.totalPages ?? 1);
+        setTotalCategorias(data.totalCount ?? null);
+      })
       .catch((err: Error) => setErro(err.message));
   }
 
-  useEffect(carregar, [lojaReal]);
+  // Trocar de loja volta para a primeira página; a seleção nunca atravessa páginas (ação em lote só no que está visível).
+  useEffect(() => { setPagina(1); }, [lojaReal]);
+  useEffect(carregar, [lojaReal, pagina]);
 
   const naoDisponiveis = (categorias || []).filter((c) => !c.is_available);
 
@@ -135,6 +149,16 @@ export function CategoriasPage() {
               { key: 'atualizado', priority: 'low', label: 'Atualizado', align: 'right', muted: true, render: (c) => formatData(c.updated_at), sortValue: (c) => c.updated_at },
             ]}
           />
+          {totalPaginas > 1 && (
+            <Pagination
+              label="Paginação de categorias"
+              page={pagina}
+              totalPages={totalPaginas}
+              totalLabel={totalCategorias != null ? plural(totalCategorias, 'categoria', 'categorias') : undefined}
+              onPrev={() => setPagina((p) => Math.max(1, p - 1))}
+              onNext={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+            />
+          )}
         </>
       )}
 

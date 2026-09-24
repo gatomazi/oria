@@ -15,6 +15,8 @@ const metaActions  = require('./lib/meta/actions');
 const metaInsights = require('./lib/meta/insights');
 const metaCriativos = require('./lib/meta/criativos');
 const financeiroConsolidado = require('./lib/financeiro/consolidado');
+const clientesLista = require('./lib/clientes/lista');
+const clientesCadastro = require('./lib/clientes/cadastro');
 const financeiroDespesas = require('./lib/financeiro/despesas');
 const { resolverMidiaDaOrganizacao } = require('./lib/financeiro/midia');
 const custosPrecos = require('./lib/custos/precos');
@@ -3236,6 +3238,16 @@ app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
 });
 
 
+// Paginação opcional das listas de catálogo: sem `page` a rota mantém o comportamento de sempre (uma página de
+// 100, usada por seletores); com `page` devolve só aquela página e os totais. Entrada validada como inteiro
+// dentro de limites — nunca repassada crua para a Ink.
+function paginaDaQuery(query, { padrao = 25, maximo = 100 } = {}) {
+  const soDigitos = (v) => typeof v === 'string' && /^\d{1,4}$/.test(v);
+  if (!soDigitos(query.page) || Number(query.page) < 1 || Number(query.page) > 1000) return { paginado: false, page: 1, perPage: 100 };
+  const perPage = soDigitos(query.per_page) && Number(query.per_page) >= 1 ? Math.min(Number(query.per_page), maximo) : padrao;
+  return { paginado: true, page: Number(query.page), perPage };
+}
+
 // ── Catálogo — Categorias (Fase 8.2, ver docs/plan.md) ──────────────────
 // Único módulo de catálogo com CRUD completo de verdade (a API documenta DELETE aqui, ao
 // contrário de produtos). `product_ids`/`kit_ids` são substituição TOTAL do array (não soma) —
@@ -3244,7 +3256,10 @@ app.post('/api/admin/produtos/:id/duplicar', requireAdmin, async (req, res) => {
 app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
   const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequestDaStore('/v1/stores/collections?per_page=100');
+    const { paginado, page, perPage } = paginaDaQuery(req.query);
+    const data = await inkApiRequestDaStore(paginado
+      ? `/v1/stores/collections?page=${page}&per_page=${perPage}`
+      : '/v1/stores/collections?per_page=100');
     // A listagem só precisa da CONTAGEM: cada categoria traz `product_ids` com todos os produtos (a maior tem
     // ~100 mil ids), e a tela levava 10+ s só para carregar esse volume. Os ids completos seguem no detalhe
     // (`GET /api/admin/categorias/:id`), que é o que o drawer usa para editar.
@@ -3252,7 +3267,7 @@ app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
       ...resto,
       product_count: Array.isArray(ids) ? ids.length : 0,
     }));
-    res.json({ categorias });
+    res.json({ categorias, page: paginado ? page : 1, totalPages: data.total_pages || 1, totalCount: data.total_count ?? null });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao listar (${loja}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível listar as categorias' });
@@ -7139,7 +7154,10 @@ function migracaoChaveDoProdutoOrigem(nome) {
 app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
   const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
-    const data = await inkApiRequestDaStore('/v1/stores/product_clusters?per_page=100');
+    const { paginado, page, perPage } = paginaDaQuery(req.query);
+    const data = await inkApiRequestDaStore(paginado
+      ? `/v1/stores/product_clusters?page=${page}&per_page=${perPage}`
+      : '/v1/stores/product_clusters?per_page=100');
     const clusters = data.product_clusters || [];
     // Resolve nome/imagem só do produto de vitrine (não de todos os `product_ids`, que pode ser
     // bem maior) — sem isso a listagem só mostrava o id cru do agrupamento e do produto de
@@ -7168,7 +7186,7 @@ app.get('/api/admin/agrupamentos', requireAdmin, async (req, res) => {
         });
       });
     }
-    res.json({ agrupamentos });
+    res.json({ agrupamentos, page: paginado ? page : 1, totalPages: data.total_pages || 1, totalCount: data.total_count ?? null });
   } catch (err) {
     console.error(`[AGRUPAMENTOS] falha ao listar (${loja}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível listar os agrupamentos' });
@@ -7508,6 +7526,48 @@ app.get('/api/admin/clientes', requireAdmin, async (req, res) => {
   }
 });
 
+// Cadastro de clientes da Ink (todas as páginas), com cache curto POR STORE. A chave é montada aqui com a
+// Organization e a Store do contexto — nunca vem do request — e o cache só guarda o cadastro daquela chave.
+const cadastroDeClientesCache = clientesCadastro.criarCacheDoCadastro();
+
+function cadastroDeClientesDaStore() {
+  const chave = `${orgDoContexto()}:${storeDoContexto()}`;
+  return cadastroDeClientesCache.obter(chave, (page) => inkApiRequestDaStore(`/v1/stores/customers?page=${page}&per_page=100`));
+}
+
+// Lista paginada da tela de Clientes: busca, ordenação e filtros rodam aqui, ANTES de fatiar a página, para valerem
+// para a lista inteira (lib/clientes/lista.js). A base é o histórico de pedidos da Organization/Store do contexto
+// MAIS o cadastro da Ink de quem nunca pediu (filtro `tipo`). Se a Ink não responder, a tela segue com quem já pediu
+// e avisa (`cadastro.disponivel: false`) em vez de quebrar.
+app.get('/api/admin/clientes/lista', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'histórico de compras exige Postgres configurado' });
+
+  try {
+    const consulta = clientesLista.normalizarConsulta(req.query);
+    const historico = await buscarClientesAgregados();
+    let base = historico;
+    let cadastro = { incluido: false, disponivel: true, parcial: false, atualizadoEm: null };
+
+    if (consulta.tipo !== 'com_pedido') {
+      try {
+        const registro = await cadastroDeClientesDaStore();
+        base = clientesLista.unirComCadastro(historico, registro.clientes, { loja: chaveDaStore() });
+        cadastro = { incluido: true, disponivel: true, parcial: registro.parcial, atualizadoEm: registro.carregadoEm };
+      } catch (err) {
+        console.error(`[CLIENTES] cadastro da Ink indisponível: ${err.message}`);
+        cadastro = { incluido: false, disponivel: false, parcial: false, atualizadoEm: null };
+        // "Só cadastro" sem cadastro não tem o que mostrar; os demais tipos seguem com o histórico.
+        if (consulta.tipo === 'sem_pedido') base = [];
+      }
+    }
+
+    res.json({ ...clientesLista.listarClientes(base, consulta), cadastro });
+  } catch (err) {
+    console.error(`[CLIENTES] falha ao listar clientes paginados: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível ler os clientes' });
+  }
+});
+
 // Agregado de clientes por loja a partir de pedidos_ink. Extraído de /api/admin/clientes pra ser
 // reaproveitado por calcularAudienciaCampanha (Campanhas/Remarketing) sem duplicar a query.
 // total_gasto/ticket_medio só entram aqui (não em /api/admin/clientes antes disso existir) porque
@@ -7535,10 +7595,14 @@ async function buscarClientesAgregados() {
 
   // Identidade nunca cruza lojas diferentes (mesmo documento podendo se repetir em 2 lojas
   // distintas, cada loja mantém seus próprios registros de cliente) — agrupa por loja primeiro.
+  // A Store nativa grava `loja` NULA nos pedidos; o cliente da Ink chega com a chave da Store
+  // (`chaveDaStore()`). A tela cruza os dois por `loja + documento/telefone`, então a chave precisa ser a mesma.
+  const chaveDoContexto = chaveDaStore();
   const pedidosPorLoja = new Map();
   for (const r of rows) {
-    if (!pedidosPorLoja.has(r.loja)) pedidosPorLoja.set(r.loja, []);
-    pedidosPorLoja.get(r.loja).push(r);
+    const chave = r.loja || chaveDoContexto;
+    if (!pedidosPorLoja.has(chave)) pedidosPorLoja.set(chave, []);
+    pedidosPorLoja.get(chave).push(r);
   }
 
   const agora = Date.now();
@@ -16625,6 +16689,36 @@ app.get('/api/pedidos/:id', async (req, res) => {
 app.get('/hotpix/:id', (req, res) => {
   res.sendFile(path.join(__dirname, 'pedido.html'));
 });
+
+// ── Product Analytics (rodada H→I) ──────────────────────────────────────────────────────────
+//
+// Fases B→G.1 (lib/product-analytics/, lib/connectors/) são bibliotecas puras, sem HTTP. Aqui é a
+// ÚNICA fiação: monta os connectors (Ink `commerce`, GA4 `analytics`) e os services UMA VEZ no
+// boot — nunca por request (o ReportCache do ProductPerformanceService só reaproveita relatório
+// entre requests se a instância sobreviver ao request que a criou; ver
+// lib/product-analytics/composition.js). O router só existe, e só é montado, com `pgPool`
+// disponível — sem Postgres não há RLS, e sem RLS estes serviços não têm o que ler com segurança.
+const { createProductAnalyticsComposition } = require('./lib/product-analytics/composition');
+const { createProductAnalyticsRouter } = require('./lib/product-analytics/http-routes');
+const PRODUCT_ANALYTICS = pgPool
+  ? createProductAnalyticsComposition({
+    pool: pgPool, keyring: CHAVEIRO,
+    googleClientId: process.env.GOOGLE_CLIENT_ID, googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  })
+  : null;
+if (PRODUCT_ANALYTICS) {
+  // `requireAdmin` já resolve auth + Organization/Store da sessão + entitlement
+  // (`analytics_product_performance`, via feature-routes.js → ROTAS) antes de qualquer handler
+  // daqui rodar — nenhum guard extra é reimplementado no router.
+  app.use('/api/admin/product-analytics', requireAdmin, createProductAnalyticsRouter({
+    productPerformanceService: PRODUCT_ANALYTICS.productPerformanceService,
+    reconciliationService: PRODUCT_ANALYTICS.reconciliationService,
+    journeyAnalyticsService: PRODUCT_ANALYTICS.journeyAnalyticsService,
+    registry: PRODUCT_ANALYTICS.registry,
+    analyticsProvider: PRODUCT_ANALYTICS.analyticsProvider,
+    commerceProvider: PRODUCT_ANALYTICS.commerceProvider,
+  }));
+}
 
 // Último middleware do app: todo erro que uma rota, um middleware ou uma promise rejeitada
 // encaminhar para `next(err)` termina aqui, com resposta HTTP controlada e sem stack no corpo.

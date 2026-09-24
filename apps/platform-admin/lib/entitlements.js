@@ -33,6 +33,9 @@ const FEATURES = Object.freeze([
   'meta_ads',
   'google_ads',
   'analytics_ga4',
+  // Rodada H→I (apps/panel): Desempenho de Produtos (GA4 + Commerce reconciliado). Guard real
+  // desde o início — diferente de meta_ads/google_ads/analytics_ga4, que entraram sem rota ligada.
+  'analytics_product_performance',
   // Em transição: já classificadas como connector capability da Reserva Ink, ainda conferidas
   // como entitlement pelo runtime do painel. Saem do vocabulário quando o guard de connector for
   // ligado nas rotas de Catálogo, Trocas e Reembolsos — não antes, senão é 403 em tela que
@@ -62,14 +65,14 @@ const FEATURES_DEPRECIADAS = Object.freeze([
   'creative_multi_product',
 ]);
 
-// Conteúdo VIGENTE do plano técnico `internal`, como as migrations o deixam (0019 + 0024). As
-// quatro chaves depreciadas podem continuar gravadas em `plan_features` até a migration de limpeza
-// (a 0024 é aditiva de propósito) e não fazem parte desta lista. Sem
+// Conteúdo VIGENTE do plano técnico `internal`, como as migrations o deixam (0019 + 0024 + 0033).
+// As quatro chaves depreciadas podem continuar gravadas em `plan_features` até a migration de
+// limpeza (a 0024 é aditiva de propósito) e não fazem parte desta lista. Sem
 // `instagram` e sem `advancedAutomations`, que ninguém mandou ligar.
 //
 // São duas camadas, de propósito:
-//   · as SEIS comerciais — whatsapp, financial, creative_generator, meta_ads, google_ads,
-//     analytics_ga4 — que descrevem o que o Oria entrega;
+//   · as SETE comerciais — whatsapp, financial, creative_generator, meta_ads, google_ads,
+//     analytics_ga4, analytics_product_performance — que descrevem o que o Oria entrega;
 //   · as TRÊS em transição — catalog, exchanges, refunds — que continuam no plano porque o
 //     runtime ainda as confere. Saem do plano junto com a fiação do guard de connector.
 //
@@ -78,6 +81,7 @@ const FEATURES_DEPRECIADAS = Object.freeze([
 // deste plano — há teste conferindo — e não o contrário.
 const FEATURES_INTERNAL = Object.freeze([
   'analytics_ga4',
+  'analytics_product_performance',
   'catalog',
   'creative_generator',
   'exchanges',

@@ -1,6 +1,8 @@
 // Única fonte de verdade da navegação do painel (sidebar, título da aba, breadcrumb da topbar).
 // Itens `comingSoon` ficam declarados aqui mas NÃO aparecem na sidebar (decisão D2 — funcionalidade
 // inexistente não ocupa a navegação); voltam a aparecer quando ganharem `href`.
+import type { Entitlements } from '../state/entitlements';
+
 export interface NavItem {
   key: string;
   label: string;
@@ -9,6 +11,11 @@ export interface NavItem {
   // Só aparece quando o envio do WhatsApp está nesse modo (Integrações → WhatsApp). Sem o campo,
   // aparece sempre.
   provider?: 'meta_api' | 'whatsapp_web';
+  // Rodada H→I: item some da sidebar sem a feature — o guard de verdade continua sendo o backend
+  // (H.1: "esconder navegação não é mecanismo de autorização"); isto é só a navegação respeitando
+  // o que o servidor já nega. Opcional — itens existentes não usam isto ainda (ver
+  // docs/architecture/features-vs-connectors.md sobre o resto do vocabulário).
+  feature?: keyof Entitlements;
 }
 
 export interface NavGroup {
@@ -23,6 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Operação',
     items: [
       { key: 'pedidos-central', label: 'Pedidos', href: '/admin/pedidos-central' },
+      { key: 'clientes', label: 'Clientes', href: '/admin/clientes' },
       { key: 'trocas', label: 'Trocas e devoluções', href: '/admin/trocas' },
       { key: 'recuperacao', label: 'Recuperação', href: '/admin/recuperacao' },
       { key: 'estoque', label: 'Estoque', href: '/admin/estoque' },
@@ -83,6 +91,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'pix-ferramenta', label: 'PIX', href: '/admin/pix' },
       { key: 'utm-tracker', label: 'UTM Tracker', href: '/admin/utm' },
       { key: 'analytics-ga4', label: 'Analytics GA4', href: '/admin/analytics' },
+      { key: 'desempenho-produtos', label: 'Desempenho de produtos', href: '/admin/desempenho-produtos', feature: 'analytics_product_performance' },
+      { key: 'jornada-compra', label: 'Jornada de compra', href: '/admin/jornada-compra', feature: 'analytics_product_performance' },
       { key: 'meta-ads', label: 'Meta Ads', href: '/admin/meta-ads' },
       { key: 'google-ads', label: 'Google Ads', href: '/admin/google-ads' },
       { key: 'criativos', label: 'Gerador de criativos', href: '/admin/criativos' },
@@ -132,6 +142,8 @@ export const PAGE_TITLES: Record<string, string> = {
   'campanhas-segmentos': 'Segmentos',
   'utm-tracker': 'UTM Tracker',
   'analytics-ga4': 'Analytics GA4',
+  'desempenho-produtos': 'Desempenho de produtos',
+  'jornada-compra': 'Jornada de compra',
   'meta-ads': 'Meta Ads',
   'google-ads': 'Google Ads',
   criativos: 'Gerador de criativos',
@@ -148,7 +160,6 @@ export interface RouteContext {
 }
 
 export const ROUTE_CONTEXT: RouteContext[] = [
-  { match: /^\/admin\/clientes\/?$/, title: 'Clientes', group: 'Operação' },
   { match: /^\/admin\/trocas\/nova\/?$/, title: 'Nova troca', parentKey: 'trocas' },
   { match: /^\/admin\/produtos\/novo\/?$/, title: 'Novo produto', parentKey: 'produtos' },
   { match: /^\/admin\/categorias\/associar\/?$/, title: 'Associar produtos', parentKey: 'categorias' },
@@ -168,6 +179,7 @@ export const NAV_ICON_PATHS: Record<string, string> = {
   'visao-geral':
     '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   'pedidos-central': '<path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+  clientes: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.2A5 5 0 0 1 21 19"/>',
   trocas: '<path d="M4 7h13"/><path d="M14 4l3 3-3 3"/><path d="M20 17H7"/><path d="M10 14l-3 3 3 3"/>',
   recuperacao: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
   estoque: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/>',
