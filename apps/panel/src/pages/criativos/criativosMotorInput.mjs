@@ -88,6 +88,14 @@ export function limiteDeProdutos(productMode, regra) {
 // espalhar (`...s`) o objeto da prévia inteiro — só os campos que o backend realmente aceita.
 const CAMPOS_SUBJECT_ACEITOS = ['id', 'role', 'persona', 'age_band', 'relation_to_primary', 'relation_label', 'wears_product_id', 'prominence'];
 
+// Achado real do smoke G.2.1: o contrato do core aceita no máximo 4 `subjects` EXPLÍCITOS por request
+// (contracts.py::MAX_SUBJECTS, espelhado em requests.js::MAX_SUBJECTS) — mesmo quando o PLANO em si (via
+// `angle_family_hint`, sem `subjects`) já produziu 5 ou 6 pessoas de verdade para 5-6 produtos (people_needed
+// == len(products) nos ângulos com pessoa). Reenviar as 5-6 linhas explícitas de "Quem veste o quê" nesse
+// caso é recusado com "subjects: too many items". Nunca inventamos pessoas nem reduzimos produtos para
+// contornar isso — a edição manual simplesmente não é oferecida acima do teto real do contrato.
+export const MAX_SUBJECTS_EDITAVEIS = 4;
+
 // "Quem veste o quê": aplica as edições humanas (subjectId -> wears_product_id | null) SOBRE os
 // `subjects` que a prévia real devolveu — nunca reconstrói persona/role/relation do zero (isso viria
 // do próprio plano, opaco). Sem NENHUMA edição, devolve `undefined` (o request não deve carregar
@@ -98,6 +106,10 @@ export function subjectsComOverride(subjectsDaPrevia, overrides) {
   if (!overrides || !Object.keys(overrides).length || !Array.isArray(subjectsDaPrevia) || !subjectsDaPrevia.length) {
     return undefined;
   }
+  // Acima do teto real do contrato (ver comentário de MAX_SUBJECTS_EDITAVEIS): nunca monta um `subjects`
+  // que o backend vai recusar. A tela não deve nem oferecer a edição nesse caso (ver GerarTabV2.tsx),
+  // mas esta função também não confia só nisso — é a rede de segurança contra estado desatualizado.
+  if (subjectsDaPrevia.length > MAX_SUBJECTS_EDITAVEIS) return undefined;
   return subjectsDaPrevia.map((s) => {
     const limpo = {};
     for (const campo of CAMPOS_SUBJECT_ACEITOS) {

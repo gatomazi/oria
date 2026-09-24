@@ -46,8 +46,8 @@ import {
 import { plural } from '../../lib/format';
 import { ENGINE_LABEL, FUNNEL_STAGE_LABEL, INTENT_DESCRICAO, INTENT_LABEL, type TextoMotor } from './criativosMotores';
 import {
-  CHAVES_FUNIL, CHAVES_REMARKETING, funnelOptions, intentsDisponiveis, limiteDeProdutos, lista_de, overridesAoTrocarDeMotor,
-  remarketingOptions, restoDe, subjectsComOverride, texto_de, TEXTO_MOTOR_VAZIO,
+  CHAVES_FUNIL, CHAVES_REMARKETING, funnelOptions, intentsDisponiveis, limiteDeProdutos, lista_de, MAX_SUBJECTS_EDITAVEIS,
+  overridesAoTrocarDeMotor, remarketingOptions, restoDe, subjectsComOverride, texto_de, TEXTO_MOTOR_VAZIO,
 } from './criativosMotorInput.mjs';
 
 // Fase E — UI V2 do gerador (Ângulos Limpos, produto único): "backend rico, planner inteligente, UI simples".
@@ -489,7 +489,11 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               options={intentsMotor.map((i) => ({ value: i, title: INTENT_LABEL[i], description: INTENT_DESCRICAO[i] }))}
             />
             {productMode === 'multi_product' && (intent === 'cart' || intent === 'checkout') && (
-              <Switch checked={cesta} onChange={setCesta} label="Estes produtos são o carrinho/pedido real do cliente" />
+              // G.2.1 — achado: `products_source:"basket"` é uma confirmação manual do lojista (o core
+              // não busca nem valida um carrinho/pedido real — não existe id de carrinho no contrato).
+              // Sem isso ligado, o core recusa cart/checkout em multipeça (UNSUPPORTED_PRODUCT_MODE).
+              <Switch checked={cesta} onChange={setCesta} label="Estes produtos são o carrinho/pedido real do cliente"
+                description="Confirmação manual sua — o gerador não verifica um carrinho ou pedido de verdade. Isso só libera as composições e o texto de carrinho/checkout." />
             )}
           </FormSection>
         )}
@@ -572,7 +576,21 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               </FormSection>
             )}
 
-            {subjectsDaPrevia.length >= 2 && (
+            {subjectsDaPrevia.length >= 2 && subjectsDaPrevia.length > MAX_SUBJECTS_EDITAVEIS && (
+              // G.2.1 — achado real: o contrato aceita no máximo 4 pessoas explícitas por request
+              // (core `MAX_SUBJECTS`); com 5-6 produtos numa família com pessoa, o motor já monta 5-6
+              // pessoas sozinho (isso funciona — é só a EDIÇÃO manual, linha a linha, que o contrato não
+              // aceita de volta). Nunca oferecemos uma edição que o backend vai recusar.
+              <FormSection title="Quem veste o quê" description={`O motor montou ${subjectsDaPrevia.length} pessoas para estes produtos — acima de ${MAX_SUBJECTS_EDITAVEIS}, a atribuição individual não pode ser editada aqui (o contrato aceita no máximo ${MAX_SUBJECTS_EDITAVEIS} pessoas explícitas). A atribuição automática abaixo já é válida para gerar.`}>
+                <ul className="criativos-lista-check">
+                  {subjectsDaPrevia.map((s) => (
+                    <li key={String(s.id)}>{String(s.persona?.label || 'Pessoa')} veste <strong>{String(s.product_name || 'nenhuma peça (apoio)')}</strong></li>
+                  ))}
+                </ul>
+              </FormSection>
+            )}
+
+            {subjectsDaPrevia.length >= 2 && subjectsDaPrevia.length <= MAX_SUBJECTS_EDITAVEIS && (
               <FormSection title="Quem veste o quê" description="Pré-preenchido com a atribuição real do motor. Só muda no request se você editar alguma linha aqui.">
                 <div className="criativos-lista-check">
                   {subjectsDaPrevia.map((s) => {

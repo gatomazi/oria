@@ -127,6 +127,33 @@ test('subjectsComOverride: relation_to_primary/relation_label presentes (não nu
   assert.ok(!('relation_label' in out[1]), 'relation_label null continua ausente mesmo quando relation_to_primary está presente');
 });
 
+// Achado real do smoke G.2.1 (core real, `/v1/plans` direto): com 5-6 produtos numa família com pessoa
+// (people_needed == len(products) nos ângulos com pessoa), o PLANO tem 5-6 subjects — mas o contrato de
+// REQUEST só aceita até 4 `subjects` explícitos (core `MAX_SUBJECTS`/`requests.js::MAX_SUBJECTS`).
+// Reenviar 5-6 linhas editadas era recusado com "subjects: too many items". `subjectsComOverride` nunca
+// deve montar esse array — mesmo com edição pendente.
+test('subjectsComOverride: acima de MAX_SUBJECTS_EDITAVEIS, nunca monta subjects (o backend recusaria)', () => {
+  const cincoPessoas = Array.from({ length: 5 }, (_, i) => ({
+    id: `s${i + 1}`, role: i === 0 ? 'primary' : 'supporting',
+    persona: { label: `Pessoa ${i + 1}` }, wears_product_id: `prod-${i + 1}`, prominence: i === 0 ? 'hero' : 'secondary',
+  }));
+  assert.equal(mod.subjectsComOverride(cincoPessoas, { s1: null }), undefined);
+});
+
+test('subjectsComOverride: exatamente no teto (4 pessoas), a edição funciona normalmente', () => {
+  const quatroPessoas = Array.from({ length: 4 }, (_, i) => ({
+    id: `s${i + 1}`, role: i === 0 ? 'primary' : 'supporting',
+    persona: { label: `Pessoa ${i + 1}` }, wears_product_id: `prod-${i + 1}`, prominence: i === 0 ? 'hero' : 'secondary',
+  }));
+  const out = mod.subjectsComOverride(quatroPessoas, { s1: null });
+  assert.equal(out.length, 4);
+  assert.equal(out[0].wears_product_id, null);
+});
+
+test('MAX_SUBJECTS_EDITAVEIS: é 4, espelhando o contrato real do core (contracts.py::MAX_SUBJECTS)', () => {
+  assert.equal(mod.MAX_SUBJECTS_EDITAVEIS, 4);
+});
+
 // ------------------------------------------------------------------ reset ao trocar de motor
 test('overridesAoTrocarDeMotor: sempre volta a nenhuma edição pendente', () => {
   assert.deepEqual(mod.overridesAoTrocarDeMotor(), {});
