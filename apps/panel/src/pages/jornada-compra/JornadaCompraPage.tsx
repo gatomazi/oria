@@ -4,7 +4,7 @@ import {
   Button, Callout, Card, DataTable, EmptyState, ErrorState, Field, Input, KpiCard, KpiStrip,
   PageHeader, PageStack, Skeleton, StatusBadge, Tabs, Toolbar,
 } from '../../components/ds';
-import { formatValor } from '../../lib/format';
+import { formatValor, formatDia } from '../../lib/format';
 import {
   checkOrderTransactionLink, getJourneyAnalytics, getOpportunities,
   type JourneyAnalyticsResponse, type OrderTransactionLinkResponse, type OpportunitiesResponse, type Opportunity,
@@ -86,12 +86,18 @@ function PrioridadesDeHoje({ periodo }: { periodo: Periodo }) {
   if (erro) return <ErrorState description={erro} onRetry={carregar} />;
   if (!dados) return <Skeleton rows={3} />;
 
+  // Achado da auditoria de preparação do piloto: `commerceReconciliation` também aparece
+  // indisponível quando só o GA4 está desconectado (reconciliação SEMPRE depende dos dois — ver
+  // reconciliation.js) — então "as duas fontes indisponíveis" nunca prova "nenhuma integração
+  // conectada": pode ser só o GA4 faltando com o Commerce já conectado. A mensagem nunca afirma
+  // que NENHUMA das duas está conectada — manda conferir o status real (por fonte) em Integrações,
+  // que é sempre a verdade, em vez de arriscar uma frase errada aqui.
   const semNenhumaFonte = !dados.sources.productFunnel.available && !dados.sources.commerceReconciliation.available;
   if (semNenhumaFonte) {
     return (
       <EmptyState
-        title="Sem fonte conectada para diagnosticar oportunidades"
-        description="Conecte o Google Analytics 4 e/ou o Commerce em Integrações para começar a ver prioridades aqui."
+        title="Nenhuma fonte disponível para diagnosticar oportunidades agora"
+        description="Conectar o Commerce sozinho não é suficiente — a maioria dos sinais depende de comportamento observado pelo GA4. Confira o status de cada integração (GA4, Commerce) em Integrações: uma delas pode precisar ser conectada, ou a conexão pode precisar ser refeita."
       />
     );
   }
@@ -144,7 +150,15 @@ function VisaoGeral({ dados, periodo }: { dados: JourneyAnalyticsResponse; perio
 
   return (
     <div className="ds-stack">
-      <Card title="Prioridades de hoje" description="Onde investigar primeiro, com evidência e ação sugerida — nunca causa comprovada.">
+      {/* Achado da auditoria de preparação do piloto: "Prioridades de hoje" é o nome do recurso
+          (fica assim mesmo com um período de semanas — outros produtos usam o mesmo padrão, ex.:
+          "Tarefas de hoje" que filtra por um intervalo maior), mas sem o período explícito aqui a
+          palavra "hoje" podia soar como "só dados de hoje" quando o filtro no topo da página cobre
+          várias semanas. A descrição agora sempre nomeia o período selecionado. */}
+      <Card
+        title="Prioridades de hoje"
+        description={`Onde investigar primeiro entre ${formatDia(periodo.startDate)} e ${formatDia(periodo.endDate)} — evidência e ação sugerida, nunca causa comprovada.`}
+      >
         <PrioridadesDeHoje periodo={periodo} />
       </Card>
 
