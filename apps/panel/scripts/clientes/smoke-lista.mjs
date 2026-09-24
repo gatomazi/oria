@@ -61,6 +61,8 @@ try {
     return { total, linhas, chips, erro, url: location.search };
   });
   // Violação = chip de segmento ativo E (linha de outro segmento OU total diferente do total do segmento).
+  // Linha do RFM Explorer pelo NOME EXATO do segmento (a linha é um botão com aria-pressed).
+  const linhaDoSegmento = (nome) => page.locator('.rfmx-linha', { has: page.locator('.rfmx-nome', { hasText: new RegExp(`^${nome}$`) }) }).first();
   const violacao = (estado, seg) => {
     if (!estado.chips.some((c) => c === `Segmento: ${rot[seg]}`)) return null; // chip ainda não é o desta etapa
     const estrangeiras = estado.linhas.filter((l) => l !== rot[seg]);
@@ -80,7 +82,7 @@ try {
 
   // ── Cenário 1: resposta lenta (2,5 s) ao aplicar o chip ────────────────────────────────────────
   await page.route('**/api/admin/clientes/lista*', async (r) => { await dorme(2500); await r.continue(); });
-  await page.locator('.cli-legenda .cli-chip', { hasText: 'Novos' }).first().click();
+  await linhaDoSegmento('Novos').click();
   const v1 = await amostrar('novos', 3200);
   ok('1 · com resposta lenta, a lista antiga não fica na tela com o chip novo', v1.length === 0, v1.join(' | '));
   await page.waitForFunction((n) => (document.querySelector('#clientes-lista .ds-toolbar__meta')?.textContent || '').includes(`${n.toLocaleString('pt-BR')} cliente`), verdade.novos);
@@ -96,13 +98,13 @@ try {
   await page.route('**/api/admin/clientes/lista*', async (r) => { n += 1; await dorme(Math.max(100, 2200 - n * 500)); await r.continue(); });
   const violRapida = [];
   for (const nome of ['Hibernando', 'Campeões', 'Novos']) {
-    const chip = page.locator('.cli-legenda .cli-chip', { hasText: nome }).first();
+    const chip = linhaDoSegmento(nome);
     await chip.click(); // seleciona
     await dorme(80);
     await chip.click(); // desmarca, para o segmento final ser o ÚNICO ativo
     await dorme(80);
   }
-  await page.locator('.cli-legenda .cli-chip', { hasText: 'Em risco' }).first().click();
+  await linhaDoSegmento('Em risco').click();
   violRapida.push(...await amostrar('em_risco', 4200));
   ok('2 · troca rápida: nunca aparece linha/total de segmento anterior', violRapida.length === 0, violRapida.join(' | '));
   const f2 = await ler();
@@ -118,7 +120,7 @@ try {
     if (falhas > 0) { falhas -= 1; await r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'serviço indisponível (simulado)' }) }); return; }
     await r.continue();
   });
-  await page.locator('.cli-legenda .cli-chip', { hasText: 'Novos' }).first().click();
+  await linhaDoSegmento('Novos').click();
   await page.waitForSelector('#clientes-lista [role="alert"]');
   const f3 = await ler();
   ok('3 · falha 503: estado de erro verdadeiro, sem linhas antigas nem total antigo', f3.erro && f3.linhas.length === 0 && f3.total == null, `erro ${f3.erro}, linhas ${f3.linhas.length}, total ${f3.total}`);
@@ -127,8 +129,8 @@ try {
   ok('3 · o estado de erro oferece "Tentar novamente"', await tentar.count() === 1);
   if (await tentar.count()) await tentar.click();
   else { // sem botão de nova tentativa: recupera pelo caminho que o usuário teria (trocar o filtro e voltar)
-    await page.locator('.cli-legenda .cli-chip', { hasText: 'Novos' }).first().click();
-    await page.locator('.cli-legenda .cli-chip', { hasText: 'Novos' }).first().click();
+    await linhaDoSegmento('Novos').click();
+    await linhaDoSegmento('Novos').click();
   }
   await page.waitForFunction((t) => (document.querySelector('#clientes-lista .ds-toolbar__meta')?.textContent || '').includes(`${t.toLocaleString('pt-BR')} cliente`), verdade.novos);
   const f3b = await ler();

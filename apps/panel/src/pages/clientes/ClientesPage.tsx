@@ -9,11 +9,13 @@ import { useLojaAtiva, useNomeDaStore } from '../../auth/AuthContext';
 import { adminStores } from '../../state/adminStores';
 import { toast } from '../../lib/toast';
 import {
-  criarSegmentoDeFiltros, criarSegmentoRfm, exportarClientes, filtrosComoObjeto, getResumoClientes, listClientes,
-  type Cliente, type FiltrosAvancados, type IndicadoresPeriodo, type ListaDeClientes, type ResumoClientes, type SegmentoFiltro, type SegmentoResumo,
+  criarSegmentoDeFiltros, criarSegmentoRfm, exportarClientes, filtrosComoObjeto, getEstadoSegmentosRfm, getResumoClientes, listClientes,
+  type Cliente, type EstadoSegmentoRfm, type FiltrosAvancados, type IndicadoresPeriodo, type ListaDeClientes, type ResumoClientes, type SegmentoFiltro, type SegmentoResumo,
 } from '../../api/clientes';
 import { ClienteDrawer } from './ClienteDrawer';
-import { GrupoBadge, RfmMatriz, type MetricaMatriz } from './RfmMatriz';
+import { GrupoBadge, RfmExplorer, type MetricaMatriz } from './RfmExplorer';
+import { alternarSelecao } from './rfmDistribuicao';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 import { SegmentoPanel } from './SegmentoPanel';
 import { concluirCarga, exibicao, iniciarCarga, totalEsperadoDaMatriz, type CargaLista } from './listaEstado';
 import { ESTADO_INICIAL, gravarFiltros, lerFiltros, ROTULOS_AVANCADOS, temAvancados, UF_LISTA, type EstadoFiltros } from './filtrosUrl';
@@ -44,7 +46,8 @@ function Kpis({ resumo }: { resumo: ResumoClientes }) {
   const a = resumo.indicadores.atual;
   const ant: IndicadoresPeriodo | null = resumo.indicadores.comparacao.anterior;
   const comparavel = ant != null;
-  const contexto = comparavel ? `vs. ${dia(resumo.indicadores.comparacao.periodo.de)}–${dia(resumo.indicadores.comparacao.periodo.ate)}` : undefined;
+  // Rótulo curto: as datas do período anterior estão na nota abaixo dos indicadores.
+  const contexto = comparavel ? 'vs. período anterior' : undefined;
   const cartao = (
     title: string, valor: string, atualN: number | null, antN: number | null | undefined, info: string, helper?: string,
   ) => {
@@ -86,7 +89,10 @@ export function ClientesPage() {
   const [busca, setBusca] = useState('');
   const [buscaAplicada, setBuscaAplicada] = useState('');
   const [metrica, setMetrica] = useState<MetricaMatriz>('clientes');
-  const [avancadosAbertos, setAvancadosAbertos] = useState(temAvancados(filtros.avancados));
+  const celular = useMediaQuery('(max-width: 720px)');
+  const [estadosSalvos, setEstadosSalvos] = useState<EstadoSegmentoRfm[]>([]);
+  // Filtros recolhidos por padrão (desktop e celular); abrem sozinhos só se já houver algum ativo na URL.
+  const [avancadosAbertos, setAvancadosAbertos] = useState(temAvancados(filtros.avancados) || filtros.tipo !== 'todos' || !!filtros.inatividade);
 
   const [resumo, setResumo] = useState<ResumoClientes | null>(null);
   const [erroResumo, setErroResumo] = useState('');
@@ -117,6 +123,15 @@ export function ClientesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(carregarResumo, [carregarResumo, escopo]);
 
+  // Segmentos RFM já salvos × corte de hoje (só leitura); usado para avisar corte defasado no painel do segmento.
+  const amostraOk = !!resumo?.rfm.amostraSuficiente;
+  useEffect(() => {
+    if (!amostraOk) return undefined;
+    let atual = true;
+    getEstadoSegmentosRfm().then((r) => { if (atual) setEstadosSalvos(r.segmentos); }).catch(() => { if (atual) setEstadosSalvos([]); });
+    return () => { atual = false; };
+  }, [amostraOk, resumo?.rfm.classificadoEm]);
+
   const chaveLista = JSON.stringify([escopo, filtros, buscaAplicada, tentativa]);
   const vista = exibicao(carga, chaveLista);
   const lista: ListaDeClientes | null = vista.modo === 'ok' ? vista.dados : null;
@@ -143,9 +158,7 @@ export function ClientesPage() {
   const selecionados = useMemo(() => segmentos.filter((s) => (filtros.segmentos as string[]).includes(s.id)), [segmentos, filtros.segmentos]);
 
   function alternarSegmento(id: string) {
-    const atuais = filtros.segmentos;
-    const proximo = (atuais as string[]).includes(id) ? atuais.filter((s) => s !== id) : [...atuais, id as SegmentoFiltro];
-    atualizar({ segmentos: proximo });
+    atualizar({ segmentos: alternarSelecao(filtros.segmentos as string[], id) as SegmentoFiltro[] });
   }
 
   async function criarCampanha(s: SegmentoResumo) {
@@ -221,10 +234,24 @@ export function ClientesPage() {
     setBuscaAplicada('');
     setParams(gravarFiltros({ ...ESTADO_INICIAL, periodo: filtros.periodo }), { replace: true });
   }
+  const filtrosAtivos = Object.values(filtros.avancados).filter(Boolean).length + (filtros.tipo !== 'todos' ? 1 : 0) + (filtros.inatividade ? 1 : 0);
   const podeSalvarFiltros = filtros.segmentos.length === 0 && temAvancados(filtros.avancados);
 
   const clientes = lista?.clientes ?? [];
   const cob = resumo?.cobertura;
+
+  // A tabela pode rolar por dentro (colunas de apoio); quando rola, isso precisa ser perceptível.
+  const tabelaRef = useRef<HTMLDivElement>(null);
+  const [tabelaRola, setTabelaRola] = useState(false);
+  useEffect(() => {
+    const wrap = tabelaRef.current?.querySelector('.ds-table-wrap');
+    if (!wrap || typeof ResizeObserver === 'undefined') return undefined;
+    const ver = () => setTabelaRola(wrap.scrollWidth > wrap.clientWidth + 1);
+    ver();
+    const ro = new ResizeObserver(ver);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [clientes.length, celular]);
 
   // Matriz × lista: mesma regra e mesmo dia de classificação. Se a lista foi classificada em outro dia ou com outra regra
   // que a matriz (base mudou/virou o dia entre as duas leituras), recarrega a matriz em vez de deixar as duas divergirem.
@@ -238,10 +265,10 @@ export function ClientesPage() {
   const historicoConfirmado = !!cob?.backfillConfirmado;
 
   return (
-    <PageStack>
+    <PageStack className="cli-pagina">
       <PageHeader
         title="Clientes"
-        description="Central de inteligência de clientes: indicadores de compra, segmentação RFM explicável e o caminho da análise até a campanha."
+        description="Compras, segmentação RFM e o caminho até a campanha."
         actions={
           <Select aria-label="Período dos indicadores" value={filtros.periodo} onChange={(e) => atualizar({ periodo: e.target.value })}>
             {Object.entries(PERIODOS_ROTULO).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
@@ -249,9 +276,8 @@ export function ClientesPage() {
         }
         meta={resumo && cob && (
           <span className="cli-meta">
-            <span>Período: {dia(resumo.periodo.de)} a {dia(resumo.periodo.ate)}</span>
-            <span>Última sincronização: {cob.ultimoSyncEm ? dataHora(cob.ultimoSyncEm) : 'não registrada'}</span>
-            <span>Histórico sincronizado desde {cob.primeiroPedidoEm ? dataCurta(cob.primeiroPedidoEm) : '—'} · {plural(cob.pedidosTotal, 'pedido', 'pedidos')}</span>
+            <span>{dia(resumo.periodo.de)} a {dia(resumo.periodo.ate)}</span>
+            <span>Sincronizado: {cob.ultimoSyncEm ? dataHora(cob.ultimoSyncEm) : 'não registrado'}</span>
             <StatusBadge tone={historicoConfirmado ? 'success' : 'warning'} label={historicoConfirmado ? 'Backfill concluído' : 'Histórico não confirmado'} />
           </span>
         )}
@@ -264,9 +290,14 @@ export function ClientesPage() {
         <>
           {!historicoConfirmado && (
             <Callout tone="warning" title="Cobertura histórica não confirmada">
-              {cob.leitura}{' '}
-              {cob.ultimoBackfillStatus && cob.ultimoBackfillStatus !== 'concluido' ? `O último backfill está "${cob.ultimoBackfillStatus}". ` : ''}
-              Os números cobrem só os pedidos já sincronizados ({cob.primeiroPedidoEm ? `desde ${dataCurta(cob.primeiroPedidoEm)}` : 'nenhum'}); não os trate como o histórico completo da loja.
+              {numero(cob.historicoObservadoDias)} dias observados, nenhum confirmado por backfill: os números cobrem só os pedidos já sincronizados.
+              <Disclosure summary="Detalhes da cobertura">
+                <p className="cli-aviso">{cob.leitura}</p>
+                <p className="cli-aviso">
+                  {cob.ultimoBackfillStatus && cob.ultimoBackfillStatus !== 'concluido' ? `O último backfill está "${cob.ultimoBackfillStatus}". ` : ''}
+                  Pedidos sincronizados: {plural(cob.pedidosTotal, 'pedido', 'pedidos')}{cob.primeiroPedidoEm ? `, desde ${dataCurta(cob.primeiroPedidoEm)}` : ''}. Não trate estes números como o histórico completo da loja.
+                </p>
+              </Disclosure>
             </Callout>
           )}
           {cob.pedidosSemIdentidade > 0 && (
@@ -275,64 +306,105 @@ export function ClientesPage() {
             </Callout>
           )}
 
-          <Kpis resumo={resumo} />
-          {resumo.indicadores.comparacao.anterior == null && (
-            <p className="ds-form-note">Sem comparação com o período anterior: {resumo.indicadores.comparacao.motivo ?? 'dados incompletos'}.</p>
-          )}
+          <div className="cli-kpis">
+            <Kpis resumo={resumo} />
+            <p className="cli-kpi-nota">
+              Indicadores de {dia(resumo.periodo.de)} a {dia(resumo.periodo.ate)}
+              {resumo.indicadores.comparacao.anterior == null
+                ? ` · sem comparação: ${resumo.indicadores.comparacao.motivo ?? 'dados incompletos'}`
+                : ` · variações contra ${dia(resumo.indicadores.comparacao.periodo.de)} a ${dia(resumo.indicadores.comparacao.periodo.ate)}`}.
+              {' '}A distribuição RFM abaixo usa a base inteira até {dataCurta(resumo.rfm.classificadoEm)} (janela de frequência de {numero(resumo.rfm.janelaFrequenciaDias)} dias) e não muda com este período.
+            </p>
+          </div>
 
-          <Card
-            title="Matriz RFM"
-            description={`Classificação ${resumo.rfm.regraVersao} em ${dataCurta(resumo.rfm.classificadoEm)} · ${numero(resumo.rfm.universo)} clientes com compra válida · janela de frequência ${resumo.rfm.janelaFrequenciaDias} dias · fonte: pedidos sincronizados. Não muda com o período dos indicadores.`}
-            action={(
-              <div className="cli-segmentado" role="group" aria-label="Tamanho das células">
-                {(['clientes', 'receita'] as const).map((m) => (
-                  <button key={m} type="button" aria-pressed={metrica === m} className={metrica === m ? 'is-ativo' : ''} onClick={() => setMetrica(m)}>
-                    {m === 'clientes' ? 'Por clientes' : 'Por receita'}
-                  </button>
-                ))}
-              </div>
-            )}
-          >
-            {!resumo.rfm.amostraSuficiente ? (
+          <Card className="cli-rfm-card">
+            {resumo.rfm.universo === 0 ? (
+              <EmptyState
+                title="Ainda não há compradores classificados"
+                description="Assim que houver pedidos pagos (sem troca) sincronizados, a distribuição por segmento aparece aqui. Sem compradores, não há público para criar campanha."
+              />
+            ) : !resumo.rfm.amostraSuficiente ? (
               <Callout tone="warning" title="Dados insuficientes para classificar com segurança">
-                {resumo.rfm.motivoInsuficiencia}. Mostrar segmentos de recompra com pouca base ou histórico curto seria enganoso; as sugestões de campanha ficam ocultas até haver cobertura.
+                {resumo.rfm.motivoInsuficiencia}. Mostrar segmentos de recompra com pouca base ou histórico curto seria enganoso; as sugestões de campanha ficam ocultas até haver cobertura. Hoje: {numero(resumo.rfm.universo)} {resumo.rfm.universo === 1 ? 'comprador' : 'compradores'} e {numero(resumo.rfm.historicoObservadoDias)} dias observados.
               </Callout>
             ) : (
               <div className="cli-rfm-grade">
-                <RfmMatriz segmentos={segmentos} selecionados={filtros.segmentos as string[]} onToggle={alternarSegmento} metrica={metrica} />
-                <SegmentoPanel
-                  rfm={resumo.rfm}
-                  selecionados={selecionados}
-                  criando={criando}
-                  onCriarCampanha={criarCampanha}
-                  onVerClientes={() => secaoLista.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                  onExportar={abrirExportacao}
-                  onLimpar={() => atualizar({ segmentos: [] })}
+                <RfmExplorer
+                  segmentos={segmentos}
+                  selecionados={filtros.segmentos as string[]}
+                  onToggle={alternarSegmento}
+                  onLimparSelecao={() => atualizar({ segmentos: [] })}
+                  metrica={metrica}
+                  onMetrica={setMetrica}
+                  historicoObservadoDias={resumo.rfm.historicoObservadoDias}
+                  limitePerdidosDias={resumo.rfm.limitesRecenciaDias[3]}
+                  resumoContexto={`classificado em ${dataCurta(resumo.rfm.classificadoEm)} · ${resumo.rfm.regraVersao}`}
+                  contexto={(
+                    <div className="cli-contexto">
+                      <p>Classificação <strong>{resumo.rfm.regraVersao}</strong> em {dataCurta(resumo.rfm.classificadoEm)} sobre {numero(resumo.rfm.universo)} compradores válidos; janela de frequência de {numero(resumo.rfm.janelaFrequenciaDias)} dias. Não muda com o período dos indicadores. Fonte: pedidos sincronizados.</p>
+                      {!cob.coberturaJanelaConfirmada && (
+                        <p>Cobertura da janela de {numero(resumo.rfm.janelaFrequenciaDias)} dias <strong>não confirmada</strong> ({numero(cob.historicoObservadoDias)} dias observados{cob.coberturaConfirmadaDias != null ? `, ${numero(cob.coberturaConfirmadaDias)} confirmados por backfill` : ', nenhum confirmado por backfill'}). Amostra suficiente para classificar não significa histórico completo.</p>
+                      )}
+                      {resumo.rfm.historicoObservadoDias <= resumo.rfm.limitesRecenciaDias[3] && (
+                        <p>Histórico observado de {numero(resumo.rfm.historicoObservadoDias)} dias, menor que o corte de “Perdidos” ({numero(resumo.rfm.limitesRecenciaDias[3])} dias sem comprar): esse segmento só pode aparecer com mais de {numero(resumo.rfm.limitesRecenciaDias[3])} dias de histórico. Seu zero hoje é consequência do histórico, não do comportamento dos clientes.</p>
+                      )}
+                      {!resumo.rfm.janelaAbrangeHistoricoObservado && (
+                        <p>A janela de frequência ({numero(resumo.rfm.janelaFrequenciaDias)} dias) é menor que o histórico observado ({numero(resumo.rfm.historicoObservadoDias)} dias): compras mais antigas contam no LTV, não na frequência.</p>
+                      )}
+                      {resumo.rfm.identidadesSemCompraValida > 0 && (
+                        <p>{plural(resumo.rfm.identidadesSemCompraValida, 'pessoa tem', 'pessoas têm')} pedido, mas nenhum válido (cancelado, reembolsado ou troca): ficam fora da distribuição, no filtro “Sem compra válida”.</p>
+                      )}
+                    </div>
+                  )}
+                  painelInline={celular}
+                  painel={(
+                    <SegmentoPanel
+                      rfm={resumo.rfm}
+                      selecionados={selecionados}
+                      criando={criando}
+                      estadosSalvos={estadosSalvos}
+                      mostrarVazio={false}
+                      onCriarCampanha={criarCampanha}
+                      onVerClientes={() => secaoLista.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      onExportar={abrirExportacao}
+                      onLimpar={() => atualizar({ segmentos: [] })}
+                    />
+                  )}
                 />
+                {!celular && (
+                  <div className="cli-rfm-lateral">
+                    <SegmentoPanel
+                      rfm={resumo.rfm}
+                      selecionados={selecionados}
+                      criando={criando}
+                      estadosSalvos={estadosSalvos}
+                      mostrarVazio
+                      onCriarCampanha={criarCampanha}
+                      onVerClientes={() => secaoLista.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      onExportar={abrirExportacao}
+                      onLimpar={() => atualizar({ segmentos: [] })}
+                    />
+                  </div>
+                )}
+                {celular && selecionados.length > 1 && (
+                  <SegmentoPanel
+                    rfm={resumo.rfm}
+                    selecionados={selecionados}
+                    criando={criando}
+                    estadosSalvos={estadosSalvos}
+                    mostrarVazio={false}
+                    onCriarCampanha={criarCampanha}
+                    onVerClientes={() => secaoLista.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    onExportar={abrirExportacao}
+                    onLimpar={() => atualizar({ segmentos: [] })}
+                  />
+                )}
               </div>
-            )}
-            {!cob.coberturaJanelaConfirmada && (
-              <p className="ds-form-note">
-                Janela de frequência de {resumo.rfm.janelaFrequenciaDias} dias: cobertura <strong>não confirmada</strong> ({numero(cob.historicoObservadoDias)} dias observados{cob.coberturaConfirmadaDias != null ? `, ${numero(cob.coberturaConfirmadaDias)} confirmados por backfill` : ', nenhum confirmado por backfill'}). Amostra suficiente para classificar ({numero(resumo.rfm.universo)} compradores) não significa histórico completo.
-              </p>
-            )}
-            {resumo.rfm.historicoObservadoDias <= resumo.rfm.limitesRecenciaDias[3] && (
-              <p className="ds-form-note">
-                Histórico observado de {numero(resumo.rfm.historicoObservadoDias)} dias, menor que o corte de “Perdidos” ({numero(resumo.rfm.limitesRecenciaDias[3])} dias sem comprar): esse segmento só pode aparecer depois de mais de {numero(resumo.rfm.limitesRecenciaDias[3])} dias de histórico. Seu tamanho zero hoje é consequência do histórico, não do comportamento dos clientes.
-              </p>
-            )}
-            {!resumo.rfm.janelaAbrangeHistoricoObservado && (
-              <p className="ds-form-note">A janela de frequência ({resumo.rfm.janelaFrequenciaDias} dias) é menor que o histórico observado ({numero(resumo.rfm.historicoObservadoDias)} dias): compras mais antigas contam no LTV, não na frequência.</p>
-            )}
-            {resumo.rfm.identidadesSemCompraValida > 0 && (
-              <p className="ds-form-note">
-                {plural(resumo.rfm.identidadesSemCompraValida, 'cliente tem', 'clientes têm')} pedido, mas nenhum válido (cancelado, reembolsado ou troca): ficam fora da matriz, no filtro “Sem compra válida”.
-              </p>
             )}
           </Card>
 
           {resumo.rfm.amostraSuficiente && (
-            <Card flush title="Distribuição por segmento" description="Tabela equivalente à matriz. Números do histórico observado até a data de classificação.">
+            <Disclosure summary="Tabela completa por segmento (ordenável)">
               <DataTable
                 label="Distribuição de clientes por segmento RFM"
                 rows={segmentos}
@@ -362,7 +434,7 @@ export function ClientesPage() {
                   { key: 'pctReceita', label: '% da receita', align: 'right', firstSortDirection: 'desc', render: (s) => pct(s.pctReceita), sortValue: (s) => s.pctReceita },
                 ]}
               />
-            </Card>
+            </Disclosure>
           )}
         </>
       )}
@@ -384,11 +456,6 @@ export function ClientesPage() {
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />
-          <Select aria-label="Filtrar por pedido" value={filtros.tipo} onChange={(e) => atualizar({ tipo: e.target.value as EstadoFiltros['tipo'] })}>
-            <option value="todos">Todos os clientes</option>
-            <option value="com_pedido">Com pedido</option>
-            <option value="sem_pedido">Só cadastro (nunca pediu)</option>
-          </Select>
           <Select aria-label="Ordenar clientes" value={filtros.ordem} onChange={(e) => atualizar({ ordem: e.target.value as EstadoFiltros['ordem'] })}>
             <option value="compras_desc">Mais compras primeiro</option>
             <option value="ltv_desc">Maior LTV primeiro</option>
@@ -396,19 +463,21 @@ export function ClientesPage() {
             <option value="inativos_primeiro">Sem comprar há mais tempo primeiro</option>
             <option value="nome">Nome (A-Z)</option>
           </Select>
-          <Select aria-label="Filtrar por tempo sem comprar" value={filtros.inatividade} onChange={(e) => atualizar({ inatividade: e.target.value })}>
-            <option value="">Qualquer cliente</option>
-            <option value="30">Sem comprar há 30+ dias</option>
-            <option value="60">Sem comprar há 60+ dias</option>
-            <option value="90">Sem comprar há 90+ dias</option>
-            <option value="180">Sem comprar há 180+ dias</option>
-          </Select>
-          <Button variant="ghost" size="sm" aria-expanded={avancadosAbertos} onClick={() => setAvancadosAbertos((v) => !v)}>
-            Filtros avançados{temAvancados(filtros.avancados) ? ' •' : ''}
+          <Button variant="secondary" size="sm" aria-expanded={avancadosAbertos} aria-controls="cli-filtros" onClick={() => setAvancadosAbertos((v) => !v)}>
+            {avancadosAbertos ? 'Ocultar filtros' : `Filtros${filtrosAtivos ? ` (${filtrosAtivos})` : ''}`}
           </Button>
         </Toolbar>
 
-        {avancadosAbertos && <FiltrosAvancadosForm valor={filtros.avancados} onChange={(avancados) => atualizar({ avancados })} />}
+        {avancadosAbertos && (
+          <FiltrosAvancadosForm
+            valor={filtros.avancados}
+            onChange={(avancados) => atualizar({ avancados })}
+            tipo={filtros.tipo}
+            onTipo={(tipo) => atualizar({ tipo })}
+            inatividade={filtros.inatividade}
+            onInatividade={(inatividade) => atualizar({ inatividade })}
+          />
+        )}
 
         {resumo && cob && lista && (
           <div className="cli-universo">
@@ -453,6 +522,7 @@ export function ClientesPage() {
           />
         ) : (
           <>
+            <div ref={tabelaRef} className={['cli-tabela', tabelaRola ? 'cli-tabela--rola' : null].filter(Boolean).join(' ')}>
             <DataTable
               label="Clientes"
               // A ordem é a do seletor, aplicada no servidor sobre a lista inteira; ordenar pelo cabeçalho só
@@ -502,6 +572,8 @@ export function ClientesPage() {
                 { key: 'marketing', priority: 'low', label: 'Marketing', render: (c) => (c.aceitaMarketing ? <StatusBadge tone="info" label="Aceita" /> : '—') },
               ]}
             />
+            </div>
+            {tabelaRola && <p className="cli-dica-scroll">Deslize a tabela para o lado para ver mais colunas →</p>}
             {lista.totalPages > 1 && (
               <Pagination
                 label="Paginação de clientes"
@@ -554,7 +626,13 @@ export function ClientesPage() {
   );
 }
 
-function FiltrosAvancadosForm({ valor, onChange }: { valor: FiltrosAvancados; onChange: (v: FiltrosAvancados) => void }) {
+interface FormFiltrosProps {
+  valor: FiltrosAvancados; onChange: (v: FiltrosAvancados) => void;
+  tipo: EstadoFiltros['tipo']; onTipo: (t: EstadoFiltros['tipo']) => void;
+  inatividade: string; onInatividade: (v: string) => void;
+}
+
+function FiltrosAvancadosForm({ valor, onChange, tipo, onTipo, inatividade, onInatividade }: FormFiltrosProps) {
   const set = (campo: keyof FiltrosAvancados, v: string) => onChange({ ...valor, [campo]: v });
   const numeroCampo = (campo: keyof FiltrosAvancados, rotulo: string) => (
     <Field label={rotulo}>
@@ -565,8 +643,24 @@ function FiltrosAvancadosForm({ valor, onChange }: { valor: FiltrosAvancados; on
     <Field label={rotulo}><Input type="date" value={valor[campo]} onChange={(e) => set(campo, e.target.value)} /></Field>
   );
   return (
-    <Disclosure summary="Faixas de recência, pedidos, LTV, ticket, datas e consentimento" defaultOpen>
+    <div id="cli-filtros" className="cli-filtros">
       <div className="cli-avancados">
+        <Field label="Quem listar">
+          <Select value={tipo} onChange={(e) => onTipo(e.target.value as EstadoFiltros['tipo'])}>
+            <option value="todos">Todos os clientes</option>
+            <option value="com_pedido">Com pedido</option>
+            <option value="sem_pedido">Só cadastro (nunca pediu)</option>
+          </Select>
+        </Field>
+        <Field label="Tempo sem comprar">
+          <Select value={inatividade} onChange={(e) => onInatividade(e.target.value)}>
+            <option value="">Qualquer</option>
+            <option value="30">30+ dias</option>
+            <option value="60">60+ dias</option>
+            <option value="90">90+ dias</option>
+            <option value="180">180+ dias</option>
+          </Select>
+        </Field>
         {numeroCampo('recenciaMin', 'Sem comprar há (dias, mín.)')}
         {numeroCampo('recenciaMax', 'Sem comprar há (dias, máx.)')}
         {numeroCampo('pedidosMin', 'Pedidos válidos (mín.)')}
@@ -594,6 +688,6 @@ function FiltrosAvancadosForm({ valor, onChange }: { valor: FiltrosAvancados; on
         </Field>
       </div>
       <p className="ds-form-note">Produto e categoria ainda não são filtros aqui: só entram quando o dado estiver capturado por cliente de forma confiável. A UF vem do endereço de entrega do pedido mais recente que a informa.</p>
-    </Disclosure>
+    </div>
   );
 }

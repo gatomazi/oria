@@ -80,42 +80,44 @@ try {
   ok('KPIs em grade de 2 colunas e dentro da viewport', kpis.length === 6 && kpis.every((k) => k.l >= 0 && k.r <= W + 1) && new Set(kpis.map((k) => Math.round(k.l))).size <= 2, `${kpis.length} células`);
   await page.screenshot({ path: path.join(OUT, '01-indicadores.png') });
 
-  // ── 2. Treemap e legenda ────────────────────────────────────────────────────────────────────────
-  await page.locator('.cli-treemap').scrollIntoViewIfNeeded();
-  await semRolagemHorizontal('matriz');
-  const celulas = await tocavel('.cli-treemap__celula');
-  ok('nenhuma célula do treemap coberta por outra', celulas.length > 0 && celulas.every((c) => c.ok), `${celulas.length} células`);
-  const larguraTreemap = await page.$eval('.cli-treemap', (e) => e.getBoundingClientRect().width);
-  ok('treemap cabe na viewport', larguraTreemap <= W, `${Math.round(larguraTreemap)}px`);
-  const chips = await tocavel('.cli-legenda .cli-chip');
-  ok('chips da legenda tocáveis', chips.length >= 11 && chips.every((c) => c.ok), `${chips.length} chips`);
-  const alvosPequenos = await page.$$eval('.cli-legenda .cli-chip', (els) => els.filter((e) => e.getBoundingClientRect().height < 28).length);
-  ok('chips com altura mínima de toque (≥ 28px)', alvosPequenos === 0, `${alvosPequenos} abaixo`);
-  await page.screenshot({ path: path.join(OUT, '02-matriz-legenda.png') });
+  // ── 2. RFM Explorer: 11 linhas com nome completo, sem hover/toque ────────────────────────────────
+  await page.locator('.rfmx').scrollIntoViewIfNeeded();
+  await semRolagemHorizontal('distribuição RFM');
+  const linhas = await page.$$eval('.rfmx-linha', (els) => els.map((e) => ({
+    nome: e.querySelector('.rfmx-nome').innerText.trim(), nomeCortado: e.querySelector('.rfmx-nome').scrollWidth > e.querySelector('.rfmx-nome').clientWidth + 1,
+    h: Math.round(e.getBoundingClientRect().height), l: e.getBoundingClientRect().left, r: e.getBoundingClientRect().right, aria: e.getAttribute('aria-label') || '',
+  })));
+  ok('as 11 linhas do RFM Explorer estão presentes (inclusive zero e < 1%)', linhas.length === 11, `${linhas.length} linhas`);
+  ok('nome completo visível em todas, sem truncar (Primeira compra de alto valor, Aguardando recompra…)', linhas.every((l) => !l.nomeCortado) && linhas.some((l) => l.nome === 'Primeira compra de alto valor') && linhas.some((l) => l.nome === 'Aguardando recompra'), linhas.filter((l) => l.nomeCortado).map((l) => l.nome).join(', '));
+  ok('linhas dentro da viewport e com alvo de toque ≥ 44 px', linhas.every((l) => l.l >= 0 && l.r <= W + 1 && l.h >= 44), `alturas ${Math.min(...linhas.map((l) => l.h))}–${Math.max(...linhas.map((l) => l.h))}`);
+  ok('cada linha tem aria-label com nome, clientes e %', linhas.every((l) => /clientes?, [\d,.]+% da base/.test(l.aria)));
+  const coberta = await tocavel('.rfmx-linha');
+  ok('nenhuma linha coberta por outro elemento', coberta.every((c) => c.ok), `${coberta.length} linhas`);
+  await page.screenshot({ path: path.join(OUT, '02-explorer.png') });
 
   // ── 3. Seleção, painel do segmento e CTA ────────────────────────────────────────────────────────
-  await page.locator('.cli-legenda .cli-chip', { hasText: 'Novos' }).first().tap();
-  const painel = page.locator('.cli-detalhe');
+  await page.locator('.rfmx-linha', { has: page.locator('.rfmx-nome', { hasText: /^Novos$/ }) }).first().tap();
+  const painel = page.locator('.segp').first();
   await painel.scrollIntoViewIfNeeded();
-  ok('painel do segmento aparece após selecionar', await painel.locator('.cli-detalhe__titulo', { hasText: 'Novos' }).count() === 1);
+  ok('painel do segmento aparece após selecionar', await painel.locator('.segp__titulo', { hasText: 'Novos' }).count() === 1);
   const cta = painel.getByRole('button', { name: 'Criar campanha com este segmento' });
   const ctaBox = await cta.boundingBox();
   ok('CTA dentro da viewport e com largura útil', ctaBox && ctaBox.x >= 0 && ctaBox.x + ctaBox.width <= W && ctaBox.width > 200, ctaBox ? `${Math.round(ctaBox.width)}px` : 'sem caixa');
-  const cobertos = await tocavel('.cli-detalhe .ds-btn');
+  const cobertos = await tocavel('.segp .ds-btn');
   ok('botões do painel tocáveis', cobertos.every((c) => c.ok));
   await semRolagemHorizontal('painel do segmento');
   await page.screenshot({ path: path.join(OUT, '03-painel-e-cta.png') });
 
   // ── 4. Filtros e tabela ─────────────────────────────────────────────────────────────────────────
   await page.locator('#clientes-lista').scrollIntoViewIfNeeded();
-  await page.getByRole('button', { name: /Filtros avançados/ }).tap();
+  await page.getByRole('button', { name: /^Filtros/ }).tap();
   await page.waitForSelector('.cli-avancados');
   await semRolagemHorizontal('filtros avançados');
   const inputs = await page.$$eval('.cli-avancados input, .cli-avancados select', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, h: r.height }; }));
   ok('campos dos filtros dentro da viewport', inputs.length >= 12 && inputs.every((i) => i.l >= 0 && i.r <= W + 1), `${inputs.length} campos`);
   ok('campos dos filtros com altura de toque (≥ 32px)', inputs.every((i) => i.h >= 32));
   await page.screenshot({ path: path.join(OUT, '04-filtros.png') });
-  await page.getByRole('button', { name: /Filtros avançados/ }).tap();
+  await page.getByRole('button', { name: /Ocultar filtros/ }).tap();
   await page.waitForSelector('table[aria-label="Clientes"] tbody tr');
   const tab = await page.evaluate(() => {
     const wrap = document.querySelector('table[aria-label="Clientes"]').closest('.ds-table-wrap');
@@ -132,6 +134,7 @@ try {
   const drawer = page.locator('.ds-drawer');
   await drawer.waitFor();
   await page.waitForSelector('.cli-drawer');
+  await page.waitForTimeout(400); // fim da animação de entrada do drawer (240 ms)
   const caixa = await drawer.boundingBox();
   ok('drawer ocupa a largura toda da viewport', caixa && caixa.x <= 1 && Math.abs(caixa.width - W) <= 1 && Math.abs(caixa.height - H) <= 1, caixa ? `${Math.round(caixa.width)}×${Math.round(caixa.height)}` : '');
   await semRolagemHorizontal('drawer aberto');
@@ -159,7 +162,7 @@ try {
   await page.locator('.ds-drawer').waitFor({ state: 'detached' });
 
   // ── 6. CTA → segmento → Nova campanha → Audiência ───────────────────────────────────────────────
-  await page.locator('.cli-detalhe').scrollIntoViewIfNeeded();
+  await page.locator('.segp').first().scrollIntoViewIfNeeded();
   await cta.tap();
   await page.waitForURL(/\/admin\/campanhas\/nova\?segmento=\d+/);
   const segId = new URL(page.url()).searchParams.get('segmento');

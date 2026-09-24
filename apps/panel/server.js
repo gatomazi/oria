@@ -7854,10 +7854,12 @@ app.post('/api/admin/clientes/exportar', requireAdmin, async (req, res) => {
 app.get('/api/admin/clientes/segmentos/estado', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'segmentos exigem Postgres configurado' });
   try {
-    const analise = await analisarClientesDaStore();
     const { rows } = await pgPool.query(
       `SELECT id, nome, rfm_segmento, rfm_versao, classificado_em, predicado FROM segments WHERE origem = 'rfm' ORDER BY criado_em DESC`
     );
+    // Sem segmento RFM salvo não há o que comparar: nem calcula a classificação (a tela consulta isto ao abrir Clientes).
+    if (!rows.length) return res.json({ classificadoEm: null, regraVersao: null, amostraSuficiente: null, segmentos: [] });
+    const analise = await analisarClientesDaStore();
     res.json({
       classificadoEm: analise.rfm.asOf,
       regraVersao: analise.rfm.regraVersao,

@@ -1,103 +1,159 @@
-import { Button, Callout } from '../../components/ds';
-import type { ResumoClientes, SegmentoResumo } from '../../api/clientes';
+import { Button, InfoTooltip } from '../../components/ds';
+import type { EstadoSegmentoRfm, PredicadoRfm, ResumoClientes, SegmentoResumo } from '../../api/clientes';
 import { formatValor } from '../../lib/format';
-import { GrupoBadge } from './RfmMatriz';
-import { decimal, descreverPredicado, numero, pct } from './rfmTexto';
+import { GrupoBadge } from './RfmExplorer';
+import { GRUPOS_DESCRICAO } from './rfmDistribuicao';
+import { estiloDe } from './rfmSegmentos';
+import { decimal, numero, pct } from './rfmTexto';
 import { rotuloCorte } from './AvisoSegmentoRfm';
 
+const moeda = (v: number) => formatValor(v) ?? '—';
+type Regra = ResumoClientes['rfm'];
+
+// Critérios R/F/M do segmento, com os cortes EXATOS da regra vigente. Valor: informa qual medida é usada (soma na janela ou
+// ticket) e que o corte é o percentil de hoje — nunca um R$ universal.
+export function criteriosDoSegmento(p: PredicadoRfm | null, rfm: Regra): { chave: 'R' | 'F' | 'V'; rotulo: string; texto: string; nota?: string }[] {
+  if (!p) return [];
+  const r = p.recenciaDias;
+  const recencia = r.max == null ? `há mais de ${numero(r.min - 1)} dias` : r.min === 0 ? `até ${numero(r.max)} dias atrás` : `entre ${numero(r.min)} e ${numero(r.max)} dias atrás`;
+  const itens: { chave: 'R' | 'F' | 'V'; rotulo: string; texto: string; nota?: string }[] = [
+    { chave: 'R', rotulo: 'Recência', texto: `Última compra ${recencia}` },
+  ];
+  if (p.frequencia) {
+    const { min, max } = p.frequencia;
+    const qtd = min != null && max != null ? (min === max ? `${min} ${min === 1 ? 'pedido' : 'pedidos'}` : `${min} a ${max} pedidos`) : min != null ? `${min} ou mais pedidos` : `até ${max} pedidos`;
+    itens.push({ chave: 'F', rotulo: 'Frequência', texto: `${qtd} nos últimos ${numero(rfm.janelaFrequenciaDias)} dias` });
+  } else {
+    itens.push({ chave: 'F', rotulo: 'Frequência', texto: 'Qualquer (fora da janela de frequência)' });
+  }
+  if (p.valor) {
+    const metrica = p.valor.metrica === 'ticket_medio' ? 'ticket médio por pedido' : `soma paga nos últimos ${numero(rfm.janelaFrequenciaDias)} dias`;
+    const percentil = Math.round((rfm.configuracao?.percentilValorAlto ?? 0.75) * 100);
+    itens.push({
+      chave: 'V', rotulo: 'Valor',
+      texto: `${metrica[0].toUpperCase()}${metrica.slice(1)} ${p.valor.min != null ? `a partir de ${moeda(p.valor.min)}` : `abaixo de ${moeda(p.valor.maxExclusivo ?? 0)}`}`,
+      nota: `Corte vigente = P${percentil} da base em ${new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })}; muda quando novos pedidos entram.`,
+    });
+  } else {
+    itens.push({ chave: 'V', rotulo: 'Valor', texto: 'Não entra na regra deste segmento' });
+  }
+  return itens;
+}
+
 interface Props {
-  rfm: ResumoClientes['rfm'];
+  rfm: Regra;
   selecionados: SegmentoResumo[];
   criando: boolean;
+  estadosSalvos: EstadoSegmentoRfm[];
   onCriarCampanha: (s: SegmentoResumo) => void;
   onVerClientes: () => void;
   onExportar: () => void;
   onLimpar: () => void;
+  // Sem nada selecionado: no desktop mostra uma dica; no celular não ocupa espaço.
+  mostrarVazio: boolean;
 }
 
-function Par({ rotulo, valor }: { rotulo: string; valor: string }) {
+function Estatistica({ rotulo, valor, sub }: { rotulo: string; valor: string; sub?: string }) {
   return (
-    <div className="cli-par">
+    <div className="segp-estat">
       <dt>{rotulo}</dt>
-      <dd>{valor}</dd>
+      <dd><strong>{valor}</strong>{sub ? <span>{sub}</span> : null}</dd>
     </div>
   );
 }
 
-// Detalhe do(s) segmento(s) selecionado(s): definição REAL (a regra numérica que o servidor usa), números, hipótese de
-// campanha e as ações. A ação primária só vale para um segmento por vez (a definição salva é uma regra, não uma união).
-export function SegmentoPanel({ rfm, selecionados, criando, onCriarCampanha, onVerClientes, onExportar, onLimpar }: Props) {
+// Painel do segmento selecionado — leitura em ~10 s: quem é, quantos são, qual a regra, o que fazer.
+export function SegmentoPanel({ rfm, selecionados, criando, estadosSalvos, onCriarCampanha, onVerClientes, onExportar, onLimpar, mostrarVazio }: Props) {
   if (!selecionados.length) {
+    if (!mostrarVazio) return null;
     return (
-      <aside className="cli-detalhe cli-detalhe--vazio" aria-live="polite">
-        <h3 className="cli-detalhe__titulo">Selecione um segmento</h3>
-        <p className="cli-detalhe__texto">
-          Clique na matriz ou na legenda para ver a regra do segmento, quantas pessoas ele reúne e criar uma campanha. Dá para marcar vários e comparar; a lista abaixo passa a mostrar só esse público.
-        </p>
-        <p className="cli-detalhe__nota">
-          Classificação <strong>{rfm.regraVersao}</strong> em {new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })}, sobre {numero(rfm.universo)} clientes com compra válida. Janela de frequência: {rfm.janelaFrequenciaDias} dias.
-        </p>
+      <aside className="segp segp--vazio" aria-label="Segmento selecionado">
+        <h3 className="segp__titulo">Escolha um segmento</h3>
+        <p className="segp__texto">Ao selecionar, aparecem aqui a regra exata (recência, frequência e valor), quantas pessoas entram e a ação para criar uma campanha. Dá para marcar vários e comparar.</p>
       </aside>
     );
   }
 
   const unico = selecionados.length === 1 ? selecionados[0] : null;
-  const clientes = selecionados.reduce((acc, s) => acc + s.clientes, 0);
-  const receita = selecionados.reduce((acc, s) => acc + s.receita, 0);
-  const pedidos = selecionados.reduce((acc, s) => acc + s.pedidos, 0);
-  const pctBase = selecionados.reduce((acc, s) => acc + s.pctBase, 0);
-  const pctReceita = selecionados.reduce((acc, s) => acc + s.pctReceita, 0);
+  const clientes = selecionados.reduce((a, s) => a + s.clientes, 0);
+  const receita = selecionados.reduce((a, s) => a + s.receita, 0);
+  const pedidos = selecionados.reduce((a, s) => a + s.pedidos, 0);
+  const pctBase = selecionados.reduce((a, s) => a + s.pctBase, 0);
+  const pctReceita = selecionados.reduce((a, s) => a + s.pctReceita, 0);
+  const defasados = unico ? estadosSalvos.filter((e) => e.rfmSegmento === unico.id && e.divergente) : [];
+  const dataClass = new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso });
+  const grupo = unico ? estiloDe(unico.id).grupo : null;
 
   return (
-    <aside className="cli-detalhe" aria-live="polite">
-      <div className="cli-detalhe__cabecalho">
-        <div>
-          <h3 className="cli-detalhe__titulo">{unico ? unico.nome : `${selecionados.length} segmentos selecionados`}</h3>
-          {unico && <GrupoBadge id={unico.id} />}
+    <aside className="segp" aria-label="Segmento selecionado" aria-live="polite">
+      <header className="segp__topo">
+        <div className="segp__ident">
+          {unico ? <GrupoBadge id={unico.id} /> : null}
+          <h3 className="segp__titulo">{unico ? unico.nome : `${selecionados.length} segmentos`}</h3>
+          <p className="segp__texto">{unico ? (unico.descricao ?? '') : selecionados.map((s) => s.nome).join(' · ')}</p>
+          {grupo && GRUPOS_DESCRICAO[grupo] ? <p className="segp__etapa">Etapa do ciclo: {GRUPOS_DESCRICAO[grupo].toLowerCase()}</p> : null}
         </div>
-        <Button variant="ghost" size="sm" onClick={onLimpar}>Limpar seleção</Button>
-      </div>
+        <Button variant="ghost" size="sm" onClick={onLimpar}>Limpar</Button>
+      </header>
 
-      {unico ? <p className="cli-detalhe__texto">{unico.descricao}</p> : <p className="cli-detalhe__texto">{selecionados.map((s) => s.nome).join(' · ')}</p>}
-
-      {unico?.predicado && (
-        <dl className="cli-regra" aria-label={`Regra do segmento ${unico.nome}`}>
-          {descreverPredicado(unico.predicado).map((l) => <Par key={l.rotulo} rotulo={l.rotulo} valor={l.texto} />)}
-        </dl>
-      )}
-
-      <dl className="cli-numeros">
-        <Par rotulo="Pessoas" valor={numero(clientes)} />
-        <Par rotulo="% da base" valor={pct(pctBase)} />
-        <Par rotulo="% da receita" valor={pct(pctReceita)} />
-        <Par rotulo="Pedidos por cliente" valor={clientes ? decimal(pedidos / clientes) : '—'} />
-        <Par rotulo="Ticket médio" valor={pedidos ? (formatValor(receita / pedidos) ?? '—') : '—'} />
-        <Par rotulo="Receita" valor={formatValor(receita) ?? '—'} />
-        {unico && <Par rotulo="Recência (mediana)" valor={unico.recenciaMedianaDias == null ? '—' : `${numero(unico.recenciaMedianaDias)} dias`} />}
+      <dl className="segp-estats">
+        <Estatistica rotulo="Clientes" valor={numero(clientes)} />
+        <Estatistica rotulo="% da base" valor={pct(pctBase)} />
+        <Estatistica rotulo="% da receita" valor={pct(pctReceita)} />
       </dl>
 
-      {unico?.hipotese && (
-        <p className="cli-detalhe__hipotese"><strong>Hipótese de campanha:</strong> {unico.hipotese} <span>É uma sugestão, não prova de intenção de compra.</span></p>
+      {unico && unico.predicado && (
+        <ul className="segp-criterios" aria-label={`Regra do segmento ${unico.nome}`}>
+          {criteriosDoSegmento(unico.predicado, rfm).map((c) => (
+            <li key={c.chave}>
+              <span className="segp-criterios__letra" aria-hidden="true">{c.chave}</span>
+              <span className="segp-criterios__corpo">
+                <strong>{c.rotulo}</strong> {c.texto}
+                {c.nota ? <em>{c.nota}</em> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
 
-      <div className="cli-detalhe__acoes">
-        {unico ? (
-          <Button onClick={() => onCriarCampanha(unico)} disabled={criando}>{criando ? 'Criando segmento…' : 'Criar campanha com este segmento'}</Button>
-        ) : (
-          <Callout tone="info">Para criar uma campanha, selecione um segmento por vez: o segmento salvo é uma regra única.</Callout>
+      <p className="segp-metricas">
+        <span>Ticket <strong>{pedidos ? moeda(receita / pedidos) : '—'}</strong><InfoTooltip content="Receita ÷ pedidos do segmento, no histórico observado." /></span>
+        <span>Pedidos/cliente <strong>{clientes ? decimal(pedidos / clientes) : '—'}</strong><InfoTooltip content="Média de pedidos válidos por cliente, no histórico observado." /></span>
+        {unico && (
+          <span>Recência mediana <strong>{unico.recenciaMedianaDias == null ? '—' : `${numero(unico.recenciaMedianaDias)} d`}</strong><InfoTooltip content="Dias desde a última compra: metade dos clientes do segmento comprou há menos que isso." /></span>
         )}
-        <div className="cli-detalhe__secundarias">
-          <Button variant="secondary" size="sm" onClick={onVerClientes}>Ver clientes</Button>
-          <Button variant="secondary" size="sm" onClick={onExportar}>Exportar</Button>
-        </div>
-      </div>
-      {unico && (
-        <p className="cli-detalhe__nota">
-          O segmento salvo tem <strong>pessoas dinâmicas</strong> (a audiência é reavaliada a cada uso) e <strong>corte de valor fixado</strong>
-          {unico.predicado?.valor ? ` em ${rotuloCorte({ metrica: unico.predicado.valor.metrica ?? 'ltv_janela', valor: (unico.predicado.valor.min ?? unico.predicado.valor.maxExclusivo) as number, sentido: unico.predicado.valor.min != null ? 'a_partir_de' : 'abaixo_de' })} (P{Math.round((rfm.configuracao?.percentilValorAlto ?? 0.75) * 100)} de {new Date(rfm.classificadoEm).toLocaleDateString('pt-BR', { timeZone: rfm.fuso })})` : ' (este segmento não usa corte de valor)'}
-          , regra {rfm.regraVersao}. Se novos pedidos moverem o percentil, o segmento salvo mantém o corte até você criar outro; a Audiência mostra a divergência. Elegibilidade por canal (opt-in, número válido) é conferida na campanha.
+      </p>
+
+      {unico?.hipotese && (
+        <p className="segp-hipotese"><strong>Hipótese de campanha</strong> {unico.hipotese} <em>É uma hipótese a testar, não previsão de conversão.</em></p>
+      )}
+
+      {defasados.length > 0 && unico && (
+        <p className="segp-alerta" role="status">
+          Já existe segmento salvo com corte defasado ({defasados.map((d) => `${rotuloCorte(d.salvo.corte)} → hoje ${rotuloCorte(d.atual.corte)}`).join('; ')}). O botão abaixo cria um segmento com o corte de hoje; o antigo não é alterado.
         </p>
       )}
+
+      <div className="segp-acoes">
+        {unico ? (
+          <>
+            <Button onClick={() => onCriarCampanha(unico)} disabled={criando || unico.clientes === 0} aria-describedby={unico.clientes === 0 ? 'segp-vazio-motivo' : undefined}>
+              {criando ? 'Criando segmento…' : 'Criar campanha com este segmento'}
+            </Button>
+            {unico.clientes === 0 && <p id="segp-vazio-motivo" className="segp__nota">Sem clientes hoje: não há público para uma campanha.</p>}
+          </>
+        ) : (
+          <p className="segp__nota">Para criar uma campanha, selecione um segmento por vez: o segmento salvo é uma regra única.</p>
+        )}
+        <div className="segp-acoes__sec">
+          <Button variant="secondary" size="sm" onClick={onVerClientes} disabled={clientes === 0}>Ver clientes</Button>
+          <Button variant="secondary" size="sm" onClick={onExportar} disabled={clientes === 0}>Exportar</Button>
+        </div>
+      </div>
+
+      <p className="segp__nota">
+        Público <strong>dinâmico</strong> (reavaliado a cada uso) com <strong>corte de valor fixo</strong> no segmento salvo · classificado em {dataClass} · regra {rfm.regraVersao}. Elegibilidade por canal (opt-in, número válido) é calculada na Audiência.
+      </p>
     </aside>
   );
 }

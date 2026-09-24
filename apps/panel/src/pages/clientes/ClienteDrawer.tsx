@@ -3,7 +3,7 @@ import { Callout, Button, Disclosure, Drawer, ErrorState, MaskedValue, Skeleton,
 import { getDetalheCliente, type DetalheCliente, type PedidoDetalhe } from '../../api/clientes';
 import { PAYMENT_STATUS_MAP, ORDER_STATUS_MAP } from '../../lib/statusMap';
 import { formatValor, plural } from '../../lib/format';
-import { GrupoBadge } from './RfmMatriz';
+import { GrupoBadge } from './RfmExplorer';
 import { dataCurta, dataHora, numero } from './rfmTexto';
 
 const moeda = (v: number | null | undefined) => (v == null ? '—' : (formatValor(v) ?? '—'));
