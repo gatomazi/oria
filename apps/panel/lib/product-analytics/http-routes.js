@@ -113,10 +113,16 @@ function mapearErro(err, res) {
 }
 
 /**
- * @param {{productPerformanceService, reconciliationService, journeyAnalyticsService, registry, analyticsProvider: string, commerceProvider: string}} deps
+ * @param {{productPerformanceService, reconciliationService, journeyAnalyticsService, registry, analyticsProvider: string, commerceProvider: string, syncCommerceCatalog?: Function, getCommerceCatalogSyncStatus?: Function}} deps
+ *   `syncCommerceCatalog`/`getCommerceCatalogSyncStatus`: Rodada M — opcionais de propósito (fica
+ *   compatível com quem monta o router sem essas duas, ex.: um teste antigo); sem elas, as rotas de
+ *   sincronização do catálogo simplesmente não são registradas.
  * @returns {import('express').Router}
  */
-function createProductAnalyticsRouter({ productPerformanceService, reconciliationService, journeyAnalyticsService, registry, analyticsProvider, commerceProvider }) {
+function createProductAnalyticsRouter({
+  productPerformanceService, reconciliationService, journeyAnalyticsService, registry, analyticsProvider, commerceProvider,
+  syncCommerceCatalog, getCommerceCatalogSyncStatus,
+}) {
   if (!productPerformanceService || typeof productPerformanceService.getProductPerformance !== 'function' || typeof productPerformanceService.getProductPerformanceSummary !== 'function') {
     throw new Error('createProductAnalyticsRouter exige productPerformanceService');
   }
@@ -130,6 +136,11 @@ function createProductAnalyticsRouter({ productPerformanceService, reconciliatio
   if (!analyticsProvider || !commerceProvider) throw new Error('createProductAnalyticsRouter exige analyticsProvider e commerceProvider');
 
   const router = express.Router();
+
+  // Rodada M · proteção só de PROCESSO (nunca substitui o lease real em Postgres — que sobrevive a
+  // restart/múltiplas instâncias; isto aqui só evita disparar duas vezes por um clique duplo antes
+  // do primeiro fire-and-forget nem ter terminado de chamar `syncCommerceCatalog`).
+  const catalogSyncEmAndamento = new Set();
 
   // Estado da conexão GA4 — read-only, nenhum request de dados (só metadata/compatibility, sem
   // runReport), pra UI decidir o que renderizar ANTES de pedir período/relatório.
@@ -255,6 +266,53 @@ function createProductAnalyticsRouter({ productPerformanceService, reconciliatio
       return mapearErro(err, res);
     }
   });
+
+  // Rodada M · achado real: `commerce_products` (o catálogo canônico que Desempenho de Produtos e a
+  // Correlação de identidade dependem) nunca tinha um jeito de ser sincronizado em produção — só
+  // rodava em teste (ver lib/product-analytics/catalog-sync.js). Sem isto, QUALQUER Organization com
+  // GA4/Ink conectados e dado real nos dois nunca resolve identidade nenhuma — "0 produtos no
+  // catálogo" mesmo com milhares de itens observados. Dispara e responde na hora (a varredura é
+  // paginada, centenas/milhares de páginas, minutos — nunca síncrono numa resposta HTTP); quem
+  // acompanha é o polling de `/catalog-sync/status`. Mesmo padrão de fire-and-forget que
+  // `/api/admin/produtos/catalogo/sync` já usa pro cache separado de Produtos.
+  if (syncCommerceCatalog) {
+    router.post('/catalog-sync', async (req, res) => {
+      const { organizationId, storeId } = req.tenant;
+      if (catalogSyncEmAndamento.has(organizationId)) {
+        return res.json({ ok: true, status: 'already_running' });
+      }
+      catalogSyncEmAndamento.add(organizationId);
+      syncCommerceCatalog({ organizationId, storeId })
+        .catch((err) => console.error(`[PRODUCT_ANALYTICS] catalog-sync falhou: ${err.message}`))
+        .finally(() => catalogSyncEmAndamento.delete(organizationId));
+      return res.json({ ok: true, status: 'started' });
+    });
+  }
+
+  if (getCommerceCatalogSyncStatus) {
+    router.get('/catalog-sync/status', async (req, res) => {
+      const { organizationId, storeId } = req.tenant;
+      try {
+        const ultimoRun = await getCommerceCatalogSyncStatus({ organizationId, storeId });
+        return res.json({
+          syncing: catalogSyncEmAndamento.has(organizationId),
+          lastRun: ultimoRun && {
+            status: ultimoRun.status,
+            startedAt: ultimoRun.started_at,
+            finishedAt: ultimoRun.finished_at,
+            pagesProcessed: ultimoRun.pages_processed,
+            productsSeen: ultimoRun.products_seen,
+            productsInserted: ultimoRun.products_inserted,
+            productsUpdated: ultimoRun.products_updated,
+            productsDeactivated: ultimoRun.products_deactivated,
+            errorCode: ultimoRun.error_code,
+          },
+        });
+      } catch (err) {
+        return mapearErro(err, res);
+      }
+    });
+  }
 
   return router;
 }

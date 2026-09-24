@@ -24,6 +24,7 @@ const { createCommerceCatalogRepository } = require('./commerce-catalog-reposito
 const { createProductPerformanceService, createReportCache } = require('./product-performance-service');
 const { createReconciliationService } = require('./reconciliation');
 const { createJourneyAnalyticsService } = require('./journey-analytics-service');
+const { runCatalogSync } = require('./catalog-sync');
 
 const ANALYTICS_PROVIDER = 'ga4';
 const COMMERCE_PROVIDER = 'reserva_ink';
@@ -36,13 +37,19 @@ const COMMERCE_PROVIDER = 'reserva_ink';
 const COMMERCE_TRANSACTION_ID_PREFIX = Object.freeze({ reserva_ink: 'INK' });
 
 /**
- * @param {{pool, keyring, fetchImpl?, googleClientId?, googleClientSecret?, reportCacheTtlMs?}} deps
+ * @param {{pool, keyring, fetchImpl?, googleClientId?, googleClientSecret?, reportCacheTtlMs?, leases?}} deps
  *   `pool`: a fachada tenant-scoped (RLS) — o mesmo `pgPool` do resto do server.js, NUNCA o pool
  *   real sem RLS (`pgPoolReal`).
+ *   `leases`: Rodada M — lib/platform/leases.js (mesma instância que server.js já cria pra `JOBS`,
+ *   `createJobLeases({ poolReal: pgPoolReal })`; criar de novo aqui é seguro — o lease em si vive no
+ *   Postgres via `job_lease_adquirir`/`job_lease_concluir`, nunca em memória do processo). Opcional:
+ *   sem leases, `runCatalogSync` roda sem proteção de concorrência (mesmo default da própria
+ *   função) — aceitável só em teste.
  * @returns {Readonly<{registry, catalogRepository, productPerformanceService, reconciliationService,
- *   reportCache, analyticsProvider: string, commerceProvider: string}>}
+ *   reportCache, analyticsProvider: string, commerceProvider: string, syncCommerceCatalog: Function,
+ *   getCommerceCatalogSyncStatus: Function}>}
  */
-function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleClientId, googleClientSecret, reportCacheTtlMs } = {}) {
+function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleClientId, googleClientSecret, reportCacheTtlMs, leases = null } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('createProductAnalyticsComposition exige pool');
   if (!keyring) throw new Error('createProductAnalyticsComposition exige keyring');
 
@@ -74,9 +81,35 @@ function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleCli
     commerceTransactionIdPrefix: COMMERCE_TRANSACTION_ID_PREFIX[COMMERCE_PROVIDER] || '',
   });
 
+  // Rodada M · achado real: `runCatalogSync` (Fase D, lib/product-analytics/catalog-sync.js) nunca
+  // tinha um jeito de ser acionada em produção — só aparecia em teste. Sem ela, `commerce_products`
+  // fica sempre vazio e Desempenho de Produtos/Jornada de Compra nunca resolvem identidade nenhuma,
+  // mesmo com GA4/Ink conectados e dado real chegando dos dois. `syncCommerceCatalog` dispara e
+  // devolve na hora (é uma varredura de centenas/milhares de páginas — minutos, nunca síncrono numa
+  // resposta HTTP); `getCommerceCatalogSyncStatus` lê o último run do log (commerce_catalog_sync_logs,
+  // já existente desde a Fase D) pra quem quiser acompanhar por polling — mesmo padrão já usado por
+  // `/api/admin/produtos/catalogo/status` pro cache separado de Produtos.
+  async function syncCommerceCatalog({ organizationId, storeId }) {
+    return runCatalogSync({ pool, registry, leases, logger: console }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
+  }
+
+  async function getCommerceCatalogSyncStatus({ organizationId, storeId }) {
+    const { rows } = await pool.query(
+      `SELECT sync_run_id, status, started_at, finished_at, pages_processed,
+              products_seen, products_inserted, products_updated, products_deactivated,
+              variants_seen, variants_inserted, variants_updated, variants_deactivated, error_code
+         FROM commerce_catalog_sync_logs
+        WHERE organization_id = $1 AND store_id = $2 AND provider = $3
+        ORDER BY started_at DESC LIMIT 1`,
+      [organizationId, storeId, COMMERCE_PROVIDER]
+    );
+    return rows[0] || null;
+  }
+
   return Object.freeze({
     registry, catalogRepository, productPerformanceService, reconciliationService, journeyAnalyticsService, reportCache,
     analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
+    syncCommerceCatalog, getCommerceCatalogSyncStatus,
   });
 }
 

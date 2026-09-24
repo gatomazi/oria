@@ -16702,6 +16702,9 @@ const PRODUCT_ANALYTICS = pgPool
   ? createProductAnalyticsComposition({
     pool: pgPool, keyring: CHAVEIRO,
     googleClientId: process.env.GOOGLE_CLIENT_ID, googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    // Rodada M · mesma proteção de concorrência que JOBS já usa (linha ~183) — instância própria,
+    // segura de duplicar (o lease em si vive no Postgres, nunca em memória do processo).
+    leases: pgPoolReal ? require('./lib/platform/leases').createJobLeases({ poolReal: pgPoolReal }) : null,
   })
   : null;
 if (PRODUCT_ANALYTICS) {
@@ -16715,6 +16718,8 @@ if (PRODUCT_ANALYTICS) {
     registry: PRODUCT_ANALYTICS.registry,
     analyticsProvider: PRODUCT_ANALYTICS.analyticsProvider,
     commerceProvider: PRODUCT_ANALYTICS.commerceProvider,
+    syncCommerceCatalog: PRODUCT_ANALYTICS.syncCommerceCatalog,
+    getCommerceCatalogSyncStatus: PRODUCT_ANALYTICS.getCommerceCatalogSyncStatus,
   }));
 }
 
