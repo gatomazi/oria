@@ -139,7 +139,7 @@ futuro.
 | Kill switch operacional, flags desligadas por padrão | ✅ confirmado por teste |
 | Modelo efetivo `gpt-4o-mini`, sem fallback, no máximo 1 tentativa HTTP por produto | ✅ confirmado nos 3 resultados reais (`model_served: "gpt-4o-mini"`, `attempts: 1`) |
 | Referências só do storage autorizado, até 2 por produto; hash/contagem nos logs, nunca bytes/base64/URLs | ✅ |
-| Limite de 3 requisições incluindo falhas; máximo US$ 0,05 com reserva prévia conservadora | ✅ — reserva de US$ 0,00006 × 3 tentativas reais nunca chegou perto do teto |
+| Limite de 3 requisições incluindo falhas; máximo US$ 0,05 com reserva prévia conservadora | ✅ — reserva de US$ 0,0006 × 3 tentativas (pior caso, antes de arredondar) = US$ 0,0018; em centavos (a unidade que o Postgres realmente compara), 1 centavo/tentativa × 3 = 3 centavos de um teto de 5 — ver a reconciliação no §5 abaixo |
 | `max_output_tokens` finito, `detail` explícito por imagem | ✅ 700 tokens, `detail: "low"` |
 | Contador/orçamento persistidos ANTES do envio; sem retry/fallback pago; timeout conta como tentativa | ✅ — as duas rodadas com falha local também contaram, por desenho |
 | Propostas só `pending`; nenhuma aprovação automática | ✅ confirmado no banco depois do piloto (ver §5) |
@@ -161,15 +161,36 @@ um arquivo pessoal ou de terceiros).
 
 ## 5. Resultados e decisão humana
 
-| Caso | Modelo pedido/servido | Tentativas | Refs. usadas | Tokens (entrada/saída/total) | Latência | Custo estimado (pior caso) | Custo real |
+| Caso | Modelo pedido/servido | Tentativas | Refs. usadas | Tokens (entrada/saída/total) | Latência | Reserva pré-chamada (pior caso, USD) | Custo real (USD, `usage`) |
 |---|---|---|---|---|---|---|---|
-| 1 — semântica clara | gpt-4o-mini / gpt-4o-mini | 1 | 1 | 3371 / 97 / 3468 | 4322 ms | US$ 0,0006 | **US$ 0,000564** |
-| 2 — ambíguo | gpt-4o-mini / gpt-4o-mini | 1 | 0 | 534 / 93 / 627 | 2356 ms | US$ 0,0006 | **US$ 0,000136** |
-| 3 — estampa com texto | gpt-4o-mini / gpt-4o-mini | 1 | 1 | 3358 / 108 / 3466 | 3629 ms | US$ 0,0006 | **US$ 0,000568** |
-| **Total** | | 3/3 sucesso | | | | US$ 0,0018 (reserva) | **US$ 0,001268** |
+| 1 — semântica clara | gpt-4o-mini / gpt-4o-mini | 1 | 1 | 3371 / 97 / 3468 | 4322 ms | US$ 0,0006 | **US$ 0,00056385** |
+| 2 — ambíguo | gpt-4o-mini / gpt-4o-mini | 1 | 0 | 534 / 93 / 627 | 2356 ms | US$ 0,0006 | **US$ 0,0001359** |
+| 3 — estampa com texto | gpt-4o-mini / gpt-4o-mini | 1 | 1 | 3358 / 108 / 3466 | 3629 ms | US$ 0,0006 | **US$ 0,0005685** |
+| **Total** | | 3/3 sucesso | | | | US$ 0,0018 | **US$ 0,00126825 (≈ US$ 0,001268)** |
 
-Teto autorizado: US$ 0,05 / 3 chamadas. **Usado: US$ 0,001268 (2,5% do teto) / 3 chamadas — dentro do
-limite em toda métrica.**
+### Reconciliação do ledger (Fase F.2.B.1 §4) — três números, três perguntas diferentes
+
+O texto original desta seção confundia números que respondem perguntas diferentes (um deles chegou a
+ser digitado errado em um dos dois lugares — "US$ 0,00006 × 3" no §3 acima contra "US$ 0,0006" aqui,
+mesma grandeza, um zero de diferença). Reconciliado, coberto por teste
+(`test/custos-precos.test.js`, seção "F.2.B.1 §4"):
+
+| # | O que é | Valor | Unidade real |
+|---|---|---|---|
+| 1 | **Custo real**, medido depois da chamada via `usage` (`custoEnrichmentReal`) | US$ 0,00126825 (3 chamadas) | USD, precisão total — nunca arredondado antes de somar |
+| 2 | **Reserva conservadora pré-chamada** (pior caso: 1200 tokens de entrada + 700 de saída, antes de qualquer chamada, `custoEnrichmentPiorCaso`) | US$ 0,0006 × 3 = US$ 0,0018 | USD, um número FIXO (não depende do uso real) — a estimativa que decide, antes de gastar, se ainda cabe no teto |
+| 3 | **Contabilização no ledger** — o que o Postgres de fato soma e compara contra o teto (`cost_usd_estimated_cents`, `centavosDeUsd` com piso de 1 centavo) | 1 centavo/tentativa × 3 = 3 centavos | **centavos inteiros** — a única unidade que o `creative_enrichment_pilot_reservar` SQL realmente vê |
+
+Teto autorizado: US$ 0,05 (= 5 centavos nessa mesma conversão). Duas percentagens diferentes, nenhuma
+das duas "errada", cada uma respondendo a uma pergunta diferente:
+- **Quanto foi gasto de verdade**: US$ 0,00126825 / US$ 0,05 = **2,5%** do teto em USD.
+- **Quanto do mecanismo que efetivamente trava novas chamadas foi consumido**: 3 centavos / 5
+  centavos = **60%** do teto em centavos — o número que de fato importa para saber quantas chamadas
+  ainda cabiam (bem menos folga do que os 2,5% sugerem, por causa do piso de 1 centavo em custos
+  sub-centavo como os deste modelo).
+
+Nas duas métricas o piloto ficou dentro do limite, mas 60% é a leitura correta de "quão perto do
+teto" — não 2,5%.
 
 ### Campos propostos e qualidade (avaliação campo a campo)
 

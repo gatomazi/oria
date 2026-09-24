@@ -666,3 +666,61 @@ test('referência corrompida/ausente no armazenamento: falha ANTES de reservar o
     assert.equal(pgPool._tentativas.length, 0, 'nenhuma reserva foi criada — a leitura da referência falhou ANTES de reservar');
   } finally { server.close(); }
 });
+
+// ------------------------------------------------------------------ Fase F.2.B.1 §4: durabilidade — OpenAI cobra, gravação local falha
+test('OpenAI cobra com sucesso mas store.createProposal falha: custo real preservado, attempt fica failed com errorCode distinto, resposta identifica o problema', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const pgPool = criarPgPoolFalsoPiloto();
+  const { server, call, store } = await subirApp({ core, uploadsDir, pgPool, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  // Substitui só este método, no MESMO objeto store (nunca um clone/spread — os outros métodos do
+  // memoryStore usam `this` internamente; trocar a referência do objeto quebraria isso) — simula uma
+  // falha de gravação local (ex.: Postgres fora do ar naquele instante) DEPOIS que a OpenAI já
+  // respondeu com sucesso dentro de `core.proposeEnrichment`.
+  store.createProposal = async () => { throw new Error('disco cheio (simulado)'); };
+  try {
+    await configurarChaveOpenAI(call);
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    const r = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(r.status, 500);
+    assert.equal(r.body.code, 'ENRICHMENT_PROPOSAL_PERSIST_FAILED');
+    assert.ok(r.body.attemptId, 'o identificador da tentativa aparece na resposta, para localizar depois');
+    assert.equal(core.calls.length, 1, 'a OpenAI FOI chamada — o custo já foi incorrido, independentemente da gravação local');
+
+    assert.equal(pgPool._tentativas.length, 1);
+    const tentativa = pgPool._tentativas[0];
+    assert.equal(tentativa.status, 'failed', 'nunca fica preso em "reserved" esperando o TTL — o resultado já é conhecido');
+    assert.equal(tentativa.errorCode, 'proposal_persist_failed', 'distinto de uma falha do lado da OpenAI — greppable no ledger');
+    assert.ok(tentativa.custoRealCentavos > 0, 'o custo real fica gravado mesmo sem a proposta existir — nunca perdido');
+    assert.equal(tentativa.model, 'gpt-4o-mini');
+  } finally { server.close(); }
+});
+
+test('depois da falha de persistência, uma nova tentativa para o MESMO produto ainda é possível dentro do teto — a proteção contra cobrança repetida é o teto agregado, não um bloqueio específico deste caso (limite documentado, não um bug novo)', async () => {
+  enrichmentQuota._resetParaTeste();
+  const core = fakeCoreComOpenAIFuturo();
+  const uploadsDir = pastaUploadsTemp();
+  const pgPool = criarPgPoolFalsoPiloto();
+  const { server, call, store } = await subirApp({ core, uploadsDir, pgPool, envExtra: { CREATIVE_ENRICHMENT_OPENAI_ORGS: '*' } });
+  let falhasRestantes = 1;
+  const criarOriginal = store.createProposal.bind(store);
+  store.createProposal = async (...args) => {
+    if (falhasRestantes > 0) { falhasRestantes -= 1; throw new Error('falha transitória simulada'); }
+    return criarOriginal(...args);
+  };
+  try {
+    await configurarChaveOpenAI(call);
+    const produtoId = await semearComReferencia(store, uploadsDir);
+    const primeira = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(primeira.status, 500);
+
+    const segunda = await call('POST', `/products/${produtoId}/enrichment/propose`);
+    assert.equal(segunda.status, 201, 'sem uma reserva "em_andamento" travada (a 1ª já foi finalizada como failed), a 2ª tentativa segue normalmente e desta vez persiste');
+    assert.equal(core.calls.length, 2, 'DUAS chamadas reais para o MESMO produto — não há bloqueio específico para este caso; o que limita é o teto agregado de 3 chamadas/US$0,05 (já testado acima em "orçamento do piloto esgotado"), documentado como o limite conhecido desta correção em docs/features/creative-generator-fase-f2b1.md §4');
+
+    assert.equal(pgPool._tentativas.length, 2);
+    assert.equal(pgPool._tentativas[0].status, 'failed');
+    assert.equal(pgPool._tentativas[1].status, 'succeeded');
+  } finally { server.close(); }
+});

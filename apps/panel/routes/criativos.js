@@ -44,6 +44,19 @@ const ANGLE_PRODUCT_MODES = ['single_product', 'multi_product'];
 const ANGLE_GAZE_MODES = ['camera', 'interaction', 'off_camera', 'product'];
 const ANGLE_DEFINITION_TEXT_FIELDS = ['framing', 'photographic_direction', 'lighting', 'composition'];
 
+// Fase F.2.B.1 §4 — a OpenAI já cobrou com sucesso (o attempt do piloto já está `succeeded` com o
+// custo REAL gravado — ver o `catch` em torno de `store.createProposal` abaixo) quando a gravação
+// local falha. Uma classe distinta em vez de deixar isto cair no 500 genérico: o operador precisa
+// ver, sem adivinhar, que dinheiro foi gasto e nada foi salvo — nunca uma mensagem genérica que
+// pareça "tente de novo" sem qualificação.
+class EnrichmentProposalPersistError extends Error {
+  constructor(attemptId) {
+    super('a análise real foi cobrada com sucesso, mas a proposta não pôde ser salva — não tente novamente sem revisão; contate o suporte com este identificador de tentativa');
+    this.name = 'EnrichmentProposalPersistError';
+    this.attemptId = attemptId;
+  }
+}
+
 function responderErro(res, err, logger) {
   if (err instanceof CoreUnavailableError) {
     return res.status(503).json({ error: 'serviço do gerador de criativos indisponível', code: err.code });
@@ -53,6 +66,10 @@ function responderErro(res, err, logger) {
   }
   if (err instanceof InputError || (err && err.httpStatus && err.httpStatus < 500)) {
     return res.status(err.httpStatus).json({ error: err.message });
+  }
+  if (err instanceof EnrichmentProposalPersistError) {
+    logger.error(`[CRIATIVOS] enrichment: cobrança real sem proposta salva, attempt=${err.attemptId}`);
+    return res.status(500).json({ error: err.message, code: 'ENRICHMENT_PROPOSAL_PERSIST_FAILED', attemptId: err.attemptId });
   }
   logger.error(`[CRIATIVOS] erro na rota: ${err && err.name}`);
   return res.status(500).json({ error: 'erro interno no gerador de criativos' });
@@ -558,21 +575,42 @@ function criarRouterCriativos(deps) {
     }
 
     if (usarOpenAI) enrichmentQuota.registrar(req.creativeTenant);
-    if (reserva) {
-      const custoReal = precos.custoEnrichmentReal(proposalCore.provider_meta && proposalCore.provider_meta.usage, precos.PRECOS_PADRAO);
-      await enrichmentPilotBudget.finalizar(q, reserva.attemptId, {
-        status: 'succeeded',
-        model: (proposalCore.provider_meta && proposalCore.provider_meta.model_served) || null,
-        custoRealUsd: custoReal ? custoReal.usd : null,
+    // Fase F.2.B.1 §4 — a chamada OpenAI (se houve) já aconteceu e já foi cobrada neste ponto; o que
+    // falta é só a gravação LOCAL, não paga. `store.createProposal` roda ANTES de marcar o attempt
+    // como `succeeded` — se ela falhar, o attempt é finalizado como `failed` mas ainda assim carrega
+    // o CUSTO REAL e um `errorCode` distinto (o schema já suporta custo real num attempt `failed` —
+    // ver migration 0038): o estado fica auditável mesmo quando a proposta não existe, sem fingir
+    // que a tentativa nunca aconteceu. O teto agregado de 3 chamadas/US$ 0,05 (que já conta toda
+    // tentativa, sucesso ou falha) permanece o limite duro contra retentativas acidentais — ver
+    // docs/features/creative-generator-fase-f2b1.md §4 para o que isto cobre e o que não cobre.
+    const custoReal = reserva
+      ? precos.custoEnrichmentReal(proposalCore.provider_meta && proposalCore.provider_meta.usage, precos.PRECOS_PADRAO)
+      : null;
+    const modeloServido = (proposalCore.provider_meta && proposalCore.provider_meta.model_served) || null;
+
+    let salva;
+    try {
+      salva = await store.createProposal(req.creativeTenant, {
+        productId: produto.id, provider: proposalCore.provider, proposed: proposalCore.proposed,
+        recommendedAngleFamilies: proposalCore.recommended_angle_families, recommendedInteractions: proposalCore.recommended_interactions,
+        fieldNotes: proposalCore.field_notes, productSnapshotHash: proposalCore.product_snapshot_hash,
+        productUpdatedAt: produto.updatedAt, createdBy: usuarioDe(req), providerMeta: proposalCore.provider_meta || null,
       });
+    } catch (erroPersistencia) {
+      if (reserva) {
+        await enrichmentPilotBudget.finalizar(q, reserva.attemptId, {
+          status: 'failed', model: modeloServido, custoRealUsd: custoReal ? custoReal.usd : null,
+          errorCode: 'proposal_persist_failed',
+        });
+      }
+      throw new EnrichmentProposalPersistError(reserva ? reserva.attemptId : null);
     }
 
-    const salva = await store.createProposal(req.creativeTenant, {
-      productId: produto.id, provider: proposalCore.provider, proposed: proposalCore.proposed,
-      recommendedAngleFamilies: proposalCore.recommended_angle_families, recommendedInteractions: proposalCore.recommended_interactions,
-      fieldNotes: proposalCore.field_notes, productSnapshotHash: proposalCore.product_snapshot_hash,
-      productUpdatedAt: produto.updatedAt, createdBy: usuarioDe(req), providerMeta: proposalCore.provider_meta || null,
-    });
+    if (reserva) {
+      await enrichmentPilotBudget.finalizar(q, reserva.attemptId, {
+        status: 'succeeded', model: modeloServido, custoRealUsd: custoReal ? custoReal.usd : null,
+      });
+    }
     res.status(201).json(salva);
   }));
 
