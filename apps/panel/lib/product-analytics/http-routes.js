@@ -325,8 +325,25 @@ function createProductAnalyticsRouter({
       const { organizationId, storeId } = req.tenant;
       try {
         const ultimoRun = await getCommerceCatalogSyncStatus({ organizationId, storeId });
+        // Gate A ("Jornada de Valor Operacional") · o Set em processo (catalogSyncEmAndamento) só
+        // enxerga o que ESTA rota disparou (clique manual) — o scheduler automático e o gatilho de
+        // conexão (server.js) chamam `syncCommerceCatalog` direto, sem passar por ele. `rodandoNoLog`
+        // é o sinal REAL (commerce_catalog_sync_logs, escrito pelo próprio runCatalogSync ANTES de
+        // qualquer trabalho — cross-process, verdadeiro não importa quem disparou nem quantas
+        // instâncias do servidor existam). `syncing` combina os dois: o Set cobre só a janela ínfima
+        // entre o fire-and-forget e o primeiro INSERT do log.
+        //
+        // `state`: a taxonomia do comando — never_synced/queued/running/completed/partial_failure/
+        // failed — nunca um status cru do banco sem rótulo pra UI decidir sozinha.
+        const emProcesso = catalogSyncEmAndamento.has(organizationId);
+        const rodandoNoLog = !!ultimoRun && ultimoRun.status === 'running';
+        const syncing = emProcesso || rodandoNoLog;
+        const state = !ultimoRun
+          ? (emProcesso ? 'queued' : 'never_synced')
+          : rodandoNoLog ? 'running'
+            : ultimoRun.status === 'success' ? 'completed' : ultimoRun.status; // 'partial_failure' | 'failed'
         return res.json({
-          syncing: catalogSyncEmAndamento.has(organizationId),
+          syncing, state,
           lastRun: ultimoRun && {
             status: ultimoRun.status,
             startedAt: ultimoRun.started_at,

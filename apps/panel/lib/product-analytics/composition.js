@@ -26,6 +26,7 @@ const { createReconciliationService } = require('./reconciliation');
 const { createJourneyAnalyticsService } = require('./journey-analytics-service');
 const { createOpportunityDiagnosticsService } = require('./opportunity-diagnostics');
 const { runCatalogSync } = require('./catalog-sync');
+const { bootstrapCommerceIdentities } = require('./product-identity-resolver');
 
 const ANALYTICS_PROVIDER = 'ga4';
 const COMMERCE_PROVIDER = 'reserva_ink';
@@ -48,9 +49,18 @@ const COMMERCE_TRANSACTION_ID_PREFIX = Object.freeze({ reserva_ink: 'INK' });
  *   função) — aceitável só em teste.
  * @returns {Readonly<{registry, catalogRepository, productPerformanceService, reconciliationService,
  *   journeyAnalyticsService, opportunityDiagnosticsService, reportCache, analyticsProvider: string,
- *   commerceProvider: string, syncCommerceCatalog: Function, getCommerceCatalogSyncStatus: Function}>}
+ *   commerceProvider: string, syncCommerceCatalog: Function, getCommerceCatalogSyncStatus: Function,
+ *   catalogSyncNecessario: Function}>}
  */
-function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleClientId, googleClientSecret, reportCacheTtlMs, leases = null } = {}) {
+function createProductAnalyticsComposition({
+  pool, keyring, fetchImpl, googleClientId, googleClientSecret, reportCacheTtlMs, leases = null,
+  // Rodada "Jornada de Valor Operacional" · a partir de quanto tempo desde o último sync BEM-SUCEDIDO
+  // um catálogo é considerado "vencido" pro scheduler automático (Gate A) disparar de novo. Injetável
+  // (nunca hardcoded globalmente) — 24h é o default operacional documentado, não "a" verdade; um
+  // catálogo de ~85 mil produtos custa dezenas/centenas de páginas por run, então recorrência mais
+  // curta que isso é orçamento de chamadas que ninguém pediu ainda.
+  catalogSyncMaxAgeMs = 24 * 60 * 60 * 1000,
+} = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('createProductAnalyticsComposition exige pool');
   if (!keyring) throw new Error('createProductAnalyticsComposition exige keyring');
 
@@ -96,8 +106,34 @@ function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleCli
   // resposta HTTP); `getCommerceCatalogSyncStatus` lê o último run do log (commerce_catalog_sync_logs,
   // já existente desde a Fase D) pra quem quiser acompanhar por polling — mesmo padrão já usado por
   // `/api/admin/produtos/catalogo/status` pro cache separado de Produtos.
+  // Gate B ("Jornada de Valor Operacional") · depois de um full sync BEM-SUCEDIDO, a identidade
+  // (product_external_identities) precisa refletir o catálogo novo — nunca uma operação manual
+  // escondida atrás de um script de teste (era exatamente esse o estado antes desta rodada:
+  // bootstrapCommerceIdentities só era chamada em teste, igual runCatalogSync na rodada anterior).
+  // Só em 'success' (nunca 'partial_failure'/'failed' — um sync parcial não termina a varredura
+  // inteira; produtos de um run parcial ganham identity no PRÓXIMO sync bem-sucedido, manual ou
+  // automático). bootstrapCommerceIdentities é idempotente e em lote (SQL set-based, nunca por
+  // produto) — rodar de novo sobre o mesmo catálogo não duplica nem sobrescreve mapping manual
+  // (`WHERE ... source = 'commerce_sync'`, ver product-identity-resolver.js).
+  //
+  // Invalidação de cache: NENHUMA aqui de propósito. O ReportCache (product-performance-service.js)
+  // guarda só as LINHAS CRUAS do relatório GA4 (nunca a resolução de identity) — toda chamada a
+  // getProductPerformance/getProductPerformanceSummary/Opportunity Diagnostics já resolve identity
+  // DE NOVO contra o banco a cada invocação (resolveAndPersist, sempre fresco). Destruir o
+  // ReportCache aqui derrubaria o reuso de 15min sem nenhum ganho — a próxima request já vê a
+  // identity nova sozinha, sem precisar que nada seja invalidado.
   async function syncCommerceCatalog({ organizationId, storeId }) {
-    return runCatalogSync({ pool, registry, leases, logger: console }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
+    const resultado = await runCatalogSync({ pool, registry, leases, logger: console }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
+    if (resultado.status === 'success') {
+      try {
+        await bootstrapCommerceIdentities({ pool }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
+      } catch (err) {
+        // O catálogo sincronizou; o bootstrap de identity é best-effort logo em seguida — falhar
+        // aqui não desfaz o sync. Fica pro próximo sync (manual ou do scheduler) tentar de novo.
+        console.error(`[PRODUCT_ANALYTICS] bootstrapCommerceIdentities pós-sync falhou (${organizationId}): ${err.message}`);
+      }
+    }
+    return resultado;
   }
 
   async function getCommerceCatalogSyncStatus({ organizationId, storeId }) {
@@ -113,11 +149,33 @@ function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleCli
     return rows[0] || null;
   }
 
+  // Gate A ("Jornada de Valor Operacional") · decide se ESTA Organization precisa de um full sync
+  // agora — usado pelo scheduler automático (server.js `sincronizarCatalogoCanonicoDaOrganizacao`)
+  // pra checar antes de disparar, nunca depois: nunca sincroniza(dor) verifica "vencido" só olhando
+  // pro relógio de parede sem olhar o log real. `maxAgeMs` é injetável por chamada (default = o
+  // `catalogSyncMaxAgeMs` desta composição) — nunca hardcoded globalmente.
+  //
+  //   sem log nenhum                → precisa (nunca sincronizado — cobre "recovery" de instalações
+  //                                    antigas do mesmo jeito que cobre um catálogo novo)
+  //   último run 'running'          → NÃO precisa (já em andamento; o lease de catalog-sync.js
+  //                                    protege — o scheduler não dispara por cima)
+  //   último run != 'success'       → precisa (falhou ou parcial — tenta de novo)
+  //   último sucesso mais velho que maxAgeMs → precisa
+  //   senão                          → não precisa
+  async function catalogSyncNecessario({ organizationId, storeId }, { maxAgeMs = catalogSyncMaxAgeMs } = {}) {
+    const ultimo = await getCommerceCatalogSyncStatus({ organizationId, storeId });
+    if (!ultimo) return true;
+    if (ultimo.status === 'running') return false;
+    if (ultimo.status !== 'success') return true;
+    if (!ultimo.finished_at) return true;
+    return (Date.now() - new Date(ultimo.finished_at).getTime()) >= maxAgeMs;
+  }
+
   return Object.freeze({
     registry, catalogRepository, productPerformanceService, reconciliationService, journeyAnalyticsService,
     opportunityDiagnosticsService, reportCache,
     analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
-    syncCommerceCatalog, getCommerceCatalogSyncStatus,
+    syncCommerceCatalog, getCommerceCatalogSyncStatus, catalogSyncNecessario,
   });
 }
 

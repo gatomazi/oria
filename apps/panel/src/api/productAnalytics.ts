@@ -179,8 +179,14 @@ export interface CommerceCatalogSyncRun {
   errorCode: string | null;
 }
 
+// Gate A ("Jornada de Valor Operacional") · taxonomia do comando — a UI decide o texto certo por
+// ESTE campo, nunca lendo `lastRun.status` cru (`state` já cobre never_synced/queued, que não têm
+// linha nenhuma em `lastRun`).
+export type CommerceCatalogSyncState = 'never_synced' | 'queued' | 'running' | 'completed' | 'partial_failure' | 'failed';
+
 export interface CommerceCatalogSyncStatus {
   syncing: boolean;
+  state: CommerceCatalogSyncState;
   lastRun: CommerceCatalogSyncRun | null;
 }
 

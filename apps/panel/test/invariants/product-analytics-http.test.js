@@ -455,11 +455,11 @@ test('M · POST /catalog-sync: autenticado sem X-CSRF-Token → 403 codigo csrf 
 // nesta suíte, mais abaixo, só pra isolar o teste de GA4 desconectado — reusar ORG_B aqui depois
 // disso testaria o estado errado.)
 
-test('M · GET /catalog-sync/status antes de qualquer sync: syncing:false, lastRun:null (nunca 404/500)', async () => {
+test('M · GET /catalog-sync/status antes de qualquer sync: syncing:false, state:never_synced, lastRun:null (nunca 404/500)', async () => {
   const nav = await navegador().entrar('pah-a@teste.oria');
   const r = await nav.req('GET', '/api/admin/product-analytics/catalog-sync/status');
   assert.equal(r.status, 200, r.texto);
-  assert.deepEqual(r.json, { syncing: false, lastRun: null });
+  assert.deepEqual(r.json, { syncing: false, state: 'never_synced', lastRun: null });
 });
 
 test('M · POST /catalog-sync dispara na hora (fire-and-forget) e o run fecha REAL no log — falha de Ink vira status:failed com código estável, nunca 500 nem "running" pra sempre', async () => {
@@ -475,6 +475,7 @@ test('M · POST /catalog-sync dispara na hora (fire-and-forget) e o run fecha RE
     return r.json.lastRun && r.json.lastRun.status !== 'running' ? r.json : null;
   });
   assert.equal(status.syncing, false);
+  assert.equal(status.state, 'failed'); // Gate A ("Jornada de Valor Operacional"): taxonomia never_synced/queued/running/completed/partial_failure/failed
   assert.equal(status.lastRun.status, 'failed');
   assert.equal(status.lastRun.errorCode, 'INTEGRATION_NOT_CONNECTED'); // registry.resolve → integrations.js: naoConectada()
   assert.equal(status.lastRun.pagesProcessed, 0);
