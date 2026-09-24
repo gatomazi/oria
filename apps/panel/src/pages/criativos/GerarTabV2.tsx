@@ -223,6 +223,20 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     setEngine(f.engine ?? null);
     setProductMode(f.product_mode ?? 'single_product');
     setProductIds(f.product_ids || []);
+    // Consolidação — "Copiar dados" também traz "quem veste o quê" de volta quando o plano original teve
+    // elenco explícito (`composition_source` "explicit"/"recommended" — o core só devolve `subjects` no
+    // draft nesses casos; um plano "legacy"/automático nunca reproduz aqui, e não deveria: a prévia nova
+    // recalcula a atribuição automática do zero). Os ids ("s1", "s2"...) são posicionais e batem com os
+    // da prévia nova para os MESMOS product_ids, na mesma ordem.
+    if (Array.isArray(f.subjects) && f.subjects.length) {
+      const overrides: Record<string, string | null> = {};
+      for (const s of f.subjects) {
+        if (s && typeof s.id === 'string') overrides[s.id] = s.wears_product_id ?? null;
+      }
+      setOverridesElenco(overrides);
+    } else {
+      setOverridesElenco({});
+    }
     if (f.custom_angle_replay_of) setEscolha({ tipo: 'custom', id: f.custom_angle_replay_of });
     setPlacements(f.placements || ['FEED_4X5']);
     setInteraction(f.interaction || '');
