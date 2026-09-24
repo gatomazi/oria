@@ -40,31 +40,10 @@ import {
 } from '../../api/criativos';
 import { plural } from '../../lib/format';
 import { PromptsPrevia } from './PromptsPrevia';
-
-const ENGINE_LABEL: Record<Engine, { title: string; description: string }> = {
-  CLEAN_ANGLES: { title: 'Ângulos Limpos', description: 'Imagem pura: produto + contexto + ângulo. O funil fica na copy do anúncio.' },
-  REMARKETING: { title: 'Remarketing', description: 'Para quem já conhece a marca: mensagem pela intenção, com headline e CTA na arte.' },
-  FUNNEL_VISUAL: { title: 'Funil por Criativo', description: 'TOFU, MOFU ou BOFU na arte: headline, CTA, selos e benefícios por etapa.' },
-};
-
-const INTENT_LABEL: Record<RemarketingIntent, string> = {
-  site_visitor: 'Visitante do site',
-  product_view: 'Produto visto',
-  collection_discovery: 'Coleção',
-  cart: 'Carrinho',
-  checkout: 'Checkout',
-  social_proof: 'Prova social',
-  objection: 'Objeção',
-};
-
-const linhas = (t: string) => t.split('\n').map((l) => l.trim()).filter(Boolean);
-
-// "Copiar dados": o que o formulário sabe editar. O resto do que veio (chaves que a tela não mostra) volta intacto no pedido.
-const CHAVES_REMARKETING = ['intent', 'headline', 'subheadline', 'cta', 'benefits', 'text_density', 'cta_emphasis', 'clean_mode', 'products_source'];
-const CHAVES_FUNIL = ['headline', 'subheadline', 'cta', 'benefits', 'badges', 'chips', 'search_bar_text', 'text_density', 'cta_emphasis', 'clean_mode'];
-const restoDe = (obj: Record<string, unknown> | undefined, conhecidas: string[]) => Object.fromEntries(Object.entries(obj || {}).filter(([k]) => !conhecidas.includes(k)));
-const texto_de = (v: unknown) => (typeof v === 'string' ? v : '');
-const lista_de = (v: unknown) => (Array.isArray(v) ? v.map(String).join('\n') : '');
+import { ENGINE_LABEL, INTENT_LABEL } from './criativosMotores';
+// Fase G.1 — extraído para criativosMotorInput.mjs (compartilhado com GerarTabV2.tsx e testado por
+// node:test); nenhuma mudança de comportamento aqui, só a origem do import.
+import { CHAVES_FUNIL, CHAVES_REMARKETING, lista_de, linhas, restoDe, texto_de } from './criativosMotorInput.mjs';
 
 const CAMPO_INDISPONIVEL: Record<string, string> = {
   product: 'Produto', brand: 'Marca', niche: 'Nicho', persona: 'Persona', context: 'Contexto', subjects: 'Pessoas e interação', scene_picks: 'Sorteios da cena',
