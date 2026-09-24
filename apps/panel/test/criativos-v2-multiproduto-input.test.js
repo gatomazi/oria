@@ -158,3 +158,13 @@ test('MAX_SUBJECTS_EDITAVEIS: é 4, espelhando o contrato real do core (contract
 test('overridesAoTrocarDeMotor: sempre volta a nenhuma edição pendente', () => {
   assert.deepEqual(mod.overridesAoTrocarDeMotor(), {});
 });
+
+// ------------------------------------------------------------------ textoAviso (achado real: primeiro uso)
+test('textoAviso: traduz o código do aviso geográfico para texto legível', () => {
+  assert.equal(mod.textoAviso('geographic_context_unresolved_used_niche_context'),
+    'Não foi possível resolver o contexto geográfico pedido — a cena usou o contexto do nicho como alternativa.');
+});
+
+test('textoAviso: um código sem tradução volta cru — nunca escondido, nunca inventado', () => {
+  assert.equal(mod.textoAviso('layout_fallback_angle_not_compatible'), 'layout_fallback_angle_not_compatible');
+});

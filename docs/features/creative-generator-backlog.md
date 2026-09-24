@@ -3,9 +3,23 @@
 Achados registrados durante o desenvolvimento que não impedem o uso e foram deliberadamente
 adiados, para não abrir novas microfases de validação. Cada item cita onde foi encontrado.
 
-- **Avisos do plano aparecem como código cru na UI** (ex.: `people_count_risk:5`,
-  `above_recommended_products_for_angle:4`, `layout_fallback_angle_not_compatible`). Corretos e já
-  visíveis (não escondidos), só não traduzidos para texto amigável. (G.2.1, smoke visual desktop.)
+- **Avisos do plano aparecem como código cru na UI**, exceto `geographic_context_unresolved_used_niche_context`
+  (traduzido no hotfix do primeiro uso real). Os demais (`people_count_risk:5`,
+  `above_recommended_products_for_angle:4`, `layout_fallback_angle_not_compatible`, etc.) continuam
+  crus — corretos e já visíveis (não escondidos), só não traduzidos. `textoAviso()` em
+  `criativosMotorInput.mjs` já existe para isso; é só ir acrescentando entradas conforme aparecem
+  reclamações reais, nunca traduzir tudo de uma vez "por precaução". (G.2.1; ampliado no hotfix do
+  primeiro uso real.)
+- **Famílias de estilo sem NENHUM preset disponível para a marca continuam aparecendo como cartões
+  clicáveis normais** (ex.: "Creator / social" para a Use Origens, que não libera nenhum preset dessa
+  família) — ao clicar, a prévia falha com uma explicação real e específica (não mais o erro genérico
+  antigo, e a prévia anterior não fica mais visível por baixo — ambos corrigidos no hotfix do primeiro
+  uso real), mas o cartão em si não avisa ANTES do clique. Desabilitar/marcar esses cartões de antemão
+  exigiria expor disponibilidade por família no catálogo (`GET /catalog`), calculada contra o Brand
+  Kit ativo — deliberadamente adiado: o core já nunca recomenda nem aceita silenciosamente um ângulo
+  indisponível (achado e corrigido nesta mesma rodada), então o que falta aqui é só descoberta
+  antecipada na UI, não uma lacuna de segurança ou de dado incorreto. (Hotfix do primeiro uso real,
+  24/09.)
 - **Lista de abas (`Gerar · Lotes · Histórico · Produtos · ...`) não cabe em ~590px** — precisa
   rolar horizontalmente dentro da própria lista; não quebra a página (sem scroll horizontal geral),
   só não é óbvio que há mais abas fora da tela. (Aceite visual mobile, G.2.1.)

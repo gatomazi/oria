@@ -134,3 +134,14 @@ export function subjectsComOverride(subjectsDaPrevia, overrides) {
 export function overridesAoTrocarDeMotor() {
   return {};
 }
+
+// Achado real de uso (primeiro criativo, conta interna): os avisos do plano chegam como código técnico
+// puro (ex. "geographic_context_unresolved_used_niche_context") — só o que o lojista de fato pediu para
+// traduzir nesta rodada, sem virar um sistema geral de tradução de avisos. Um código sem tradução aqui
+// volta cru (nunca escondido) — é sempre estritamente mais informativo que sumir com o aviso.
+const TEXTO_AVISO = {
+  geographic_context_unresolved_used_niche_context: 'Não foi possível resolver o contexto geográfico pedido — a cena usou o contexto do nicho como alternativa.',
+};
+export function textoAviso(codigo) {
+  return TEXTO_AVISO[codigo] || codigo;
+}

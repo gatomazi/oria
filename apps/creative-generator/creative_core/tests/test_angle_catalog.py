@@ -20,6 +20,7 @@ from creative_core.angle_catalog import (
     LEGACY_ALIASES,
     SYSTEM_ANGLES,
     canonical_legacy_angle_id,
+    family_presets,
     recommend_angle,
     resolve_angle_meta,
 )
@@ -173,6 +174,72 @@ def test_given_an_unknown_family_in_the_hint_then_the_contract_refuses_it():
     except GenerationError as exc:
         err = exc
     assert err is not None and err.code == "UNSUPPORTED_ANGLE"
+
+
+# ------------------------------------------------------------------ Achado real (primeiro uso, conta interna, 24/09):
+# a escolha MANUAL de família na UI V2 (o cartão "Estilo" — a tela nunca oferece um preset específico,
+# só a família) sempre resolvia para o preset PADRÃO da família, sem olhar disponibilidade — travava
+# mesmo quando outro preset real da MESMA família (ex.: product_focus tem CAIMENTO/CLOSE_ESTAMPA/
+# CLOSE_BOLSO) já era permitido pela marca. `family_presets` + a busca em `_resolve_angle_id` corrigem
+# isso sem nunca cruzar para uma família diferente da que o lojista escolheu.
+def test_given_a_family_then_family_presets_lists_every_distinct_legacy_angle_default_first():
+    assert family_presets("product_focus") == [(None, "CAIMENTO"), ("print_detail", "CLOSE_ESTAMPA"), ("small_detail", "CLOSE_BOLSO")]
+    assert family_presets("product_no_person") == [(None, "PRODUTO_ESTAMPA"), ("hanging", "CABIDE"), ("editorial_still", "PREMIUM_ESTILO")]
+    assert family_presets("creator_social") == [(None, "CREATOR_STYLE")], "single-preset family: just its default"
+    assert family_presets("action_movement") == [], "reserved, no legacy mapping at all"
+
+
+def test_given_a_manual_family_whose_default_is_unavailable_then_it_finds_another_real_preset_in_the_same_family():
+    # product_focus's default (CAIMENTO) not enabled, but CLOSE_ESTAMPA (same family) is — never crosses
+    # into a different family just because the lojista's own pick's default preset is unavailable.
+    brand = {**load_brand_kit("use_origens"), "enabledAngles": ["CLOSE_ESTAMPA"]}
+    request = _req(angle_id="auto", plan_schema_version=2, brand_kit=brand, angle_family_hint={"family": "product_focus"})
+    del request["brand_kit_id"]
+    plan = plan_creative(request, router=ROUTER)
+    assert plan["angle"]["id"] == "CLOSE_ESTAMPA"
+    assert plan["angle_recommendation"]["family"] == "product_focus"
+    assert any(r.startswith("preset_fallback:CLOSE_ESTAMPA:tried=CAIMENTO") for r in plan["angle_recommendation"]["reason"])
+    assert plan["angle_recommendation"]["source"] == "user", "still the lojista's own family choice, not a planner default"
+
+
+def test_given_a_manual_family_where_no_preset_is_available_then_it_refuses_honestly_naming_what_it_tried():
+    # Nenhum preset de product_focus (CAIMENTO/CLOSE_ESTAMPA/CLOSE_BOLSO) está liberado — recusa, nunca
+    # inventa nem empresta um ângulo de outra família.
+    brand = {**load_brand_kit("use_origens"), "enabledAngles": ["LIFESTYLE_COTIDIANO"]}
+    request = _req(angle_id="auto", plan_schema_version=2, brand_kit=brand, angle_family_hint={"family": "product_focus"})
+    del request["brand_kit_id"]
+    err = None
+    try:
+        plan_creative(request, router=ROUTER)
+    except GenerationError as exc:
+        err = exc
+    assert err is not None and err.code == "UNSUPPORTED_ANGLE"
+    assert err.details["reason"] == "no_angle_available_for_brand_or_niche"
+    assert set(err.details["tried"]) == {"CAIMENTO", "CLOSE_ESTAMPA", "CLOSE_BOLSO"}
+
+
+def test_given_an_explicit_preset_unavailable_then_it_still_refuses_no_search_no_override():
+    # Um PRESET explícito (não só a família — hoje só chega por replay/custom angle, nunca pela UI) é uma
+    # escolha ainda mais específica do que a família: nunca ganha a busca por alternativa dentro da
+    # família — comportamento idêntico ao de antes desta correção.
+    brand = {**load_brand_kit("use_origens"), "enabledAngles": ["CLOSE_ESTAMPA"]}
+    request = _req(angle_id="auto", plan_schema_version=2, brand_kit=brand,
+                    angle_family_hint={"family": "product_focus", "preset": "technical_fit"})
+    del request["brand_kit_id"]
+    err = None
+    try:
+        plan_creative(request, router=ROUTER)
+    except GenerationError as exc:
+        err = exc
+    assert err is not None and err.code == "UNSUPPORTED_ANGLE" and err.details["angle_id"] == "CAIMENTO"
+
+
+def test_given_a_manual_family_whose_default_is_already_available_then_no_fallback_noise_in_the_reason():
+    # Caminho comum (a maioria das marcas): nada muda — sem entrada "preset_fallback" no reason quando o
+    # padrão já funciona.
+    plan = _plan(angle_id="auto", plan_schema_version=2, angle_family_hint={"family": "lifestyle"})
+    assert plan["angle"]["id"] == "LIFESTYLE_COTIDIANO"
+    assert plan["angle_recommendation"]["reason"] == ["angle_family_hint:lifestyle"]
 
 
 # ------------------------------------------------------------------ recommend_angle is pure (no request/DB access)
