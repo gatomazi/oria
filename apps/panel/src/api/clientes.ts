@@ -281,6 +281,9 @@ export interface EstadoSegmentoRfm {
   rfmSegmento: SegmentoRfmId;
   salvo: { regraVersao: string | null; classificadoEm: string | null; corte: CorteDeValor | null; predicado: PredicadoRfm | null };
   atual: { regraVersao: string; classificadoEm: string; corte: CorteDeValor | null; predicado: PredicadoRfm | null; amostraSuficiente: boolean };
+  // 'exata': a Audiência avalia pela classificação RFM (mesma população da matriz); 'aproximada': salvo antes, com filtros
+  // genéricos (troca paga conta, sem janela, 24h) — pode divergir da matriz.
+  equivalencia: 'exata' | 'aproximada';
   mesmaRegraVersao: boolean;
   divergente: boolean;
   diferencas: { campo: string; salvo: number | string | null; atual: number | string | null }[];

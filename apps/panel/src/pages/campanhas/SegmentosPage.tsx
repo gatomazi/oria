@@ -138,7 +138,12 @@ export function SegmentosPage() {
               render: (s) => (s.origem === 'rfm' ? `RFM ${s.rfmVersao ?? ''}`.trim() : s.origem === 'clientes' ? 'Filtros de Clientes' : 'Construtor'),
               sortValue: (s) => s.origem,
             },
-            { key: 'politica', priority: 'low', label: 'Tipo', muted: true, render: (s) => (s.origem === 'rfm' ? 'Pessoas dinâmicas · corte fixo' : 'Dinâmico') },
+            {
+              key: 'politica', priority: 'low', label: 'Tipo', muted: true,
+              render: (s) => (s.origem === 'rfm'
+                ? `Pessoas dinâmicas · corte fixo · ${s.filtros?.some((f) => f.field === 'rfm') ? 'avaliação exata' : 'avaliação aproximada'}`
+                : 'Dinâmico'),
+            },
             {
               key: 'corte', priority: 'low', label: 'Corte de valor',
               render: (s) => {
@@ -154,7 +159,7 @@ export function SegmentosPage() {
               },
             },
             { key: 'match', priority: 'low', label: 'Lógica', render: (s) => (s.match === 'ANY' ? 'Qualquer condição' : 'Todas as condições') },
-            { key: 'filtros', label: 'Filtros', align: 'right', render: (s) => plural(s.filtros?.length || 0, 'filtro', 'filtros') },
+            { key: 'filtros', label: 'Filtros', align: 'right', render: (s) => (s.filtros?.some((f) => f.field === 'rfm') ? 'Segmento RFM' : plural(s.filtros?.length || 0, 'filtro', 'filtros')) },
             { key: 'criadoEm', priority: 'low', label: 'Criado em', align: 'right', muted: true, render: (s) => new Date(s.criadoEm).toLocaleDateString('pt-BR') },
             {
               key: 'acoes',

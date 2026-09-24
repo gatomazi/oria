@@ -172,34 +172,31 @@ try {
   await page.waitForFunction(() => document.querySelector('input[type="text"]')?.value.startsWith('RFM · '));
   ok('nome da campanha pré-preenchido com o segmento', (await nomeCampo.inputValue()).startsWith('RFM · Novos'));
   await page.getByRole('button', { name: 'Avançar' }).tap();
-  await page.waitForSelector('[aria-label="Campo do filtro"]');
+  await page.waitForSelector('.ad-rfm-card');
   await page.screenshot({ path: path.join(OUT, '08-audiencia.png'), fullPage: true });
   await semRolagemHorizontal('etapa Audiência');
 
-  // Aviso do segmento RFM: regra, data da classificação, corte salvo e corte de hoje (pessoas dinâmicas, corte materializado).
+  // Rodada 5: o segmento RFM é UMA condição obrigatória (cartão somente leitura), avaliada pela mesma classificação da matriz.
   const aviso = await page.locator('.ds-callout', { hasText: 'Segmento RFM' }).first().innerText().catch(() => '');
-  ok('Audiência exibe regra, data, corte salvo e corte de hoje do segmento RFM', /Regra rfm-v1:[0-9a-f]{8}/.test(aviso) && /classificado em/.test(aviso) && /corte salvo/.test(aviso) && /Hoje \(/.test(aviso) && /corte SALVO/.test(aviso), aviso.replace(/\s+/g, ' ').slice(0, 160));
-  // O que a tela mostra × o que foi persistido × a prévia calculada pelo servidor.
-  const tela = await page.evaluate(() => [...document.querySelectorAll('[aria-label="Campo do filtro"]')].map((sel) => {
-    const linha = sel.closest('div');
-    const ctrls = [...linha.querySelectorAll('select, input')];
-    return { campo: sel.value, op: linha.querySelector('[aria-label="Operador"]')?.value ?? null, valor: (linha.querySelector('input:not([type="checkbox"])') || linha.querySelector('[aria-label="Valor do filtro"]'))?.value ?? null, n: ctrls.length };
-  }));
   const api = await ctx.request.get(`${BASE}/api/admin/segments`);
   const salvo = (await api.json()).segmentos.find((s) => s.id === segId);
   ok('segmento persistido é dinâmico, de origem RFM, com versão da regra e data de classificação', salvo && salvo.origem === 'rfm' && salvo.politica === 'dinamico' && /^rfm-v1:[0-9a-f]{8}$/.test(salvo.rfmVersao) && !!salvo.classificadoEm, salvo ? `${salvo.rfmVersao}` : 'não encontrado');
-  ok('a Audiência mostra tantos filtros quantos o segmento persistiu', tela.length === salvo.filtros.length, `tela ${tela.length} × banco ${salvo.filtros.length}`);
-  const iguais = salvo.filtros.every((f, i) => tela[i] && tela[i].campo === f.field && tela[i].op === f.op && Number(tela[i].valor) === Number(f.value));
-  ok('campo, operador e valor de cada filtro na tela = filtro persistido', iguais, JSON.stringify(tela));
+  ok('o segmento persistiu UM filtro `rfm` (predicado com o corte salvo + regra), não filtros genéricos', salvo.filtros.length === 1 && salvo.filtros[0].field === 'rfm' && salvo.filtros[0].value.regraVersao === salvo.rfmVersao, JSON.stringify(salvo.filtros.map((f) => f.field)));
+  const cartao = await page.locator('.ad-rfm-card').innerText();
+  ok('a Audiência mostra o segmento RFM como condição obrigatória, com regra e versão', /Segmento RFM/.test(cartao) && /Condição obrigatória/.test(cartao) && new RegExp(salvo.rfmVersao).test(cartao), cartao.replace(/\s+/g, ' ').slice(0, 140));
+  ok('nenhuma linha de filtro genérico aparece no lugar do segmento (nada para descartar sem querer)', (await page.locator('[aria-label="Campo do filtro"]').count()) === 0);
+  ok('o aviso de corte (quando existe) fala de regra, data e corte salvo × de hoje', aviso === '' || (/corte/.test(aviso)), aviso.replace(/\s+/g, ' ').slice(0, 120));
   const prevApi = await post('/api/admin/campaigns/audience/preview', { match: salvo.match, filters: salvo.filtros, exclusions: { semOptIn: true, numeroInvalido: true } });
   const esperado = await prevApi.json();
-  await page.waitForFunction(() => /encontrados/.test(document.body.innerText));
-  const texto = await page.evaluate(() => document.body.innerText.match(/(\d[\d.]*)\s+clientes? eleg[ií]veis?\s+—\s+(\d[\d.]*)\s+encontrados?,\s+(\d[\d.]*)\s+exclu[ií]dos?/i));
+  await page.waitForFunction(() => /no segmento/.test(document.body.innerText));
+  const texto = await page.evaluate(() => document.body.innerText.match(/(\d[\d.]*)\s+clientes? eleg[ií]veis?\s+—\s+(\d[\d.]*)\s+no segmento,\s+(\d[\d.]*)\s+exclu[ií]dos?/i));
   const lido = texto ? texto.slice(1).map((x) => Number(x.replace(/\./g, ''))) : null;
-  ok('contagem exibida na Audiência = prévia do servidor com os filtros persistidos', lido && lido[0] === esperado.eligible && lido[1] === esperado.matched && lido[2] === esperado.excluded, `tela ${JSON.stringify(lido)} × servidor ${esperado.eligible}/${esperado.matched}/${esperado.excluded}`);
+  ok('contagem exibida na Audiência = prévia do servidor com o filtro persistido', lido && lido[0] === esperado.eligible && lido[1] === esperado.matched && lido[2] === esperado.excluded, `tela ${JSON.stringify(lido)} × servidor ${esperado.eligible}/${esperado.matched}/${esperado.excluded}`);
   const { json: resumo } = { json: await (await ctx.request.get(`${BASE}/api/admin/clientes/resumo`)).json() };
   const seg = resumo.rfm.segmentos.find((s) => s.id === 'novos');
-  ok('universo do segmento RFM ≤ audiência encontrada (diferença só pelas regras documentadas)', esperado.matched >= seg.clientes && esperado.matched - seg.clientes <= 3, `RFM ${seg.clientes} × audiência ${esperado.matched}`);
+  ok('população da Audiência = segmento da matriz (igualdade exata, sem tolerância)', esperado.matched === seg.clientes && esperado.rfm.universos.segmento === seg.clientes, `RFM ${seg.clientes} × Audiência ${esperado.matched}`);
+  const resumoTela = await page.locator('.ad-segmento-preview').innerText();
+  ok('a prévia declara universos, asOf e regra (pessoas com pedido ⊃ compradores válidos ⊃ segmento)', /compradores? v[aá]lidos?/.test(resumoTela) && /pessoas? com pedido/.test(resumoTela) && /calculado agora/.test(resumoTela) && new RegExp(salvo.rfmVersao).test(resumoTela), resumoTela.replace(/\s+/g, ' ').slice(0, 200));
   // Nada foi disparado: continua sem campanha criada.
   const camps = await (await ctx.request.get(`${BASE}/api/admin/campaigns`)).json();
   ok('nenhuma campanha foi criada ou disparada', (camps.campanhas || camps.campaigns || []).length === 0);

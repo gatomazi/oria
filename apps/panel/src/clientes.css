@@ -218,6 +218,8 @@
 
 .cli-aviso { margin: 0 0 var(--space-1); }
 .cli-aviso--nota { color: var(--text-muted); font: var(--type-caption); }
+/* dentro de um Callout o fundo é tingido: o texto discreto sobe para o secundário (contraste AA) */
+.ds-callout .cli-aviso--nota { color: var(--text-secondary); }
 
 /* ── Página: cabeçalho, KPIs e filtros ────────────────────────────────────────────────────────────── */
 .cli-kpi-nota { margin: var(--space-2) 0 0; font: var(--type-caption); color: var(--text-muted); max-width: 90ch; }

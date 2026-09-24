@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { CorteDeValor, PredicadoRfm } from './clientes';
 
 // Campos de filtro suportados hoje (dado real disponível — ver decisão #7 do plano de
 // Campanhas/Remarketing, docs/PROMPT-CLAUDE-CAMPANHAS-REMARKETING-MIDIA-WHATSAPP.md). Cidade,
@@ -14,7 +15,16 @@ export type AudienciaCampo =
   | 'temCarrinhoAbandonado'
   | 'recebeuCampanha'
   | 'naoRecebeuCampanha'
-  | 'recebeuCampanhaNosUltimosDias';
+  | 'recebeuCampanhaNosUltimosDias'
+  // Segmento de origem RFM (Rodada 5): condição OBRIGATÓRIA avaliada pela mesma classificação da matriz de Clientes.
+  | 'rfm';
+
+export interface AudienciaFiltroRfmValor {
+  segmento: string;
+  regraVersao: string;
+  classificadoEm: string | null;
+  predicado: PredicadoRfm;
+}
 
 export const UF_OPCOES = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB',
@@ -36,6 +46,23 @@ export interface AudienciaExclusoes {
   recebeuCampanhaNasUltimasHoras?: number | null;
 }
 
+// Presente só quando a audiência tem um segmento RFM: de onde vem a população e com que regra/corte/`asOf` foi calculada.
+export interface AudienciaRfmResumo {
+  equivalencia: 'exata';
+  segmento: string;
+  segmentoNome: string;
+  regraVersao: string;
+  asOf: string;
+  fuso: string;
+  classificadoEmSalvo: string | null;
+  // Três universos distintos: pessoas com pedido ⊃ compradores válidos (a RFM) ⊃ segmento.
+  universos: { pessoasComPedido: number; compradoresValidos: number; segmento: number };
+  corteSalvo: CorteDeValor | null;
+  corteAtual: CorteDeValor | null;
+  divergente: boolean;
+  pessoasNoSegmentoDeHoje: number | null;
+}
+
 export interface AudienciaPreviewResultado {
   matched: number;
   excluded: number;
@@ -46,6 +73,7 @@ export interface AudienciaPreviewResultado {
     compradoRecentemente: number;
     recebeuCampanhaRecentemente: number;
   };
+  rfm?: AudienciaRfmResumo;
 }
 
 export function previewAudiencia(match: 'ALL' | 'ANY', filters: AudienciaFiltro[], exclusions: AudienciaExclusoes) {

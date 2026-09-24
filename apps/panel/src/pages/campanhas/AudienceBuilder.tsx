@@ -6,9 +6,11 @@ import {
   type AudienciaCampo,
   type AudienciaExclusoes,
   type AudienciaFiltro,
+  type AudienciaFiltroRfmValor,
   type AudienciaOperador,
   type AudienciaPreviewResultado,
 } from '../../api/campanhas';
+import { AudienciaResumo, AvisoCorteDaAudiencia, RfmFiltroCard } from './AudienciaResumo';
 
 // Construtor de audiência compartilhado entre Segmentos (Fase 3) e a Etapa 2 do wizard de Nova
 // Campanha (Fase 4) — mesma UI, mesmo contrato de filtro/exclusão, só o estado é controlado por
@@ -25,6 +27,8 @@ const CAMPO_LABEL: Record<AudienciaCampo, string> = {
   recebeuCampanha: 'Já recebeu a campanha',
   naoRecebeuCampanha: 'Nunca recebeu a campanha',
   recebeuCampanhaNosUltimosDias: 'Recebeu campanha nos últimos X dias',
+  // Não aparece na lista de campos: o segmento RFM vem de Clientes e é exibido em cartão próprio (somente leitura).
+  rfm: 'Segmento RFM',
 };
 
 const CAMPOS_NUMERICOS: AudienciaCampo[] = ['diasSemComprar', 'quantidadePedidos', 'totalGasto', 'ticketMedio'];
@@ -75,6 +79,9 @@ function filtroFormParaApi(f: FiltroForm): AudienciaFiltro | null {
 
 export interface AudienceState {
   match: 'ALL' | 'ANY';
+  // Segmento de origem RFM: condição OBRIGATÓRIA (vale mesmo com "Qualquer condição"), avaliada pelo servidor com a mesma
+  // classificação da matriz de Clientes. Somente leitura aqui: nunca vira uma linha de texto que possa ser descartada.
+  rfm: AudienciaFiltroRfmValor | null;
   filtros: FiltroForm[];
   semOptIn: boolean;
   numeroInvalido: boolean;
@@ -85,6 +92,7 @@ export interface AudienceState {
 export function audienceStateVazio(): AudienceState {
   return {
     match: 'ALL',
+    rfm: null,
     filtros: [filtroFormVazio()],
     semOptIn: true,
     numeroInvalido: true,
@@ -94,10 +102,14 @@ export function audienceStateVazio(): AudienceState {
 }
 
 export function audienceStateDeSalvo(match: 'ALL' | 'ANY', filtros: AudienciaFiltro[], exclusoes: AudienciaExclusoes): AudienceState {
+  const filtroRfm = filtros.find((f) => f.field === 'rfm');
+  const demais = filtros.filter((f) => f.field !== 'rfm');
   return {
     match,
-    filtros: filtros.length
-      ? filtros.map((f) => ({
+    rfm: filtroRfm ? (filtroRfm.value as AudienciaFiltroRfmValor) : null,
+    // Com segmento RFM e sem condições adicionais não há linha vazia: o cartão do segmento já é a audiência.
+    filtros: demais.length
+      ? demais.map((f) => ({
           field: f.field,
           op: (f.op as AudienciaOperador) || 'gte',
           value:
@@ -105,7 +117,7 @@ export function audienceStateDeSalvo(match: 'ALL' | 'ANY', filtros: AudienciaFil
               ? String((f.value as Record<string, unknown>).campanhaId ?? (f.value as Record<string, unknown>).dias ?? '')
               : String(f.value ?? ''),
         }))
-      : [filtroFormVazio()],
+      : filtroRfm ? [] : [filtroFormVazio()],
     semOptIn: exclusoes.semOptIn !== false,
     numeroInvalido: exclusoes.numeroInvalido !== false,
     compradoNosUltimosDias: exclusoes.compradoNosUltimosDias != null ? String(exclusoes.compradoNosUltimosDias) : '',
@@ -116,7 +128,10 @@ export function audienceStateDeSalvo(match: 'ALL' | 'ANY', filtros: AudienciaFil
 export function audienceStateParaApi(s: AudienceState): { match: 'ALL' | 'ANY'; filtros: AudienciaFiltro[]; exclusoes: AudienciaExclusoes } {
   return {
     match: s.match,
-    filtros: s.filtros.map(filtroFormParaApi).filter((f): f is AudienciaFiltro => f !== null),
+    filtros: [
+      ...(s.rfm ? [{ field: 'rfm' as const, op: 'segmento' as unknown as AudienciaOperador, value: s.rfm }] : []),
+      ...s.filtros.map(filtroFormParaApi).filter((f): f is AudienciaFiltro => f !== null),
+    ],
     exclusoes: {
       semOptIn: s.semOptIn,
       numeroInvalido: s.numeroInvalido,
@@ -132,7 +147,7 @@ function FiltroRow({ filtro, onChange, onRemove }: { filtro: FiltroForm; onChang
   return (
     <div className="ad-filtro-row">
       <select className="ds-select" aria-label="Campo do filtro" value={filtro.field} onChange={(e) => onChange({ ...filtroFormVazio(), field: e.target.value as AudienciaCampo })}>
-        {Object.entries(CAMPO_LABEL).map(([valor, label]) => (
+        {Object.entries(CAMPO_LABEL).filter(([valor]) => valor !== 'rfm').map(([valor, label]) => (
           <option key={valor} value={valor}>{label}</option>
         ))}
       </select>
@@ -183,27 +198,36 @@ export function AudienceBuilder({ loja, state, onChange, onPreview }: AudienceBu
   const apiPayload = useMemo(() => audienceStateParaApi(state), [state]);
 
   useEffect(() => {
+    // `vigente` descarta respostas de uma configuração que já não é a atual (troca rápida de filtro, resposta lenta ou fora de
+    // ordem): a tela nunca mostra a contagem de um filtro antigo sob o filtro novo.
+    let vigente = true;
     const timer = setTimeout(() => {
       setPreviewCarregando(true);
       setPreviewErro('');
       previewAudiencia(apiPayload.match, apiPayload.filtros, apiPayload.exclusoes)
         .then((r) => {
+          if (!vigente) return;
           setPreview(r);
           onPreview?.(r);
         })
         .catch((err: Error) => {
+          if (!vigente) return;
+          setPreview(null);
           setPreviewErro(err.message);
           onPreview?.(null);
         })
-        .finally(() => setPreviewCarregando(false));
+        .finally(() => { if (vigente) setPreviewCarregando(false); });
     }, 400);
-    return () => clearTimeout(timer);
+    return () => { vigente = false; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loja, apiPayload.match, JSON.stringify(apiPayload.filtros), JSON.stringify(apiPayload.exclusoes)]);
 
   return (
     <div className="ad-segmento-form">
-      <Field label="Quem deve receber?">
+      {state.rfm && <RfmFiltroCard filtro={state.rfm} preview={preview} />}
+      {state.rfm && <AvisoCorteDaAudiencia preview={preview} />}
+
+      <Field label={state.rfm ? 'Condições adicionais' : 'Quem deve receber?'} hint={state.rfm ? 'O segmento RFM acima vale sempre; estas condições atuam sobre ele.' : undefined}>
         <select className="ds-select" value={state.match} onChange={(e) => onChange({ ...state, match: e.target.value as 'ALL' | 'ANY' })}>
           <option value="ALL">Todas as condições</option>
           <option value="ANY">Qualquer condição</option>
@@ -246,16 +270,7 @@ export function AudienceBuilder({ loja, state, onChange, onPreview }: AudienceBu
         </Field>
       </Card>
 
-      <div className="ad-segmento-preview">
-        {previewCarregando && <span className="pc-nota">Calculando…</span>}
-        {previewErro && <span className="ds-form-error">{previewErro}</span>}
-        {preview && !previewCarregando && (
-          <>
-            <strong>{preview.eligible}</strong> {preview.eligible === 1 ? 'cliente elegível' : 'clientes elegíveis'}
-            <span className="pc-nota"> — {preview.matched} encontrados, {preview.excluded} excluídos</span>
-          </>
-        )}
-      </div>
+      <AudienciaResumo preview={preview} carregando={previewCarregando} erro={previewErro} />
     </div>
   );
 }

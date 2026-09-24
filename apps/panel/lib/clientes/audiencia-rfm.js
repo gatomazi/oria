@@ -130,6 +130,7 @@ function resolverPopulacaoRfm({ agregados, analise, filtro }) {
     resumo: {
       equivalencia: 'exata',
       segmento: f.value.segmento,
+      segmentoNome: (REGRAS.find((r) => r.id === f.value.segmento) || {}).nome || f.value.segmento,
       regraVersao: rfm.regraVersao,
       asOf: rfm.asOf,
       fuso: rfm.fuso,
