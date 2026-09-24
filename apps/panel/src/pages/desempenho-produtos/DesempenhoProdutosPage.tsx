@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Button, Callout, DataTable, EmptyState, ErrorState, Icon, Input, KpiCard, KpiStrip, PageHeader, PageStack, Pagination, Skeleton, StatusBadge, Tabs, Toolbar, type TableSort,
 } from '../../components/ds';
@@ -278,7 +278,21 @@ export function DesempenhoProdutosPage() {
   const [periodo, setPeriodo] = useState<Periodo>({ startDate: TRINTA_DIAS_ATRAS, endDate: HOJE });
   const [status, setStatus] = useState<ProductAnalyticsStatus | null>(null);
   const [statusErro, setStatusErro] = useState('');
-  const [drawerId, setDrawerId] = useState<string | null>(null);
+  // Gate D ("Jornada de Valor"): CTA de "Prioridades de hoje" (Jornada de Compra) chega aqui como
+  // /admin/desempenho-produtos?productId=<id> — abre o drawer direto, sem forçar o lojista a
+  // procurar o produto de novo na tabela. `productId` some da URL depois de abrir (nunca preso no
+  // histórico do navegador — fechar/reabrir o drawer manualmente não reabre o mesmo produto).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [drawerId, setDrawerId] = useState<string | null>(() => searchParams.get('productId'));
+
+  useEffect(() => {
+    if (searchParams.get('productId')) {
+      const proximos = new URLSearchParams(searchParams);
+      proximos.delete('productId');
+      setSearchParams(proximos, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     getProductAnalyticsStatus().then(setStatus).catch((err: Error) => setStatusErro(err.message));

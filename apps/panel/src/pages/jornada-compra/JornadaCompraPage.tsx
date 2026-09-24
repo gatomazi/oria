@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  Button, Callout, DataTable, EmptyState, ErrorState, Field, Input, KpiCard, KpiStrip,
+  Button, Callout, Card, DataTable, EmptyState, ErrorState, Field, Input, KpiCard, KpiStrip,
   PageHeader, PageStack, Skeleton, StatusBadge, Tabs, Toolbar,
 } from '../../components/ds';
 import { formatValor } from '../../lib/format';
 import {
-  checkOrderTransactionLink, getJourneyAnalytics,
-  type JourneyAnalyticsResponse, type OrderTransactionLinkResponse,
+  checkOrderTransactionLink, getJourneyAnalytics, getOpportunities,
+  type JourneyAnalyticsResponse, type OrderTransactionLinkResponse, type OpportunitiesResponse, type Opportunity,
 } from '../../api/journeyAnalytics';
-import { STATUS_LABEL, statusTone } from './formatadores';
+import { STATUS_LABEL, statusTone, OPORTUNIDADE_TITULO, formatarEvidencia, CONFIANCA_LABEL, confiancaTone } from './formatadores';
 
 import '../../pedidos-central.css';
 import '../desempenho-produtos/desempenho-produtos.css';
+import './jornada-compra.css';
 
 const HOJE = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const TRINTA_DIAS_ATRAS = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(Date.now() - 29 * 86_400_000));
@@ -30,13 +32,89 @@ function CabecalhoDeFonte({ titulo, available, status, reason }: { titulo: strin
   );
 }
 
-function VisaoGeral({ dados }: { dados: JourneyAnalyticsResponse }) {
+// Gate C/D ("Jornada de Valor") · "Prioridades de hoje" — até 5 diagnósticos reais, com evidência
+// numérica, hipótese (NUNCA causa comprovada — ver opportunity-diagnostics.js) e CTA funcional pra
+// uma tela que já existe. Busca própria (endpoint próprio, GET /journey/opportunities) — nunca
+// bloqueia nem é bloqueada pelo carregamento do resto da página.
+function CartaoDeOportunidade({ op }: { op: Opportunity }) {
+  const cta = op.product
+    ? { href: `/admin/desempenho-produtos?productId=${encodeURIComponent(op.product.id)}`, label: 'Abrir produto' }
+    : { href: '/admin/desempenho-produtos', label: 'Abrir Desempenho de Produtos' };
+  return (
+    <Card
+      title={op.product ? `${OPORTUNIDADE_TITULO[op.type]} — ${op.product.name}` : OPORTUNIDADE_TITULO[op.type]}
+      description={formatarEvidencia(op)}
+      action={<StatusBadge tone={confiancaTone(op.confidence)} label={CONFIANCA_LABEL[op.confidence]} />}
+    >
+      <p className="pa-oportunidade-hipotese">{op.hypothesis}</p>
+      <p className="pa-oportunidade-acao"><strong>O que investigar:</strong> {op.suggestedAction}</p>
+      <Link to={cta.href} className="ds-btn ds-btn--secondary ds-btn--sm">{cta.label}</Link>
+    </Card>
+  );
+}
+
+function PrioridadesDeHoje({ periodo }: { periodo: Periodo }) {
+  const [dados, setDados] = useState<OpportunitiesResponse | null>(null);
+  const [erro, setErro] = useState('');
+
+  function carregar() {
+    setErro('');
+    setDados(null);
+    getOpportunities(periodo, { limit: 5 }).then(setDados).catch((err: Error) => setErro(err.message));
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(carregar, [periodo.startDate, periodo.endDate]);
+
+  if (erro) return <ErrorState description={erro} onRetry={carregar} />;
+  if (!dados) return <Skeleton rows={3} />;
+
+  const semNenhumaFonte = !dados.sources.productFunnel.available && !dados.sources.commerceReconciliation.available;
+  if (semNenhumaFonte) {
+    return (
+      <EmptyState
+        title="Sem fonte conectada para diagnosticar oportunidades"
+        description="Conecte o Google Analytics 4 e/ou o Commerce em Integrações para começar a ver prioridades aqui."
+      />
+    );
+  }
+
+  if (!dados.opportunities.length) {
+    return (
+      <Callout tone="info" title="Nenhuma prioridade encontrada neste período">
+        Com o volume e a cobertura de dados atuais, nenhum produto se desviou o suficiente da própria Store pra virar uma prioridade — isso não significa que está tudo perfeito, só que não há evidência suficiente ainda.
+      </Callout>
+    );
+  }
+
+  return (
+    <div className="ds-stack">
+      {!dados.sources.commerceReconciliation.available && (
+        <Callout tone="info" title="Diagnósticos só com GA4 nesta carga">
+          {STATUS_LABEL[dados.sources.commerceReconciliation.status] || 'Commerce indisponível'} — sinais que comparam com pedidos confirmados (ex.: divergência de unidades) não aparecem até o Commerce estar conectado e no período coberto.
+        </Callout>
+      )}
+      <div className="pa-oportunidades-grid">
+        {dados.opportunities.map((op, i) => <CartaoDeOportunidade key={`${op.type}-${op.product?.id ?? 'store'}-${i}`} op={op} />)}
+      </div>
+      {dados.totalCandidates > dados.opportunities.length && (
+        <p className="ds-note">Mostrando {dados.opportunities.length} de {dados.totalCandidates} sinais encontrados no período — os de maior prioridade primeiro.</p>
+      )}
+    </div>
+  );
+}
+
+function VisaoGeral({ dados, periodo }: { dados: JourneyAnalyticsResponse; periodo: Periodo }) {
   const { tier1 } = dados;
   if (!tier1) return null;
   const { funnel, confirmedOrders, adsInvestment } = tier1;
 
   return (
     <div className="ds-stack">
+      <Card title="Prioridades de hoje" description="Onde investigar primeiro, com evidência e ação sugerida — nunca causa comprovada.">
+        <PrioridadesDeHoje periodo={periodo} />
+      </Card>
+
       <Callout tone="info" title="Cada fonte mede uma coisa diferente — nunca somadas entre si">
         GA4 observa comportamento agregado por item; Meta Ads reporta o que a própria plataforma atribui à campanha; Commerce confirma a venda operacional. Divergência entre elas é diagnóstico, não erro.
       </Callout>
@@ -289,7 +367,7 @@ export function JornadaCompraPage() {
           <Tabs
             label="Jornada de Compra"
             tabs={[
-              { label: 'Visão geral', render: () => <VisaoGeral dados={dados} /> },
+              { label: 'Visão geral', render: () => <VisaoGeral dados={dados} periodo={periodo} /> },
               { label: 'Aquisição', render: () => <Aquisicao dados={dados} /> },
               { label: 'Meta Ads', render: () => <MetaAdsPainel dados={dados} /> },
               { label: 'Correlação transação↔pedido', render: () => <Correlacao dados={dados} periodo={periodo} /> },
