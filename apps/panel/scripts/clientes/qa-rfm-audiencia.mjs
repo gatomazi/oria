@@ -123,6 +123,7 @@ try {
     await page.waitForFunction(() => /Revisão|Resumo|Audiência/.test(document.body.innerText) && document.querySelector('.ad-revisao'));
     await page.waitForFunction(() => /no segmento/.test(document.querySelector('.ad-revisao')?.innerText || ''));
     ok('Revisão: a audiência foi RECALCULADA ao entrar (nova chamada de prévia)', chamadasPrevia > antes, `+${chamadasPrevia - antes} chamada(s)`);
+    await page.waitForFunction(() => /calculado agora/.test(document.querySelector('.tn-form')?.innerText || '')); // o detalhe da Revisão chega junto com o "ok" da reavaliação
     const rev = await page.locator('.ad-revisao').innerText();
     ok('Revisão mostra a mesma contagem do servidor, com "no segmento" e a regra', new RegExp(`${api1.matched} no segmento`).test(rev) && /calculado agora/.test(await page.locator('.tn-form').innerText()), rev.replace(/\s+/g, ' ').slice(0, 140));
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-02-revisao.png`), fullPage: true });

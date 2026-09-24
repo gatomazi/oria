@@ -188,13 +188,14 @@ try {
   ok('o aviso de corte (quando existe) fala de regra, data e corte salvo × de hoje', aviso === '' || (/corte/.test(aviso)), aviso.replace(/\s+/g, ' ').slice(0, 120));
   const prevApi = await post('/api/admin/campaigns/audience/preview', { match: salvo.match, filters: salvo.filtros, exclusions: { semOptIn: true, numeroInvalido: true } });
   const esperado = await prevApi.json();
-  await page.waitForFunction(() => /no segmento/.test(document.body.innerText));
+  await page.waitForFunction(() => { const t = document.querySelector('.ad-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
   const texto = await page.evaluate(() => document.body.innerText.match(/(\d[\d.]*)\s+clientes? eleg[ií]veis?\s+—\s+(\d[\d.]*)\s+no segmento,\s+(\d[\d.]*)\s+exclu[ií]dos?/i));
   const lido = texto ? texto.slice(1).map((x) => Number(x.replace(/\./g, ''))) : null;
   ok('contagem exibida na Audiência = prévia do servidor com o filtro persistido', lido && lido[0] === esperado.eligible && lido[1] === esperado.matched && lido[2] === esperado.excluded, `tela ${JSON.stringify(lido)} × servidor ${esperado.eligible}/${esperado.matched}/${esperado.excluded}`);
   const { json: resumo } = { json: await (await ctx.request.get(`${BASE}/api/admin/clientes/resumo`)).json() };
   const seg = resumo.rfm.segmentos.find((s) => s.id === 'novos');
   ok('população da Audiência = segmento da matriz (igualdade exata, sem tolerância)', esperado.matched === seg.clientes && esperado.rfm.universos.segmento === seg.clientes, `RFM ${seg.clientes} × Audiência ${esperado.matched}`);
+  await page.waitForFunction(() => { const t = document.querySelector('.ad-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
   const resumoTela = await page.locator('.ad-segmento-preview').innerText();
   ok('a prévia declara universos, asOf e regra (pessoas com pedido ⊃ compradores válidos ⊃ segmento)', /compradores? v[aá]lidos?/.test(resumoTela) && /pessoas? com pedido/.test(resumoTela) && /calculado agora/.test(resumoTela) && new RegExp(salvo.rfmVersao).test(resumoTela), resumoTela.replace(/\s+/g, ' ').slice(0, 200));
   // Nada foi disparado: continua sem campanha criada.
