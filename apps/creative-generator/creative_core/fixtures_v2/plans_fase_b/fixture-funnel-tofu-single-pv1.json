@@ -1,0 +1,486 @@
+{
+ "name": "fixture-funnel-tofu-single-pv1",
+ "request": {
+  "creative_id": "55555555-5555-4555-8555-555555555555",
+  "strategy": "FUNNEL_VISUAL",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "prod-maringa",
+    "name": "Camiseta Maringá",
+    "type": "camiseta",
+    "referenceImages": [
+     "tenant-demo/products/prod-maringa/front.png"
+    ],
+    "metadata": {
+     "city": "Maringá",
+     "state": "PR"
+    }
+   }
+  ],
+  "brand_kit_id": "use_origens",
+  "angle_id": "IDENTIDADE_ORIGEM",
+  "placement_id": "FEED_4X5",
+  "funnel_stage": "TOFU",
+  "context": {
+   "mode": "automatic"
+  },
+  "seed": 2,
+  "plan_schema_version": 2,
+  "prompt_version": 1
+ },
+ "plan": {
+  "plan_id": "plan_6854249ffe65ad58836b9e4a",
+  "creative_id": "55555555-5555-4555-8555-555555555555",
+  "schema_version": 2,
+  "strategy": "FUNNEL_VISUAL",
+  "internal_strategy_id": "FUNIL_VISUAL",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "prod-maringa",
+    "name": "Camiseta Maringá",
+    "type": "camiseta",
+    "referenceImages": [
+     "tenant-demo/products/prod-maringa/front.png"
+    ],
+    "metadata": {
+     "city": "Maringá",
+     "state": "PR"
+    }
+   }
+  ],
+  "angle": {
+   "id": "IDENTIDADE_ORIGEM",
+   "label": "Identidade / Origem",
+   "description": "Pessoa usando o produto integrada ao lugar/ambiente que representa a identidade da marca — comunica 'isso é meu' sem pose.",
+   "uses_person": true,
+   "apparel_only": false,
+   "multi_product_limit": 4
+  },
+  "placement": {
+   "id": "FEED_4X5",
+   "label": "Feed (4:5 — 1080×1350)",
+   "width": 1080,
+   "height": 1350,
+   "api_size": "1088x1360"
+  },
+  "persona": {
+   "id": "fashion_young",
+   "label": "Jovem 22 anos, estilo streetwear leve",
+   "age_range": "20-25",
+   "appearance": "cabelo cacheado curto",
+   "style": "streetwear leve",
+   "behavior": "espontâneo, rindo",
+   "source": "automatic"
+  },
+  "context": {
+   "context_id": "niche:fashion",
+   "context_type": "niche",
+   "provider": "niche",
+   "scene": "luz natural e paleta da própria região",
+   "supporting_element": "caminhar pela rua",
+   "avoid": [
+    "peça deformada ou com proporção irreal",
+    "tecido liso como vetor, sem trama",
+    "produto parecendo adesivo colado na foto",
+    "pose de catálogo rígida",
+    "fundo infinito colorido",
+    "sorriso de banco de imagem",
+    "caricatura regional",
+    "excesso de símbolos",
+    "souvenir turístico",
+    "excesso de texto",
+    "mapas ou silhuetas geográficas como ornamento",
+    "campanha turística de estado"
+   ],
+   "status": "approved",
+   "profile_version": 1
+  },
+  "brand_kit": {
+   "id": "use_origens",
+   "version": 1
+  },
+  "niche_kit": {
+   "id": "fashion",
+   "version": 1
+  },
+  "funnel_stage": "TOFU",
+  "remarketing_intent": null,
+  "layout": null,
+  "overlay": {
+   "allowed": true,
+   "headline": "Feito para o seu dia a dia",
+   "subheadline": null,
+   "cta": null,
+   "badges": [],
+   "benefits": [],
+   "search_bar_text": null,
+   "chips": [],
+   "text_density": "minimal",
+   "cta_emphasis": "subtle",
+   "clean": false
+  },
+  "copy": {
+   "generate": false,
+   "funnel_stages": [
+    "TOFU"
+   ]
+  },
+  "references": [
+   {
+    "ref": "tenant-demo/products/prod-maringa/front.png",
+    "product_id": "prod-maringa",
+    "role": "product_art",
+    "order": 1
+   }
+  ],
+  "prompt": {
+   "text": "REGRAS OBRIGATÓRIAS (nunca ignore):\n- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.\n- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.\n- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.\n- Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).\n- Fotografia realista, alta qualidade, formato vertical.\n- Preserve o TIPO DE PEÇA original: camiseta de MANGA CURTA, gola redonda, tecido de algodão comum (não premium). NUNCA transforme em manga longa, moletom, camisa de botão ou qualquer outra peça — mesmo que o cenário sugira frio, a peça continua sendo camiseta de manga curta (a pessoa pode usar um casaco/jaqueta POR CIMA se o clima pedir, mas a camiseta em si nunca muda de manga).\n- A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.\n- Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.\n- ETAPA TOFU: a imagem deve parecer uma publicação social plausível, NUNCA um anúncio tradicional. Sem molduras promocionais, preços, descontos ou cupons, e sem simular depoimento ou experiência de compra de um cliente real.\n\nTEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.\n\nPRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = \"Camiseta Maringá\" (camiseta).\n\nCOMPOSIÇÃO DE PESSOAS (contrato): exatamente 1 pessoa em quadro.\n  · Pessoa 1 (principal): Jovem 22 anos, estilo streetwear leve — veste \"Camiseta Maringá\" (camiseta).\n\nPERSONA: Jovem 22 anos, estilo streetwear leve; cabelo cacheado curto; streetwear leve; espontâneo, rindo. Aparência natural, sem rosto padrão de banco de imagem.\n\nOLHAR: olhar espontâneo para fora da câmera, como se algo fora de quadro chamasse a atenção; ninguém olha diretamente para a lente.\n\nÂNGULO IDENTIDADE: Jovem 22 anos, estilo streetwear leve usando \"Camiseta Maringá\" (camiseta) de forma natural, integrada ao cenário (luz natural e paleta da própria região). Enquadramento médio, a pessoa ocupa ~40% do quadro e o produto é claramente legível. Nada de pose de catálogo: parece um registro autêntico do cotidiano de quem se identifica com a marca.\n\nETAPA DO FUNIL NA ARTE — TOFU (descoberta): composição de publicação social plausível; texto mínimo (headline curta e, no máximo, CTA em texto + seta); nada de botão sólido, preço, cupom ou selo.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"Feito para o seu dia a dia\"\n  · Densidade de texto: minimal — só headline + micro CTA; imagem domina, muito respiro.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nMARCA (Use Origens):\n  · Posicionamento: regional contemporâneo; premium acessível; não souvenir; camisetas premium de identidade regional para quem tem orgulho de onde veio.\n  · Linguagem visual: editorial, clean, natural, lifestyle, premium.\n  · Paleta da marca (guia de cor da CENA, nunca do produto): #4d543d; #d6ba8d; #1a1e14; #f4efe6.\n  · Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.\n  · Cuia de chimarrão só no Sul (RS/SC/PR).\n\nNICHO (Moda / Vestuário):\n  · Materiais e sinais de uso real: algodão, trama de tecido visível, costuras e acabamento, etiqueta discreta.\n  · Público: compra pelo caimento e pelo estilo, não só pela estampa; quer ver a peça vestida em corpo real; compara tecido, acabamento e tamanho antes de decidir.\n\nCONTEXTO DA CENA: luz natural e paleta da própria região. Elemento de apoio, discreto: caminhar pela rua. Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.\n\nEVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): peça deformada ou com proporção irreal; tecido liso como vetor, sem trama; produto parecendo adesivo colado na foto; pose de catálogo rígida; fundo infinito colorido; sorriso de banco de imagem; caricatura regional; excesso de símbolos; souvenir turístico; excesso de texto; mapas ou silhuetas geográficas como ornamento; campanha turística de estado.\n\nFORMATO: Feed 4:5 vertical (1080×1350).",
+   "sections": [
+    {
+     "name": "fidelity_rules",
+     "length": 1594,
+     "source": "product",
+     "value": "9"
+    },
+    {
+     "name": "text_rules",
+     "length": 518,
+     "source": "user",
+     "value": "funnel_visual"
+    },
+    {
+     "name": "reference_roles",
+     "length": 99,
+     "source": "product",
+     "value": "refs:1"
+    },
+    {
+     "name": "people_composition_contract",
+     "length": 331,
+     "source": "niche",
+     "value": "1"
+    },
+    {
+     "name": "gaze",
+     "length": 131,
+     "source": "angle",
+     "value": "off_camera"
+    },
+    {
+     "name": "scene_action",
+     "length": 362,
+     "source": "angle",
+     "value": "IDENTIDADE_ORIGEM"
+    },
+    {
+     "name": "strategy_communication",
+     "length": 657,
+     "source": "user",
+     "value": "funnel_visual"
+    },
+    {
+     "name": "brand",
+     "length": 499,
+     "source": "brand",
+     "value": "Use Origens"
+    },
+    {
+     "name": "niche",
+     "length": 301,
+     "source": "niche",
+     "value": "Moda / Vestuário"
+    },
+    {
+     "name": "context",
+     "length": 184,
+     "source": "niche",
+     "value": "niche:fashion"
+    },
+    {
+     "name": "avoid",
+     "length": 425,
+     "source": "brand",
+     "value": "12"
+    },
+    {
+     "name": "output_format",
+     "length": 39,
+     "source": "user",
+     "value": "FEED_4X5"
+    }
+   ],
+   "sha256": "326ec13b428a5ce787428c3e8decdc2ee239e2ca84e140c8288b3207cb6c5069",
+   "prompt_version": 1
+  },
+  "model": {
+   "task": "image_generation",
+   "model": "gpt-image-2",
+   "quality": "medium",
+   "size": "1088x1360"
+  },
+  "mode": "creative",
+  "objective": "funnel_visual",
+  "subjects": [
+   {
+    "id": "s1",
+    "role": "primary",
+    "label": "Jovem 22 anos, estilo streetwear leve",
+    "persona": {
+     "id": "fashion_young",
+     "label": "Jovem 22 anos, estilo streetwear leve",
+     "age_range": "20-25",
+     "appearance": "cabelo cacheado curto",
+     "style": "streetwear leve",
+     "behavior": "espontâneo, rindo",
+     "source": "automatic"
+    },
+    "age_band": "adult",
+    "is_minor": false,
+    "minor_source": null,
+    "product_use": "wears",
+    "product_id": "prod-maringa",
+    "role_hint": null,
+    "relation_to_primary": null,
+    "prominence": "hero",
+    "source": "niche"
+   }
+  ],
+  "scene": {
+   "gaze": {
+    "mode": "off_camera",
+    "requested": "auto",
+    "source": "angle",
+    "reason": "angle_default:IDENTIDADE_ORIGEM:single"
+   },
+   "picks": {},
+   "prompt_version": 1,
+   "interaction": null
+  },
+  "composition": {
+   "people_count": 1,
+   "pose_risk": "low",
+   "risk_reasons": []
+  },
+  "minor_safety": {
+   "applies": false,
+   "minor_subject_ids": [],
+   "global": {
+    "policy": "global_minor_safety_policy",
+    "version": 1,
+    "rules": [
+     "age_appropriate_clothing",
+     "nothing_revealing",
+     "not_sexualized",
+     "no_adult_aesthetic",
+     "age_appropriate_poses",
+     "normal_fit_no_body_focus",
+     "commercial_family_context"
+    ],
+    "adult_child_rule": null
+   },
+   "brand": null
+  },
+  "semantics": {
+   "products": [
+    {
+     "product_id": "prod-maringa",
+     "semantic_context": null
+    }
+   ],
+   "supporting": null,
+   "warnings": []
+  },
+  "resolved_inputs": {
+   "brand": {
+    "name": "Use Origens",
+    "positioning": [
+     "regional contemporâneo",
+     "premium acessível",
+     "não souvenir",
+     "camisetas premium de identidade regional para quem tem orgulho de onde veio"
+    ],
+    "visualStyle": [
+     "editorial",
+     "clean",
+     "natural",
+     "lifestyle",
+     "premium"
+    ],
+    "colors": [
+     "#4d543d",
+     "#d6ba8d",
+     "#1a1e14",
+     "#f4efe6"
+    ],
+    "manualNotes": [
+     "Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.",
+     "Cuia de chimarrão só no Sul (RS/SC/PR)."
+    ]
+   },
+   "niche": {
+    "name": "Moda / Vestuário",
+    "materials": [
+     "algodão",
+     "trama de tecido visível",
+     "costuras e acabamento",
+     "etiqueta discreta"
+    ],
+    "audienceBehaviors": [
+     "compra pelo caimento e pelo estilo, não só pela estampa",
+     "quer ver a peça vestida em corpo real",
+     "compara tecido, acabamento e tamanho antes de decidir"
+    ]
+   },
+   "strategy": {
+    "text_rule": "TEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.",
+    "communication": "ETAPA DO FUNIL NA ARTE — TOFU (descoberta): composição de publicação social plausível; texto mínimo (headline curta e, no máximo, CTA em texto + seta); nada de botão sólido, preço, cupom ou selo.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"Feito para o seu dia a dia\"\n  · Densidade de texto: minimal — só headline + micro CTA; imagem domina, muito respiro.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa."
+   }
+  },
+  "provenance": {
+   "angle": "user",
+   "brand_kit": "user",
+   "compiler": "planner_default",
+   "composition": "planner_default",
+   "context": "niche",
+   "minor_safety.brand": "planner_default",
+   "minor_safety.global": "safety_policy",
+   "mode": "planner_default",
+   "model": "planner_default",
+   "niche_kit": "brand",
+   "objective": "user",
+   "persona": "niche",
+   "placement": "user",
+   "products": "user",
+   "quality": "planner_default",
+   "references": "product",
+   "resolved_inputs": "brand",
+   "scene.gaze": "angle",
+   "scene.picks": "planner_default",
+   "scene.prompt_version": "planner_default",
+   "semantics": "planner_default",
+   "strategy": "user",
+   "subjects": "niche"
+  },
+  "seed": 2,
+  "compiler": {
+   "version": 1,
+   "sections": [
+    {
+     "section": "fidelity_rules",
+     "source": "product",
+     "value": "9",
+     "length": 1594
+    },
+    {
+     "section": "text_rules",
+     "source": "user",
+     "value": "funnel_visual",
+     "length": 518
+    },
+    {
+     "section": "reference_roles",
+     "source": "product",
+     "value": "refs:1",
+     "length": 99
+    },
+    {
+     "section": "people_composition_contract",
+     "source": "niche",
+     "value": "1",
+     "length": 331
+    },
+    {
+     "section": "gaze",
+     "source": "angle",
+     "value": "off_camera",
+     "length": 131
+    },
+    {
+     "section": "scene_action",
+     "source": "angle",
+     "value": "IDENTIDADE_ORIGEM",
+     "length": 362
+    },
+    {
+     "section": "strategy_communication",
+     "source": "user",
+     "value": "funnel_visual",
+     "length": 657
+    },
+    {
+     "section": "brand",
+     "source": "brand",
+     "value": "Use Origens",
+     "length": 499
+    },
+    {
+     "section": "niche",
+     "source": "niche",
+     "value": "Moda / Vestuário",
+     "length": 301
+    },
+    {
+     "section": "context",
+     "source": "niche",
+     "value": "niche:fashion",
+     "length": 184
+    },
+    {
+     "section": "avoid",
+     "source": "brand",
+     "value": "12",
+     "length": 425
+    },
+    {
+     "section": "output_format",
+     "source": "user",
+     "value": "FEED_4X5",
+     "length": 39
+    }
+   ]
+  },
+  "versions": {
+   "core_version": "1.1.0",
+   "schema_version": 1,
+   "prompt_version": 1,
+   "brand_kit_schema_version": 1,
+   "niche_kit_schema_version": 1,
+   "context_profile_schema_version": 1,
+   "clean_angles_version": 1,
+   "remarketing_version": 1,
+   "funnel_visual_version": 1,
+   "strategy_version": 1,
+   "compiler_version": 1,
+   "brand_kit_version": 1,
+   "niche_kit_version": 1,
+   "context_profile_version": 1
+  },
+  "validations": [
+   {
+    "rule": "product_count_within_limits",
+    "passed": true
+   },
+   {
+    "rule": "angle_available_for_brand_and_niche",
+    "passed": true
+   },
+   {
+    "rule": "context_profile_approved",
+    "passed": true
+   },
+   {
+    "rule": "references_are_product_art_only",
+    "passed": true
+   },
+   {
+    "rule": "funnel_stage_in_image",
+    "passed": true
+   }
+  ],
+  "warnings": [
+   "geographic_context_unresolved_used_niche_context"
+  ]
+ }
+}

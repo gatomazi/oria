@@ -6,9 +6,16 @@ server-to-server; browsers never do.
     GET  /v1/health        liveness + versions
     GET  /v1/contracts     strategies, multi-product rules, versions, catalog, JSON Schemas
     POST /v1/validate/<C>  {payload} -> {valid, errors}   (C = exported contract, e.g. BrandKit)
-    POST /v1/plans         CreativeRequest            -> CreativePlan
-    POST /v1/generations   {plan, references, openai_api_key} -> CreativeResult
+    POST /v1/plans         {request}                  -> {plan: CreativePlan}   (request.prompt_version / plan_schema_version 1|2, optional)
+    POST /v1/compile       {plan}                     -> {compiled: CompiledPrompt}   (schema_version 2 plans; pure)
+    POST /v1/draft         {plan}                     -> {draft: GenerationDraft}   (any persisted plan; pure — "Copiar dados")
+    POST /v1/feedback-snapshot {plan[, result_metadata, asset_sha256]} -> {snapshot: FeedbackSnapshot}   (pure — "Gostei / Não gostei")
+    POST /v1/generations   {plan, references, openai_api_key[, generation_attempt, normalize_references]} -> CreativeResult
     POST /v1/copies        {request, openai_api_key}  -> {variants: CopyVariant[], usage}
+    POST /v1/enrichment/propose {product[, brand, niche, provider, references, openai_api_key]} -> {proposal: EnrichmentProposal}
+        (pure, no persistence; `provider` "fake" (default, no key needed) or "openai" — "openai"
+        needs `openai_api_key` (same BYOK mechanism as /v1/generations, /v1/copies) or refuses
+        cleanly, never a silent fallback to "fake"; see _enrichment_propose)
 
 Security controls:
   * service-to-service auth: `Authorization: Bearer <CREATIVE_CORE_SERVICE_TOKEN>`,
@@ -32,17 +39,42 @@ from typing import Callable, Iterable
 
 from . import contracts
 from .angles import ANGLE_IDS, CORE_ANGLES
+from . import angle_catalog, composition
+from .compiler import compile_prompt
+from .drafts import feedback_snapshot, generation_draft_from_plan
 from .engines import generate_copy_with_usage, generate_creative, plan_creative
+from . import enrichment
 from .errors import GenerationError
 from .kits import list_builtin_kits, load_brand_kit, load_niche_kit
 from .model_router import ModelRouter
 from .placements import PUBLIC_PLACEMENTS, placement_descriptor
+from .prompt_v2 import PROMPT_V2_ANGLES
 from .references import decode_reference
 from .strategies import MULTI_PRODUCT_RULES, SAAS_STRATEGIES, compatibility_matrix
-from .versions import version_manifest
+from .versions import COMPILER_VERSION, SUPPORTED_PLAN_SCHEMA_VERSIONS, SUPPORTED_PROMPT_VERSIONS, version_manifest
 
 MAX_BODY_BYTES = 60 * 1024 * 1024
 TOKEN_ENV = "CREATIVE_CORE_SERVICE_TOKEN"
+NORMALIZE_REFERENCES_ENV = "CREATIVE_NORMALIZE_REFERENCES"
+PROMPT_VERSION_ENV = "CREATIVE_PROMPT_VERSION"
+PLAN_SCHEMA_VERSION_ENV = "CREATIVE_PLAN_SCHEMA_VERSION"
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _env_flag(name: str, env: dict | None = None) -> bool:
+    return str((os.environ if env is None else env).get(name, "")).strip().lower() in _TRUTHY
+
+
+def _env_plan_schema_version(env: dict | None = None) -> int:
+    """CREATIVE_PLAN_SCHEMA_VERSION: 2 builds CreativePlan v2 by default; anything else (unset, garbage) is 1."""
+    raw = str((os.environ if env is None else env).get(PLAN_SCHEMA_VERSION_ENV, "")).strip()
+    return int(raw) if raw.isdigit() and int(raw) in SUPPORTED_PLAN_SCHEMA_VERSIONS else 1
+
+
+def _env_prompt_version(env: dict | None = None) -> int:
+    """CREATIVE_PROMPT_VERSION: 2 turns the v2 person scenes on by default; anything else (unset, garbage) is 1."""
+    raw = str((os.environ if env is None else env).get(PROMPT_VERSION_ENV, "")).strip()
+    return int(raw) if raw.isdigit() and int(raw) in SUPPORTED_PROMPT_VERSIONS else 1
 
 ClientFactory = Callable[[str], object]
 
@@ -57,12 +89,19 @@ def openai_client_factory(api_key: str):
 
 class CreativeCoreService:
     def __init__(self, token: str, client_factory: ClientFactory = openai_client_factory,
-                 router: ModelRouter | None = None):
+                 router: ModelRouter | None = None, normalize_references: bool = False, prompt_version: int = 1,
+                 plan_schema_version: int = 1):
         if not token or len(token) < 32:
             raise ValueError(f"{TOKEN_ENV} must be set with at least 32 characters")
         self._token = token.encode()
         self._client_factory = client_factory
         self._router = router or ModelRouter()
+        # Default for POST /v1/generations; a request may override it with `normalize_references`.
+        self._normalize_references = normalize_references
+        # Default for POST /v1/plans when the request carries no `prompt_version`.
+        self._prompt_version = prompt_version if prompt_version in SUPPORTED_PROMPT_VERSIONS else 1
+        # Default for POST /v1/plans when the request carries no `plan_schema_version`.
+        self._plan_schema_version = plan_schema_version if plan_schema_version in SUPPORTED_PLAN_SCHEMA_VERSIONS else 1
 
     # ------------------------------------------------------------ plumbing
     def __call__(self, environ: dict, start_response) -> Iterable[bytes]:
@@ -127,8 +166,12 @@ class CreativeCoreService:
             ("GET", "/v1/health"): self._health,
             ("GET", "/v1/contracts"): self._contracts,
             ("POST", "/v1/plans"): self._plans,
+            ("POST", "/v1/compile"): self._compile,
+            ("POST", "/v1/draft"): self._draft,
+            ("POST", "/v1/feedback-snapshot"): self._feedback_snapshot,
             ("POST", "/v1/generations"): self._generations,
             ("POST", "/v1/copies"): self._copies,
+            ("POST", "/v1/enrichment/propose"): self._enrichment_propose,
         }
         if path == "/v1/health" and method == "GET":
             return self._health(environ)
@@ -162,6 +205,10 @@ class CreativeCoreService:
             "multi_product_rules": MULTI_PRODUCT_RULES,
             "compatibility_matrix": compatibility_matrix(),
             "models": self._router.describe(),
+            "prompt_versions": {"supported": list(SUPPORTED_PROMPT_VERSIONS), "default": self._prompt_version,
+                                "v2_angles": sorted(PROMPT_V2_ANGLES)},
+            "plan_schema_versions": {"supported": list(SUPPORTED_PLAN_SCHEMA_VERSIONS), "default": self._plan_schema_version,
+                                     "compiler_version": COMPILER_VERSION},
             "catalog": self._catalog(),
             "schemas": {name: contracts.json_schema(name) for name in contracts.EXPORTED_CONTRACTS},
         }
@@ -184,6 +231,17 @@ class CreativeCoreService:
             "cta_emphases": list(contracts.CTA_EMPHASES),
             "clean_modes": list(contracts.CLEAN_MODES),
             "context_modes": list(contracts.CONTEXT_MODES),
+            # Scene composition (Fase C): what a screen needs to name and offer people and interactions.
+            "interactions": [{"id": k, "label": v["label"], "min_people": v["min_people"], "max_people": v["max_people"]}
+                             for k, v in composition.INTERACTIONS.items()],
+            "relations": [{"id": k, "label": v} for k, v in composition.CATALOG["relation_labels"].items() if k != "_doc"],
+            # Fase D: family cards for a V2 screen (§6 — no ids/hints/prompt internals below `label`/`description`),
+            # plus the legacy angle -> family/preset map so the panel can show "this batch used <family>" for history
+            # generated before Fase D, and the discontinued-as-top-level set (still valid as angle_id, not offered as a card).
+            "angle_families": [{"id": k, "label": v["label"], "description": v["description"], "reserved": bool(v.get("reserved"))}
+                               for k, v in angle_catalog.FAMILIES.items()],
+            "angle_legacy_map": {aid: angle_catalog.resolve_angle_meta(aid) for aid in ANGLE_IDS},
+            "angle_discontinued": sorted(angle_catalog.DISCONTINUED_AS_TOP_LEVEL),
             "builtin_kits": {
                 "brand": [load_brand_kit(k) for k in builtin["brand"]],
                 "niche": [load_niche_kit(k) for k in builtin["niche"]],
@@ -200,10 +258,87 @@ class CreativeCoreService:
 
     def _plans(self, environ: dict) -> tuple[int, dict]:
         body = self._read_json(environ, allowed={"request"}, required={"request"})
-        return 200, {"plan": plan_creative(body["request"], router=self._router)}
+        return 200, {"plan": plan_creative(body["request"], router=self._router, default_prompt_version=self._prompt_version,
+                                           default_plan_schema_version=self._plan_schema_version)}
+
+    def _compile(self, environ: dict) -> tuple[int, dict]:
+        """Recompiles a persisted schema_version 2 plan (debug/audit/reproduction): same plan + compiler version = same
+        prompt. Pure — no provider call, no key."""
+        body = self._read_json(environ, allowed={"plan"}, required={"plan"})
+        errors = contracts.validate("CreativePlan", body["plan"])
+        if errors:
+            raise GenerationError("INVALID_INPUT", {"contract": "CreativePlan", "errors": errors[:20]})
+        if body["plan"].get("schema_version") != 2:
+            raise GenerationError("INVALID_INPUT", {"errors": ["plan: only schema_version 2 plans are compiled here"]})
+        return 200, {"compiled": compile_prompt(body["plan"])}
+
+    @staticmethod
+    def _persisted_plan(body: dict) -> dict:
+        errors = contracts.validate("CreativePlan", body["plan"])
+        if errors:
+            raise GenerationError("INVALID_INPUT", {"contract": "CreativePlan", "errors": errors[:20]})
+        return body["plan"]
+
+    def _draft(self, environ: dict) -> tuple[int, dict]:
+        """The generator input that produced a persisted plan, with "again" / "variation" prepared. Pure: no provider
+        call, no key, and no state — the panel decides what of the draft still exists (products, profiles)."""
+        body = self._read_json(environ, allowed={"plan"}, required={"plan"})
+        return 200, {"draft": generation_draft_from_plan(self._persisted_plan(body))}
+
+    def _enrichment_propose(self, environ: dict) -> tuple[int, dict]:
+        """A PROPOSAL about one product's semantic_context. Pure: no persistence — the panel stores
+        the returned envelope as a pending row and decides approval.
+
+        `provider="openai"` is accepted (validated against the same `EnrichmentProposal.provider`
+        enum the "fake" path always used), and `references` follows the EXACT shape/validation
+        `/v1/generations` already uses (`{"ref", "data_base64"}`, decoded by magic bytes here — never
+        a caller-supplied MIME label, never a URL: no SSRF surface).
+
+        Fase F.2.B — `openai_api_key` is now accepted, OPTIONAL, and used ONLY when
+        `provider="openai"`: the exact same BYOK mechanism `_generations`/`_copies` already use
+        (`self._client_factory(self._api_key(body))`), wrapped by `enrichment.real_openai_client` so
+        it satisfies this module's `OpenAIClient` protocol. The key is used to build a client for
+        THIS request only — never stored, logged, echoed or persisted (same guarantee the module
+        docstring already states for every other route). `provider="openai"` with no key still
+        refuses cleanly with INVALID_INPUT ("no client configured") before anything resembling a
+        network call — this route never falls back to "fake" silently, by design (a fake suggestion
+        must never present as real vision)."""
+        body = self._read_json(environ, allowed={"product", "brand", "niche", "provider", "references", "openai_api_key"},
+                               required={"product"})
+        provider = body.get("provider", "fake")
+        if provider not in enrichment._PROVIDER_NAMES:
+            raise GenerationError("INVALID_INPUT", {"errors": [f"provider: unknown ({provider})"]})
+        raw_refs = body.get("references") or []
+        if not isinstance(raw_refs, list) or len(raw_refs) > enrichment._MAX_REFERENCES:
+            raise GenerationError("INVALID_REFERENCE", {"reason": f"references must be a list of at most {enrichment._MAX_REFERENCES} items"})
+        references = []
+        for item in raw_refs:
+            if not isinstance(item, dict) or set(item) != {"ref", "data_base64"}:
+                raise GenerationError("INVALID_REFERENCE", {"reason": "each reference needs exactly ref and data_base64"})
+            decode_reference(str(item["data_base64"]))  # fail fast on a malformed reference — never a silent drop at this boundary
+            references.append({"data_base64": str(item["data_base64"])})
+        client = None
+        if provider == "openai" and "openai_api_key" in body:
+            client = enrichment.real_openai_client(self._client_factory(self._api_key(body)))
+        proposal = enrichment.propose(body["product"], brand=body.get("brand"), niche=body.get("niche"),
+                                      provider=provider, references=references, router=self._router, client=client)
+        return 200, {"proposal": proposal}
+
+    def _feedback_snapshot(self, environ: dict) -> tuple[int, dict]:
+        """What to remember about a creative when the user says liked/disliked, read from its persisted plan. The
+        panel adds organization/store/job/user/verdict/timestamps; the snapshot logic lives only here."""
+        body = self._read_json(environ, allowed={"plan", "result_metadata", "asset_sha256"}, required={"plan"})
+        plan = self._persisted_plan(body)
+        metadata, asset = body.get("result_metadata"), body.get("asset_sha256")
+        if metadata is not None and not isinstance(metadata, dict):
+            raise GenerationError("INVALID_INPUT", {"errors": ["result_metadata: expected object"]})
+        if asset is not None and not (isinstance(asset, str) and len(asset) == 64 and all(c in "0123456789abcdef" for c in asset)):
+            raise GenerationError("INVALID_INPUT", {"errors": ["asset_sha256: expected 64 hex characters"]})
+        return 200, {"snapshot": feedback_snapshot(plan, metadata, asset)}
 
     def _generations(self, environ: dict) -> tuple[int, dict]:
-        body = self._read_json(environ, allowed={"plan", "references", "openai_api_key", "generation_attempt"},
+        body = self._read_json(environ, allowed={"plan", "references", "openai_api_key", "generation_attempt",
+                                                 "normalize_references"},
                                required={"plan", "references", "openai_api_key"})
         refs = body["references"]
         if not isinstance(refs, list) or not refs or len(refs) > 10:
@@ -216,8 +351,12 @@ class CreativeCoreService:
         attempt = body.get("generation_attempt", 1)
         if not isinstance(attempt, int) or attempt < 1:
             raise GenerationError("INVALID_INPUT", {"errors": ["generation_attempt: must be a positive integer"]})
+        normalize = body.get("normalize_references", self._normalize_references)
+        if not isinstance(normalize, bool):
+            raise GenerationError("INVALID_INPUT", {"errors": ["normalize_references: must be a boolean"]})
         client = self._client_factory(self._api_key(body))
-        result = generate_creative(body["plan"], client=client, references=decoded, router=self._router, attempt=attempt)
+        result = generate_creative(body["plan"], client=client, references=decoded, router=self._router, attempt=attempt,
+                                   normalize_references=normalize)
         return 200, {"result": result}
 
     def _copies(self, environ: dict) -> tuple[int, dict]:
@@ -236,7 +375,9 @@ class _HttpError(Exception):
 
 
 def create_app() -> CreativeCoreService:
-    return CreativeCoreService(os.environ.get(TOKEN_ENV, ""))
+    return CreativeCoreService(os.environ.get(TOKEN_ENV, ""), normalize_references=_env_flag(NORMALIZE_REFERENCES_ENV),
+                               prompt_version=_env_prompt_version(),
+                               plan_schema_version=_env_plan_schema_version())
 
 
 if __name__ == "__main__":

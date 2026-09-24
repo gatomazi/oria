@@ -1,0 +1,32 @@
+{
+  "_doc": "Two layers, kept apart on purpose. GLOBAL: applies whenever a minor is in the frame and is NOT configurable towards permissive. BRAND: a wardrobe preference of the brand (BrandKit.minorWardrobePolicy) that can only ADD restrictions on top of the global layer.",
+  "version": 1,
+  "global": {
+    "policy": "global_minor_safety_policy",
+    "header": "PROTEÇÃO DE MENORES (regra absoluta, não negociável): há criança ou adolescente em cena.",
+    "rules": [
+      {"id": "age_appropriate_clothing", "text": "roupa apropriada para a idade"},
+      {"id": "nothing_revealing", "text": "nada revelador"},
+      {"id": "not_sexualized", "text": "nada sexualizado"},
+      {"id": "no_adult_aesthetic", "text": "nenhuma estética adulta (maquiagem, figurino ou pose de adulto)"},
+      {"id": "age_appropriate_poses", "text": "poses naturais e apropriadas à idade"},
+      {"id": "normal_fit_no_body_focus", "text": "peças com caimento normal, sem foco no corpo"},
+      {"id": "commercial_family_context", "text": "contexto comercial, familiar e cotidiano coerente"}
+    ],
+    "adult_child_rule": {"id": "adult_child_contact_family_only", "text": "contato físico entre adulto e criança apenas em situação familiar ou cotidiana coerente com a relação declarada"}
+  },
+  "brand": {
+    "policy": "brand_minor_wardrobe_policy",
+    "header": "VESTUÁRIO DAS CRIANÇAS (política da marca):",
+    "defaults": {"enabled": false, "legs_coverage": "default", "allow_short_shorts": true, "allow_short_skirts": true, "allow_revealing_clothing": false, "style": "casual_age_appropriate"},
+    "legs_coverage": {
+      "full": "pernas totalmente cobertas — preferir calça, jeans, sarja, legging apropriada ou peças compridas; nenhuma composição que exponha demais as pernas",
+      "knee": "pernas cobertas pelo menos até o joelho"
+    },
+    "no_short_shorts": "sem shorts curtos",
+    "no_short_skirts": "sem saias curtas",
+    "styles": {"casual_age_appropriate": "roupas casuais infantis, apropriadas à idade"},
+    "revealing_locked": "allow_revealing_clothing is ignored: the global layer forbids revealing clothing and a brand cannot loosen it",
+    "conflicting_product_words": ["short", "shorts", "bermuda", "saia", "minissaia", "mini-saia"]
+  }
+}

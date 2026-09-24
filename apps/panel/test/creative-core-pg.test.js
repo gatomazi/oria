@@ -35,7 +35,7 @@ test('pgStore cumpre o contrato do store (schema, perfis, produtos, lotes, fila,
     const { rows: tabelasCreative } = await pool.query(
       `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_name LIKE 'creative\\_%'`
     );
-    assert.equal(tabelasCreative[0].n, 9, 'as 9 tabelas creative_* precisam existir via migration');
+    assert.equal(tabelasCreative[0].n, 13, 'as 13 tabelas creative_* precisam existir via migration (9 do core + creative_feedback da 0033 + creative_angles da 0034 + creative_enrichment_proposals da 0036 + creative_enrichment_pilot_attempts da 0038, Fase F.2.B)');
     // tenant_id que não é o id da Organization dona é recusado pelo banco.
     await assert.rejects(
       pool.query(
@@ -78,6 +78,21 @@ test('pgStore cumpre o contrato do store (schema, perfis, produtos, lotes, fila,
     await store.updateItem(tenant, primeiro.creativeId, { status: 'generating', plan: { p: 1 }, planSummary: { scene: 'rua' }, persona: 'P1', hacker: 'ignorado' });
     assert.equal((await store.refreshJobStatus(tenant, jobId)).status, 'generating');
     await store.updateItem(tenant, primeiro.creativeId, { status: 'completed', finishedAt: new Date().toISOString(), record: { engine: 'CLEAN_ANGLES' } });
+    // Fase A1: trace por tentativa em JSONB + colunas escalares (migration 0031).
+    await store.updateItem(tenant, primeiro.creativeId, {
+      generationTrace: { 1: { attempt: 1, model_served: 'gpt-image-2', duration_ms: 1234 } },
+      modelServed: 'gpt-image-2', durationMs: 1234, providerRequestId: 'req_abc',
+    });
+    const comTrace = await store.getItem(tenant, primeiro.creativeId);
+    assert.deepEqual(comTrace.generationTrace, { 1: { attempt: 1, model_served: 'gpt-image-2', duration_ms: 1234 } });
+    assert.deepEqual([comTrace.modelServed, comTrace.durationMs, comTrace.providerRequestId], ['gpt-image-2', 1234, 'req_abc']);
+    assert.equal((await store.getItem(tenant, primeiro.creativeId)).status, 'completed', 'trace não mexe no status');
+    // Fase B: versão do plano e do compiler (migration 0032).
+    await store.updateItem(tenant, primeiro.creativeId, { planSchemaVersion: 2, compilerVersion: 1 });
+    const comVersao = await store.getItem(tenant, primeiro.creativeId);
+    assert.deepEqual([comVersao.planSchemaVersion, comVersao.compilerVersion], [2, 1]);
+    await store.updateItem(tenant, primeiro.creativeId, { compilerVersion: null });
+    assert.equal((await store.getItem(tenant, primeiro.creativeId)).compilerVersion, null, 'plano v1 não tem compiler v2');
     const assetId = crypto.randomUUID();
     await store.insertAsset(tenant, { id: assetId, creativeId: primeiro.creativeId, storageKey: 'creatives/a/image.png', mime: 'image/png', byteSize: 10, sha256: 'x' });
     assert.equal((await store.getAssetByCreative(tenant, primeiro.creativeId)).id, assetId);

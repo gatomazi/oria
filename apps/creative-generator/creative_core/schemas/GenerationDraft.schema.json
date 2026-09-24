@@ -1,0 +1,573 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/GenerationDraft.schema.json",
+  "title": "GenerationDraft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mode",
+    "objective",
+    "strategy",
+    "product_mode",
+    "product_ids",
+    "angle_id",
+    "placement_id",
+    "quality",
+    "brand_kit",
+    "niche_kit",
+    "persona_mode",
+    "subjects",
+    "context",
+    "copy",
+    "gaze_mode",
+    "plan_schema_version",
+    "prompt_version",
+    "actions",
+    "carried",
+    "source"
+  ],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "creative"
+      ]
+    },
+    "objective": {
+      "type": "string",
+      "enum": [
+        "clean_creative",
+        "remarketing",
+        "funnel_visual"
+      ]
+    },
+    "strategy": {
+      "type": "string",
+      "enum": [
+        "CLEAN_ANGLES",
+        "REMARKETING",
+        "FUNNEL_VISUAL"
+      ]
+    },
+    "product_mode": {
+      "type": "string",
+      "enum": [
+        "single_product",
+        "multi_product"
+      ]
+    },
+    "product_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "angle_id": {
+      "type": "string"
+    },
+    "custom_angle": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CustomAngle"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "placement_id": {
+      "type": "string"
+    },
+    "quality": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "brand_kit": {
+      "$ref": "#/$defs/KitRef"
+    },
+    "niche_kit": {
+      "$ref": "#/$defs/KitRef"
+    },
+    "persona_mode": {
+      "type": "string",
+      "enum": [
+        "automatic",
+        "custom",
+        "none"
+      ]
+    },
+    "persona": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "subjects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RequestSubject"
+      }
+    },
+    "interaction": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "scene_picks": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "funnel_stage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "remarketing": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "funnel": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "copy": {
+      "$ref": "#/$defs/CopyOptions"
+    },
+    "gaze_mode": {
+      "type": "string",
+      "enum": [
+        "camera",
+        "interaction",
+        "off_camera",
+        "product",
+        "auto"
+      ]
+    },
+    "plan_schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "prompt_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "plan_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "carried": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "CopyOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generate"
+      ],
+      "properties": {
+        "generate": {
+          "type": "boolean"
+        },
+        "funnel_stages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "TOFU",
+              "MOFU",
+              "BOFU"
+            ]
+          },
+          "maxItems": 3
+        }
+      }
+    },
+    "CustomAngle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope",
+        "organization_id",
+        "slug",
+        "name",
+        "family",
+        "people_mode",
+        "active",
+        "version",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "organization",
+            "store"
+          ]
+        },
+        "organization_id": {
+          "type": "string"
+        },
+        "store_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "family": {
+          "type": "string",
+          "enum": [
+            "lifestyle",
+            "connection",
+            "editorial_portrait",
+            "action_movement",
+            "product_focus",
+            "product_no_person",
+            "creator_social"
+          ]
+        },
+        "people_mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "optional",
+            "required"
+          ]
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 60
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "definition": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "allowed_interactions": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allowed_product_modes": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "single_product",
+                  "multi_product"
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default_gaze": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "camera",
+                "interaction",
+                "off_camera",
+                "product",
+                "none"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      }
+    },
+    "KitRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "Persona": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "age_range": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "appearance": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "style": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "behavior": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "custom"
+          ]
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
+            "teen",
+            "adult",
+            "senior",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "RequestSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "persona"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "primary",
+            "supporting"
+          ]
+        },
+        "persona": {
+          "$ref": "#/$defs/Persona"
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
+            "teen",
+            "adult",
+            "senior",
+            "unknown"
+          ]
+        },
+        "relation_to_primary": {
+          "type": "string",
+          "enum": [
+            "mother",
+            "father",
+            "daughter",
+            "son",
+            "sibling",
+            "partner",
+            "friend",
+            "grandparent",
+            "custom"
+          ]
+        },
+        "relation_label": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "wears_product_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prominence": {
+          "type": "string",
+          "enum": [
+            "hero",
+            "secondary",
+            "background"
+          ]
+        }
+      }
+    }
+  }
+}

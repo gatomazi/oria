@@ -1,0 +1,653 @@
+{
+ "name": "fixture-v2-entre-nos-caimento-pv1",
+ "request": {
+  "creative_id": "22222222-2222-4222-8222-222222222222",
+  "strategy": "CLEAN_ANGLES",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "pipa-menina",
+    "name": "Brincar com Meu Pai — Pipa Menina",
+    "type": "camiseta infantil",
+    "description": "camiseta infantil branca de manga curta, estampa vermelha 'BRINCAR COM MEU PAI' com pai e filha empinando pipa e a frase 'deixa a alegria voar longe.'",
+    "referenceImages": [
+     "tenant-demo/products/pipa-menina/front.webp"
+    ],
+    "semantic_context": {
+     "wearer_roles": [
+      "child"
+     ],
+     "relationship_themes": [
+      "father_child"
+     ],
+     "recommended_supporting_roles": [
+      "father"
+     ],
+     "incompatible_auto_supporting_roles": [
+      "mother"
+     ],
+     "scene_intents": [
+      "play",
+      "bond",
+      "family"
+     ],
+     "visible_text": [
+      "BRINCAR COM MEU PAI",
+      "deixa a alegria voar longe."
+     ],
+     "source": "manual"
+    }
+   }
+  ],
+  "brand_kit": {
+   "id": "entre_nos_ab",
+   "name": "Entre Nós",
+   "schemaVersion": 1,
+   "version": 1,
+   "positioning": [
+    "camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa"
+   ],
+   "visualStyle": [
+    "editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo",
+    "luz natural quente e suave, hora dourada ou luz de janela",
+    "materiais tácteis e domésticos: tecidos, madeira, linho, papel"
+   ],
+   "colors": [
+    "creme e bege quente",
+    "bordô/vinho profundo",
+    "marrom terroso",
+    "navy",
+    "off-white"
+   ],
+   "manualNotes": [
+    "Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.",
+    "Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.",
+    "Crianças em cena sempre à vontade e em interação real com o adulto."
+   ],
+   "avoid": [
+    "estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans)",
+    "clima de propaganda de margarina",
+    "cenário de imobiliária sem sinal de uso"
+   ],
+   "suggestedPersonas": [
+    {
+     "label": "menina 6 anos",
+     "source": "automatic"
+    },
+    {
+     "label": "mulher 35 anos, mãe da menina",
+     "source": "automatic"
+    }
+   ],
+   "minorWardrobePolicy": {
+    "enabled": true,
+    "legs_coverage": "full",
+    "allow_short_shorts": false,
+    "allow_short_skirts": false,
+    "allow_revealing_clothing": false,
+    "style": "casual_age_appropriate"
+   }
+  },
+  "niche_kit_id": "fashion",
+  "angle_id": "CAIMENTO",
+  "placement_id": "FEED_4X5",
+  "persona_mode": "custom",
+  "persona": {
+   "label": "menina 6 anos"
+  },
+  "context": {
+   "mode": "custom",
+   "profile": {
+    "contextId": "entre_nos_sala",
+    "contextType": "custom",
+    "subject": {
+     "name": "Sala de estar acolhedora"
+    },
+    "summary": "Rotina dentro de casa",
+    "sceneContexts": [
+     "sala de estar acolhedora com sofá, manta e luz natural lateral"
+    ],
+    "domainElements": [
+     "manta de tricô jogada no encosto"
+    ],
+    "avoid": [
+     "qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado"
+    ],
+    "status": "approved",
+    "schemaVersion": 1,
+    "promptVersion": 1,
+    "profileVersion": 1
+   }
+  },
+  "quality": "medium",
+  "seed": 101,
+  "plan_schema_version": 2,
+  "prompt_version": 1
+ },
+ "plan": {
+  "plan_id": "plan_86f59430d7a1ef1c3777e316",
+  "creative_id": "22222222-2222-4222-8222-222222222222",
+  "schema_version": 2,
+  "strategy": "CLEAN_ANGLES",
+  "internal_strategy_id": "ANGULOS_LIMPOS",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "pipa-menina",
+    "name": "Brincar com Meu Pai — Pipa Menina",
+    "type": "camiseta infantil",
+    "description": "camiseta infantil branca de manga curta, estampa vermelha 'BRINCAR COM MEU PAI' com pai e filha empinando pipa e a frase 'deixa a alegria voar longe.'",
+    "referenceImages": [
+     "tenant-demo/products/pipa-menina/front.webp"
+    ],
+    "semantic_context": {
+     "wearer_roles": [
+      "child"
+     ],
+     "relationship_themes": [
+      "father_child"
+     ],
+     "recommended_supporting_roles": [
+      "father"
+     ],
+     "incompatible_auto_supporting_roles": [
+      "mother"
+     ],
+     "scene_intents": [
+      "play",
+      "bond",
+      "family"
+     ],
+     "visible_text": [
+      "BRINCAR COM MEU PAI",
+      "deixa a alegria voar longe."
+     ],
+     "source": "manual"
+    }
+   }
+  ],
+  "angle": {
+   "id": "CAIMENTO",
+   "label": "Caimento",
+   "description": "Registro técnico de vestibilidade: silhueta, largura, comprimento.",
+   "uses_person": true,
+   "apparel_only": true,
+   "multi_product_limit": 4
+  },
+  "placement": {
+   "id": "FEED_4X5",
+   "label": "Feed (4:5 — 1080×1350)",
+   "width": 1080,
+   "height": 1350,
+   "api_size": "1088x1360"
+  },
+  "persona": {
+   "label": "menina 6 anos",
+   "source": "custom"
+  },
+  "context": {
+   "context_id": "entre_nos_sala",
+   "context_type": "custom",
+   "provider": "custom",
+   "scene": "sala de estar acolhedora com sofá, manta e luz natural lateral",
+   "supporting_element": "manta de tricô jogada no encosto",
+   "avoid": [
+    "qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado",
+    "estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans)",
+    "clima de propaganda de margarina",
+    "cenário de imobiliária sem sinal de uso",
+    "peça deformada ou com proporção irreal",
+    "tecido liso como vetor, sem trama",
+    "produto parecendo adesivo colado na foto"
+   ],
+   "status": "approved",
+   "profile_version": 1
+  },
+  "brand_kit": {
+   "id": "entre_nos_ab",
+   "version": 1
+  },
+  "niche_kit": {
+   "id": "fashion",
+   "version": 1
+  },
+  "funnel_stage": null,
+  "remarketing_intent": null,
+  "layout": null,
+  "overlay": {
+   "allowed": false,
+   "headline": null,
+   "subheadline": null,
+   "cta": null,
+   "badges": [],
+   "benefits": [],
+   "search_bar_text": null,
+   "chips": [],
+   "text_density": null,
+   "cta_emphasis": null,
+   "clean": true
+  },
+  "copy": {
+   "generate": false,
+   "funnel_stages": [
+    "TOFU",
+    "MOFU",
+    "BOFU"
+   ]
+  },
+  "references": [
+   {
+    "ref": "tenant-demo/products/pipa-menina/front.webp",
+    "product_id": "pipa-menina",
+    "role": "product_art",
+    "order": 1
+   }
+  ],
+  "prompt": {
+   "text": "REGRAS OBRIGATÓRIAS (nunca ignore):\n- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.\n- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.\n- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.\n- Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).\n- Fotografia realista, alta qualidade, formato vertical.\n- Preserve o TIPO DE PEÇA original: camiseta infantil, manga curta, gola redonda, tamanho de criança. O MODELO da cena é SEMPRE uma criança, NUNCA um adulto. Elementos culturais de adulto (ex: cuia de mate) NÃO devem ficar nas mãos da criança — podem aparecer só discretamente no cenário ao fundo, se fizer sentido.\n- A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.\n- Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.\n\nMODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.\n\nPROTEÇÃO DE MENORES (regra absoluta, não negociável): há criança ou adolescente em cena. Sempre: roupa apropriada para a idade; nada revelador; nada sexualizado; nenhuma estética adulta (maquiagem, figurino ou pose de adulto); poses naturais e apropriadas à idade; peças com caimento normal, sem foco no corpo; contexto comercial, familiar e cotidiano coerente.\n\nPRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = \"Brincar com Meu Pai — Pipa Menina\" (camiseta infantil) — camiseta infantil branca de manga curta, estampa vermelha 'BRINCAR COM MEU PAI' com pai e filha empinando pipa e a frase 'deixa a alegria voar longe.'.\n\nSEMÂNTICA DO PRODUTO (o significado da estampa orienta o clima da cena; não altera a pose, o enquadramento nem a quantidade de pessoas definidos abaixo):\n  · \"Brincar com Meu Pai — Pipa Menina\" (camiseta infantil) — tema: pai e filho(a); quem veste: criança; a cena pode remeter a: brincar, vínculo, família; texto visível na peça: \"BRINCAR COM MEU PAI\"; \"deixa a alegria voar longe.\".\n\nCOMPOSIÇÃO DE PESSOAS (contrato): exatamente 1 pessoa em quadro.\n  · Pessoa 1 (principal): menina 6 anos — veste \"Brincar com Meu Pai — Pipa Menina\" (camiseta infantil).\n\nPERSONA: menina 6 anos. Aparência natural, sem rosto padrão de banco de imagem.\n\nOLHAR: a pessoa olha diretamente para a câmera, com expressão natural.\n\nÂNGULO CAIMENTO: menina 6 anos vestindo \"Brincar com Meu Pai — Pipa Menina\" (camiseta infantil), corpo inteiro ou 3/4, pose neutra que mostra silhueta, largura e comprimento reais da peça. Fundo limpo inspirado em sala de estar acolhedora com sofá, manta e luz natural lateral. Registro técnico, não editorial de moda.\n\nVESTUÁRIO DAS CRIANÇAS (política da marca): pernas totalmente cobertas — preferir calça, jeans, sarja, legging apropriada ou peças compridas; nenhuma composição que exponha demais as pernas; sem shorts curtos; sem saias curtas; roupas casuais infantis, apropriadas à idade.\n\nMARCA (Entre Nós):\n  · Posicionamento: camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa.\n  · Linguagem visual: editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo, luz natural quente e suave, hora dourada ou luz de janela, materiais tácteis e domésticos: tecidos, madeira, linho, papel.\n  · Paleta da marca (guia de cor da CENA, nunca do produto): creme e bege quente; bordô/vinho profundo; marrom terroso; navy; off-white.\n  · Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.\n  · Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.\n  · Crianças em cena sempre à vontade e em interação real com o adulto.\n\nNICHO (Moda / Vestuário):\n  · Materiais e sinais de uso real: algodão, trama de tecido visível, costuras e acabamento, etiqueta discreta.\n  · Público: compra pelo caimento e pelo estilo, não só pela estampa; quer ver a peça vestida em corpo real; compara tecido, acabamento e tamanho antes de decidir.\n\nCONTEXTO DA CENA: sala de estar acolhedora com sofá, manta e luz natural lateral. Elemento de apoio, discreto: manta de tricô jogada no encosto. Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.\n\nEVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado; estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans); clima de propaganda de margarina; cenário de imobiliária sem sinal de uso; peça deformada ou com proporção irreal; tecido liso como vetor, sem trama; produto parecendo adesivo colado na foto.\n\nFORMATO: Feed 4:5 vertical (1080×1350).",
+   "sections": [
+    {
+     "name": "fidelity_rules",
+     "length": 1301,
+     "source": "product",
+     "value": "8"
+    },
+    {
+     "name": "text_rules",
+     "length": 509,
+     "source": "user",
+     "value": "clean_creative"
+    },
+    {
+     "name": "minor_safety",
+     "length": 361,
+     "source": "safety_policy",
+     "value": "minors:s1"
+    },
+    {
+     "name": "reference_roles",
+     "length": 278,
+     "source": "product",
+     "value": "refs:1"
+    },
+    {
+     "name": "product_semantic_context",
+     "length": 385,
+     "source": "product",
+     "value": "father_child"
+    },
+    {
+     "name": "people_composition_contract",
+     "length": 250,
+     "source": "user",
+     "value": "1"
+    },
+    {
+     "name": "gaze",
+     "length": 70,
+     "source": "angle",
+     "value": "camera"
+    },
+    {
+     "name": "scene_action",
+     "length": 318,
+     "source": "angle",
+     "value": "CAIMENTO"
+    },
+    {
+     "name": "minor_wardrobe_policy",
+     "length": 273,
+     "source": "brand",
+     "value": "full"
+    },
+    {
+     "name": "brand",
+     "length": 827,
+     "source": "brand",
+     "value": "Entre Nós"
+    },
+    {
+     "name": "niche",
+     "length": 301,
+     "source": "niche",
+     "value": "Moda / Vestuário"
+    },
+    {
+     "name": "context",
+     "length": 223,
+     "source": "user",
+     "value": "entre_nos_sala"
+    },
+    {
+     "name": "avoid",
+     "length": 475,
+     "source": "brand",
+     "value": "7"
+    },
+    {
+     "name": "output_format",
+     "length": 39,
+     "source": "user",
+     "value": "FEED_4X5"
+    }
+   ],
+   "sha256": "8554229783792e7b64789db0ee7aaac7ecb92a2dc149d07bb462df769b196b3f",
+   "prompt_version": 1
+  },
+  "model": {
+   "task": "image_generation",
+   "model": "gpt-image-2",
+   "quality": "medium",
+   "size": "1088x1360"
+  },
+  "mode": "creative",
+  "objective": "clean_creative",
+  "subjects": [
+   {
+    "id": "s1",
+    "role": "primary",
+    "label": "menina 6 anos",
+    "persona": {
+     "label": "menina 6 anos",
+     "source": "custom"
+    },
+    "age_band": "child",
+    "is_minor": true,
+    "minor_source": "persona.label",
+    "product_use": "wears",
+    "product_id": "pipa-menina",
+    "role_hint": null,
+    "relation_to_primary": null,
+    "prominence": "hero",
+    "source": "user"
+   }
+  ],
+  "scene": {
+   "gaze": {
+    "mode": "camera",
+    "requested": "auto",
+    "source": "angle",
+    "reason": "angle_default:CAIMENTO:single"
+   },
+   "picks": {},
+   "prompt_version": 1,
+   "interaction": null
+  },
+  "composition": {
+   "people_count": 1,
+   "pose_risk": "low",
+   "risk_reasons": []
+  },
+  "minor_safety": {
+   "applies": true,
+   "minor_subject_ids": [
+    "s1"
+   ],
+   "global": {
+    "policy": "global_minor_safety_policy",
+    "version": 1,
+    "rules": [
+     "age_appropriate_clothing",
+     "nothing_revealing",
+     "not_sexualized",
+     "no_adult_aesthetic",
+     "age_appropriate_poses",
+     "normal_fit_no_body_focus",
+     "commercial_family_context"
+    ],
+    "adult_child_rule": null
+   },
+   "brand": {
+    "policy": "brand_minor_wardrobe_policy",
+    "source": "brand",
+    "requested": {
+     "enabled": true,
+     "legs_coverage": "full",
+     "allow_short_shorts": false,
+     "allow_short_skirts": false,
+     "allow_revealing_clothing": false,
+     "style": "casual_age_appropriate"
+    },
+    "effective": {
+     "enabled": true,
+     "legs_coverage": "full",
+     "allow_short_shorts": false,
+     "allow_short_skirts": false,
+     "allow_revealing_clothing": false,
+     "style": "casual_age_appropriate"
+    },
+    "ignored": []
+   }
+  },
+  "semantics": {
+   "products": [
+    {
+     "product_id": "pipa-menina",
+     "semantic_context": {
+      "wearer_roles": [
+       "child"
+      ],
+      "relationship_themes": [
+       "father_child"
+      ],
+      "recommended_supporting_roles": [
+       "father"
+      ],
+      "incompatible_auto_supporting_roles": [
+       "mother"
+      ],
+      "scene_intents": [
+       "play",
+       "bond",
+       "family"
+      ],
+      "visible_text": [
+       "BRINCAR COM MEU PAI",
+       "deixa a alegria voar longe."
+      ],
+      "source": "manual"
+     }
+    }
+   ],
+   "supporting": null,
+   "warnings": []
+  },
+  "resolved_inputs": {
+   "brand": {
+    "name": "Entre Nós",
+    "positioning": [
+     "camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa"
+    ],
+    "visualStyle": [
+     "editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo",
+     "luz natural quente e suave, hora dourada ou luz de janela",
+     "materiais tácteis e domésticos: tecidos, madeira, linho, papel"
+    ],
+    "colors": [
+     "creme e bege quente",
+     "bordô/vinho profundo",
+     "marrom terroso",
+     "navy",
+     "off-white"
+    ],
+    "manualNotes": [
+     "Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.",
+     "Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.",
+     "Crianças em cena sempre à vontade e em interação real com o adulto."
+    ]
+   },
+   "niche": {
+    "name": "Moda / Vestuário",
+    "materials": [
+     "algodão",
+     "trama de tecido visível",
+     "costuras e acabamento",
+     "etiqueta discreta"
+    ],
+    "audienceBehaviors": [
+     "compra pelo caimento e pelo estilo, não só pela estampa",
+     "quer ver a peça vestida em corpo real",
+     "compara tecido, acabamento e tamanho antes de decidir"
+    ]
+   },
+   "strategy": {
+    "text_rule": "MODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.",
+    "communication": ""
+   }
+  },
+  "provenance": {
+   "angle": "user",
+   "brand_kit": "user",
+   "compiler": "planner_default",
+   "composition": "planner_default",
+   "context": "user",
+   "minor_safety.brand": "brand",
+   "minor_safety.global": "safety_policy",
+   "mode": "planner_default",
+   "model": "planner_default",
+   "niche_kit": "user",
+   "objective": "user",
+   "persona": "user",
+   "placement": "user",
+   "products": "user",
+   "quality": "user",
+   "references": "product",
+   "resolved_inputs": "brand",
+   "scene.gaze": "angle",
+   "scene.picks": "planner_default",
+   "scene.prompt_version": "planner_default",
+   "semantics": "product",
+   "strategy": "user",
+   "subjects": "user"
+  },
+  "seed": 101,
+  "compiler": {
+   "version": 1,
+   "sections": [
+    {
+     "section": "fidelity_rules",
+     "source": "product",
+     "value": "8",
+     "length": 1301
+    },
+    {
+     "section": "text_rules",
+     "source": "user",
+     "value": "clean_creative",
+     "length": 509
+    },
+    {
+     "section": "minor_safety",
+     "source": "safety_policy",
+     "value": "minors:s1",
+     "length": 361
+    },
+    {
+     "section": "reference_roles",
+     "source": "product",
+     "value": "refs:1",
+     "length": 278
+    },
+    {
+     "section": "product_semantic_context",
+     "source": "product",
+     "value": "father_child",
+     "length": 385
+    },
+    {
+     "section": "people_composition_contract",
+     "source": "user",
+     "value": "1",
+     "length": 250
+    },
+    {
+     "section": "gaze",
+     "source": "angle",
+     "value": "camera",
+     "length": 70
+    },
+    {
+     "section": "scene_action",
+     "source": "angle",
+     "value": "CAIMENTO",
+     "length": 318
+    },
+    {
+     "section": "minor_wardrobe_policy",
+     "source": "brand",
+     "value": "full",
+     "length": 273
+    },
+    {
+     "section": "brand",
+     "source": "brand",
+     "value": "Entre Nós",
+     "length": 827
+    },
+    {
+     "section": "niche",
+     "source": "niche",
+     "value": "Moda / Vestuário",
+     "length": 301
+    },
+    {
+     "section": "context",
+     "source": "user",
+     "value": "entre_nos_sala",
+     "length": 223
+    },
+    {
+     "section": "avoid",
+     "source": "brand",
+     "value": "7",
+     "length": 475
+    },
+    {
+     "section": "output_format",
+     "source": "user",
+     "value": "FEED_4X5",
+     "length": 39
+    }
+   ]
+  },
+  "versions": {
+   "core_version": "1.1.0",
+   "schema_version": 1,
+   "prompt_version": 1,
+   "brand_kit_schema_version": 1,
+   "niche_kit_schema_version": 1,
+   "context_profile_schema_version": 1,
+   "clean_angles_version": 1,
+   "remarketing_version": 1,
+   "funnel_visual_version": 1,
+   "strategy_version": 1,
+   "compiler_version": 1,
+   "brand_kit_version": 1,
+   "niche_kit_version": 1,
+   "context_profile_version": 1
+  },
+  "validations": [
+   {
+    "rule": "product_count_within_limits",
+    "passed": true
+   },
+   {
+    "rule": "angle_available_for_brand_and_niche",
+    "passed": true
+   },
+   {
+    "rule": "context_profile_approved",
+    "passed": true
+   },
+   {
+    "rule": "references_are_product_art_only",
+    "passed": true
+   },
+   {
+    "rule": "clean_angles_has_no_overlay",
+    "passed": true
+   }
+  ],
+  "warnings": []
+ }
+}

@@ -1,0 +1,86 @@
+{
+  "_doc": "Fixed wording of the sections the v2 prompt compiler owns (the others reuse the v1 blocks in blocks.py and the person scenes of angles_v2.json). Changing any text here changes the compiler output: bump COMPILER_VERSION in versions.py. Compiler version 2 (Fase C1) adds the `subjects` contract with relations/ages, the `interaction` section and the angle `frame` scene; version 1 (Fase B) stays compilable, frozen, so stored plans recompile byte for byte.",
+  "gaze": {
+    "camera": "OLHAR: a pessoa olha diretamente para a câmera, com expressão natural.",
+    "camera_group": "OLHAR: as pessoas olham diretamente para a câmera, com expressão natural.",
+    "interaction": "OLHAR: as pessoas olham uma para a outra ou para a ação em curso — não para a câmera.",
+    "off_camera": "OLHAR: olhar espontâneo para fora da câmera, como se algo fora de quadro chamasse a atenção; ninguém olha diretamente para a lente.",
+    "product": "OLHAR: a pessoa olha para o produto ou para o objeto em foco — não para a câmera."
+  },
+  "people": {
+    "header": "COMPOSIÇÃO DE PESSOAS (contrato): {count}.",
+    "count_one": "exatamente 1 pessoa em quadro",
+    "count_many": "exatamente {n} pessoas em quadro",
+    "line": "  · {name} ({role}): {label} — {use}.",
+    "roles": {
+      "primary": "principal",
+      "supporting": "apoio"
+    },
+    "uses": {
+      "wears": "veste {product}",
+      "uses": "usa {product}",
+      "none": "não usa o produto"
+    }
+  },
+  "semantics": {
+    "header": "SEMÂNTICA DO PRODUTO (o significado da estampa orienta o clima da cena; não altera a pose, o enquadramento nem a quantidade de pessoas definidos abaixo):",
+    "line": "  · {product}",
+    "theme": "tema: {value}",
+    "wearer": "quem veste: {value}",
+    "intent": "a cena pode remeter a: {value}",
+    "supporting": "pessoa de apoio recomendada: {value}",
+    "visible_text": "texto visível na peça: {value}"
+  },
+  "subjects": {
+    "header": "COMPOSIÇÃO DE PESSOAS (contrato): {count}.",
+    "line": "  · {name} ({role}): {label}{age}{relation} — {use}.",
+    "age": ", {value}",
+    "relation": ", {value}",
+    "details_header": "DETALHES DAS PESSOAS (refinam quem é cada uma; pose, ação, enquadramento e interação definidos acima sempre vencem):",
+    "details_line": "  · {name}: {identity}.{behavior}",
+    "details_behavior": " Jeito natural: {value}."
+  },
+  "interaction": {
+    "line": "INTERAÇÃO ({label}): {scene} Mãos: {hands}"
+  },
+  "frame": {
+    "line": "ÂNGULO {label}: {description} Cenário: {scene}."
+  },
+  "frames": {
+    "_doc": "Angle frames for scenes that are not the angle's own person template: the angle's idea and the setting, written so it holds for one person or several (the people themselves come from the subjects contract and the interaction). Angles without an entry fall back to their catalog description.",
+    "LIFESTYLE_COTIDIANO": "ÂNGULO LIFESTYLE COTIDIANO: as pessoas em ação natural no dia a dia, vivendo um momento real — nunca posadas nem paradas olhando para o nada. Cenário: {scene}.",
+    "IDENTIDADE_ORIGEM": "ÂNGULO IDENTIDADE DE MARCA: as pessoas, com o produto, integradas ao lugar que representa a identidade da marca — comunica 'isso é meu', sem pose. Cenário: {scene}.",
+    "ORGULHO_DISCRETO": "ÂNGULO RETRATO CONFIANTE: retrato de postura segura, cenário simples e desfocado — o foco são as pessoas com o produto. Cenário: {scene}.",
+    "PERTENCIMENTO": "ÂNGULO PERTENCIMENTO: as pessoas, com o produto, interagindo entre si — conexão genuína, não pose de grupo. Cenário: {scene}.",
+    "NOSTALGIA_ORIGEM": "ÂNGULO MEMÓRIA AFETIVA: momento contemplativo e emocional com o produto, sempre com pessoas em quadro. Cenário: {scene}.",
+    "CAIMENTO": "ÂNGULO CAIMENTO: registro técnico de vestibilidade — silhueta, largura e comprimento da peça visíveis em cada pessoa que a veste. Cenário: {scene}.",
+    "CLOSE_ESTAMPA": "ÂNGULO CLOSE NO DETALHE: plano fechado, com o detalhe principal do produto grande e legível. Cenário: {scene}.",
+    "CLOSE_BOLSO": "ÂNGULO CLOSE NO DETALHE PEQUENO: plano próximo com foco num detalhe pequeno do produto (bolso, peito, etiqueta). Cenário: {scene}.",
+    "CREATOR_STYLE": "ÂNGULO CREATOR-STYLE: linguagem de rede social (selfie, foto de amigo), sem fingir depoimento. Cenário: {scene}.",
+    "PRESENTE_AFETO": "ÂNGULO PRESENTE: valor emocional da peça como presente — momento de presentear ou de uso compartilhado entre as pessoas. Cenário: {scene}."
+  },
+  "wearer_rules": {
+    "_doc": "Compiler v2 replaces the v1 infant-garment sentence 'O MODELO da cena é SEMPRE uma criança' (it is the whole scene's model, which contradicts a child + parent cast) with a rule about whoever WEARS the piece. `old` is the exact sentence in products.py; the compiler refuses to build if any 'O MODELO da cena é SEMPRE' is left after the replacements, so a new garment rule cannot slip the old idea back in.",
+    "guard": "O MODELO da cena é SEMPRE",
+    "rules": [
+      {
+        "old": "O MODELO da cena é SEMPRE uma criança, NUNCA um adulto.",
+        "new": "Qualquer pessoa que VESTE esta peça deve ser uma criança compatível com a faixa do produto. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil."
+      },
+      {
+        "old": "O MODELO da cena é SEMPRE um bebê ou criança pequena, NUNCA um adulto.",
+        "new": "Qualquer pessoa que VESTE esta peça deve ser um bebê ou criança pequena. Adultos podem aparecer na cena como pessoas de apoio, mas NUNCA vestem esta peça infantil."
+      }
+    ]
+  },
+  "custom_angle": {
+    "_doc": "Fase D.1 — the block a custom (organization/store) angle's structured definition compiles to. Header names the angle so the model reads it as ONE coherent direction, not a stray list; each field becomes its own labeled line, in this fixed order, so two custom angles of the same family with different fields produce visibly different, deterministic text.",
+    "header": "DIREÇÃO DO ÂNGULO PERSONALIZADO ({name}):",
+    "labels": {
+      "framing": "Enquadramento",
+      "photographic_direction": "Direção fotográfica",
+      "lighting": "Iluminação",
+      "composition": "Composição"
+    }
+  }
+}

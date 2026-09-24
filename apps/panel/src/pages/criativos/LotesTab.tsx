@@ -3,6 +3,10 @@ import { Button, Card, DataTable, EmptyState, ErrorState, PageStack, ProgressBar
 import { cancelJob, getJob, listHistory, listJobs, retryJobItem, type Job, type JobItem } from '../../api/criativos';
 import { formatData, plural } from '../../lib/format';
 import { CREATIVE_JOB_STATUS_MAP } from '../../lib/statusMap';
+import { AvaliacaoCriativo } from './AvaliacaoCriativo';
+
+// Abre o gerador preenchido com os dados do criativo (a aba e o estado moram em CriativosPage).
+type CopiarDados = (creativeId: string) => Promise<void>;
 
 const MOTOR: Record<string, string> = { CLEAN_ANGLES: 'Ângulos Limpos', REMARKETING: 'Remarketing', FUNNEL_VISUAL: 'Funil por Criativo' };
 const ATIVOS = ['queued', 'planning', 'generating', 'processing'];
@@ -12,7 +16,7 @@ function Status({ value }: { value: string }) {
   return <StatusBadge tone={s.tone} label={s.label} />;
 }
 
-export function LotesTab({ selecionado, onSelecionar }: { selecionado: string | null; onSelecionar: (id: string | null) => void }) {
+export function LotesTab({ selecionado, onSelecionar, onCopiar }: { selecionado: string | null; onSelecionar: (id: string | null) => void; onCopiar: CopiarDados }) {
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [erro, setErro] = useState('');
 
@@ -22,7 +26,7 @@ export function LotesTab({ selecionado, onSelecionar }: { selecionado: string | 
   }, []);
   useEffect(carregar, [carregar]);
 
-  if (selecionado) return <LoteDetalhe id={selecionado} onVoltar={() => { onSelecionar(null); carregar(); }} />;
+  if (selecionado) return <LoteDetalhe id={selecionado} onVoltar={() => { onSelecionar(null); carregar(); }} onCopiar={onCopiar} />;
   if (erro) return <ErrorState description={erro} onRetry={carregar} />;
   if (!jobs) return <Skeleton variant="table" rows={4} />;
   if (!jobs.length) return <EmptyState title="Nenhum lote ainda" description="Os lotes criados na aba Gerar aparecem aqui com o andamento de cada criativo." />;
@@ -37,7 +41,7 @@ export function LotesTab({ selecionado, onSelecionar }: { selecionado: string | 
   return <DataTable label="Lotes do gerador de criativos" columns={columns} rows={jobs} rowKey={(j) => j.id} onRowClick={(j) => onSelecionar(j.id)} defaultSort={{ key: 'createdAt', direction: 'desc' }} />;
 }
 
-function LoteDetalhe({ id, onVoltar }: { id: string; onVoltar: () => void }) {
+function LoteDetalhe({ id, onVoltar, onCopiar }: { id: string; onVoltar: () => void; onCopiar: CopiarDados }) {
   const [job, setJob] = useState<Job | null>(null);
   const [erro, setErro] = useState('');
 
@@ -77,13 +81,13 @@ function LoteDetalhe({ id, onVoltar }: { id: string; onVoltar: () => void }) {
         <p>{plural(p.completed, 'criativo pronto', 'criativos prontos')} · {plural(p.failed, 'falha', 'falhas')}</p>
       </Card>
       <div className="criativos-grade">
-        {(job.items || []).map((item) => <ItemCard key={item.creativeId} jobId={job.id} item={item} onAtualizar={carregar} />)}
+        {(job.items || []).map((item) => <ItemCard key={item.creativeId} jobId={job.id} item={item} onAtualizar={carregar} onCopiar={onCopiar} />)}
       </div>
     </PageStack>
   );
 }
 
-function ItemCard({ jobId, item, onAtualizar }: { jobId: string; item: JobItem; onAtualizar: () => void }) {
+function ItemCard({ jobId, item, onAtualizar, onCopiar }: { jobId: string; item: JobItem; onAtualizar: () => void; onCopiar: CopiarDados }) {
   const [tentando, setTentando] = useState(false);
   return (
     <div className="criativos-item">
@@ -103,11 +107,12 @@ function ItemCard({ jobId, item, onAtualizar }: { jobId: string; item: JobItem; 
         </Button>
       )}
       {item.assetUrl && <a href={item.assetUrl} download={`criativo-${item.creativeId}.png`}>Baixar PNG</a>}
+      {item.status === 'completed' && <AvaliacaoCriativo creativeId={item.creativeId} inicial={item.feedback} onCopiar={onCopiar} />}
     </div>
   );
 }
 
-export function HistoricoTab() {
+export function HistoricoTab({ onCopiar }: { onCopiar: CopiarDados }) {
   const [itens, setItens] = useState<(JobItem & { record: Record<string, unknown> | null })[] | null>(null);
   const [erro, setErro] = useState('');
   const carregar = useCallback(() => {
@@ -130,6 +135,7 @@ export function HistoricoTab() {
     { key: 'versions', label: 'Versões', render: (i) => `marca v${i.brandKitVersion ?? '—'} · prompt v${i.promptVersion ?? '—'}`, priority: 'low', muted: true },
     { key: 'status', label: 'Status', render: (i) => <Status value={i.status} /> },
     { key: 'asset', label: 'Arquivo', render: (i) => (i.assetUrl ? <a href={i.assetUrl} target="_blank" rel="noreferrer">Abrir</a> : '—') },
+    { key: 'avaliacao', label: 'Avaliação', render: (i) => (i.status === 'completed' ? <AvaliacaoCriativo creativeId={i.creativeId} inicial={i.feedback} onCopiar={onCopiar} /> : '—') },
   ];
   return <DataTable label="Histórico de criativos" columns={columns} rows={itens} rowKey={(i) => i.creativeId} defaultSort={{ key: 'updatedAt', direction: 'desc' }} />;
 }
