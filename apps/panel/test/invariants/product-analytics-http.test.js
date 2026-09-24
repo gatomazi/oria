@@ -377,6 +377,47 @@ test('K · GET /journey: período anterior a 19/08/2026 → insufficient_data (m
   assert.equal(r.json.reason, 'LOCAL_ORDERS_HISTORY_STARTS_LATER');
 });
 
+// ── Gate C ("Jornada de Valor") · GET /journey/opportunities ─────────────────────────────────────
+// Wiring fim a fim no processo REAL (auth/entitlement/validação/status de fonte); a matemática de
+// baseline/desvio/score/limiar tem cobertura própria e exaustiva, pura, em
+// opportunity-diagnostics.test.js — aqui o alvo é só provar que a rota está montada e degrada
+// honestamente por fonte, como toda rota deste arquivo.
+
+test('C · GET /journey/opportunities: sem sessão → 401', async () => {
+  const nav = navegador();
+  const r = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}`);
+  assert.equal(r.status, 401);
+});
+
+test('C · GET /journey/opportunities: limit fora do intervalo (1-20) → 400', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const zero = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}&limit=0`);
+  assert.equal(zero.status, 400);
+  const grande = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}&limit=21`);
+  assert.equal(grande.status, 400);
+});
+
+test('C · GET /journey/opportunities: GA4 conectado (ORG_A) mas Commerce nunca conectado — productFunnel available, commerceReconciliation not_connected, nunca 500/409 pela fonte que falta', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.status, 'ok');
+  assert.equal(r.json.sources.productFunnel.available, true);
+  assert.equal(r.json.sources.commerceReconciliation.available, false);
+  assert.equal(r.json.sources.commerceReconciliation.status, 'not_connected');
+  // Catálogo do fixture (ver test.before) tem 1 produto só: sem outro pra comparar, a mediana da
+  // Store é o próprio produto — desvio zero, nenhuma oportunidade fabricada por falta de baseline.
+  assert.deepEqual(r.json.opportunities, []);
+  assert.equal(Array.isArray(r.json.opportunities), true);
+});
+
+test('C · GET /journey/opportunities: respeita `limit` na config devolvida (nunca hardcoded)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}&limit=2`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.config.limit, 2);
+});
+
 // ── M · Catalog sync (achado real: runCatalogSync nunca tinha gatilho em produção) ──────────────
 // Processo REAL do server.js, Postgres real — nada mockado aqui além do GA4 (provider-mock.cjs, já
 // carregado pelo próprio processo). Ink NUNCA está conectado por ORG_A neste arquivo (ver

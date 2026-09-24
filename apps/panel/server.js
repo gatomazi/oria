@@ -16715,6 +16715,7 @@ if (PRODUCT_ANALYTICS) {
     productPerformanceService: PRODUCT_ANALYTICS.productPerformanceService,
     reconciliationService: PRODUCT_ANALYTICS.reconciliationService,
     journeyAnalyticsService: PRODUCT_ANALYTICS.journeyAnalyticsService,
+    opportunityDiagnosticsService: PRODUCT_ANALYTICS.opportunityDiagnosticsService,
     registry: PRODUCT_ANALYTICS.registry,
     analyticsProvider: PRODUCT_ANALYTICS.analyticsProvider,
     commerceProvider: PRODUCT_ANALYTICS.commerceProvider,

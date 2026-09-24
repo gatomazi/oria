@@ -24,6 +24,7 @@ const { createCommerceCatalogRepository } = require('./commerce-catalog-reposito
 const { createProductPerformanceService, createReportCache } = require('./product-performance-service');
 const { createReconciliationService } = require('./reconciliation');
 const { createJourneyAnalyticsService } = require('./journey-analytics-service');
+const { createOpportunityDiagnosticsService } = require('./opportunity-diagnostics');
 const { runCatalogSync } = require('./catalog-sync');
 
 const ANALYTICS_PROVIDER = 'ga4';
@@ -46,8 +47,8 @@ const COMMERCE_TRANSACTION_ID_PREFIX = Object.freeze({ reserva_ink: 'INK' });
  *   sem leases, `runCatalogSync` roda sem proteção de concorrência (mesmo default da própria
  *   função) — aceitável só em teste.
  * @returns {Readonly<{registry, catalogRepository, productPerformanceService, reconciliationService,
- *   reportCache, analyticsProvider: string, commerceProvider: string, syncCommerceCatalog: Function,
- *   getCommerceCatalogSyncStatus: Function}>}
+ *   journeyAnalyticsService, opportunityDiagnosticsService, reportCache, analyticsProvider: string,
+ *   commerceProvider: string, syncCommerceCatalog: Function, getCommerceCatalogSyncStatus: Function}>}
  */
 function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleClientId, googleClientSecret, reportCacheTtlMs, leases = null } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('createProductAnalyticsComposition exige pool');
@@ -81,6 +82,12 @@ function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleCli
     commerceTransactionIdPrefix: COMMERCE_TRANSACTION_ID_PREFIX[COMMERCE_PROVIDER] || '',
   });
 
+  // Gate C ("Jornada de Valor") · consome productPerformanceService + reconciliationService JÁ
+  // montados acima (mesmo ReportCache, nenhuma chamada nova ao GA4/Ink) — nunca um segundo motor.
+  const opportunityDiagnosticsService = createOpportunityDiagnosticsService({
+    productPerformanceService, reconciliationService, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
+  });
+
   // Rodada M · achado real: `runCatalogSync` (Fase D, lib/product-analytics/catalog-sync.js) nunca
   // tinha um jeito de ser acionada em produção — só aparecia em teste. Sem ela, `commerce_products`
   // fica sempre vazio e Desempenho de Produtos/Jornada de Compra nunca resolvem identidade nenhuma,
@@ -107,7 +114,8 @@ function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleCli
   }
 
   return Object.freeze({
-    registry, catalogRepository, productPerformanceService, reconciliationService, journeyAnalyticsService, reportCache,
+    registry, catalogRepository, productPerformanceService, reconciliationService, journeyAnalyticsService,
+    opportunityDiagnosticsService, reportCache,
     analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
     syncCommerceCatalog, getCommerceCatalogSyncStatus,
   });

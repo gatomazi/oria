@@ -89,6 +89,16 @@ function validarFilters(query) {
   return filters;
 }
 
+// Gate C ("Jornada de Valor") · `limit` de /journey/opportunities — mesma disciplina de
+// validarPaginacao acima (inteiro, faixa fechada), teto BEM menor: "Prioridades de hoje" é curto de
+// propósito (nunca uma tabela técnica disfarçada de lista curta).
+function validarLimiteOportunidades(query) {
+  if (query.limit === undefined) return undefined;
+  const limit = Number(query.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new EntradaInvalidaError('limit deve ser um inteiro entre 1 e 20');
+  return limit;
+}
+
 function erroValidacao(res, err) {
   return res.status(400).json({ error: err.message, codigo: 'PRODUCT_ANALYTICS_INVALID_INPUT' });
 }
@@ -113,14 +123,16 @@ function mapearErro(err, res) {
 }
 
 /**
- * @param {{productPerformanceService, reconciliationService, journeyAnalyticsService, registry, analyticsProvider: string, commerceProvider: string, syncCommerceCatalog?: Function, getCommerceCatalogSyncStatus?: Function}} deps
+ * @param {{productPerformanceService, reconciliationService, journeyAnalyticsService, opportunityDiagnosticsService?, registry, analyticsProvider: string, commerceProvider: string, syncCommerceCatalog?: Function, getCommerceCatalogSyncStatus?: Function}} deps
  *   `syncCommerceCatalog`/`getCommerceCatalogSyncStatus`: Rodada M — opcionais de propósito (fica
  *   compatível com quem monta o router sem essas duas, ex.: um teste antigo); sem elas, as rotas de
  *   sincronização do catálogo simplesmente não são registradas.
+ *   `opportunityDiagnosticsService`: Gate C ("Jornada de Valor") — mesmo padrão opcional; sem ele,
+ *   GET /journey/opportunities não é registrada.
  * @returns {import('express').Router}
  */
 function createProductAnalyticsRouter({
-  productPerformanceService, reconciliationService, journeyAnalyticsService, registry, analyticsProvider, commerceProvider,
+  productPerformanceService, reconciliationService, journeyAnalyticsService, opportunityDiagnosticsService, registry, analyticsProvider, commerceProvider,
   syncCommerceCatalog, getCommerceCatalogSyncStatus,
 }) {
   if (!productPerformanceService || typeof productPerformanceService.getProductPerformance !== 'function' || typeof productPerformanceService.getProductPerformanceSummary !== 'function') {
@@ -266,6 +278,25 @@ function createProductAnalyticsRouter({
       return mapearErro(err, res);
     }
   });
+
+  // Gate C ("Jornada de Valor") · "Prioridades de hoje" — lista curta e ORDENADA de diagnósticos com
+  // evidência, hipótese e CTA (ver opportunity-diagnostics.js). Reaproveita o MESMO ReportCache de
+  // productPerformanceService/reconciliationService — nenhuma chamada nova ao GA4/Ink por trás desta
+  // rota. Nunca 409/500 por uma fonte desconectada: `sources` reporta GA4/Commerce separadamente,
+  // `opportunities` fica vazio (nunca erro) quando nenhuma fonte sustenta um sinal.
+  if (opportunityDiagnosticsService) {
+    router.get('/journey/opportunities', async (req, res) => {
+      const { organizationId, storeId } = req.tenant;
+      try {
+        const { startDate, endDate } = validarPeriodo(req.query);
+        const limit = validarLimiteOportunidades(req.query);
+        const r = await opportunityDiagnosticsService.getOpportunities({ organizationId, storeId, startDate, endDate, limit });
+        return res.json(r);
+      } catch (err) {
+        return mapearErro(err, res);
+      }
+    });
+  }
 
   // Rodada M · achado real: `commerce_products` (o catálogo canônico que Desempenho de Produtos e a
   // Correlação de identidade dependem) nunca tinha um jeito de ser sincronizado em produção — só
