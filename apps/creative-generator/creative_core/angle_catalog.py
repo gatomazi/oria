@@ -20,6 +20,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .angles import angle_is_available
+
 _PATH = Path(__file__).parent / "templates" / "angle_catalog_v2.json"
 with open(_PATH, encoding="utf-8") as _f:
     _CATALOG: dict = json.load(_f)
@@ -92,7 +94,25 @@ def _semantic_of(inputs: dict) -> dict | None:
     return None
 
 
-def recommend_angle(inputs: dict) -> dict:
+# Achado real (primeiro uso, conta interna): a escolha abaixo nunca soube de `enabledAngles`/
+# `supportsApparelAngles` — podia recomendar (e só depois `plan_creative` recusar) um ângulo que o
+# próprio motor considera indisponível para a marca. Cada caso agora tem uma cadeia de alternativas —
+# a preferida primeiro, depois variações razoáveis dentro da mesma leitura do pedido (nunca uma família
+# que contradiga o sinal, como "sem pessoa" cair para uma família com pessoa) — e usa a PRIMEIRA
+# (family, hint) cujo ângulo legado é realmente disponível para esta marca/nicho. Sem `brand`/`niche`
+# (chamadas antigas, ou pureza total quando não há contexto de marca a checar), usa sempre a primeira
+# da cadeia, igual ao comportamento anterior.
+_FALLBACKS: dict[str, list[tuple[str, str | None]]] = {
+    "no_person": [("product_no_person", None), ("product_no_person", "hanging"), ("product_no_person", "editorial_still")],
+    "gifting": [("connection", "gifting"), ("connection", None), ("lifestyle", None)],
+    "connection": [("connection", None), ("lifestyle", None)],
+    "lifestyle": [("lifestyle", None), ("lifestyle", "brand_identity"), ("connection", None)],
+    "creator": [("creator_social", None), ("lifestyle", None), ("editorial_portrait", None)],
+    "single_default": [("editorial_portrait", None), ("editorial_portrait", "reflective"), ("lifestyle", None)],
+}
+
+
+def recommend_angle(inputs: dict, *, brand: dict | None = None, niche: dict | None = None) -> dict:
     """Pure recommendation from what the request already states — never a provider call, never feedback
     (Gostei/Não gostei is not read here; see docs/features/creative-generator-fase-d.md §7).
 
@@ -101,6 +121,15 @@ def recommend_angle(inputs: dict) -> dict:
     'none' — a rough single/multi guess before subjects exist), `products` (for `semantic_context`),
     `intent_hint` (explicit seam for a future GPT-authored brief — see §5; today only a plain string like
     "creator" a caller may pass, never inferred).
+
+    `brand`/`niche`: optional, so a caller with no kit context still gets the pure, deterministic pick
+    (same as before this fix). When given, the picked family/preset is checked against
+    `angles.angle_is_available` — falling through `_FALLBACKS[case]` in order — before being returned, so
+    this never hands back something `plan_creative` would immediately reject as UNSUPPORTED_ANGLE for a
+    reason this function could see for itself. The chain never crosses into a family that contradicts the
+    request's own signal (e.g. "no person requested" never falls back to a family with a person) — if
+    every candidate in the chain is unavailable, `angle_id` comes back `None` with `reason` explaining
+    exactly what was tried and rejected, never a silent/invented pick and never a bypassed restriction.
 
     Returns `{angle_id (family scoped, e.g. "family:connection"), family, preset, objective_hints, reason,
     source}` — `source` is always "planner_default" here; the caller sets "user" when the request named an
@@ -112,28 +141,50 @@ def recommend_angle(inputs: dict) -> dict:
 
     if count == 0:
         reasons.append("no_person_requested")
-        family, hint = "product_no_person", None
+        case = "no_person"
     elif interaction in _GIFTING_INTERACTIONS:
         reasons.append(f"interaction:{interaction}")
-        family, hint = "connection", "gifting"
+        case = "gifting"
     elif count >= 2 and (interaction in _BONDING_INTERACTIONS or (semantic and semantic.get("relationship_themes"))):
         if interaction:
             reasons.append(f"interaction:{interaction}")
         if semantic and semantic.get("relationship_themes"):
             reasons.append(f"relationship_theme:{semantic['relationship_themes'][0]}")
         reasons.append(f"people_count:{count}")
-        family, hint = "connection", None
+        case = "connection"
     elif count >= 2:
         reasons.append(f"people_count:{count}")
-        family, hint = "lifestyle", None
+        case = "lifestyle"
     elif inputs.get("intent_hint") == "creator":
         reasons.append("intent_hint:creator")
-        family, hint = "creator_social", None
+        case = "creator"
     else:
         reasons.append("single_person_default")
-        family, hint = "editorial_portrait", None
+        case = "single_default"
 
+    candidates = _FALLBACKS[case]
+    family, hint = candidates[0]
     legacy_id = canonical_legacy_angle_id(family, hint)
+    if brand is not None or niche is not None:
+        tried: list[str] = []
+        chosen = None
+        for fam, hnt in candidates:
+            lid = canonical_legacy_angle_id(fam, hnt)
+            if lid and angle_is_available(lid, brand, niche):
+                chosen = (fam, hnt, lid)
+                break
+            tried.append(lid or f"{fam}:{hnt}")
+        if chosen:
+            family, hint, legacy_id = chosen
+            if (family, hint) != candidates[0]:
+                reasons.append(f"brand_fallback:{family}:{hint}:tried={','.join(tried)}")
+        else:
+            # Toda a cadeia é indisponível para esta marca/nicho — nunca inventa pessoa nem remove a
+            # restrição para "resolver" às escondidas; a tela mostra isso como recomendação vazia
+            # (ver GerarTabV2 "Escolher o estilo manualmente") em vez de um 422 genérico.
+            reasons.append(f"no_available_angle_for_brand:tried={','.join(tried)}")
+            return {"angle_id": None, "family": family, "preset": None, "objective_hints": [], "reason": reasons, "source": "planner_default"}
+
     spec = SYSTEM_ANGLES[LEGACY_ALIASES[legacy_id]["angle_id"]] if legacy_id else None
     return {
         "angle_id": legacy_id, "family": family, "preset": spec.get("preset") if spec else None,

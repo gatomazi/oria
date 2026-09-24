@@ -230,7 +230,7 @@ def _funnel_parts(request: dict, products: list):
 
 
 # ------------------------------------------------------------------ plan
-def _resolve_angle_id(request: dict, products: list, product_mode: str) -> tuple[str, str, list[str]]:
+def _resolve_angle_id(request: dict, products: list, product_mode: str, brand: dict, niche: dict) -> tuple[str, str, list[str]]:
     """(angle_id, provenance source, reason). `angle_id: "auto"` asks the planner to recommend one (Fase D);
     any of the 13 legacy ids is used as named, exactly like before this phase. `angle_family_hint` (also only
     meaningful with "auto") steers straight to a family — how an explicit family/preset picker reaches the core
@@ -262,12 +262,23 @@ def _resolve_angle_id(request: dict, products: list, product_mode: str) -> tuple
             raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": hint["family"],
                                                          "reason": "family has no generation route yet"})
         return legacy_id, "user", [f"angle_family_hint:{hint['family']}"]
+    # brand/niche entram aqui (achado real, primeiro uso da conta interna) para que a recomendação
+    # automática nunca escolha um ângulo que ela própria sabe que `angle_is_available` vai recusar
+    # mais abaixo — ver a cadeia de alternativas em `_FALLBACKS`, angle_catalog.py.
     recommendation = recommend_angle({
         "subjects": request.get("subjects"), "interaction": request.get("interaction"),
         "persona_mode": request.get("persona_mode"), "products": products,
         "intent_hint": request.get("angle_intent_hint"),
-    })
+    }, brand=brand, niche=niche)
     if recommendation["angle_id"] is None:
+        # Duas causas bem diferentes, nunca confundidas: a família não tem NENHUMA rota de geração
+        # (reservada, ex. action_movement — "reason" fica só a leitura do pedido) vs. toda a cadeia de
+        # alternativas era rota real mas indisponível PARA ESTA marca/nicho (reason termina em
+        # "no_available_angle_for_brand:tried=...") — a UI usa isso pra explicar, nunca um 422 genérico.
+        if any(r.startswith("no_available_angle_for_brand") for r in recommendation["reason"]):
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": recommendation["family"],
+                                                         "reason": "no_angle_available_for_brand_or_niche",
+                                                         "tried": recommendation["reason"]})
         raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": recommendation["family"],
                                                      "reason": "family has no generation route yet"})
     return recommendation["angle_id"], "planner_default", recommendation["reason"]
@@ -309,7 +320,7 @@ def plan_creative(
         raise GenerationError("INVALID_REFERENCE", {"reason": "too_many_reference_images", "max": MAX_REFERENCE_IMAGES})
 
     custom_angle = request.get("custom_angle")
-    angle_id, angle_source, angle_reason = _resolve_angle_id(request, products, product_mode)
+    angle_id, angle_source, angle_reason = _resolve_angle_id(request, products, product_mode, brand, niche)
     if not angle_is_available(angle_id, brand, niche):
         raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": angle_id, "brand_kit": brand["id"], "niche_kit": niche["id"]})
     angle = angle_descriptor(angle_id, brand, niche)

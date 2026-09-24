@@ -27,6 +27,7 @@ from creative_core.angles import ANGLE_IDS
 from creative_core.compiler import compile_prompt
 from creative_core.engines import plan_creative
 from creative_core.errors import GenerationError
+from creative_core.kits import load_brand_kit
 
 
 def _req(**extra) -> dict:
@@ -197,6 +198,82 @@ def test_given_two_people_and_no_interaction_but_a_relationship_theme_then_conne
 def test_given_two_people_and_no_bonding_signal_then_lifestyle_not_connection():
     rec = recommend_angle({"subjects": [{"id": "s1"}, {"id": "s2"}]})
     assert rec["family"] == "lifestyle" and rec["angle_id"] == "LIFESTYLE_COTIDIANO"
+
+
+# ------------------------------------------------------------------ Achado real (primeiro uso, conta interna, 24/09):
+# `recommend_angle` recomendava um ângulo que ela própria não sabia que `angle_is_available` ia recusar —
+# o `auto` sem nenhuma pista caía sempre em editorial_portrait (ORGULHO_DISCRETO), e uma marca real com
+# `enabledAngles` restrito (que nem sequer incluía esse ângulo) travava no primeiro produto, sem saída.
+def test_given_no_brand_or_niche_kwargs_then_behavior_is_unchanged_pure_default():
+    # Sem brand/niche (assinatura antiga, ou nenhum contexto de marca a checar): comportamento idêntico
+    # ao de antes desta correção — sempre o primeiro candidato da cadeia, nunca filtrado.
+    rec = recommend_angle({})
+    assert rec["family"] == "editorial_portrait" and rec["angle_id"] == "ORGULHO_DISCRETO"
+    assert not any(r.startswith("brand_fallback") or r.startswith("no_available_angle") for r in rec["reason"])
+
+
+def test_given_a_brand_that_excludes_the_default_pick_then_it_falls_back_to_an_available_family_in_the_same_reading():
+    # A marca real que travou: enabledAngles restrito, sem ORGULHO_DISCRETO — o padrão "uma pessoa, sem
+    # outro sinal" cai para lifestyle (LIFESTYLE_COTIDIANO), que a mesma marca permite — nunca vira "sem
+    # pessoa" nem "grupo": a leitura do pedido (uma pessoa) continua valendo, só a família muda.
+    brand = {**load_brand_kit("use_origens"), "enabledAngles": ["LIFESTYLE_COTIDIANO", "PRODUTO_ESTAMPA"]}
+    niche = {"supportsApparelAngles": True}
+    rec = recommend_angle({}, brand=brand, niche=niche)
+    assert rec["family"] == "lifestyle" and rec["angle_id"] == "LIFESTYLE_COTIDIANO"
+    assert "single_person_default" in rec["reason"], "the original reading of the request is still recorded"
+    assert any(r.startswith("brand_fallback:lifestyle:None") for r in rec["reason"]), "the fallback itself is never silent"
+
+
+def test_given_a_brand_that_only_allows_a_close_up_angle_then_no_person_still_never_falls_back_into_a_person_family():
+    # "Sem pessoa" nunca deve virar "com pessoa" só porque a família de zero-pessoa está indisponível —
+    # a cadeia de product_no_person só tenta OUTROS presets sem pessoa (CABIDE/PREMIUM_ESTILO), nunca cruza
+    # para uma família que contradiz o pedido.
+    brand = {**load_brand_kit("use_origens"), "enabledAngles": ["CABIDE"]}
+    niche = {"supportsApparelAngles": True}
+    rec = recommend_angle({"persona_mode": "none"}, brand=brand, niche=niche)
+    assert rec["family"] == "product_no_person" and rec["angle_id"] == "CABIDE"
+    assert "no_person_requested" in rec["reason"]
+
+
+def test_given_a_brand_where_every_candidate_in_the_chain_is_unavailable_then_it_honestly_gives_up_never_inventing_or_bypassing():
+    # Nenhum ângulo do encadeamento de "uma pessoa" está liberado (só um ângulo de outra leitura, CLOSE_BOLSO,
+    # está) — a função nunca inventa uma pessoa nem ignora a restrição: devolve angle_id None com o que
+    # tentou, exatamente como o achado real pedia ("não remova as restrições... para esconder o erro").
+    brand = {**load_brand_kit("use_origens"), "enabledAngles": ["CLOSE_BOLSO"]}
+    niche = {"supportsApparelAngles": True}
+    rec = recommend_angle({}, brand=brand, niche=niche)
+    assert rec["angle_id"] is None
+    assert any(r.startswith("no_available_angle_for_brand:tried=") for r in rec["reason"])
+    tentativas = next(r for r in rec["reason"] if r.startswith("no_available_angle_for_brand"))
+    assert "ORGULHO_DISCRETO" in tentativas and "NOSTALGIA_ORIGEM" in tentativas and "LIFESTYLE_COTIDIANO" in tentativas
+
+
+def test_given_the_real_blocked_scenario_then_plan_creative_now_succeeds_end_to_end():
+    # Reprodução fiel do bloqueio real: marca com enabledAngles restrito (sem ORGULHO_DISCRETO), 1
+    # produto, nenhuma família escolhida — antes desta correção, 422 UNSUPPORTED_ANGLE no primeiro
+    # produto da conta; agora resolve para uma família de fato disponível.
+    brand = {**load_brand_kit("use_origens"),
+             "enabledAngles": ["IDENTIDADE_ORIGEM", "LIFESTYLE_COTIDIANO", "PERTENCIMENTO", "CABIDE",
+                                "PRODUTO_ESTAMPA", "CAIMENTO", "CLOSE_ESTAMPA", "PRESENTE_AFETO"]}
+    request = _req(angle_id="auto", plan_schema_version=2, brand_kit=brand)
+    del request["brand_kit_id"]
+    plan = plan_creative(request, router=ROUTER)
+    assert plan["angle_recommendation"]["family"] == "lifestyle"
+    assert plan["angle"]["id"] == "LIFESTYLE_COTIDIANO"
+
+
+def test_given_an_explicit_family_hint_still_unavailable_then_it_still_refuses_no_silent_fallback():
+    # Escolha EXPLÍCITA do lojista (via family hint) nunca ganha um fallback escondido — só o "auto" sem
+    # pista usa a cadeia; uma escolha manual continua exatamente honesta como antes desta correção.
+    brand = {**load_brand_kit("use_origens"), "enabledAngles": ["LIFESTYLE_COTIDIANO"]}
+    request = _req(angle_id="auto", plan_schema_version=2, brand_kit=brand, angle_family_hint={"family": "editorial_portrait"})
+    del request["brand_kit_id"]
+    err = None
+    try:
+        plan_creative(request, router=ROUTER)
+    except GenerationError as exc:
+        err = exc
+    assert err is not None and err.code == "UNSUPPORTED_ANGLE" and err.details["angle_id"] == "ORGULHO_DISCRETO"
 
 
 # ------------------------------------------------------------------ recompiled byte-identically regardless of family layer
