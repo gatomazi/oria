@@ -143,6 +143,10 @@ test.before(async () => {
       PORT: String(porta), NODE_ENV: 'development', NODE_PATH: path.join(h.RAIZ_REPO, 'node_modules'),
       DATABASE_URL: h.urlComUsuario(db.url, ROLE, SENHA_ROLE),
       DB_ENFORCE_APP_ROLE: '1',
+      // Isolamento dos mocks: estes testes CONTAM chamadas aos providers em janelas de tempo; um job de boot (ex.: `boot-redes-de-seguranca`,
+      // 5 s após subir) que caísse dentro da janela somava chamadas ao Ink e reprovava o teste (INV-12 / STORE-02). Nenhum teste deste arquivo
+      // depende de job de fundo.
+      ORIA_JOBS_DE_FUNDO: 'off',
       ENCRYPTION_MASTER_KEY: MESTRA,
       ADMIN_SESSION_SECRET: crypto.randomBytes(32).toString('base64url'),
       PROVIDER_MOCK_LOG: mockLog,

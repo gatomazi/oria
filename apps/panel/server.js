@@ -187,7 +187,12 @@ const pgPoolReal = MODO_DADOS.modo === MODO_POSTGRES ? new Pool(opcoesDePool(DAT
 const pgPool = pgPoolReal ? criarPoolTenant(pgPoolReal) : null;
 // Jobs rodam uma iteração por Organization ativa, cada uma no próprio contexto (INV-17).
 // Fase 5c · INV-18: toda iteração de job pede lease persistente (job, Organization) antes de rodar.
+// Só para isolar testes: `ORIA_JOBS_DE_FUNDO=off` desliga os timers de fundo, e SOMENTE fora de produção (em produção é ignorado, com
+// erro no log — desligar a fila de campanhas/sync por engano seria silencioso demais).
+const JOBS_DE_FUNDO_DESLIGADOS = process.env.ORIA_JOBS_DE_FUNDO === 'off' && process.env.NODE_ENV !== 'production';
+if (process.env.ORIA_JOBS_DE_FUNDO === 'off' && !JOBS_DE_FUNDO_DESLIGADOS) console.error('[JOBS] ORIA_JOBS_DE_FUNDO=off IGNORADO em produção: os jobs continuam ligados');
 const JOBS = require('./lib/platform/jobs').createJobRunner({
+  desligado: JOBS_DE_FUNDO_DESLIGADOS,
   poolReal: pgPoolReal,
   leases: pgPoolReal ? require('./lib/platform/leases').createJobLeases({ poolReal: pgPoolReal }) : null,
 });
