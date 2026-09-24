@@ -83,7 +83,7 @@ export function RfmExplorer({
           <span className="rfmx-numeros">
             <span className="rfmx-valor"><strong>{valorPrincipal}</strong>{unidade}</span>
             <span className="rfmx-sub">
-              <span className="rfmx-pct">{pct(l.pctPrincipal)}{l.abaixoDeUmPorCento ? <span className="rfmx-menor"> · &lt; 1%</span> : null}</span>
+              <span className="rfmx-pct">{pct(l.pctPrincipal)}</span>
               <span className="rfmx-sec"> · {secundario}</span>
             </span>
           </span>

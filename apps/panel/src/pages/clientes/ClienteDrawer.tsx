@@ -173,7 +173,7 @@ export function ClienteDrawer({ customerKey, nomeInicial, onClose }: Props) {
               dados.rfm.amostraSuficiente && dados.rfm.escore ? (
                 <>
                   <dl className="cli-pares">
-                    <Par rotulo="Recência" valor={`${numero(dados.rfm.r)} dias · nota ${dados.rfm.escore.r}/5`} />
+                    <Par rotulo="Recência" valor={`${dados.rfm.r == null ? '—' : plural(dados.rfm.r, 'dia', 'dias')} · nota ${dados.rfm.escore.r}/5`} />
                     <Par rotulo="Frequência" valor={`${numero(dados.rfm.f)} na janela (${numero(dados.rfm.fVida)} no total) · nota ${dados.rfm.escore.f}/5`} />
                     <Par rotulo="Valor" valor={`${moeda(dados.rfm.m)} · nota ${dados.rfm.escore.m}/5`} />
                   </dl>

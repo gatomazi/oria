@@ -1,8 +1,13 @@
 import type { PredicadoRfm } from '../../api/clientes';
 import { formatValor } from '../../lib/format';
 
-export const pct = (v: number | null | undefined, casas = 1): string =>
-  v == null || !Number.isFinite(v) ? '—' : `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`;
+// Um valor > 0 que arredondaria para 0,0% aparece como "< 0,1%": zero de verdade só para quem tem 0.
+export const pct = (v: number | null | undefined, casas = 1): string => {
+  if (v == null || !Number.isFinite(v)) return '—';
+  const fmt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+  const minimo = 10 ** -casas / 100;
+  return v > 0 && v < minimo / 2 ? `< ${fmt(minimo * 100)}%` : `${fmt(v * 100)}%`;
+};
 
 export const numero = (v: number | null | undefined): string => (v == null ? '—' : v.toLocaleString('pt-BR'));
 

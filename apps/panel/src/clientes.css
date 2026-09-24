@@ -15,12 +15,6 @@
 
 .cli-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); font: var(--type-caption); color: var(--text-muted); }
 
-.cli-segmentado { display: inline-flex; border: 1px solid var(--border-default); border-radius: var(--radius-sm); overflow: hidden; }
-.cli-segmentado button { height: var(--control-h-sm); padding: 0 var(--space-3); border: 0; background: var(--control-bg); color: var(--text-secondary); font: var(--type-label); cursor: pointer; }
-.cli-segmentado button + button { border-left: 1px solid var(--border-default); }
-.cli-segmentado button.is-ativo { background: var(--surface-3); color: var(--text-primary); }
-.cli-segmentado button:hover { color: var(--text-primary); }
-.cli-segmentado button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -85,7 +79,6 @@
 .rfmx-valor { font: var(--type-body-dense); color: var(--text-secondary); white-space: nowrap; }
 .rfmx-valor strong { font: 600 15px/20px var(--font-sans); color: var(--text-primary); }
 .rfmx-pct { font: 600 13px/18px var(--font-sans); color: var(--text-primary); white-space: nowrap; }
-.rfmx-menor { font-weight: 400; color: var(--text-secondary); }
 .rfmx-sec { font: var(--type-caption); color: var(--text-muted); white-space: nowrap; }
 /* pct + secundário na mesma linha; no celular o secundário sai (o número principal e o % ficam) */
 .rfmx-sub { display: block; white-space: nowrap; }
@@ -115,7 +108,7 @@
 .cli-segmentado button.is-ativo { background: var(--surface-3); color: var(--text-primary); }
 .cli-segmentado button:hover { color: var(--text-primary); }
 .cli-segmentado button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-@media (pointer: coarse) { .cli-segmentado button { min-height: 44px; } }
+@media (pointer: coarse), (max-width: 719px) { .cli-segmentado button { min-height: 44px; } }
 
 /* ── Painel do segmento (segp) ───────────────────────────────────────────────────────────────────── */
 .segp { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--surface-2); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
@@ -130,7 +123,10 @@
 .segp-estat { padding: var(--space-2) var(--space-3); background: var(--surface-1); min-width: 0; }
 .segp-estat dt { font: var(--type-caption); color: var(--text-muted); }
 .segp-estat dd { margin: 0; font-variant-numeric: tabular-nums; }
-.segp-estat strong { font: 600 20px/26px var(--font-sans); color: var(--text-primary); }
+.segp-estat strong { font: 600 20px/26px var(--font-sans); color: var(--text-primary); white-space: nowrap; }
+@media (max-width: 359px) { .segp-estat { padding: var(--space-2); } .segp-estat strong { font-size: 17px; } }
+/* 6 indicadores: em 3 colunas (2 linhas) no tablet, em vez de 5 + 1 órfão */
+@media (min-width: 600px) and (max-width: 1023px) { .cli-kpis .ds-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .segp-criterios { list-style: none; margin: 0; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); background: var(--surface-1); border-radius: var(--radius-sm); }
 .segp-criterios li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: var(--space-2); align-items: start; }
 .segp-criterios__letra { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius-xs); font: 600 11px/1 var(--font-sans); color: var(--text-secondary); }
@@ -147,7 +143,7 @@
 .segp-acoes { display: flex; flex-direction: column; gap: var(--space-2); }
 .segp-acoes > .ds-btn { align-self: stretch; }
 .segp-acoes__sec { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-@media (pointer: coarse) { .segp-acoes .ds-btn, .rfmx-limpar { min-height: 44px; } }
+@media (pointer: coarse), (max-width: 719px) { .segp-acoes .ds-btn, .segp__topo .ds-btn, .rfmx-limpar { min-height: 44px; } }
 
 .cli-chip {
   display: inline-flex; align-items: center; gap: var(--space-1-5); min-height: var(--control-h-sm); padding: 0 var(--space-2-5, 10px);
