@@ -9,7 +9,8 @@ import {
   checkOrderTransactionLink, getJourneyAnalytics, getOpportunities,
   type JourneyAnalyticsResponse, type OrderTransactionLinkResponse, type OpportunitiesResponse, type Opportunity,
 } from '../../api/journeyAnalytics';
-import { STATUS_LABEL, statusTone, OPORTUNIDADE_TITULO, formatarEvidencia, CONFIANCA_LABEL, confiancaTone } from './formatadores';
+import { getCommerceCatalogSyncStatus, type CommerceCatalogSyncStatus } from '../../api/productAnalytics';
+import { STATUS_LABEL, statusTone, OPORTUNIDADE_TITULO, formatarEvidencia, EVIDENCIA_LABEL, evidenciaTone } from './formatadores';
 
 import '../../pedidos-central.css';
 import '../desempenho-produtos/desempenho-produtos.css';
@@ -44,7 +45,7 @@ function CartaoDeOportunidade({ op }: { op: Opportunity }) {
     <Card
       title={op.product ? `${OPORTUNIDADE_TITULO[op.type]} — ${op.product.name}` : OPORTUNIDADE_TITULO[op.type]}
       description={formatarEvidencia(op)}
-      action={<StatusBadge tone={confiancaTone(op.confidence)} label={CONFIANCA_LABEL[op.confidence]} />}
+      action={<StatusBadge tone={evidenciaTone(op.evidenceStrength)} label={EVIDENCIA_LABEL[op.evidenceStrength]} />}
     >
       <p className="pa-oportunidade-hipotese">{op.hypothesis}</p>
       <p className="pa-oportunidade-acao"><strong>O que investigar:</strong> {op.suggestedAction}</p>
@@ -53,14 +54,30 @@ function CartaoDeOportunidade({ op }: { op: Opportunity }) {
   );
 }
 
+// Gate B ("Jornada de Valor Operacional") · "0 oportunidades" nunca pode parecer sucesso quando a
+// causa real é "catálogo ausente/sincronizando/parcial" — a UI precisa saber a diferença entre
+// "sem evidência de verdade" e "ainda não há catálogo pra ter evidência nenhuma".
+const ESTADO_CATALOGO_LABEL: Record<CommerceCatalogSyncStatus['state'], { title: string; description: string }> = {
+  never_synced: { title: 'Catálogo ainda não sincronizado', description: 'Sem o catálogo canônico (commerce_products), nenhum produto tem identidade resolvida — não há como calcular oportunidade nenhuma ainda. Sincronize o catálogo em Desempenho de Produtos.' },
+  queued: { title: 'Sincronização do catálogo na fila', description: 'O catálogo está prestes a começar a sincronizar — as oportunidades aparecem assim que ele terminar.' },
+  running: { title: 'Catálogo sincronizando agora', description: 'A varredura do catálogo está em andamento (pode levar alguns minutos com catálogos grandes) — as oportunidades desta tela vão refletir o catálogo completo assim que ela terminar.' },
+  partial_failure: { title: 'Última sincronização do catálogo terminou parcial', description: 'Parte do catálogo sincronizou, parte não — os diagnósticos abaixo (se houver) são sobre o que já sincronizou. Tente sincronizar de novo em Desempenho de Produtos.' },
+  failed: { title: 'Última sincronização do catálogo falhou', description: 'Sem catálogo sincronizado, a identidade dos produtos fica incompleta e os diagnósticos abaixo não são o quadro completo. Veja o erro e tente de novo em Desempenho de Produtos.' },
+  completed: { title: '', description: '' }, // catálogo em dia — nunca usado como explicação, ver abaixo
+};
+
 function PrioridadesDeHoje({ periodo }: { periodo: Periodo }) {
   const [dados, setDados] = useState<OpportunitiesResponse | null>(null);
+  const [catalogo, setCatalogo] = useState<CommerceCatalogSyncStatus | null>(null);
   const [erro, setErro] = useState('');
 
   function carregar() {
     setErro('');
     setDados(null);
     getOpportunities(periodo, { limit: 5 }).then(setDados).catch((err: Error) => setErro(err.message));
+    // Catálogo é informativo aqui (nunca bloqueia "Prioridades de hoje" se falhar — a tela dedicada
+    // de sincronização já existe em Desempenho de Produtos).
+    getCommerceCatalogSyncStatus().then(setCatalogo).catch(() => setCatalogo(null));
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,6 +93,22 @@ function PrioridadesDeHoje({ periodo }: { periodo: Periodo }) {
         title="Sem fonte conectada para diagnosticar oportunidades"
         description="Conecte o Google Analytics 4 e/ou o Commerce em Integrações para começar a ver prioridades aqui."
       />
+    );
+  }
+
+  // Gate B: "0 oportunidades" por causa do catálogo (ausente/sincronizando/parcial/falho) é um
+  // ESTADO OPERACIONAL, nunca "nenhuma oportunidade encontrada" (que implica catálogo em dia e
+  // Store saudável). Só entra aqui quando o catálogo REALMENTE explica a ausência de sinal.
+  const catalogoExplicaAusencia = catalogo && catalogo.state !== 'completed' && !dados.opportunities.length;
+  if (catalogoExplicaAusencia && catalogo) {
+    const info = ESTADO_CATALOGO_LABEL[catalogo.state];
+    return (
+      <Callout tone={catalogo.state === 'failed' ? 'warning' : 'info'} title={info.title}>
+        {info.description}
+        <div className="pa-callout__acao">
+          <Link to="/admin/desempenho-produtos" className="ds-btn ds-btn--secondary ds-btn--sm">Ir para Desempenho de Produtos</Link>
+        </div>
+      </Callout>
     );
   }
 
