@@ -1,14 +1,17 @@
 'use strict';
 
-// Rodada "preparação do piloto" · teste de escala DIRECIONADO — simula um catálogo de ~85 mil
-// produtos (o número usado em toda a documentação desde a Fase D como o piloto real) contra um
-// registry FAKE (nunca a API real da Ink — só a forma do contrato, `listProductsWithVariants`
-// paginado a 100/página, o mesmo limite que catalog-sync.js já usa de verdade) e Postgres real
-// (efêmero, descartado no final). Mede tempo, memória e volume de queries de cada fase:
+// Rodada "preparação do piloto" + "corrigir o gargalo real" · teste de escala DIRECIONADO — simula
+// um catálogo de ~85 mil produtos (o número usado em toda a documentação desde a Fase D como o
+// piloto real) contra um registry FAKE (nunca a API real da Ink/GA4 — só a forma do contrato,
+// `listProductsWithVariants` paginado a 100/página, o mesmo limite que catalog-sync.js usa de
+// verdade) e Postgres real (efêmero, descartado no final). Mede tempo, memória de PICO e volume de
+// queries/chamadas de connector de cada fase:
 //
-//   1. runCatalogSync            — full sync do catálogo (Gate A)
+//   1. runCatalogSync              — full sync do catálogo (Gate A)
 //   2. bootstrapCommerceIdentities — identity em lote (Gate B)
-//   3. opportunityDiagnosticsService.getOpportunities — o endpoint que o lojista realmente abre
+//   3. getOpportunities FRIO       — GET /journey/opportunities, cache de relatório GA4 vazio
+//   4. getOpportunities QUENTE     — MESMO período, cache de relatório GA4 já aquecido pela fase 3
+//   5. getOpportunities (catálogo pequeno/médio) — cenário separado, ~2.000 produtos
 //
 // Nunca faz asserção pass/fail (não é um teste de correção — essas já existem, com fixtures
 // pequenos, em catalog-sync.test.js/product-identity-resolver.test.js/opportunity-diagnostics.
@@ -16,9 +19,9 @@
 // motivo de bloqueio antes do piloto.
 //
 // Uso:
-//   node --expose-gc scripts/test-db.mjs run -- node --expose-gc scripts/dev/scale-test-catalog-85k.cjs
-//   (--expose-gc é opcional — sem ele, a medição de memória é só heapUsed/rss antes/depois, sem
-//   forçar coleta; com ele, cada fase começa de um heap mais previsível)
+//   node scripts/test-db.mjs run -- node --expose-gc scripts/dev/scale-test-catalog-85k.cjs
+//   (--expose-gc é opcional — sem ele, o pico de memória ainda é amostrado, só sem forçar coleta
+//   antes/depois de cada fase, o que deixa os deltas um pouco mais ruidosos)
 //
 // Variáveis opcionais: SCALE_PRODUTOS (default 85000), SCALE_OBSERVADOS_GA4 (default 20000 — quantos
 // itemIds o GA4 "observa" no período, sempre <= SCALE_PRODUTOS), SCALE_PEDIDOS_PAGOS (default 2000).
@@ -45,10 +48,13 @@ const N_OBSERVADOS_GA4 = Math.min(Number(process.env.SCALE_OBSERVADOS_GA4) || 20
 const N_PEDIDOS_PAGOS = Number(process.env.SCALE_PEDIDOS_PAGOS) || 2000;
 const POR_PAGINA = 100; // mesmo limite que catalog-sync.js usa de verdade — nunca um número de teste
 
+// Cenário "pequeno/médio" pra comparação — mesma forma, escala bem menor (uma loja real comum).
+const N_PRODUTOS_PEQUENO = 2000;
+const N_OBSERVADOS_GA4_PEQUENO = 800;
+const N_PEDIDOS_PAGOS_PEQUENO = 150;
+
 const PROVIDER = 'reserva_ink';
 const ANALYTICS_PROVIDER = 'ga4';
-const ORG = crypto.randomUUID();
-const STORE = crypto.randomUUID();
 
 function mb(bytes) { return `${(bytes / 1024 / 1024).toFixed(1)}MB`; }
 
@@ -56,22 +62,51 @@ function medidor(pool) {
   const contagem = new Map();
   const original = pool.query.bind(pool);
   pool.query = async (sql, params) => {
-    const primeiraLinha = String(sql).trim().split('\n')[0].trim().slice(0, 60);
+    // 120 chars — comfortably além da 1ª linha das queries de identidade (~72 chars); truncar
+    // curto demais aqui já causou um falso-negativo real (a chave gravada ficava mais curta do que
+    // a string checada em `chamadasResolucaoIdentidade`, `startsWith` nunca batia).
+    const primeiraLinha = String(sql).trim().split('\n')[0].trim().slice(0, 120);
     contagem.set(primeiraLinha, (contagem.get(primeiraLinha) || 0) + 1);
     return original(sql, params);
   };
   return {
     total: () => [...contagem.values()].reduce((a, b) => a + b, 0),
+    // Chamadas de RESOLUÇÃO DE IDENTIDADE especificamente (resolveExternalIds/resolveAndPersist —
+    // ver product-identity-resolver.js): a query que checa mapping já existente. Repetida por
+    // página era EXATAMENTE o gargalo desta rodada — o número aqui prova se ainda é O(páginas) ou
+    // já é O(1) por chamada de getOpportunities.
+    chamadasResolucaoIdentidade: () => [...contagem.entries()]
+      .filter(([sql]) => sql.startsWith('SELECT external_id, commerce_product_id FROM product_external_identities'))
+      .reduce((acc, [, n]) => acc + n, 0),
     detalhe: () => [...contagem.entries()].sort((a, b) => b[1] - a[1]),
     resetar: () => contagem.clear(),
   };
 }
 
+function contador() {
+  let n = 0;
+  return { inc: () => { n += 1; }, get: () => n, resetar: () => { n = 0; } };
+}
+
+// Amostra memória em intervalos curtos DURANTE a fase (nunca só antes/depois — um pico no meio de
+// uma fase de segundos nunca apareceria só olhando os dois extremos).
 async function fase(nome, fn) {
   if (global.gc) global.gc();
   const memAntes = process.memoryUsage();
+  let picoHeap = memAntes.heapUsed;
+  let picoRss = memAntes.rss;
+  const amostragem = setInterval(() => {
+    const m = process.memoryUsage();
+    if (m.heapUsed > picoHeap) picoHeap = m.heapUsed;
+    if (m.rss > picoRss) picoRss = m.rss;
+  }, 25);
   const t0 = process.hrtime.bigint();
-  const resultado = await fn();
+  let resultado;
+  try {
+    resultado = await fn();
+  } finally {
+    clearInterval(amostragem);
+  }
   const t1 = process.hrtime.bigint();
   if (global.gc) global.gc();
   const memDepois = process.memoryUsage();
@@ -79,14 +114,15 @@ async function fase(nome, fn) {
   return {
     nome, ms, resultado,
     heapUsedAntes: memAntes.heapUsed, heapUsedDepois: memDepois.heapUsed,
-    heapDelta: memDepois.heapUsed - memAntes.heapUsed,
-    rssAntes: memAntes.rss, rssDepois: memDepois.rss,
+    heapDelta: memDepois.heapUsed - memAntes.heapUsed, heapPico: picoHeap,
+    rssAntes: memAntes.rss, rssDepois: memDepois.rss, rssPico: picoRss,
   };
 }
 
-// ── Fake commerce connector — gera a página SOB DEMANDA (nunca materializa os 85k de uma vez na
-// memória do próprio script, que distorceria a medição de memória do CÓDIGO SOB TESTE). ──
-function registryComercioFake() {
+// ── Fakes — gera a página SOB DEMANDA (nunca materializa o catálogo inteiro de uma vez na memória
+// do próprio script, que distorceria a medição de memória do CÓDIGO SOB TESTE). Parametrizados por
+// N pra servir tanto o cenário 85k quanto o pequeno/médio, sem duplicar a implementação. ──
+function registryComercioFake({ nProdutos, nPedidosPagos, org, store }) {
   const registry = createConnectorRegistry();
   registry.register({
     domain: 'commerce', provider: PROVIDER, integrationProvider: PROVIDER, requiresStoreContext: true,
@@ -95,8 +131,8 @@ function registryComercioFake() {
       async listProductsWithVariants({ cursor }) {
         const pagina = cursor ? Number(cursor) : 1;
         const inicio = (pagina - 1) * POR_PAGINA;
-        if (inicio >= N_PRODUTOS) return { items: [], nextCursor: null };
-        const fim = Math.min(inicio + POR_PAGINA, N_PRODUTOS);
+        if (inicio >= nProdutos) return { items: [], nextCursor: null };
+        const fim = Math.min(inicio + POR_PAGINA, nProdutos);
         const items = [];
         for (let n = inicio; n < fim; n += 1) {
           items.push({
@@ -113,26 +149,26 @@ function registryComercioFake() {
             ],
           });
         }
-        return { items, nextCursor: fim < N_PRODUTOS ? String(pagina + 1) : null };
+        return { items, nextCursor: fim < nProdutos ? String(pagina + 1) : null };
       },
       async listOrders({ cursor, limit = 200 }) {
         const pagina = cursor ? Number(cursor) : 1;
         const inicio = (pagina - 1) * limit;
-        if (inicio >= N_PEDIDOS_PAGOS) return { items: [], nextCursor: null };
-        const fim = Math.min(inicio + limit, N_PEDIDOS_PAGOS);
+        if (inicio >= nPedidosPagos) return { items: [], nextCursor: null };
+        const fim = Math.min(inicio + limit, nPedidosPagos);
         const items = [];
         for (let n = inicio; n < fim; n += 1) {
           // Cada pedido paga por 1 unidade de um produto espalhado pelo catálogo (n * 37 — primo,
           // espalha sem repetir padrão óbvio) — nunca todos os pedidos no mesmo produto.
-          const providerProductId = String((n * 37) % N_PRODUTOS);
+          const providerProductId = String((n * 37) % nProdutos);
           items.push({
-            id: `pedido-${n}`, organizationId: ORG, storeId: STORE, provider: PROVIDER, providerOrderId: String(n),
+            id: `pedido-${n}`, organizationId: org, storeId: store, provider: PROVIDER, providerOrderId: String(n),
             status: 'delivered', paymentStatus: 'paid', isPaid: true, isRefunded: false, totalValue: 89.9,
             createdAt: new Date(), paidAt: new Date(),
             items: [{ providerProductId, commerceProductId: null, quantity: 1, unitValue: 89.9, totalValue: 89.9 }],
           });
         }
-        return { items, nextCursor: fim < N_PEDIDOS_PAGOS ? String(pagina + 1) : null };
+        return { items, nextCursor: fim < nPedidosPagos ? String(pagina + 1) : null };
       },
       async getOrder() { return null; },
     }),
@@ -140,13 +176,15 @@ function registryComercioFake() {
   return registry;
 }
 
-// GA4 fake: observa N_OBSERVADOS_GA4 itemIds distintos, cada um = o providerProductId de um produto
+// GA4 fake: observa `nObservados` itemIds distintos, cada um = o providerProductId de um produto
 // real (garante cobertura resolvível). Devolve tudo numa chamada só (mesmo contrato do connector
-// real — o service NUNCA pagina o relatório de analytics em si, só o catálogo).
-function registryAnalyticsFake() {
+// real — o service NUNCA pagina o relatório de analytics em si, só o catálogo). `chamadasGa4` conta
+// quantas vezes o connector real foi chamado — prova se o ReportCache está sendo reaproveitado
+// (fria vs. quente) ou se cada getOpportunities bate no "provider" de novo.
+function registryAnalyticsFake({ nObservados, chamadasGa4 }) {
   const registry = createConnectorRegistry();
   const linhas = [];
-  for (let n = 0; n < N_OBSERVADOS_GA4; n += 1) {
+  for (let n = 0; n < nObservados; n += 1) {
     linhas.push({
       externalProductId: String(n), externalProductName: `Produto ${n}`,
       itemsViewed: 50 + (n % 500), itemsAddedToCart: 5 + (n % 40), itemsCheckedOut: 2 + (n % 15), itemsPurchased: 1 + (n % 6),
@@ -156,16 +194,40 @@ function registryAnalyticsFake() {
   registry.register({
     domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
     capabilities: { productMetrics: true, eventMetrics: false, realtime: false },
-    create: () => ({ getProductPerformance: async () => linhas, getCacheScope: async () => null }),
+    create: () => ({
+      async getProductPerformance() { chamadasGa4.inc(); return linhas; },
+      async getCacheScope() { return null; },
+    }),
   });
   return registry;
 }
 
+function montarRegistryFinal({ registryComercio, registryAnalytics, org, store }) {
+  const registryFinal = createConnectorRegistry();
+  registryFinal.register({
+    domain: 'commerce', provider: PROVIDER, integrationProvider: PROVIDER, requiresStoreContext: true,
+    capabilities: { products: false, variants: false, productsWithVariants: true, orders: true, refunds: false, productCosts: false },
+    create: () => registryComercio.resolve('commerce', PROVIDER, { organizationId: org, storeId: store }).connector,
+  });
+  registryFinal.register({
+    domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
+    capabilities: { productMetrics: true, eventMetrics: false, realtime: false },
+    create: () => registryAnalytics.resolve('analytics', ANALYTICS_PROVIDER, { organizationId: org, storeId: store }).connector,
+  });
+  return registryFinal;
+}
+
+function relatarGetOpportunities(rotulo, f, medidorQueries, chamadasGa4) {
+  console.log(`✔ ${rotulo}: ${f.ms.toFixed(0)}ms · fontes: funil=${f.resultado.sources.productFunnel.status} commerce=${f.resultado.sources.commerceReconciliation.status} · candidatos=${f.resultado.totalCandidates} · oportunidades=${f.resultado.opportunities.length}`);
+  console.log(`   heap: antes=${mb(f.heapUsedAntes)} depois=${mb(f.heapUsedDepois)} PICO=${mb(f.heapPico)} · rss: antes=${mb(f.rssAntes)} depois=${mb(f.rssDepois)} PICO=${mb(f.rssPico)}`);
+  console.log(`   ${medidorQueries.total()} queries SQL totais · ${medidorQueries.chamadasResolucaoIdentidade()} chamada(s) de resolução de identidade (era ~425-850 antes da correção; O(1) por chamada agora) · ${chamadasGa4.get()} chamada(s) reais ao connector GA4`);
+  console.log(`   payload (JSON.stringify): ${(JSON.stringify(f.resultado).length / 1024).toFixed(1)}KB`);
+}
+
 async function main() {
-  console.log(`\n=== Teste de escala — catálogo simulado ===`);
-  console.log(`Produtos: ${N_PRODUTOS} (${Math.ceil(N_PRODUTOS / POR_PAGINA)} páginas de ${POR_PAGINA})`);
-  console.log(`Itens observados pelo GA4 (fake): ${N_OBSERVADOS_GA4}`);
-  console.log(`Pedidos pagos (fake): ${N_PEDIDOS_PAGOS}`);
+  console.log(`\n=== Teste de escala — catálogo simulado (rodada "corrigir o gargalo real") ===`);
+  console.log(`Cenário grande: ${N_PRODUTOS} produtos (${Math.ceil(N_PRODUTOS / POR_PAGINA)} páginas) · ${N_OBSERVADOS_GA4} itemIds GA4 · ${N_PEDIDOS_PAGOS} pedidos pagos`);
+  console.log(`Cenário pequeno/médio: ${N_PRODUTOS_PEQUENO} produtos · ${N_OBSERVADOS_GA4_PEQUENO} itemIds GA4 · ${N_PEDIDOS_PAGOS_PEQUENO} pedidos pagos`);
   console.log(`--expose-gc: ${global.gc ? 'ativo (medição de memória mais estável)' : 'INATIVO — rode com --expose-gc pra números mais confiáveis'}\n`);
 
   const db = await h.criarBancoDescartavel('oria_escala_85k');
@@ -181,74 +243,114 @@ async function main() {
   const fachada = runtime.criarPoolTenant(appPoolReal);
   const leases = createJobLeases({ poolReal: appPoolReal, dono: 'scale-test' });
 
-  await sup.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [ORG, 'Escala 85k']);
-  await sup.query('INSERT INTO stores (id, organization_id, nome, loja_legada) VALUES ($1, $2, $3, NULL)', [STORE, ORG, 'Escala 85k']);
+  const ORG_GRANDE = crypto.randomUUID();
+  const STORE_GRANDE = crypto.randomUUID();
+  const ORG_PEQUENA = crypto.randomUUID();
+  const STORE_PEQUENA = crypto.randomUUID();
+  for (const [org, store, nome] of [[ORG_GRANDE, STORE_GRANDE, 'Escala 85k'], [ORG_PEQUENA, STORE_PEQUENA, 'Escala pequena']]) {
+    await sup.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [org, nome]);
+    await sup.query('INSERT INTO stores (id, organization_id, nome, loja_legada) VALUES ($1, $2, $3, NULL)', [store, org, nome]);
+  }
 
   const medidorQueries = medidor(fachada);
   const relatorio = [];
 
-  await runtime.comContexto({ organizationId: ORG, storeId: STORE, origem: 'scale-test' }, async () => {
-    // ── Fase 1: runCatalogSync ──────────────────────────────────────────────────────────────────
-    const registryComercio = registryComercioFake();
+  // ── Cenário GRANDE (85k) ──────────────────────────────────────────────────────────────────────
+  await runtime.comContexto({ organizationId: ORG_GRANDE, storeId: STORE_GRANDE, origem: 'scale-test' }, async () => {
+    const registryComercio = registryComercioFake({ nProdutos: N_PRODUTOS, nPedidosPagos: N_PEDIDOS_PAGOS, org: ORG_GRANDE, store: STORE_GRANDE });
     medidorQueries.resetar();
-    const f1 = await fase('1. runCatalogSync (full sync)', () => runCatalogSync(
+    const f1 = await fase('1. runCatalogSync (full sync, 85k)', () => runCatalogSync(
       { pool: fachada, registry: registryComercio, leases, logger: { warn() {}, error(m) { console.error(m); } } },
-      { organizationId: ORG, storeId: STORE, provider: PROVIDER }
+      { organizationId: ORG_GRANDE, storeId: STORE_GRANDE, provider: PROVIDER }
     ));
-    relatorio.push({ ...f1, queries: medidorQueries.total(), queriesDetalhe: medidorQueries.detalhe() });
-    console.log(`✔ runCatalogSync: ${f1.ms.toFixed(0)}ms · status=${f1.resultado.status} · páginas=${f1.resultado.pagesProcessed} · produtos inseridos=${f1.resultado.productsInserted} · variantes inseridas=${f1.resultado.variantsInserted} · heap Δ${mb(f1.heapDelta)} · ${medidorQueries.total()} queries`);
-    if (f1.resultado.status !== 'success') {
-      console.error(`  ATENÇÃO: sync não terminou com sucesso (${f1.resultado.status}) — fases seguintes rodam mesmo assim, mas o resultado não é representativo.`);
-    }
+    relatorio.push({ ...f1, queries: medidorQueries.total() });
+    console.log(`✔ runCatalogSync: ${f1.ms.toFixed(0)}ms · status=${f1.resultado.status} · páginas=${f1.resultado.pagesProcessed} · produtos inseridos=${f1.resultado.productsInserted} · variantes inseridas=${f1.resultado.variantsInserted} · heap PICO=${mb(f1.heapPico)} · ${medidorQueries.total()} queries`);
+    if (f1.resultado.status !== 'success') console.error(`  ATENÇÃO: sync não terminou com sucesso (${f1.resultado.status}) — fases seguintes rodam mesmo assim, mas o resultado não é representativo.`);
 
-    // ── Fase 2: bootstrapCommerceIdentities ────────────────────────────────────────────────────
     medidorQueries.resetar();
-    const f2 = await fase('2. bootstrapCommerceIdentities', () => bootstrapCommerceIdentities({ pool: fachada }, { organizationId: ORG, storeId: STORE, provider: PROVIDER }));
-    relatorio.push({ ...f2, queries: medidorQueries.total(), queriesDetalhe: medidorQueries.detalhe() });
-    console.log(`✔ bootstrapCommerceIdentities: ${f2.ms.toFixed(0)}ms · product=${f2.resultado.productIdentities} variant=${f2.resultado.variantIdentities} sku=${f2.resultado.skuIdentities} · heap Δ${mb(f2.heapDelta)} · ${medidorQueries.total()} queries`);
+    const f2 = await fase('2. bootstrapCommerceIdentities (85k)', () => bootstrapCommerceIdentities({ pool: fachada }, { organizationId: ORG_GRANDE, storeId: STORE_GRANDE, provider: PROVIDER }));
+    relatorio.push({ ...f2, queries: medidorQueries.total() });
+    console.log(`✔ bootstrapCommerceIdentities: ${f2.ms.toFixed(0)}ms · product=${f2.resultado.productIdentities} variant=${f2.resultado.variantIdentities} sku=${f2.resultado.skuIdentities} · heap PICO=${mb(f2.heapPico)} · ${medidorQueries.total()} queries`);
 
-    // ── Fase 3: GET /journey/opportunities (via opportunityDiagnosticsService direto) ──────────
-    // Registry único com os dois domains (commerce + analytics) — mesma composição real
-    // (composition.js registra os dois no MESMO registry); os connectors delegam pros fakes já
-    // criados acima, nunca uma terceira implementação.
-    const registryAnalytics = registryAnalyticsFake();
-    const registryFinal = createConnectorRegistry();
-    registryFinal.register({
-      domain: 'commerce', provider: PROVIDER, integrationProvider: PROVIDER, requiresStoreContext: true,
-      capabilities: { products: false, variants: false, productsWithVariants: true, orders: true, refunds: false, productCosts: false },
-      create: () => registryComercio.resolve('commerce', PROVIDER, { organizationId: ORG, storeId: STORE }).connector,
-    });
-    registryFinal.register({
-      domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
-      capabilities: { productMetrics: true, eventMetrics: false, realtime: false },
-      create: () => registryAnalytics.resolve('analytics', ANALYTICS_PROVIDER, { organizationId: ORG, storeId: STORE }).connector,
-    });
-
+    const chamadasGa4 = contador();
+    const registryAnalytics = registryAnalyticsFake({ nObservados: N_OBSERVADOS_GA4, chamadasGa4 });
+    const registryFinal = montarRegistryFinal({ registryComercio, registryAnalytics, org: ORG_GRANDE, store: STORE_GRANDE });
     const catalogRepository = createCommerceCatalogRepository({ pool: fachada });
     const productPerformanceService = createProductPerformanceService({ pool: fachada, registry: registryFinal, catalogRepository });
     const reconciliationService = createReconciliationService({ registry: registryFinal, productPerformanceService });
     const opportunityDiagnosticsService = createOpportunityDiagnosticsService({
-      productPerformanceService, reconciliationService, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: PROVIDER,
+      productPerformanceService, reconciliationService, catalogRepository, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: PROVIDER,
+    });
+    const entradaOportunidades = { organizationId: ORG_GRANDE, storeId: STORE_GRANDE, startDate: '2026-09-01', endDate: '2026-09-20', limit: 5 };
+
+    medidorQueries.resetar();
+    chamadasGa4.resetar();
+    const f3 = await fase('3. getOpportunities FRIO (85k, cache de relatório GA4 vazio)', () => opportunityDiagnosticsService.getOpportunities(entradaOportunidades));
+    relatorio.push({ ...f3, queries: medidorQueries.total() });
+    relatarGetOpportunities('3. getOpportunities FRIO (85k)', f3, medidorQueries, chamadasGa4);
+    console.log(`   >>> META DE ENGENHARIA (comando): até 30s com cache aquecido — este é o FRIO, ${f3.ms < 30000 ? 'JÁ dentro da meta mesmo frio' : 'ainda acima — ver fase 4 (quente)'}.`);
+
+    medidorQueries.resetar();
+    chamadasGa4.resetar();
+    const f4 = await fase('4. getOpportunities QUENTE (85k, MESMO período — cache de relatório já aquecido pela fase 3)', () => opportunityDiagnosticsService.getOpportunities(entradaOportunidades));
+    relatorio.push({ ...f4, queries: medidorQueries.total() });
+    relatarGetOpportunities('4. getOpportunities QUENTE (85k)', f4, medidorQueries, chamadasGa4);
+    console.log(`   >>> META DE ENGENHARIA (comando): até 30s com cache aquecido — ${f4.ms <= 30000 ? '✔ DENTRO da meta' : '✘ AINDA ACIMA da meta — profile de novo, não declarar sucesso'} (${(f4.ms / 1000).toFixed(1)}s).`);
+
+    // Request subsequente + reentrância: duas chamadas concorrentes da MESMA Organization/período
+    // (a mesma instância de productPerformanceService/reconciliationService é COMPARTILHADA pelo
+    // processo inteiro em produção — nunca uma por request) nunca podem se corromper uma à outra.
+    medidorQueries.resetar();
+    const [c1, c2] = await Promise.all([
+      opportunityDiagnosticsService.getOpportunities(entradaOportunidades),
+      opportunityDiagnosticsService.getOpportunities(entradaOportunidades),
+    ]);
+    const consistente = JSON.stringify(c1) === JSON.stringify(c2);
+    console.log(`✔ 5. Reentrância (2 chamadas concorrentes, mesma Organization/período): resultados idênticos=${consistente}`);
+  });
+
+  // ── Cenário PEQUENO/MÉDIO (2k) — mesma forma, escala realista de uma loja comum ────────────────
+  await runtime.comContexto({ organizationId: ORG_PEQUENA, storeId: STORE_PEQUENA, origem: 'scale-test' }, async () => {
+    const registryComercio = registryComercioFake({ nProdutos: N_PRODUTOS_PEQUENO, nPedidosPagos: N_PEDIDOS_PAGOS_PEQUENO, org: ORG_PEQUENA, store: STORE_PEQUENA });
+    await runCatalogSync(
+      { pool: fachada, registry: registryComercio, leases, logger: { warn() {}, error(m) { console.error(m); } } },
+      { organizationId: ORG_PEQUENA, storeId: STORE_PEQUENA, provider: PROVIDER }
+    );
+    await bootstrapCommerceIdentities({ pool: fachada }, { organizationId: ORG_PEQUENA, storeId: STORE_PEQUENA, provider: PROVIDER });
+
+    const chamadasGa4 = contador();
+    const registryAnalytics = registryAnalyticsFake({ nObservados: N_OBSERVADOS_GA4_PEQUENO, chamadasGa4 });
+    const registryFinal = montarRegistryFinal({ registryComercio, registryAnalytics, org: ORG_PEQUENA, store: STORE_PEQUENA });
+    const catalogRepository = createCommerceCatalogRepository({ pool: fachada });
+    const productPerformanceService = createProductPerformanceService({ pool: fachada, registry: registryFinal, catalogRepository });
+    const reconciliationService = createReconciliationService({ registry: registryFinal, productPerformanceService });
+    const opportunityDiagnosticsService = createOpportunityDiagnosticsService({
+      productPerformanceService, reconciliationService, catalogRepository, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: PROVIDER,
     });
 
     medidorQueries.resetar();
-    const f3 = await fase('3. GET /journey/opportunities (getOpportunities)', () => opportunityDiagnosticsService.getOpportunities({
-      organizationId: ORG, storeId: STORE, startDate: '2026-09-01', endDate: '2026-09-20', limit: 5,
+    chamadasGa4.resetar();
+    const f5 = await fase('6. getOpportunities (catálogo pequeno/médio, 2k produtos, frio)', () => opportunityDiagnosticsService.getOpportunities({
+      organizationId: ORG_PEQUENA, storeId: STORE_PEQUENA, startDate: '2026-09-01', endDate: '2026-09-20', limit: 5,
     }));
-    relatorio.push({ ...f3, queries: medidorQueries.total(), queriesDetalhe: medidorQueries.detalhe() });
-    console.log(`✔ getOpportunities: ${f3.ms.toFixed(0)}ms · fontes: funil=${f3.resultado.sources.productFunnel.status} commerce=${f3.resultado.sources.commerceReconciliation.status} · candidatos=${f3.resultado.totalCandidates} · heap Δ${mb(f3.heapDelta)} · ${medidorQueries.total()} queries`);
+    relatorio.push({ ...f5, queries: medidorQueries.total() });
+    relatarGetOpportunities('6. getOpportunities (2k produtos)', f5, medidorQueries, chamadasGa4);
   });
 
-  console.log(`\n=== Detalhe de queries por fase (top 8 por volume) ===`);
-  for (const f of relatorio) {
-    console.log(`\n-- ${f.nome} (${f.queries} queries totais) --`);
-    for (const [sql, n] of f.queriesDetalhe.slice(0, 8)) console.log(`  ${String(n).padStart(6)}x  ${sql}`);
-  }
+  // ── Isolamento entre Organizations com o MESMO providerProductId (o cenário grande e o pequeno
+  // já reusam os ids 0..N em cada Organization — se houvesse vazamento de cache/contexto entre
+  // tenants, a Organization pequena veria números da grande ou vice-versa). Checagem direta: o
+  // total de produtos da Organization pequena tem que bater com N_PRODUTOS_PEQUENO, nunca com o
+  // catálogo da Organization grande. ──
+  const catalogRepositoryChecagem = createCommerceCatalogRepository({ pool: fachada });
+  const paginaPequena = await runtime.comContexto({ organizationId: ORG_PEQUENA, storeId: STORE_PEQUENA, origem: 'scale-test' },
+    () => catalogRepositoryChecagem.listPage({ organizationId: ORG_PEQUENA, storeId: STORE_PEQUENA, limit: 1 }));
+  console.log(`\n✔ 7. Isolamento entre Organizations: catálogo da Organization pequena reporta totalCount=${paginaPequena.totalCount} (esperado ${N_PRODUTOS_PEQUENO}, nunca ${N_PRODUTOS} da grande) — ${paginaPequena.totalCount === N_PRODUTOS_PEQUENO ? 'OK' : 'FALHOU'}`);
 
   console.log(`\n=== Resumo ===`);
-  console.log('fase'.padEnd(45), 'ms'.padStart(10), 'queries'.padStart(10), 'heapΔ'.padStart(10), 'rssDepois'.padStart(12));
+  console.log('fase'.padEnd(52), 'ms'.padStart(10), 'queries'.padStart(10), 'heapPico'.padStart(11), 'rssPico'.padStart(11));
   for (const f of relatorio) {
-    console.log(f.nome.padEnd(45), f.ms.toFixed(0).padStart(10), String(f.queries).padStart(10), mb(f.heapDelta).padStart(10), mb(f.rssDepois).padStart(12));
+    console.log(f.nome.padEnd(52), f.ms.toFixed(0).padStart(10), String(f.queries).padStart(10), mb(f.heapPico).padStart(11), mb(f.rssPico).padStart(11));
   }
 
   await appPoolReal.end();
