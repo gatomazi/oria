@@ -194,9 +194,9 @@ const pgPool = pgPoolReal ? criarPoolTenant(pgPoolReal) : null;
 const JOBS_DE_FUNDO_DESLIGADOS = process.env.ORIA_JOBS_DE_FUNDO === 'off' && process.env.NODE_ENV !== 'production';
 if (process.env.ORIA_JOBS_DE_FUNDO === 'off' && !JOBS_DE_FUNDO_DESLIGADOS) console.error('[JOBS] ORIA_JOBS_DE_FUNDO=off IGNORADO em produção: os jobs continuam ligados');
 const JOBS = require('./lib/platform/jobs').createJobRunner({
-  desligado: JOBS_DE_FUNDO_DESLIGADOS,
   poolReal: pgPoolReal,
   leases: pgPoolReal ? require('./lib/platform/leases').createJobLeases({ poolReal: pgPoolReal }) : null,
+  desligado: JOBS_DE_FUNDO_DESLIGADOS, // depois de `leases`: o contrato INV-18 (fase5c-leases) fixa `poolReal` + `leases` no início
 });
 
 if (!pgPool) {
