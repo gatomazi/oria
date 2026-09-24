@@ -334,3 +334,23 @@ Resultado final: **158/158**. Achados corrigidos no caminho: alvos de 32–40 px
 ### R4.4 Não tocado / pendências
 
 Limiares, base real, opção B, snapshots, job diário, CI remoto e deploy. Calibração real segue dependendo de acesso autorizado (R3.4). O erro "cadastro da Ink não respondeu" visível na lista em ambiente local é o mock sem cadastro, estado honesto e intencional.
+
+## Rodada 5 — consistência RFM × Audiência e preparação de release
+
+Detalhe completo em `docs/features/oria-clientes-rfm-rodada5.md`. Resumo:
+
+- **Audiência exata para segmentos RFM.** O segmento salvo passa a persistir UM filtro `rfm` (predicado + corte SALVO + regra), avaliado pela
+  mesma classificação da matriz (mesmas linhas canônicas, `asOf`, identidade, `casaPredicado`). Obrigatório mesmo com `match: ANY`;
+  qualquer defeito é 409 acionável, nunca "todos os clientes". Opção A preservada (sem migração, sem opção B, sem snapshots); filtros
+  genéricos e segmentos antigos intocados (marcados "avaliação aproximada").
+- **Divergências reproduzidas:** 24 h × dia de calendário; troca paga; janela/duplicados; "só cancelado" entrando em Perdidos (0 × 20 na massa sintética);
+  filtro descartado em silêncio; prévia envelhecida/erro engolido na Revisão.
+- **Financeiro:** matriz de estados com 4 consumidores reais (19 casos); semântica de `backfillConfirmado`/reexecução documentada; textos
+  "líquida"/"cancelado" corrigidos. Nenhuma regra global alterada; nenhuma leitura real.
+- **Desempenho:** benchmark local sintético (2 mil/20 mil/100 mil pedidos); sem N+1; gargalo de JS corrigido (×1,9 no A/B, resultado idêntico por hash);
+  gargalo estrutural (O(N) por requisição) documentado para a decisão de snapshots.
+- **CI/hook:** `pre-commit` é global do desenvolvedor e o repositório não tem config — documentado, sem bypass opaco; gate de CI descrito e
+  verificado localmente.
+- **Testes novos:** `clientes-audiencia-rfm` (45), `clientes-status-financeiro` (19), `clientes-rfm-equivalencia` (4), 5 testes HTTP novos + 3
+  atualizados em `clientes-rfm-http`; QA Playwright `qa-rfm-audiencia` (57) e regressões (158, 13, 38).
+- **Ajuste de negative control:** `clientes/chave-da-store-ausente` (PED-02) passou a mirar `lib/clientes/agregado.js` (a linha saiu de `server.js` na extração).
