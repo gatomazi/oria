@@ -409,6 +409,70 @@ test('L · checkOrderTransactionLink: 1 pedido explícito, 1 chamada ao Commerce
   assert.equal(r.order.id, pedido.id);
 }));
 
+// ── M: achado real de produção (Use Sul) — a Ink manda transaction_id pro GA4 como INK<id> ────────
+
+test('M · commerceTransactionIdPrefix: findTransaction recebe o providerOrderId PREFIXADO, nunca o cru — achado real contra o GA4 da Use Sul', () => em(async () => {
+  const ids = await semearCatalogo([{ providerProductId: 'p10' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: PROVIDER });
+  let transactionIdRecebido = null;
+  const pedido = pedidoFake('2010279', { items: [{ commerceProductId: ids.get('p10'), quantity: 1, totalValue: 794.20 }], totalValue: 794.20 });
+  const registry = createConnectorRegistry();
+  registry.register({
+    domain: 'commerce', provider: PROVIDER, integrationProvider: PROVIDER, requiresStoreContext: true,
+    capabilities: { products: true, variants: false, productsWithVariants: false, orders: true, refunds: false, productCosts: false },
+    create: () => ({
+      listProducts: async () => ({ items: [], nextCursor: null }),
+      getProduct: async () => null,
+      listOrders: async () => ({ items: [], nextCursor: null }),
+      getOrder: async ({ providerOrderId }) => (providerOrderId === pedido.id ? pedido : null),
+    }),
+  });
+  registry.register({
+    domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
+    capabilities: { productMetrics: true, eventMetrics: false, realtime: false },
+    create: () => ({
+      getProductPerformance: async () => [],
+      getTransactionCapabilities: async () => ({ apt: true, reason: null, transactionIdAvailable: true, metrics: {} }),
+      // GA4 REAL só reconhece 'INK2010279' — se o service mandasse o id cru ('2010279'), nunca acharia.
+      findTransaction: async ({ transactionId }) => { transactionIdRecebido = transactionId; return { found: transactionId === 'INK2010279', transactions: 1, revenue: 794.20 }; },
+    }),
+  });
+  const svc = await montarServico(registry, { commerceTransactionIdPrefix: 'INK' });
+  const r = await svc.checkOrderTransactionLink({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO, providerOrderId: pedido.id });
+  assert.equal(transactionIdRecebido, 'INK2010279');
+  assert.equal(r.linked, true);
+  // O providerOrderId exposto na resposta continua CRU (é o id do Commerce, nunca o formato do GA4).
+  assert.equal(r.order.id, '2010279');
+}));
+
+test('M · commerceTransactionIdPrefix default é vazio — nenhum provider ganha prefixo sem ser explicitamente configurado', () => em(async () => {
+  const ids = await semearCatalogo([{ providerProductId: 'p11' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: PROVIDER });
+  let transactionIdRecebido = null;
+  const pedido = pedidoFake('sem-prefixo-1', { items: [{ commerceProductId: ids.get('p11'), quantity: 1, totalValue: 50 }], totalValue: 50 });
+  const registry = createConnectorRegistry();
+  registry.register({
+    domain: 'commerce', provider: PROVIDER, integrationProvider: PROVIDER, requiresStoreContext: true,
+    capabilities: { products: true, variants: false, productsWithVariants: false, orders: true, refunds: false, productCosts: false },
+    create: () => ({
+      listProducts: async () => ({ items: [], nextCursor: null }), getProduct: async () => null, listOrders: async () => ({ items: [], nextCursor: null }),
+      getOrder: async ({ providerOrderId }) => (providerOrderId === pedido.id ? pedido : null),
+    }),
+  });
+  registry.register({
+    domain: 'analytics', provider: ANALYTICS_PROVIDER, integrationProvider: ANALYTICS_PROVIDER, requiresStoreContext: true,
+    capabilities: { productMetrics: true, eventMetrics: false, realtime: false },
+    create: () => ({
+      getProductPerformance: async () => [],
+      getTransactionCapabilities: async () => ({ apt: true, reason: null, transactionIdAvailable: true, metrics: {} }),
+      findTransaction: async ({ transactionId }) => { transactionIdRecebido = transactionId; return { found: false, transactions: null, revenue: null }; },
+    }),
+  });
+  const svc = await montarServico(registry); // sem commerceTransactionIdPrefix — default ''
+  await svc.checkOrderTransactionLink({ organizationId: ORG_A, storeId: STORE_A, ...PERIODO, providerOrderId: pedido.id });
+  assert.equal(transactionIdRecebido, 'sem-prefixo-1'); // cru, sem prefixo nenhum
+}));
+
 test('L · checkOrderTransactionLink: pedido inexistente → insufficient_data/ORDER_NOT_FOUND, nunca chama o GA4', () => em(async () => {
   let chamouGa4 = false;
   const registry = createConnectorRegistry();

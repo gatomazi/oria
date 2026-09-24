@@ -28,6 +28,13 @@ const { createJourneyAnalyticsService } = require('./journey-analytics-service')
 const ANALYTICS_PROVIDER = 'ga4';
 const COMMERCE_PROVIDER = 'reserva_ink';
 
+// Rodada M · achado real de produção (Use Sul, GA4 real cruzado à mão pelo usuário contra o Oria):
+// a Ink manda `transaction_id` pro GA4 como `INK<providerOrderId>`, nunca o id cru. Mapa por
+// provider (nunca um `if` solto em journey-analytics-service.js) — outro CommerceConnector no
+// futuro entra aqui só se também tiver prefixo próprio; sem entrada, o default do service (`''`)
+// já cobre "sem prefixo", nenhuma mudança necessária lá.
+const COMMERCE_TRANSACTION_ID_PREFIX = Object.freeze({ reserva_ink: 'INK' });
+
 /**
  * @param {{pool, keyring, fetchImpl?, googleClientId?, googleClientSecret?, reportCacheTtlMs?}} deps
  *   `pool`: a fachada tenant-scoped (RLS) — o mesmo `pgPool` do resto do server.js, NUNCA o pool
@@ -62,7 +69,10 @@ function createProductAnalyticsComposition({ pool, keyring, fetchImpl, googleCli
   // registry por enquanto (ver comentário no próprio arquivo). Nenhum provider `event_analytics` é
   // registrado nesta composição — tier3 (jornada individual) fica estruturalmente indisponível até
   // uma composição futura registrar um.
-  const journeyAnalyticsService = createJourneyAnalyticsService({ pool, registry, productPerformanceService, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER });
+  const journeyAnalyticsService = createJourneyAnalyticsService({
+    pool, registry, productPerformanceService, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
+    commerceTransactionIdPrefix: COMMERCE_TRANSACTION_ID_PREFIX[COMMERCE_PROVIDER] || '',
+  });
 
   return Object.freeze({
     registry, catalogRepository, productPerformanceService, reconciliationService, journeyAnalyticsService, reportCache,

@@ -99,7 +99,7 @@ function classificarIndisponibilidade(reason) {
 
 /**
  * @param {{pool, registry, productPerformanceService, analyticsProvider, commerceProvider,
- *   localOrdersHistoryStart?: string, maxTransactionSampleSize?: number}} deps
+ *   localOrdersHistoryStart?: string, maxTransactionSampleSize?: number, commerceTransactionIdPrefix?: string}} deps
  *   `localOrdersHistoryStart`: Rodada L §2.4 — o cache local de pedidos só é confiável a partir
  *   desta data NESTA instalação (LOCAL_ORDERS_HISTORY_START, reconciliation.js, Fase G.1). Injetável
  *   de propósito: não é uma regra global do produto SaaS, é uma característica de cobertura de
@@ -108,10 +108,22 @@ function classificarIndisponibilidade(reason) {
  *   `sync_estado`/`pedidos_backfill_jobs`, sem mudar este arquivo. Não migrado nesta rodada — sem
  *   evidência de qual seria o valor certo por tenant, migrar seria inventar dado.
  *   `maxTransactionSampleSize`: Rodada L §2.3 — teto de lookups GA4 no relatório agregado.
+ *   `commerceTransactionIdPrefix`: Rodada M — achado real de produção (smoke autenticado contra o
+ *   GA4 de verdade da Use Sul, cruzado à mão pelo usuário): o `transaction_id` que a Ink manda pro
+ *   GA4 no evento `purchase` NÃO é o `providerOrderId` cru — vem como `INK<providerOrderId>` (ex.:
+ *   pedido Ink `2010279` chega no GA4 como transação `INK2010279`; confirmado comparando a mesma
+ *   compra nos dois sistemas). A comparação de vínculo é sempre exata (nunca fuzzy — §6 do comando),
+ *   então sem este prefixo nenhum pedido bateria, mesmo com o rastreamento funcionando perfeitamente
+ *   dos dois lados — o gap era de FORMATO, não de dado ausente. Confirmado pelo usuário: é sempre o
+ *   mesmo prefixo pra este commerceProvider, nunca varia por loja/período. Injetável (nunca um `if`
+ *   comparando `commerceProvider` aqui dentro — decidido em composition.js, por provider) porque é
+ *   uma característica do PROVIDER, não do produto — outro Commerce no futuro pode não ter
+ *   prefixo nenhum (default `''`).
  */
 function createJourneyAnalyticsService({
   pool, registry, productPerformanceService, analyticsProvider, commerceProvider,
   localOrdersHistoryStart = LOCAL_ORDERS_HISTORY_START, maxTransactionSampleSize = MAX_TRANSACTION_SAMPLE_SIZE,
+  commerceTransactionIdPrefix = '',
 }) {
   if (!pool || typeof pool.query !== 'function') throw new Error('createJourneyAnalyticsService exige pool');
   if (!registry || typeof registry.resolve !== 'function') throw new Error('createJourneyAnalyticsService exige registry');
@@ -123,6 +135,12 @@ function createJourneyAnalyticsService({
   if (!Number.isInteger(maxTransactionSampleSize) || maxTransactionSampleSize < 1) {
     throw new Error('maxTransactionSampleSize deve ser um inteiro >= 1');
   }
+  if (typeof commerceTransactionIdPrefix !== 'string') throw new Error('commerceTransactionIdPrefix deve ser string');
+
+  // Único ponto que conhece a regra de formato — nunca espalhado. `pedido.providerOrderId`/
+  // `providerOrderId` continuam CRUS em toda outra parte do service (getOrder, exibição na UI,
+  // links.providerOrderId na resposta) — só a comparação COM O GA4 usa o id prefixado.
+  const transactionIdNoGa4 = (providerOrderId) => `${commerceTransactionIdPrefix}${providerOrderId}`;
 
   // Tier 1a · funil agregado — reaproveita getProductPerformanceSummary (Fase G/J.4): observed (todo
   // itemId GA4 do período) + matched (só o resolvido a produto canônico), nunca um número novo.
@@ -245,7 +263,7 @@ function createJourneyAnalyticsService({
     const links = [];
     for (const pedido of amostra) {
       // eslint-disable-next-line no-await-in-loop
-      const resultado = await cap.resolvido.connector.findTransaction({ startDate, endDate, transactionId: pedido.providerOrderId });
+      const resultado = await cap.resolvido.connector.findTransaction({ startDate, endDate, transactionId: transactionIdNoGa4(pedido.providerOrderId) });
       links.push({
         commerceOrderId: pedido.id, providerOrderId: pedido.providerOrderId,
         linked: resultado.found, linkType: 'transaction_linked', ga4Transactions: resultado.transactions, ga4Revenue: resultado.revenue,
@@ -290,7 +308,7 @@ function createJourneyAnalyticsService({
     const cap = await capacidadeDeTransacao({ organizationId, storeId });
     if (!cap.ok) return { available: false, status: cap.status, reason: cap.reason, order: pedido, linked: null };
 
-    const resultado = await cap.resolvido.connector.findTransaction({ startDate, endDate, transactionId: providerOrderId });
+    const resultado = await cap.resolvido.connector.findTransaction({ startDate, endDate, transactionId: transactionIdNoGa4(providerOrderId) });
     return {
       available: true, status: 'available', reason: null, order: pedido,
       linked: resultado.found, linkType: 'transaction_linked', ga4Transactions: resultado.transactions, ga4Revenue: resultado.revenue,
