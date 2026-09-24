@@ -39,7 +39,8 @@ const COMMERCE_PROVIDER = 'reserva_ink';
 const COMMERCE_TRANSACTION_ID_PREFIX = Object.freeze({ reserva_ink: 'INK' });
 
 /**
- * @param {{pool, keyring, fetchImpl?, googleClientId?, googleClientSecret?, reportCacheTtlMs?, leases?}} deps
+ * @param {{pool, keyring, fetchImpl?, googleClientId?, googleClientSecret?, reportCacheTtlMs?, leases?,
+ *   catalogSyncMaxAgeMs?, catalogSyncLeaseTtlMs?}} deps
  *   `pool`: a fachada tenant-scoped (RLS) — o mesmo `pgPool` do resto do server.js, NUNCA o pool
  *   real sem RLS (`pgPoolReal`).
  *   `leases`: Rodada M — lib/platform/leases.js (mesma instância que server.js já cria pra `JOBS`,
@@ -47,6 +48,8 @@ const COMMERCE_TRANSACTION_ID_PREFIX = Object.freeze({ reserva_ink: 'INK' });
  *   Postgres via `job_lease_adquirir`/`job_lease_concluir`, nunca em memória do processo). Opcional:
  *   sem leases, `runCatalogSync` roda sem proteção de concorrência (mesmo default da própria
  *   função) — aceitável só em teste.
+ *   `catalogSyncMaxAgeMs`/`catalogSyncLeaseTtlMs`: Rodada "preparação do piloto" — ver os comentários
+ *   junto aos defaults abaixo.
  * @returns {Readonly<{registry, catalogRepository, productPerformanceService, reconciliationService,
  *   journeyAnalyticsService, opportunityDiagnosticsService, reportCache, analyticsProvider: string,
  *   commerceProvider: string, syncCommerceCatalog: Function, getCommerceCatalogSyncStatus: Function,
@@ -60,6 +63,20 @@ function createProductAnalyticsComposition({
   // catálogo de ~85 mil produtos custa dezenas/centenas de páginas por run, então recorrência mais
   // curta que isso é orçamento de chamadas que ninguém pediu ainda.
   catalogSyncMaxAgeMs = 24 * 60 * 60 * 1000,
+  // Rodada "preparação do piloto" · achado da auditoria de concorrência: sem este parâmetro,
+  // `runCatalogSync` usava o TTL padrão de `leases.js` (`ttlPara(0)` = 30min, pensado pra jobs
+  // curtos como reconciliação/fila) pro lease `commerce-catalog-sync:<provider>` — o MESMO lease
+  // que protege um full sync de centenas/milhares de páginas contra a API real da Ink (latência de
+  // rede real, nunca a do fake local usado no teste de escala). Um catálogo grande o bastante (ou
+  // uma API degradada/rate-limited) rodando mais de 30 minutos faria o lease expirar ENQUANTO o
+  // sync original ainda está rodando — sem heartbeat/renovação (`job_leases.ate` é fixo desde a
+  // aquisição, ver migrations/sql/0016-job-leases.up.sql), qualquer disparo seguinte (scheduler,
+  // clique manual, reconexão) adquiriria o "mesmo" lease e rodaria um SEGUNDO full sync concorrente
+  // da mesma Organization. 3h é generoso o bastante pra cobrir isso com folga real (o scheduler
+  // externo já espera até 2h — `ttlPara(60min) = max(30min, 2h) = 2h` — pra reconsiderar a MESMA
+  // Organization) sem tirar o auto-recovery de quedas de verdade (processo morto = lease livre
+  // depois de 3h, não "pra sempre").
+  catalogSyncLeaseTtlMs = 3 * 60 * 60 * 1000,
 } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('createProductAnalyticsComposition exige pool');
   if (!keyring) throw new Error('createProductAnalyticsComposition exige keyring');
@@ -123,7 +140,11 @@ function createProductAnalyticsComposition({
   // ReportCache aqui derrubaria o reuso de 15min sem nenhum ganho — a próxima request já vê a
   // identity nova sozinha, sem precisar que nada seja invalidado.
   async function syncCommerceCatalog({ organizationId, storeId }) {
-    const resultado = await runCatalogSync({ pool, registry, leases, logger: console }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
+    const resultado = await runCatalogSync(
+      { pool, registry, leases, logger: console },
+      { organizationId, storeId, provider: COMMERCE_PROVIDER },
+      { ttlMs: catalogSyncLeaseTtlMs }
+    );
     if (resultado.status === 'success') {
       try {
         await bootstrapCommerceIdentities({ pool }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
@@ -152,20 +173,37 @@ function createProductAnalyticsComposition({
   // Gate A ("Jornada de Valor Operacional") · decide se ESTA Organization precisa de um full sync
   // agora — usado pelo scheduler automático (server.js `sincronizarCatalogoCanonicoDaOrganizacao`)
   // pra checar antes de disparar, nunca depois: nunca sincroniza(dor) verifica "vencido" só olhando
-  // pro relógio de parede sem olhar o log real. `maxAgeMs` é injetável por chamada (default = o
-  // `catalogSyncMaxAgeMs` desta composição) — nunca hardcoded globalmente.
+  // pro relógio de parede sem olhar o log real. `maxAgeMs`/`maxRunningAgeMs` são injetáveis por
+  // chamada (default = os desta composição) — nunca hardcoded globalmente.
   //
-  //   sem log nenhum                → precisa (nunca sincronizado — cobre "recovery" de instalações
-  //                                    antigas do mesmo jeito que cobre um catálogo novo)
-  //   último run 'running'          → NÃO precisa (já em andamento; o lease de catalog-sync.js
-  //                                    protege — o scheduler não dispara por cima)
-  //   último run != 'success'       → precisa (falhou ou parcial — tenta de novo)
+  //   sem log nenhum                       → precisa (nunca sincronizado — cobre "recovery" de
+  //                                           instalações antigas do mesmo jeito que cobre um
+  //                                           catálogo novo)
+  //   último run 'running' e RECENTE       → NÃO precisa (em andamento de verdade; o lease de
+  //                                           catalog-sync.js protege — o scheduler não dispara
+  //                                           por cima)
+  //   último run 'running' mas mais velho
+  //     que maxRunningAgeMs                → precisa (achado da auditoria de concorrência/
+  //                                           preparação do piloto: se o processo caiu NO MEIO do
+  //                                           sync, `fecharLog` nunca roda e a linha fica 'running'
+  //                                           PRA SEMPRE — sem este teto, o scheduler nunca mais
+  //                                           tentaria essa Organization de novo, mesmo com o lease
+  //                                           real já expirado há muito tempo. maxRunningAgeMs
+  //                                           default = o MESMO catalogSyncLeaseTtlMs do lease: depois
+  //                                           desse prazo o lease já expirou de qualquer forma, então
+  //                                           uma linha ainda 'running' é comprovadamente abandonada,
+  //                                           nunca um sync legítimo mais longo que o próprio lease
+  //                                           que o protege — a proteção de fato continua sendo o
+  //                                           lease em si, nunca este teto sozinho)
+  //   último run != 'success'              → precisa (falhou ou parcial — tenta de novo)
   //   último sucesso mais velho que maxAgeMs → precisa
-  //   senão                          → não precisa
-  async function catalogSyncNecessario({ organizationId, storeId }, { maxAgeMs = catalogSyncMaxAgeMs } = {}) {
+  //   senão                                 → não precisa
+  async function catalogSyncNecessario({ organizationId, storeId }, { maxAgeMs = catalogSyncMaxAgeMs, maxRunningAgeMs = catalogSyncLeaseTtlMs } = {}) {
     const ultimo = await getCommerceCatalogSyncStatus({ organizationId, storeId });
     if (!ultimo) return true;
-    if (ultimo.status === 'running') return false;
+    if (ultimo.status === 'running') {
+      return (Date.now() - new Date(ultimo.started_at).getTime()) >= maxRunningAgeMs;
+    }
     if (ultimo.status !== 'success') return true;
     if (!ultimo.finished_at) return true;
     return (Date.now() - new Date(ultimo.finished_at).getTime()) >= maxAgeMs;

@@ -19,8 +19,21 @@ const { createProductAnalyticsComposition, COMMERCE_PROVIDER } = h.sujeito('lib/
 
 const ORG_A = 'f1000000-0000-4000-8000-000000000001';
 const ORG_B = 'f1000000-0000-4000-8000-000000000002';
+// ORG_C/D/E: uma Organization POR teste que grava timestamp retroativo (startedAtOffsetMs) — nunca
+// duas gravações retroativas na MESMA Organization. Motivo: ORDER BY started_at DESC LIMIT 1 pega a
+// linha com o maior started_at — se um teste usa offset pequeno (ex.: 1ms) e outro, rodando alguns
+// milissegundos DEPOIS na mesma Organization, usa offset grande (ex.: 5000ms), a linha do offset
+// PEQUENO continua "mais recente" (started_at maior) mesmo tendo sido inserida antes — o teste do
+// offset grande nunca seria o que `catalogSyncNecessario` realmente lê. Isolar por Organization
+// remove essa dependência de timing entre testes por completo.
+const ORG_C = 'f1000000-0000-4000-8000-000000000003';
+const ORG_D = 'f1000000-0000-4000-8000-000000000004';
+const ORG_E = 'f1000000-0000-4000-8000-000000000005';
 const STORE_A = 'f2000000-0000-4000-8000-000000000001';
 const STORE_B = 'f2000000-0000-4000-8000-000000000002';
+const STORE_C = 'f2000000-0000-4000-8000-000000000003';
+const STORE_D = 'f2000000-0000-4000-8000-000000000004';
+const STORE_E = 'f2000000-0000-4000-8000-000000000005';
 const ROLE = `oria_app_csn_${crypto.randomBytes(4).toString('hex')}`;
 const SENHA_ROLE = crypto.randomBytes(16).toString('hex');
 const MESTRA = crypto.randomBytes(32).toString('base64');
@@ -54,13 +67,18 @@ test.before(async () => {
   }
   const appPoolReal = h.abrirPoolDescartavel(h.urlComUsuario(db.url, ROLE, SENHA_ROLE), { max: 6 });
   fachada = runtime.criarPoolTenant(appPoolReal);
-  for (const [org, store, nome] of [[ORG_A, STORE_A, 'Org A'], [ORG_B, STORE_B, 'Org B']]) {
+  for (const [org, store, nome] of [
+    [ORG_A, STORE_A, 'Org A'], [ORG_B, STORE_B, 'Org B'], [ORG_C, STORE_C, 'Org C'], [ORG_D, STORE_D, 'Org D'], [ORG_E, STORE_E, 'Org E'],
+  ]) {
     await sup.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [org, nome]);
     await sup.query('INSERT INTO stores (id, organization_id, nome, loja_legada) VALUES ($1, $2, $3, NULL)', [store, org, nome]);
   }
   // catalogSyncMaxAgeMs curto (200ms) pra não depender de horas reais de espera no teste — a lógica
   // testada é "mais velho que o limite", nunca um valor de produção específico.
-  composicao = createProductAnalyticsComposition({ pool: fachada, keyring: createKeyring({ ENCRYPTION_MASTER_KEY: MESTRA }), catalogSyncMaxAgeMs: 200 });
+  composicao = createProductAnalyticsComposition({
+    pool: fachada, keyring: createKeyring({ ENCRYPTION_MASTER_KEY: MESTRA }),
+    catalogSyncMaxAgeMs: 200, catalogSyncLeaseTtlMs: 300,
+  });
 });
 
 test.after(async () => {
@@ -78,10 +96,24 @@ test('A · nunca sincronizado (sem log nenhum) → precisa (cobre catálogo novo
   assert.equal(precisa, true);
 }));
 
-test('A · último run "running" → NÃO precisa (já em andamento; o lease de catalog-sync.js protege, o scheduler não dispara por cima)', () => em(ORG_A, STORE_A, async () => {
-  await gravarLog(ORG_A, STORE_A, { status: 'running', finishedAtOffsetMs: null });
-  const precisa = await composicao.catalogSyncNecessario({ organizationId: ORG_A, storeId: STORE_A });
+test('A · último run "running" RECENTE → NÃO precisa (em andamento de verdade; o lease de catalog-sync.js protege, o scheduler não dispara por cima)', () => em(ORG_C, STORE_C, async () => {
+  await gravarLog(ORG_C, STORE_C, { status: 'running', startedAtOffsetMs: 1, finishedAtOffsetMs: null });
+  const precisa = await composicao.catalogSyncNecessario({ organizationId: ORG_C, storeId: STORE_C });
   assert.equal(precisa, false);
+}));
+
+test('A · último run "running" ÓRFÃO (mais velho que o TTL do próprio lease) → precisa (achado da auditoria: processo caiu no meio do sync, fecharLog nunca roda, a linha fica "running" pra sempre sem este teto — o lease real já expirou há muito)', () => em(ORG_D, STORE_D, async () => {
+  await gravarLog(ORG_D, STORE_D, { status: 'running', startedAtOffsetMs: 5000, finishedAtOffsetMs: null }); // 5s atrás, TTL do lease é 300ms nesta composição
+  const precisa = await composicao.catalogSyncNecessario({ organizationId: ORG_D, storeId: STORE_D });
+  assert.equal(precisa, true);
+}));
+
+test('A · maxRunningAgeMs por chamada sobrescreve o default (nunca hardcoded globalmente)', () => em(ORG_E, STORE_E, async () => {
+  await gravarLog(ORG_E, STORE_E, { status: 'running', startedAtOffsetMs: 5000, finishedAtOffsetMs: null });
+  // maxRunningAgeMs explícito bem maior que 5s: ainda dentro — não precisa.
+  assert.equal(await composicao.catalogSyncNecessario({ organizationId: ORG_E, storeId: STORE_E }, { maxRunningAgeMs: 60000 }), false);
+  // Default da composição (300ms): 5s atrás já é órfão — precisa.
+  assert.equal(await composicao.catalogSyncNecessario({ organizationId: ORG_E, storeId: STORE_E }), true);
 }));
 
 test('A · último run "failed" → precisa (tenta de novo, mesmo recente)', () => em(ORG_A, STORE_A, async () => {
