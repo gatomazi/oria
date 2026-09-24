@@ -16688,6 +16688,36 @@ app.get('/hotpix/:id', (req, res) => {
   res.sendFile(path.join(__dirname, 'pedido.html'));
 });
 
+// ── Product Analytics (rodada H→I) ──────────────────────────────────────────────────────────
+//
+// Fases B→G.1 (lib/product-analytics/, lib/connectors/) são bibliotecas puras, sem HTTP. Aqui é a
+// ÚNICA fiação: monta os connectors (Ink `commerce`, GA4 `analytics`) e os services UMA VEZ no
+// boot — nunca por request (o ReportCache do ProductPerformanceService só reaproveita relatório
+// entre requests se a instância sobreviver ao request que a criou; ver
+// lib/product-analytics/composition.js). O router só existe, e só é montado, com `pgPool`
+// disponível — sem Postgres não há RLS, e sem RLS estes serviços não têm o que ler com segurança.
+const { createProductAnalyticsComposition } = require('./lib/product-analytics/composition');
+const { createProductAnalyticsRouter } = require('./lib/product-analytics/http-routes');
+const PRODUCT_ANALYTICS = pgPool
+  ? createProductAnalyticsComposition({
+    pool: pgPool, keyring: CHAVEIRO,
+    googleClientId: process.env.GOOGLE_CLIENT_ID, googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  })
+  : null;
+if (PRODUCT_ANALYTICS) {
+  // `requireAdmin` já resolve auth + Organization/Store da sessão + entitlement
+  // (`analytics_product_performance`, via feature-routes.js → ROTAS) antes de qualquer handler
+  // daqui rodar — nenhum guard extra é reimplementado no router.
+  app.use('/api/admin/product-analytics', requireAdmin, createProductAnalyticsRouter({
+    productPerformanceService: PRODUCT_ANALYTICS.productPerformanceService,
+    reconciliationService: PRODUCT_ANALYTICS.reconciliationService,
+    journeyAnalyticsService: PRODUCT_ANALYTICS.journeyAnalyticsService,
+    registry: PRODUCT_ANALYTICS.registry,
+    analyticsProvider: PRODUCT_ANALYTICS.analyticsProvider,
+    commerceProvider: PRODUCT_ANALYTICS.commerceProvider,
+  }));
+}
+
 // Último middleware do app: todo erro que uma rota, um middleware ou uma promise rejeitada
 // encaminhar para `next(err)` termina aqui, com resposta HTTP controlada e sem stack no corpo.
 app.use(httpSafety.criarErroCentral());

@@ -36,6 +36,9 @@ const FEATURES = Object.freeze([
   'meta_ads',
   'google_ads',
   'analytics_ga4',
+  // Rodada H→I: Product Analytics (GA4 + Commerce reconciliado). Diferente das três acima, nasce
+  // com o guard ligado no mesmo commit (feature-routes.js) — não é "capacidade sem rota" transitória.
+  'analytics_product_performance',
   // ── Em transição ────────────────────────────────────────────────────────────────────────────
   // Conceitualmente já são CONNECTOR CAPABILITIES (ver docs/architecture/features-vs-connectors.md).
   // Continuam aqui porque o runtime delas ainda não migrou: `requireEntitlement` confere estas
@@ -105,6 +108,8 @@ const ESTADO_DAS_FEATURES = Object.freeze({
   meta_ads: 'sem_guard',
   google_ads: 'sem_guard',
   analytics_ga4: 'sem_guard',
+  // Rodada H→I: /api/admin/product-analytics já nasce protegido (feature-routes.js → ROTAS).
+  analytics_product_performance: 'implementada',
   // Em transição: o runtime ainda confere estas chaves, então continuam implementadas enquanto
   // estiverem em FEATURES.
   catalog: 'implementada',

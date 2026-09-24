@@ -41,7 +41,14 @@ const RLS = /row-level security/;
 const RLS_OU_TRIGGER = /row-level security|diverge/;
 
 function mapeamento() {
-  const org = (x) => ({ id: x.id, nome: `Org ${x.loja}`, store: { id: crypto.randomUUID(), nome: `Store ${x.loja}`, lojaLegada: x.loja } });
+  // Fase D: commerce_products/variants/sync_logs têm store_id NOT NULL — o id gerado aqui precisa
+  // ficar acessível a valoresPara() depois (nenhuma tabela de plataforma anterior precisava disso:
+  // as legadas leem `loja`/`escopo`, texto; store_id é identidade de Store de verdade).
+  const org = (x) => {
+    const storeId = crypto.randomUUID();
+    x.storeId = storeId;
+    return { id: x.id, nome: `Org ${x.loja}`, store: { id: storeId, nome: `Store ${x.loja}`, lojaLegada: x.loja } };
+  };
   return {
     versao: 1,
     organizations: [org(ORG.A), org(ORG.B)],
@@ -77,6 +84,20 @@ async function valoresPara(tabela, chave) {
   if (tabela === 'organization_members') v.user_id = pessoas[chave];
   // Fase 7: passo de onboarding precisa de id e requisito do vocabulário (CHECK).
   if (tabela === 'onboarding_steps') Object.assign(v, { step_id: 'owner', requirement: 'required' });
+  // Fase D: store_id é NOT NULL nas três tabelas do catálogo canônico — a Store REAL da
+  // Organization, nunca um UUID aleatório (que quebraria a FK composta para `stores`).
+  if (['commerce_products', 'commerce_product_variants', 'commerce_catalog_sync_logs', 'product_external_identities'].includes(tabela)) {
+    v.store_id = o.storeId;
+  }
+  if (tabela === 'commerce_product_variants') v.commerce_product_id = linhas[chave].get('commerce_products').id;
+  // Fase F: colunas com CHECK de vocabulário fechado — o preenchedor genérico (`coluna-N`) violaria
+  // namespace/source/confidence. Valores válidos e explícitos, como onboarding_steps acima.
+  if (tabela === 'product_external_identities') {
+    Object.assign(v, {
+      commerce_product_id: linhas[chave].get('commerce_products').id,
+      namespace: 'sku', external_id: `sku-${chave}`, source: 'manual', confidence: 'exact',
+    });
+  }
   const decl = manifesto.porTabela(tabela);
   if (decl && decl.pai) v[decl.pai.coluna] = linhas[chave].get(decl.pai.tabela).id;
   return v;

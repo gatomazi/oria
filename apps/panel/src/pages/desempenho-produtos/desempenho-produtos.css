@@ -1,0 +1,92 @@
+/* Desempenho de Produtos (rodada H→I) — tokens do design system existente, nenhuma cor nova. */
+
+.pa-callout__acao {
+  margin-top: var(--space-3, 12px);
+}
+
+.pa-funil {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 12px);
+}
+
+.pa-funil__etapa {
+  flex: 1 1 120px;
+  min-width: 120px;
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--border-subtle, #26314a);
+  border-radius: var(--radius-md, 8px);
+  text-align: center;
+}
+
+.pa-funil__valor {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.pa-funil__label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted, #8b96ad);
+  margin-top: 2px;
+}
+
+.pa-drawer__secao-titulo {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted, #8b96ad);
+  margin: 0 0 var(--space-2, 8px);
+}
+
+.pa-drawer__dl {
+  display: grid;
+  gap: var(--space-2, 8px);
+  margin: 0;
+}
+
+.pa-drawer__dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+}
+
+.pa-drawer__dl dt {
+  color: var(--text-muted, #8b96ad);
+}
+
+.pa-drawer__dl dd {
+  margin: 0;
+  text-align: right;
+}
+
+.pa-drawer__receita {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.pa-drawer__diagnosticos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.pa-caveats {
+  margin: 0;
+  padding-left: var(--space-4, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+@media (max-width: 600px) {
+  .pa-funil__etapa {
+    flex: 1 1 45%;
+  }
+}

@@ -136,6 +136,9 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       '1790001300000_oauth-state-whatsapp',
       '1790001400000_campanhas-store-id',
       '1790001500000_reparar-loja-uuid-em-pedidos',
+      '1790001600000_commerce-catalog',
+      '1790001700000_product-external-identities',
+      '1790001800000_entitlement-product-performance',
     ]);
   } finally {
     await pool.end();

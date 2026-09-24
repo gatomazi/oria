@@ -226,12 +226,84 @@ function responder(url, metodo, corpo, auth) {
       return json({ accountSummaries: props.length ? [{ displayName: 'Conta GA', propertySummaries: props.map((i) => ({ property: `properties/${id(i)}`, displayName: `Site ${i}` })) }] : [] });
     }
     case 'analyticsdata.googleapis.com': {
-      // runReport: UMA combinação de UTM, com números proporcionais ao id da propriedade — prova de
-      // qual propriedade foi consultada (e, portanto, de qual Store).
-      const m = p.match(/properties\/(\d+):runReport/);
-      const escala = m ? Number(m[1].slice(-3)) : 1;
-      const linha = { dimensionValues: ['instagram', 'paid_social', 'bf26', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala, escala - 1, 5, escala * 10].map((value) => ({ value: String(value) })) };
-      return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
+      // ── Product Analytics (rodada H→I, lib/connectors/analytics/ga4/) ──────────────────────────
+      // GET properties/{id}/metadata: item-scoped completo (itemId/itemName + as 5 métricas de
+      // item) — nenhum teste legado chama este endpoint, então não há comportamento a preservar.
+      // Rodada K: também traz as dimensões/métricas de aquisição (sessionManual*) e transactionId —
+      // sempre "existem" na propriedade mock; COMPATIBLE ou não é decidido no checkCompatibility.
+      if (metodo === 'GET' && /\/properties\/\d+\/metadata$/.test(p)) {
+        return json({
+          dimensions: [
+            { apiName: 'itemId' }, { apiName: 'itemName' },
+            { apiName: 'sessionManualSource' }, { apiName: 'sessionManualMedium' }, { apiName: 'sessionManualCampaignName' },
+            { apiName: 'transactionId' },
+          ],
+          metrics: [
+            'itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue',
+            'sessions', 'ecommercePurchases', 'totalRevenue', 'transactions', 'purchaseRevenue',
+          ].map((apiName) => ({ apiName })),
+        });
+      }
+      // POST properties/{id}:checkCompatibility: tudo compatível (o mock não simula propriedade
+      // incompatível — isso já tem cobertura própria em test/connectors-analytics-ga4-*.test.js).
+      if (metodo === 'POST' && /:checkCompatibility$/.test(p)) {
+        return json({
+          dimensionCompatibilities: [
+            'itemId', 'itemName', 'sessionManualSource', 'sessionManualMedium', 'sessionManualCampaignName', 'transactionId',
+          ].map((apiName) => ({ dimensionMetadata: { apiName }, compatibility: 'COMPATIBLE' })),
+          metricCompatibilities: [
+            'itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue',
+            'sessions', 'ecommercePurchases', 'totalRevenue', 'transactions', 'purchaseRevenue',
+          ].map((apiName) => ({ metricMetadata: { apiName }, compatibility: 'COMPATIBLE' })),
+        });
+      }
+      const m = p.match(/properties\/(\d+):runReport$/);
+      if (m) {
+        const propertyId = m[1];
+        const escala = Number(propertyId.slice(-3)) || 1;
+        // O corpo decide o formato — 4 formas distintas, na ordem em que são checadas: item-scoped
+        // (Product Analytics), transactionId (Rodada K, lookup pontual), aquisição por canal/campanha
+        // (Rodada K, 3 dimensões) e, por último, o runReport legado (UTM/consolidado, 5 dimensões) —
+        // comportamento LEGADO original, intocado, pra não quebrar teste nenhum.
+        let corpoJson = {};
+        try { corpoJson = JSON.parse(corpo || '{}'); } catch { /* corpo não é JSON: trata como legado */ }
+        const dimNomes = (corpoJson.dimensions || []).map((d) => d.name);
+        const itemScoped = dimNomes.includes('itemId');
+        const transactionScoped = dimNomes.length === 1 && dimNomes[0] === 'transactionId';
+        const acquisitionScoped = dimNomes.length === 3
+          && dimNomes[0] === 'sessionManualSource' && dimNomes[1] === 'sessionManualMedium' && dimNomes[2] === 'sessionManualCampaignName';
+
+        if (itemScoped) {
+          // Números proporcionais ao id da propriedade — mesma prova de "qual property foi
+          // consultada" que o runReport legado já usa (escala vem do id).
+          const linha = {
+            dimensionValues: [{ value: `sku-mock-${propertyId}` }, { value: `Produto Mock ${propertyId}` }],
+            metricValues: [escala * 10, escala * 2, escala, Math.max(1, Math.floor(escala / 2)), escala * 9.9].map((value) => ({ value: String(value) })),
+          };
+          return json({ rows: [linha], rowCount: 1 });
+        }
+        if (transactionScoped) {
+          // A transação "existe" no GA4 mock só quando o transactionId pedido contém `ga4-encontrada`
+          // — qualquer outro valor (incl. um providerOrderId real do Commerce que nunca foi
+          // propagado) devolve `rows: []`, provando o caminho "não encontrada" sem inventar match.
+          const idPedido = corpoJson.dimensionFilter?.filter?.stringFilter?.value || '';
+          if (!idPedido.includes('ga4-encontrada')) return json({ rows: [] });
+          const linha = { dimensionValues: [{ value: idPedido }], metricValues: [{ value: '1' }, { value: String(escala * 9.9) }] };
+          return json({ rows: [linha], rowCount: 1 });
+        }
+        if (acquisitionScoped) {
+          // 2 linhas: 1 canal pago com sessão/campanha reais, 1 "(not set)" (tráfego sem UTM manual)
+          // — prova que o mapper preserva "(not set)" como veio, nunca traduz pra null nem descarta.
+          const linhas = [
+            { dimensionValues: ['instagram', 'paid_social', `campanha-mock-${propertyId}`].map((value) => ({ value })), metricValues: [escala * 5, escala, escala * 45.5].map((value) => ({ value: String(value) })) },
+            { dimensionValues: ['(not set)', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala * 2, 0, 0].map((value) => ({ value: String(value) })) },
+          ];
+          return json({ rows: linhas, rowCount: linhas.length });
+        }
+        const linha = { dimensionValues: ['instagram', 'paid_social', 'bf26', '(not set)', '(not set)'].map((value) => ({ value })), metricValues: [escala, escala - 1, 5, escala * 10].map((value) => ({ value: String(value) })) };
+        return json({ rows: [linha], totals: [{ metricValues: linha.metricValues }], rowCount: 1 });
+      }
+      return json({}, 404);
     }
     case 'api.openai.com':
       // Chave "inválida" (o texto contém `invalid`): a OpenAI a recusa com 401, como faria de verdade.

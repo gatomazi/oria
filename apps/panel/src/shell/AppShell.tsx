@@ -236,7 +236,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const whatsappProvider = useWhatsappProvider();
   // Itens sem href ("em breve") não aparecem (D2). Enquanto o provider não carrega, esconde os
   // itens condicionais (evita piscar o item errado).
-  const itemVisivel = (item: NavItem) => !!item.href && (!item.provider || item.provider === whatsappProvider);
+  const itemVisivel = (item: NavItem) =>
+    !!item.href && (!item.provider || item.provider === whatsappProvider) && (!item.feature || hasEntitlement(item.feature));
 
   useEffect(() => {
     loadProductSettings().then(setSettings);

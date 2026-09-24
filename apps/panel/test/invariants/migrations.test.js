@@ -101,6 +101,9 @@ test('migrations · do zero, num banco vazio, aplicam todas na ordem', async (t)
       '1790001300000_oauth-state-whatsapp',
       '1790001400000_campanhas-store-id',
       '1790001500000_reparar-loja-uuid-em-pedidos',
+      '1790001600000_commerce-catalog',
+      '1790001700000_product-external-identities',
+      '1790001800000_entitlement-product-performance',
     ]);
     assert.ok((await tabelas(pool)).includes('integration_secrets'));
   } finally { await pool.end(); }
