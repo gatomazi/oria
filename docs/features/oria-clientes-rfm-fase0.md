@@ -354,3 +354,11 @@ Detalhe completo em `docs/features/oria-clientes-rfm-rodada5.md`. Resumo:
 - **Testes novos:** `clientes-audiencia-rfm` (45), `clientes-status-financeiro` (19), `clientes-rfm-equivalencia` (4), 5 testes HTTP novos + 3
   atualizados em `clientes-rfm-http`; QA Playwright `qa-rfm-audiencia` (57) e regressões (158, 13, 38).
 - **Ajuste de negative control:** `clientes/chave-da-store-ausente` (PED-02) passou a mirar `lib/clientes/agregado.js` (a linha saiu de `server.js` na extração).
+
+## Rodada 6 — fechamento: motor fail-closed e preparação de release
+
+Detalhe em `docs/features/oria-clientes-rfm-rodada6.md`. Resumo: contrato único de definição de audiência (campo, operador, tipo, valor,
+`match`, exclusões) em prévia, Revisão, criação/edição e envio/agendamento; condição inválida nunca alarga o público; "todos os clientes" só
+explícito; segmentos RFM legados preservados e com confirmação/recriação explícita antes de executar; Revisão reavalia ao entrar e antes de
+confirmar; `ReportCache` com relógio injetável; runbook com as cinco decisões da calibração real. Suíte integral: 1.951/1.952 (1 falha de
+temporização de job de fundo, isolada verde). Opção A, `rfm-v1:c35267c2` e limiares intactos; sem snapshots; nada enviado.
