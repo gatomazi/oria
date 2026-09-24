@@ -62,10 +62,14 @@ async function criarPessoa(email, org, papel) {
 }
 
 function navegador() {
-  const nav = { cookie: null };
+  // `csrf`: Rodada M — só usado pelos testes de POST /catalog-sync (as rotas GET pré-existentes
+  // nunca precisaram); capturado do login, igual ao padrão já usado nos outros arquivos de teste
+  // deste repo (auth-flow.test.js etc.) — ver CSRF_HEADER em lib/auth/middleware.js.
+  const nav = { cookie: null, csrf: null };
   nav.req = async (metodo, caminho) => {
     const hd = {};
     if (nav.cookie) hd.Cookie = nav.cookie;
+    if (metodo !== 'GET' && nav.csrf) hd['X-CSRF-Token'] = nav.csrf;
     const res = await fetch(base + caminho, { method: metodo, headers: hd });
     const setCookie = res.headers.get('set-cookie');
     if (setCookie && setCookie.includes('oria_session')) nav.cookie = setCookie.split(';')[0];
@@ -80,7 +84,11 @@ function navegador() {
     });
     const setCookie = r.headers.get('set-cookie');
     if (setCookie) nav.cookie = setCookie.split(';')[0];
-    assert.equal(r.status, 200, await r.text());
+    const texto = await r.text();
+    assert.equal(r.status, 200, texto);
+    let json = null;
+    try { json = JSON.parse(texto); } catch { json = null; }
+    if (json && json.csrfToken) nav.csrf = json.csrfToken;
     return nav;
   };
   return nav;
@@ -367,6 +375,134 @@ test('K · GET /journey: período anterior a 19/08/2026 → insufficient_data (m
   assert.equal(r.status, 200);
   assert.equal(r.json.status, 'insufficient_data');
   assert.equal(r.json.reason, 'LOCAL_ORDERS_HISTORY_STARTS_LATER');
+});
+
+// ── Gate C ("Jornada de Valor") · GET /journey/opportunities ─────────────────────────────────────
+// Wiring fim a fim no processo REAL (auth/entitlement/validação/status de fonte); a matemática de
+// baseline/desvio/score/limiar tem cobertura própria e exaustiva, pura, em
+// opportunity-diagnostics.test.js — aqui o alvo é só provar que a rota está montada e degrada
+// honestamente por fonte, como toda rota deste arquivo.
+
+test('C · GET /journey/opportunities: sem sessão → 401', async () => {
+  const nav = navegador();
+  const r = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}`);
+  assert.equal(r.status, 401);
+});
+
+test('C · GET /journey/opportunities: limit fora do intervalo (1-20) → 400', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const zero = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}&limit=0`);
+  assert.equal(zero.status, 400);
+  const grande = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}&limit=21`);
+  assert.equal(grande.status, 400);
+});
+
+test('C · GET /journey/opportunities: GA4 conectado (ORG_A) mas Commerce nunca conectado — productFunnel available, commerceReconciliation not_connected, nunca 500/409 pela fonte que falta', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.status, 'ok');
+  assert.equal(r.json.sources.productFunnel.available, true);
+  assert.equal(r.json.sources.commerceReconciliation.available, false);
+  assert.equal(r.json.sources.commerceReconciliation.status, 'not_connected');
+  // Catálogo do fixture (ver test.before) tem 1 produto só: sem outro pra comparar, a mediana da
+  // Store é o próprio produto — desvio zero, nenhuma oportunidade fabricada por falta de baseline.
+  assert.deepEqual(r.json.opportunities, []);
+  assert.equal(Array.isArray(r.json.opportunities), true);
+});
+
+test('C · GET /journey/opportunities: respeita `limit` na config devolvida (nunca hardcoded)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', `/api/admin/product-analytics/journey/opportunities?${PERIODO}&limit=2`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.config.limit, 2);
+});
+
+// ── M · Catalog sync (achado real: runCatalogSync nunca tinha gatilho em produção) ──────────────
+// Processo REAL do server.js, Postgres real — nada mockado aqui além do GA4 (provider-mock.cjs, já
+// carregado pelo próprio processo). Ink NUNCA está conectado por ORG_A neste arquivo (ver
+// test.before) — de propósito: prova que um catalog sync real, fim a fim (lease → log → registry →
+// connector → falha → log fechado), nunca derruba o processo nem deixa o run "running" pra sempre.
+
+async function esperar(condFn, { timeoutMs = 20000, intervalMs = 200 } = {}) {
+  const inicio = Date.now();
+  for (;;) {
+    // eslint-disable-next-line no-await-in-loop
+    const r = await condFn();
+    if (r) return r;
+    if (Date.now() - inicio > timeoutMs) throw new Error('esperar: timeout sem a condição satisfeita');
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((res) => setTimeout(res, intervalMs));
+  }
+}
+
+test('M · POST /catalog-sync: sem sessão → 401', async () => {
+  const nav = navegador();
+  const r = await nav.req('POST', '/api/admin/product-analytics/catalog-sync');
+  assert.equal(r.status, 401);
+});
+
+test('M · POST /catalog-sync: autenticado sem X-CSRF-Token → 403 codigo csrf (mesma proteção de toda escrita — lib/auth/middleware.js)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  nav.csrf = null; // simula um client que não mandou o header
+  const r = await nav.req('POST', '/api/admin/product-analytics/catalog-sync');
+  assert.equal(r.status, 403);
+  assert.equal(r.json.codigo, 'csrf');
+});
+
+// (sem teste "POST sem a feature" isolado aqui: `requireAdmin` aplica featureDaRota por PREFIXO de
+// caminho, sem ramo por método — já provado pela suíte GET acima; e ORG_B ganha a feature ainda
+// nesta suíte, mais abaixo, só pra isolar o teste de GA4 desconectado — reusar ORG_B aqui depois
+// disso testaria o estado errado.)
+
+test('M · GET /catalog-sync/status antes de qualquer sync: syncing:false, state:never_synced, lastRun:null (nunca 404/500)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', '/api/admin/product-analytics/catalog-sync/status');
+  assert.equal(r.status, 200, r.texto);
+  assert.deepEqual(r.json, { syncing: false, state: 'never_synced', lastRun: null });
+});
+
+test('M · POST /catalog-sync dispara na hora (fire-and-forget) e o run fecha REAL no log — falha de Ink vira status:failed com código estável, nunca 500 nem "running" pra sempre', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+
+  const disparo = await nav.req('POST', '/api/admin/product-analytics/catalog-sync');
+  assert.equal(disparo.status, 200, disparo.texto);
+  assert.deepEqual(disparo.json, { ok: true, status: 'started' });
+
+  const status = await esperar(async () => {
+    const r = await nav.req('GET', '/api/admin/product-analytics/catalog-sync/status');
+    assert.equal(r.status, 200, r.texto);
+    return r.json.lastRun && r.json.lastRun.status !== 'running' ? r.json : null;
+  });
+  assert.equal(status.syncing, false);
+  assert.equal(status.state, 'failed'); // Gate A ("Jornada de Valor Operacional"): taxonomia never_synced/queued/running/completed/partial_failure/failed
+  assert.equal(status.lastRun.status, 'failed');
+  assert.equal(status.lastRun.errorCode, 'INTEGRATION_NOT_CONNECTED'); // registry.resolve → integrations.js: naoConectada()
+  assert.equal(status.lastRun.pagesProcessed, 0);
+  assert.equal(status.lastRun.productsSeen, 0);
+  assert.equal(status.lastRun.finishedAt !== null, true);
+});
+
+test('M · POST /catalog-sync: 2ª chamada em voo com a 1ª ainda rodando → already_running (guard em processo — nunca 2 runs simultâneos da mesma Organization)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  // Concorrente de propósito: o guard (Set em memória, ver http-routes.js) só protege entre o
+  // `add()` síncrono e o `.finally()` assíncrono de syncCommerceCatalog — a janela real é o tempo
+  // de lease+log+registry.resolve contra o Postgres real, bem maior que o intervalo entre as duas
+  // chamadas fetch() abaixo.
+  const [r1, r2] = await Promise.all([
+    nav.req('POST', '/api/admin/product-analytics/catalog-sync'),
+    nav.req('POST', '/api/admin/product-analytics/catalog-sync'),
+  ]);
+  assert.equal(r1.status, 200, r1.texto);
+  assert.equal(r2.status, 200, r2.texto);
+  const statuses = [r1.json.status, r2.json.status].sort();
+  assert.deepEqual(statuses, ['already_running', 'started']);
+
+  // Nunca deixa o guard em processo preso: espera o run terminar antes do teste seguinte reusar ORG_A.
+  await esperar(async () => {
+    const r = await nav.req('GET', '/api/admin/product-analytics/catalog-sync/status');
+    return r.json.syncing === false ? true : null;
+  });
 });
 
 // ── Reconciliação ──────────────────────────────────────────────────────────────────────────────

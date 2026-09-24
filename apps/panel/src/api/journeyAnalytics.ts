@@ -169,3 +169,56 @@ export function checkOrderTransactionLink(periodo: { startDate: string; endDate:
   params.set('providerOrderId', providerOrderId);
   return api<OrderTransactionLinkResponse>(`/api/admin/product-analytics/journey/transaction-link?${params.toString()}`);
 }
+
+// Gate C ("Jornada de Valor") · "Prioridades de hoje" — contrato vem de
+// lib/product-analytics/opportunity-diagnostics.js. `evidence`/`config` são só números/contadores
+// (nunca token/PII); `hypothesis` NUNCA é apresentada como causa comprovada, só possível explicação
+// com uma ação de verificação — a UI preserva esse tom, nunca reescreve como afirmação.
+export type OpportunityType =
+  | 'low_view_to_cart' | 'low_cart_to_checkout' | 'low_checkout_to_purchase'
+  | 'units_divergent_ga4_commerce' | 'identity_coverage_low';
+
+export interface Opportunity {
+  type: OpportunityType;
+  scope: 'product' | 'store';
+  product: ProductAnalyticsProductRef | null;
+  evidence: Record<string, number>;
+  hypothesis: string;
+  suggestedAction: string;
+  // Rodada "Jornada de Valor Operacional" (Gate C) · NUNCA "confidence"/estatística calibrada — é
+  // mediana da Store + limiar de amostra, nunca um modelo. 'suficiente' a partir do dobro da amostra
+  // mínima do próprio sinal; 'limitada' entre o mínimo e o dobro (ainda um candidato real, só com
+  // menos volume por trás).
+  evidenceStrength: 'limitada' | 'suficiente';
+  score: number;
+}
+
+interface ProductAnalyticsProductRef {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  productType: string | null;
+  provider: string;
+  providerProductId: string;
+}
+
+export interface OpportunitiesSource {
+  available: boolean;
+  status: AvailabilityStatus;
+  reason: string | null;
+}
+
+export interface OpportunitiesResponse {
+  period: { startDate: string; endDate: string };
+  status: 'ok';
+  config: { minSamples: Record<string, number>; minDeviation: number; minCoverage: number; limit: number };
+  sources: { productFunnel: OpportunitiesSource; commerceReconciliation: OpportunitiesSource };
+  opportunities: Opportunity[];
+  totalCandidates: number;
+}
+
+export function getOpportunities(periodo: { startDate: string; endDate: string }, opts: { limit?: number } = {}): Promise<OpportunitiesResponse> {
+  const params = periodoParams(periodo);
+  if (opts.limit) params.set('limit', String(opts.limit));
+  return api<OpportunitiesResponse>(`/api/admin/product-analytics/journey/opportunities?${params.toString()}`);
+}

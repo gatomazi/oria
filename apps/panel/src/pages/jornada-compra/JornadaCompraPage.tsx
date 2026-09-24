@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  Button, Callout, DataTable, EmptyState, ErrorState, Field, Input, KpiCard, KpiStrip,
+  Button, Callout, Card, DataTable, EmptyState, ErrorState, Field, Input, KpiCard, KpiStrip,
   PageHeader, PageStack, Skeleton, StatusBadge, Tabs, Toolbar,
 } from '../../components/ds';
-import { formatValor } from '../../lib/format';
+import { formatValor, formatDia } from '../../lib/format';
 import {
-  checkOrderTransactionLink, getJourneyAnalytics,
-  type JourneyAnalyticsResponse, type OrderTransactionLinkResponse,
+  checkOrderTransactionLink, getJourneyAnalytics, getOpportunities,
+  type JourneyAnalyticsResponse, type OrderTransactionLinkResponse, type OpportunitiesResponse, type Opportunity,
 } from '../../api/journeyAnalytics';
-import { STATUS_LABEL, statusTone } from './formatadores';
+import { getCommerceCatalogSyncStatus, type CommerceCatalogSyncStatus } from '../../api/productAnalytics';
+import { STATUS_LABEL, statusTone, OPORTUNIDADE_TITULO, formatarEvidencia, EVIDENCIA_LABEL, evidenciaTone } from './formatadores';
 
 import '../../pedidos-central.css';
 import '../desempenho-produtos/desempenho-produtos.css';
+import './jornada-compra.css';
 
 const HOJE = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 const TRINTA_DIAS_ATRAS = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(Date.now() - 29 * 86_400_000));
@@ -30,13 +33,135 @@ function CabecalhoDeFonte({ titulo, available, status, reason }: { titulo: strin
   );
 }
 
-function VisaoGeral({ dados }: { dados: JourneyAnalyticsResponse }) {
+// Gate C/D ("Jornada de Valor") · "Prioridades de hoje" — até 5 diagnósticos reais, com evidência
+// numérica, hipótese (NUNCA causa comprovada — ver opportunity-diagnostics.js) e CTA funcional pra
+// uma tela que já existe. Busca própria (endpoint próprio, GET /journey/opportunities) — nunca
+// bloqueia nem é bloqueada pelo carregamento do resto da página.
+function CartaoDeOportunidade({ op }: { op: Opportunity }) {
+  const cta = op.product
+    ? { href: `/admin/desempenho-produtos?productId=${encodeURIComponent(op.product.id)}`, label: 'Abrir produto' }
+    : { href: '/admin/desempenho-produtos', label: 'Abrir Desempenho de Produtos' };
+  return (
+    <Card
+      title={op.product ? `${OPORTUNIDADE_TITULO[op.type]} — ${op.product.name}` : OPORTUNIDADE_TITULO[op.type]}
+      description={formatarEvidencia(op)}
+      action={<StatusBadge tone={evidenciaTone(op.evidenceStrength)} label={EVIDENCIA_LABEL[op.evidenceStrength]} />}
+    >
+      <p className="pa-oportunidade-hipotese">{op.hypothesis}</p>
+      <p className="pa-oportunidade-acao"><strong>O que investigar:</strong> {op.suggestedAction}</p>
+      <Link to={cta.href} className="ds-btn ds-btn--secondary ds-btn--sm">{cta.label}</Link>
+    </Card>
+  );
+}
+
+// Gate B ("Jornada de Valor Operacional") · "0 oportunidades" nunca pode parecer sucesso quando a
+// causa real é "catálogo ausente/sincronizando/parcial" — a UI precisa saber a diferença entre
+// "sem evidência de verdade" e "ainda não há catálogo pra ter evidência nenhuma".
+const ESTADO_CATALOGO_LABEL: Record<CommerceCatalogSyncStatus['state'], { title: string; description: string }> = {
+  never_synced: { title: 'Catálogo ainda não sincronizado', description: 'Sem o catálogo canônico (commerce_products), nenhum produto tem identidade resolvida — não há como calcular oportunidade nenhuma ainda. Sincronize o catálogo em Desempenho de Produtos.' },
+  queued: { title: 'Sincronização do catálogo na fila', description: 'O catálogo está prestes a começar a sincronizar — as oportunidades aparecem assim que ele terminar.' },
+  running: { title: 'Catálogo sincronizando agora', description: 'A varredura do catálogo está em andamento (pode levar alguns minutos com catálogos grandes) — as oportunidades desta tela vão refletir o catálogo completo assim que ela terminar.' },
+  partial_failure: { title: 'Última sincronização do catálogo terminou parcial', description: 'Parte do catálogo sincronizou, parte não — os diagnósticos abaixo (se houver) são sobre o que já sincronizou. Tente sincronizar de novo em Desempenho de Produtos.' },
+  failed: { title: 'Última sincronização do catálogo falhou', description: 'Sem catálogo sincronizado, a identidade dos produtos fica incompleta e os diagnósticos abaixo não são o quadro completo. Veja o erro e tente de novo em Desempenho de Produtos.' },
+  completed: { title: '', description: '' }, // catálogo em dia — nunca usado como explicação, ver abaixo
+};
+
+function PrioridadesDeHoje({ periodo }: { periodo: Periodo }) {
+  const [dados, setDados] = useState<OpportunitiesResponse | null>(null);
+  const [catalogo, setCatalogo] = useState<CommerceCatalogSyncStatus | null>(null);
+  const [erro, setErro] = useState('');
+
+  function carregar() {
+    setErro('');
+    setDados(null);
+    getOpportunities(periodo, { limit: 5 }).then(setDados).catch((err: Error) => setErro(err.message));
+    // Catálogo é informativo aqui (nunca bloqueia "Prioridades de hoje" se falhar — a tela dedicada
+    // de sincronização já existe em Desempenho de Produtos).
+    getCommerceCatalogSyncStatus().then(setCatalogo).catch(() => setCatalogo(null));
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(carregar, [periodo.startDate, periodo.endDate]);
+
+  if (erro) return <ErrorState description={erro} onRetry={carregar} />;
+  if (!dados) return <Skeleton rows={3} />;
+
+  // Achado da auditoria de preparação do piloto: `commerceReconciliation` também aparece
+  // indisponível quando só o GA4 está desconectado (reconciliação SEMPRE depende dos dois — ver
+  // reconciliation.js) — então "as duas fontes indisponíveis" nunca prova "nenhuma integração
+  // conectada": pode ser só o GA4 faltando com o Commerce já conectado. A mensagem nunca afirma
+  // que NENHUMA das duas está conectada — manda conferir o status real (por fonte) em Integrações,
+  // que é sempre a verdade, em vez de arriscar uma frase errada aqui.
+  const semNenhumaFonte = !dados.sources.productFunnel.available && !dados.sources.commerceReconciliation.available;
+  if (semNenhumaFonte) {
+    return (
+      <EmptyState
+        title="Nenhuma fonte disponível para diagnosticar oportunidades agora"
+        description="Conectar o Commerce sozinho não é suficiente — a maioria dos sinais depende de comportamento observado pelo GA4. Confira o status de cada integração (GA4, Commerce) em Integrações: uma delas pode precisar ser conectada, ou a conexão pode precisar ser refeita."
+      />
+    );
+  }
+
+  // Gate B: "0 oportunidades" por causa do catálogo (ausente/sincronizando/parcial/falho) é um
+  // ESTADO OPERACIONAL, nunca "nenhuma oportunidade encontrada" (que implica catálogo em dia e
+  // Store saudável). Só entra aqui quando o catálogo REALMENTE explica a ausência de sinal.
+  const catalogoExplicaAusencia = catalogo && catalogo.state !== 'completed' && !dados.opportunities.length;
+  if (catalogoExplicaAusencia && catalogo) {
+    const info = ESTADO_CATALOGO_LABEL[catalogo.state];
+    return (
+      <Callout tone={catalogo.state === 'failed' ? 'warning' : 'info'} title={info.title}>
+        {info.description}
+        <div className="pa-callout__acao">
+          <Link to="/admin/desempenho-produtos" className="ds-btn ds-btn--secondary ds-btn--sm">Ir para Desempenho de Produtos</Link>
+        </div>
+      </Callout>
+    );
+  }
+
+  if (!dados.opportunities.length) {
+    return (
+      <Callout tone="info" title="Nenhuma prioridade encontrada neste período">
+        Com o volume e a cobertura de dados atuais, nenhum produto se desviou o suficiente da própria Store pra virar uma prioridade — isso não significa que está tudo perfeito, só que não há evidência suficiente ainda.
+      </Callout>
+    );
+  }
+
+  return (
+    <div className="ds-stack">
+      {!dados.sources.commerceReconciliation.available && (
+        <Callout tone="info" title="Diagnósticos só com GA4 nesta carga">
+          {STATUS_LABEL[dados.sources.commerceReconciliation.status] || 'Commerce indisponível'} — sinais que comparam com pedidos confirmados (ex.: divergência de unidades) não aparecem até o Commerce estar conectado e no período coberto.
+        </Callout>
+      )}
+      <div className="pa-oportunidades-grid">
+        {dados.opportunities.map((op, i) => <CartaoDeOportunidade key={`${op.type}-${op.product?.id ?? 'store'}-${i}`} op={op} />)}
+      </div>
+      {dados.totalCandidates > dados.opportunities.length && (
+        <p className="ds-note">Mostrando {dados.opportunities.length} de {dados.totalCandidates} sinais encontrados no período — os de maior prioridade primeiro.</p>
+      )}
+    </div>
+  );
+}
+
+function VisaoGeral({ dados, periodo }: { dados: JourneyAnalyticsResponse; periodo: Periodo }) {
   const { tier1 } = dados;
   if (!tier1) return null;
   const { funnel, confirmedOrders, adsInvestment } = tier1;
 
   return (
     <div className="ds-stack">
+      {/* Achado da auditoria de preparação do piloto: "Prioridades de hoje" é o nome do recurso
+          (fica assim mesmo com um período de semanas — outros produtos usam o mesmo padrão, ex.:
+          "Tarefas de hoje" que filtra por um intervalo maior), mas sem o período explícito aqui a
+          palavra "hoje" podia soar como "só dados de hoje" quando o filtro no topo da página cobre
+          várias semanas. A descrição agora sempre nomeia o período selecionado. */}
+      <Card
+        title="Prioridades de hoje"
+        description={`Onde investigar primeiro entre ${formatDia(periodo.startDate)} e ${formatDia(periodo.endDate)} — evidência e ação sugerida, nunca causa comprovada.`}
+      >
+        <PrioridadesDeHoje periodo={periodo} />
+      </Card>
+
       <Callout tone="info" title="Cada fonte mede uma coisa diferente — nunca somadas entre si">
         GA4 observa comportamento agregado por item; Meta Ads reporta o que a própria plataforma atribui à campanha; Commerce confirma a venda operacional. Divergência entre elas é diagnóstico, não erro.
       </Callout>
@@ -289,7 +414,7 @@ export function JornadaCompraPage() {
           <Tabs
             label="Jornada de Compra"
             tabs={[
-              { label: 'Visão geral', render: () => <VisaoGeral dados={dados} /> },
+              { label: 'Visão geral', render: () => <VisaoGeral dados={dados} periodo={periodo} /> },
               { label: 'Aquisição', render: () => <Aquisicao dados={dados} /> },
               { label: 'Meta Ads', render: () => <MetaAdsPainel dados={dados} /> },
               { label: 'Correlação transação↔pedido', render: () => <Correlacao dados={dados} periodo={periodo} /> },
