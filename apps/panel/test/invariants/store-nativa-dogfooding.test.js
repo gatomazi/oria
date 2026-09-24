@@ -424,6 +424,8 @@ test('fonte · Clientes, Financeiro e Dashboard migrados não chamam lojaLegadaD
   const rotas = [
     "app.get('/api/admin/clientes'",
     "app.get('/api/admin/clientes/lista'",
+    "app.get('/api/admin/clientes/resumo'",
+    "app.get('/api/admin/clientes/segmentos/estado'",
     "app.get('/api/admin/financeiro/resumo'",
     "app.get('/api/admin/financeiro/movimentacoes'",
     "app.get('/api/admin/financeiro/antecipacoes'",
@@ -436,7 +438,8 @@ test('fonte · Clientes, Financeiro e Dashboard migrados não chamam lojaLegadaD
     const bloco = blocoDaRota(fonte, assinatura);
     assert.doesNotMatch(bloco, /lojaLegadaDoContexto\(\)/, `${assinatura} voltou a exigir a chave legada`);
   }
-  for (const funcao of ['async function buscarClientesAgregados()', 'function midiaDaOrganizacao(from, to)']) {
+  // `buscarClientesAgregados(linhasPrelidas = null)` ganhou um parâmetro opcional (a lista passa as linhas que também alimentam a RFM).
+  for (const funcao of ['async function buscarClientesAgregados(', 'function midiaDaOrganizacao(from, to)']) {
     assert.doesNotMatch(blocoDaRota(fonte, funcao), /lojaLegadaDoContexto\(\)/, `${funcao} voltou a exigir a chave legada`);
   }
   // Os jobs de fundo canônicos: pedidos por Store (já sob contexto) e estoque só para quem tem chave.

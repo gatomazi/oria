@@ -223,3 +223,67 @@ Depois dessas correções **não rodei a suíte completa de novo** (custa ~2h30)
 ## 10. Próximo incremento (só depois da calibração real)
 
 Snapshots versionados (`as_of`, `regraVersao`, contagens reconciliáveis) e job diário idempotente; depois, segmento congelado e as ações do drawer (`Adicionar ao segmento`, `Excluir de campanhas`).
+
+---
+
+# Rodada 3 — consistência matriz × lista × Audiência, cobertura e calibração real (2026-09-23)
+
+Branch `feature/clientes-rfm`, sobre `5e3ac21`…`f2cc8da`. **Sem push, merge, deploy, campanha disparada, snapshot, job diário ou mudança de limiar.** Todos os números abaixo vêm do banco **sintético local** (2.577 pedidos aleatórios) e só provam mecanismo; não descrevem clientes da loja.
+
+## R3.1 Lista × matriz — bug reproduzido e corrigido
+
+**Reprodução** (`scripts/clientes/smoke-lista.mjs`, Playwright, amostragem do DOM a cada ~60 ms com respostas atrasadas/fora de ordem/503), **antes da correção — 6/13**:
+
+| Cenário | Resultado antes |
+|---|---|
+| 1. chip **Novos** com resposta lenta (2,5 s) | a lista **sem filtro** ficou na tela sob o chip novo: linhas de **Campeões** e **Precisam de atenção** com o total antigo (2.400) — exatamente a captura relatada |
+| 2. troca rápida entre segmentos, respostas fora de ordem | linhas de **Novos** apareceram sob o chip **Em risco** (o estado final ficou certo; o intermediário, não) |
+| 3. falha 503 | o erro apareceu, mas com o **total antigo** (19) ainda no topo e **sem "Tentar novamente"** |
+| 4. cadastro da Ink | com chip de segmento a Ink **era consultada** e o alerta "cadastro indisponível" aparecia sobre uma lista que ela não afeta |
+
+**Causa** (não presumida; confirmada pelos cenários acima): a página guardava só "a última resposta" e a exibia sem conferir a que filtro ela pertencia; ao trocar o filtro, a lista antiga (e o total) ficavam até a nova chegar — ou para sempre, se falhasse. Além disso o servidor consultava o cadastro da Ink (lento/falho) mesmo quando o filtro já excluía quem só tem cadastro.
+
+**Correção**
+- `src/pages/clientes/listaEstado.ts`: a carga carrega a **chave** do pedido (escopo + filtros + busca + tentativa); só se exibe dado cuja chave é a atual — senão, carregamento (`aria-busy`) ou erro; resposta de chave antiga é ignorada; erro tem **"Tentar novamente"**.
+- Servidor (`GET /api/admin/clientes/lista`): filtro que exclui cadastro sem pedido (segmento RFM, LTV, ticket, datas, UF) **não consulta a Ink** (`cadastro.motivoOmitido = filtro_exige_pedido`); falha da Ink com `tipo=todos` segue com os pedidos locais e é declarada; filtro que **depende** da RFM nunca é "degradado" para lista sem o filtro (erro 503 `RFM_INDISPONIVEL`); uma **única leitura** de pedidos alimenta o agregado da lista e a RFM (mesma população da matriz); a resposta traz `rfm.{regraVersao, diaClassificacao}` e a tela recarrega a matriz se diferirem.
+- Tela: linha "**2.400 pessoas com pedido = 2.265 compradores válidos classificados (a matriz) + 135 sem compra válida**" (números sintéticos), com "confere com a matriz" (ou aviso de divergência) quando o único filtro é segmento.
+
+**Depois — 13/13** (mesmo script). Testes de regressão: `test/clientes-lista-estado.test.js` (5), `clientes-lista.test.js` (+3), e no HTTP (`clientes-rfm-http`, com Ink conectada no mock e controle de lentidão/queda): falha → pedidos locais intactos e falha declarada; com segmento a Ink **não é chamada**; Ink lenta (2,5 s) → lista de segmento em < 1,5 s; recuperação (erro **não cacheado**) → `cadastro.incluido = true`; matriz × lista × drawer usam o mesmo segmento, a mesma versão e o mesmo dia.
+
+Distinção explícita dos universos (sintético): **2.400** pessoas com pedido = **2.265** compradores válidos classificados + **135** sem compra válida (cancelado/reembolsado/troca); **301** é só o segmento Novos. Cadastro sem pedido (Ink) é um quarto conjunto, só quando a Ink responde e nenhum filtro exige pedido.
+
+## R3.2 Cobertura ≠ amostra suficiente; defeitos do relatório
+
+- `rfm.suficiente` foi **renomeado `amostraSuficiente`**: critério **estatístico** mínimo (≥ 30 compradores e ≥ 90 dias observados). **Não** significa histórico completo.
+- Campos novos (`lib/clientes/cobertura.js`, no resumo e no relatório): `historicoObservadoDias` (pedido mais antigo do cache → asOf), `backfillConfirmado` (existe job **concluído**), `backfillConcluidoDesde`, `coberturaConfirmadaDias` (menor `desde` entre jobs concluídos → asOf), `cobertura365Confirmada`, `coberturaJanelaConfirmada`, `janelaObservadaAbrange365`. Observar 400 dias **sem** backfill continua "não confirmado". `janelaCobreHistorico` virou `janelaAbrangeHistoricoObservado` (a janela é ≥ ao histórico observado).
+- **260 dias × janela de 365**: com histórico menor que a janela, a janela cobre *tudo o que se vê*, mas nada confirma que é tudo. Consequência estrutural: **`Perdidos` (> 365 dias sem comprar) é impossível com < 365 dias de histórico** — `Perdidos = 0` no sintético é aritmética do histórico, não comportamento (a tela agora diz isso). `Leais = 0` é a limitação já registrada de "valor alto pela soma" (§R2.3).
+- **`p10`/`p99` `undefined`**: o markdown imprimia chaves que o relatório de intervalos nunca calculava (só p25/p50/p75/p90). Agora `quantis()` devolve **todas** as chaves pedidas, `null` quando a amostra não sustenta (n < ⌈1/min(p,1−p)⌉: p99 pede 100, p95/p5 20, p90/p10 10, p75/p25 4, p50 2), e o markdown mostra **`n.d.`**; teste percorre bases de 0, 1, 5, 40 e 500 clientes exigindo que `undefined`/`NaN` nunca apareçam. (A fronteira p90 com n = 10 tinha erro de ponto flutuante — `1/0.0999… = 10,000000000000002` — pego pelo teste de fronteira e corrigido.)
+- **Recompra 30/60/90/180/365 d**: cada janela declara seu **denominador** ("clientes com 1ª compra há ≥ N dias"), `elegivel` (coorte ≥ 30 **e** histórico observado ≥ janela) e `motivoInelegivel`; nota explícita de que **não é curva cumulativa**; pedidos do mesmo dia (intervalo 0, possível pedido dividido) contados à parte.
+- **Regra atual × alternativas**: mesma população e mesmo instante (verificado: `todasAlternativasNaMesmaPopulacaoEInstante`), com clientes, receita, recência mediana e recorrência por segmento e **impacto em Campeões/Leais** (quem migra entre eles).
+- **`paid` com `order_status` cancelado/devolvido/reembolsado**: a definição de pedido válido **não mudou**; o relatório conta esses casos (`pagamentoValidoComPedidoEncerrado`) e cruza `pagamento × pedido` para a decisão ser tomada **na leitura real** (runbook, conferência 3).
+
+## R3.3 Segmento "dinâmico" com percentil mutável — decisão e pendência
+
+**Achado**: o segmento salvo persiste `totalGasto < 242,73` (o P75 do momento). O `regraVersao` hash cobre a **configuração**, não o **corte**; quando novos pedidos movem o P75 a versão continua igual e o número salvo deixa de ser o percentil de hoje. Provado com relógio controlado e pedidos sintéticos (`clientes-rfm.test.js` ×4; HTTP ×1): P75 sobe/desce sem mudar a versão; com o **tempo** passando sem pedidos novos o corte não se move.
+
+**Contrato honesto (implementado, ajuste mínimo, sem reescrever campanha existente)** — *pessoas dinâmicas, corte de valor materializado*:
+- `GET /api/admin/clientes/segmentos/estado` compara, para cada segmento RFM salvo, **regra, `asOf`, corte salvo × corte efetivo de hoje e pessoas em cada leitura** (só leitura).
+- **Nova campanha → Audiência** mostra o aviso (regra, data, corte salvo, corte de hoje, pessoas pela regra salva × pelo segmento de hoje; "a Audiência usa o corte SALVO") e oferece **"Criar segmento com o corte atual"** — cria um segmento **novo**; o antigo **não é reescrito** (teste: a linha salva permanece idêntica). **Segmentos** ganhou "Tipo: pessoas dinâmicas · corte fixo" e o selo "Corte defasado / Confere com hoje". No painel do segmento a nota deixa explícito o P75, sua data e a regra.
+- Exemplo local: P75 242,73 → 270,81 após 120 pedidos novos; 301 pessoas pela regra salva × 314 no segmento de hoje.
+
+**Decisão pendente (mudança de contrato maior — não implementada; parar para revisão)**
+
+| | A · corte materializado (o que está no ar) | B · recalcular o percentil na prévia/execução |
+|---|---|---|
+| Como | filtros numéricos salvos; divergência exibida; usuário cria segmento novo | segmento guarda só `{origem: rfm, segmento, regraVersao}`; a prévia/execução resolve o predicado com o P75 **do momento** |
+| Impacto | nenhum no motor de audiência nem em campanhas existentes | novo tipo de filtro no motor de audiência + no `AudienceBuilder`; `audience_definition` da campanha precisa registrar o corte **resolvido** no disparo (para o snapshot de destinatários ser auditável) |
+| Risco | corte defasado até o usuário atualizar | audiência **muda entre a prévia e o envio**; exige congelar o corte no disparo e comunicar isso |
+| Quando | agora | junto com o **segmento congelado/snapshots** da próxima rodada |
+
+## R3.4 Calibração real — status inequívoco: **sem acesso confirmado**
+
+Verificado sem exibir segredos: **não há `DATABASE_URL`/réplica de leitura no ambiente** desta sessão e nenhuma credencial de leitura designada para esta tarefa; o `railway` CLI está vinculado a `oria / production / oria-panel`, mas extrair a `DATABASE_URL` de produção por ele seria **retirar segredo de produção com a sessão do usuário**, o que não foi autorizado e **não foi feito**. Portanto: **nenhum dado real foi lido, nenhum relatório real foi gerado e nenhum limiar foi alterado**.
+
+Entregue para a execução autorizada: `scripts/clientes/rfm-calibracao.mjs` endurecido + `docs/operations/rfm-calibracao-runbook.md` (copiável): descoberta da Organization por `--listar-organizacoes` (só ids e contagens); sessão `READ ONLY` com **aborto** se o servidor não confirmar; **host obrigatório por confirmação** fora de localhost (`--confirmo-host`); a URL nunca é impressa; saída dentro do repositório só em caminho **ignorado** (`apps/panel/relatorios-privados/`, no `.gitignore`); cobertura por backfill; e tabela de conferências (cobertura → integridade → status conflitantes → recompra → estabilidade → alternativas). Testado em `clientes-calibracao-script.test.js` (6): guardas sem banco e, com banco descartável, escopo da Organization (a outra não entra), nenhuma linha gravada, nenhum dado pessoal na saída, cobertura por backfill.
+
+Limiares só serão propostos depois de conferir distribuição real, suficiência do histórico e denominadores.
