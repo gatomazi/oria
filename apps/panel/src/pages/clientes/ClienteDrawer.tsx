@@ -40,7 +40,7 @@ function PedidoItem({ p }: { p: PedidoDetalhe }) {
             <Par rotulo="Frete" valor={moeda(p.frete)} />
             <Par rotulo="Total pago" valor={moeda(p.totalPago)} />
             <Par rotulo="Devolvido" valor={p.devolvido != null ? moeda(p.devolvido) : 'Sem reembolso total'} />
-            <Par rotulo="Total líquido" valor={moeda(p.totalLiquido)} />
+            <Par rotulo="Conta no LTV" valor={moeda(p.totalLiquido)} />
           </dl>
           {p.conciliado === false && (
             <Callout tone="warning" title="A soma dos itens não fecha com o pedido">
@@ -156,7 +156,7 @@ export function ClienteDrawer({ customerKey, nomeInicial, onClose }: Props) {
 
           <section aria-label="Indicadores">
             <div className="cli-indicadores">
-              <div><span>LTV líquido</span><strong>{moeda(dados.indicadores.ltv)}</strong></div>
+              <div><span>LTV (valor pago)</span><strong>{moeda(dados.indicadores.ltv)}</strong></div>
               <div><span>Pedidos pagos</span><strong>{numero(dados.indicadores.pedidosPagos)}</strong></div>
               <div><span>Ticket médio</span><strong>{moeda(dados.indicadores.ticketMedio)}</strong></div>
               <div>

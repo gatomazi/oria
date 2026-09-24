@@ -57,8 +57,8 @@ function Kpis({ resumo }: { resumo: ResumoClientes }) {
   return (
     <KpiStrip label="Indicadores do período">
       {cartao('Faturamento', moeda(a.faturamento), a.faturamento, ant?.faturamento,
-        'Soma do valor pago (já líquido de desconto, com o frete pago) dos pedidos válidos do período. Pedido cancelado, pendente, reembolsado por inteiro e troca ficam de fora.')}
-      {cartao('Pedidos válidos', numero(a.pedidos), a.pedidos, ant?.pedidos, 'Pedidos pagos, sem troca, com cliente identificável.',
+        'Soma do valor pago (total do pedido: já líquido de desconto e com o frete pago) dos pedidos com pagamento confirmado e sem troca. Pagamento cancelado, pendente ou reembolsado por inteiro, e troca, ficam de fora. A situação do pedido (cancelado, devolvido) não é considerada e reembolso parcial não é descontado.')}
+      {cartao('Pedidos válidos', numero(a.pedidos), a.pedidos, ant?.pedidos, 'Pedidos com pagamento confirmado (pago ou gratuito), sem troca, com cliente identificável.',
         a.pedidosReembolsados ? `${plural(a.pedidosReembolsados, 'reembolsado', 'reembolsados')} fora` : undefined)}
       {cartao('Clientes compradores', numero(a.clientes), a.clientes, ant?.clientes, 'Pessoas distintas (documento, telefone ou e-mail em comum viram uma só) com ao menos um pedido válido no período.',
         a.clientesPrimeiraCompra ? `${numero(a.clientesPrimeiraCompra)} na 1ª compra` : undefined)}
@@ -430,7 +430,7 @@ export function ClientesPage() {
                   { key: 'ppc', priority: 'low', label: 'Pedidos/cliente', align: 'right', firstSortDirection: 'desc', render: (s) => decimal(s.pedidosPorCliente), sortValue: (s) => s.pedidosPorCliente },
                   { key: 'ticket', priority: 'low', label: 'Ticket médio', align: 'right', firstSortDirection: 'desc', render: (s) => moeda(s.ticketMedio), sortValue: (s) => s.ticketMedio },
                   { key: 'mediana', priority: 'low', label: 'Recência (mediana)', align: 'right', render: (s) => (s.recenciaMedianaDias == null ? '—' : `${numero(s.recenciaMedianaDias)} d`), sortValue: (s) => s.recenciaMedianaDias },
-                  { key: 'receita', label: 'Receita líquida', align: 'right', firstSortDirection: 'desc', render: (s) => moeda(s.receita), sortValue: (s) => s.receita },
+                  { key: 'receita', label: 'Valor pago', align: 'right', firstSortDirection: 'desc', render: (s) => moeda(s.receita), sortValue: (s) => s.receita },
                   { key: 'pctReceita', label: '% da receita', align: 'right', firstSortDirection: 'desc', render: (s) => pct(s.pctReceita), sortValue: (s) => s.pctReceita },
                 ]}
               />

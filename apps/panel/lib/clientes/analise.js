@@ -44,6 +44,18 @@ function compararPedidosRecentesPrimeiro(a, b) {
   return 0;
 }
 
+// Mesma ordem de `compararPedidosRecentesPrimeiro`, mas com o instante e o id calculados UMA vez por linha (o comparador
+// direto reparseia a data a cada comparação: O(n log n) `new Date` em massas grandes). Estável; resultado idêntico (teste por hash).
+function ordenarRecentesPrimeiro(linhas) {
+  const chaves = linhas.map((r) => ({ r, t: r.criado_em ? new Date(r.criado_em).getTime() : -Infinity, id: Number(r.ink_order_id) }));
+  chaves.sort((a, b) => {
+    if (a.t !== b.t) return b.t - a.t;
+    if (Number.isFinite(a.id) && Number.isFinite(b.id) && a.id !== b.id) return b.id - a.id;
+    return 0;
+  });
+  return chaves.map((k) => k.r);
+}
+
 // Um mesmo pedido da Ink nunca conta duas vezes: as chaves únicas (org, loja, id) e (org, store_id, id) são
 // independentes, então uma linha legada e outra da Store podem coexistir para o mesmo `ink_order_id`. Fica a primeira na
 // ordem canônica (a mais recente por `atualizado_em`, se vier; senão a primeira lida).
@@ -122,7 +134,7 @@ function coberturaDe(linhas, clientes, duplicados = 0) {
 // `hoje` (YYYY-MM-DD no fuso) só serve de teto do período; `asOf` é a data de CLASSIFICAÇÃO da RFM e não muda
 // quando o usuário troca o período dos indicadores.
 function analisarPedidos(linhasLidas, { asOf, periodo, fuso = FUSO_PADRAO, chaveDoContexto, opcoesRfm = {} }) {
-  const { unicas: linhas, duplicados } = deduplicarPedidos([...linhasLidas].sort(compararPedidosRecentesPrimeiro));
+  const { unicas: linhas, duplicados } = deduplicarPedidos(ordenarRecentesPrimeiro(linhasLidas));
   const clientes = agruparClientes(linhas, { chaveDoContexto });
   const cobertura = coberturaDe(linhas, clientes, duplicados);
   const rfm = classificarRfm(clientes, { asOf, fuso, ...opcoesRfm });
@@ -135,7 +147,7 @@ function analisarPedidos(linhasLidas, { asOf, periodo, fuso = FUSO_PADRAO, chave
 // Devolve também as `linhas` canônicas (deduplicadas, na ordem canônica): quem agrega o cadastro para a Audiência deve
 // usar EXATAMENTE essas linhas, para as duas visões chegarem à mesma `loja + customerKey` por pessoa.
 function analisarRfm(linhasLidas, { asOf, fuso = FUSO_PADRAO, chaveDoContexto, opcoesRfm = {} }) {
-  const { unicas: linhas, duplicados } = deduplicarPedidos([...linhasLidas].sort(compararPedidosRecentesPrimeiro));
+  const { unicas: linhas, duplicados } = deduplicarPedidos(ordenarRecentesPrimeiro(linhasLidas));
   const clientes = agruparClientes(linhas, { chaveDoContexto });
   const rfm = classificarRfm(clientes, { asOf, fuso, ...opcoesRfm });
   const classificacaoPorId = new Map(rfm.clientes.map((c) => [c.id, c]));
@@ -145,4 +157,4 @@ function analisarRfm(linhasLidas, { asOf, fuso = FUSO_PADRAO, chaveDoContexto, o
 // Chave de junção com a lista de Clientes (a mesma `loja + customerKey` que ela usa).
 const chaveDeJuncao = (loja, customerKey) => `${loja}\u0000${customerKey}`;
 
-module.exports = { analisarPedidos, analisarRfm, agruparClientes, deduplicarPedidos, compararPedidosRecentesPrimeiro, coberturaDe, pedidoDaLinha, chaveDeJuncao, dataLocal };
+module.exports = { analisarPedidos, analisarRfm, ordenarRecentesPrimeiro, agruparClientes, deduplicarPedidos, compararPedidosRecentesPrimeiro, coberturaDe, pedidoDaLinha, chaveDeJuncao, dataLocal };

@@ -216,6 +216,11 @@ function classificarRfm(clientes, opcoes = {}) {
   const { janelaFrequenciaDias: janela, limitesRecenciaDias: limites, minClientes, minHistoricoDias: minHistorico, percentilValorAlto: percentilAlto, valorAltoMetrica } = config;
   const limiteMs = asOf.getTime();
 
+  // O dia de calendário de `asOf` é o mesmo para todos: calculado uma vez. O de cada compra também (uma vez por compra, e não
+  // uma vez por uso): formatar datas com Intl era o custo dominante da classificação em massas grandes.
+  const diaAsOf = diaLocal(asOf, fuso);
+  const diasAte = (dia) => Math.max(0, Math.round((diaAsOf - dia) / MS_DIA));
+
   const base = [];
   let primeiroPedido = null;
   let leadsSemCompraValida = 0;
@@ -227,12 +232,12 @@ function classificarRfm(clientes, opcoes = {}) {
     if (!validos.length) { leadsSemCompraValida += 1; continue; }
     let ultima = validos[0].t;
     let primeira = validos[0].t;
-    for (const p of validos) { if (p.t > ultima) ultima = p.t; if (p.t < primeira) primeira = p.t; }
+    for (const p of validos) { p.dia = diaLocal(new Date(p.t), fuso); if (p.t > ultima) ultima = p.t; if (p.t < primeira) primeira = p.t; }
     if (primeiroPedido == null || primeira < primeiroPedido) primeiroPedido = primeira;
 
-    const r = diasDeCalendario(new Date(ultima), asOf, fuso);
+    const r = diasAte(diaLocal(new Date(ultima), fuso));
     // Janela em dias de calendário: a compra de N dias atrás ainda conta em N ≤ janela.
-    const naJanela = validos.filter((p) => diasDeCalendario(new Date(p.t), asOf, fuso) <= janela);
+    const naJanela = validos.filter((p) => diasAte(p.dia) <= janela);
     const fJanela = naJanela.length;
     const m = somaCentavos(naJanela, (p) => p.valor);
     const ltv = somaCentavos(validos, (p) => p.valor);
