@@ -287,3 +287,18 @@ Verificado sem exibir segredos: **não há `DATABASE_URL`/réplica de leitura no
 Entregue para a execução autorizada: `scripts/clientes/rfm-calibracao.mjs` endurecido + `docs/operations/rfm-calibracao-runbook.md` (copiável): descoberta da Organization por `--listar-organizacoes` (só ids e contagens); sessão `READ ONLY` com **aborto** se o servidor não confirmar; **host obrigatório por confirmação** fora de localhost (`--confirmo-host`); a URL nunca é impressa; saída dentro do repositório só em caminho **ignorado** (`apps/panel/relatorios-privados/`, no `.gitignore`); cobertura por backfill; e tabela de conferências (cobertura → integridade → status conflitantes → recompra → estabilidade → alternativas). Testado em `clientes-calibracao-script.test.js` (6): guardas sem banco e, com banco descartável, escopo da Organization (a outra não entra), nenhuma linha gravada, nenhum dado pessoal na saída, cobertura por backfill.
 
 Limiares só serão propostos depois de conferir distribuição real, suficiência do histórico e denominadores.
+
+## R3.5 Testes desta rodada (o que realmente rodou)
+
+- **Suíte completa (`npm test`, com os ciclos de negative control): 1.803 testes, 1.803 passaram, 0 falhas, 0 cancelados** — execução integral única, sobre o commit `7db08b5`, com container Postgres **próprio** (`TEST_PG_CONTAINER=oria-cli-rfm-run`).
+- Histórico honesto até chegar aí: (1) 1ª execução integral desta rodada — 1.803 / 1.799 / **4 falhas de código**, todas a mesma causa: o teste de fonte `store-nativa-dogfooding` procurava `async function buscarClientesAgregados()` e a função ganhou um parâmetro opcional (corrigido; os 3 negative controls STORE-05/06/07 dependiam dele e passaram nas suas fatias); (2) uma repetição foi **interrompida por infraestrutura** (40 cancelados/`ECONNREFUSED`: o container `oria-test-pg` é compartilhado por nome e outra sessão o derrubou) — os 6 arquivos comuns afetados passaram isolados (84/84) e as fatias de negative control foram refeitas na execução integral final; (3) execução integral final, container próprio: **verde**.
+- Novos testes desta rodada: `clientes-rfm.test.js` (36), `clientes-calibracao.test.js` (22), `clientes-lista-estado.test.js` (5), `clientes-lista.test.js` (+3), `clientes-rfm-http.test.js` (18), `clientes-calibracao-script.test.js` (6); regressão de UI/API em Playwright: `smoke-lista.mjs` (13/13, era 6/13 antes da correção) e `smoke-viewport.mjs` 390 × 844 (35/35, inclui o aviso do segmento RFM na Audiência).
+- **Ainda falta antes de merge/deploy**: rodar a mesma suíte em CI de ambiente estável (esta execução foi local, numa máquina compartilhada).
+
+## R3.6 Pendências e próximo gate
+
+1. **Acesso de leitura autorizado à base real** → executar `docs/operations/rfm-calibracao-runbook.md` e revisar o `.md` (cobertura → integridade → `paid` com pedido encerrado → recompra → estabilidade → alternativas). Sem isso, nenhum limiar muda.
+2. **Decisão A × B** do corte de valor (§R3.3), a tomar junto com o desenho de snapshots.
+3. **`order_status` conflitante** e **reembolso parcial**: decidir com o número real.
+4. Só então: snapshots versionados (`as_of`, `regraVersao`, corte efetivo, contagens reconciliáveis), job diário idempotente, segmento congelado e ações do drawer.
+5. Execução integral em CI antes de qualquer merge.
