@@ -131,7 +131,18 @@ function analisarPedidos(linhasLidas, { asOf, periodo, fuso = FUSO_PADRAO, chave
   return { clientes, cobertura, rfm, indicadores, classificacaoPorId };
 }
 
+// Só a parte de identidade + RFM de `analisarPedidos` (sem indicadores do período): é o que a Audiência de Campanhas precisa.
+// Devolve também as `linhas` canônicas (deduplicadas, na ordem canônica): quem agrega o cadastro para a Audiência deve
+// usar EXATAMENTE essas linhas, para as duas visões chegarem à mesma `loja + customerKey` por pessoa.
+function analisarRfm(linhasLidas, { asOf, fuso = FUSO_PADRAO, chaveDoContexto, opcoesRfm = {} }) {
+  const { unicas: linhas, duplicados } = deduplicarPedidos([...linhasLidas].sort(compararPedidosRecentesPrimeiro));
+  const clientes = agruparClientes(linhas, { chaveDoContexto });
+  const rfm = classificarRfm(clientes, { asOf, fuso, ...opcoesRfm });
+  const classificacaoPorId = new Map(rfm.clientes.map((c) => [c.id, c]));
+  return { linhas, duplicados, clientes, rfm, classificacaoPorId };
+}
+
 // Chave de junção com a lista de Clientes (a mesma `loja + customerKey` que ela usa).
 const chaveDeJuncao = (loja, customerKey) => `${loja}\u0000${customerKey}`;
 
-module.exports = { analisarPedidos, agruparClientes, deduplicarPedidos, compararPedidosRecentesPrimeiro, coberturaDe, pedidoDaLinha, chaveDeJuncao, dataLocal };
+module.exports = { analisarPedidos, analisarRfm, agruparClientes, deduplicarPedidos, compararPedidosRecentesPrimeiro, coberturaDe, pedidoDaLinha, chaveDeJuncao, dataLocal };

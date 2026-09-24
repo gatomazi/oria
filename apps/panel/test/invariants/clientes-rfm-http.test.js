@@ -338,8 +338,12 @@ test('segmento RFM: definição vem do servidor, fica dinâmica com versão e da
   });
   assert.equal(criar.status, 201, criar.texto);
   assert.equal(criar.json.politica, 'dinamico');
-  assert.ok(criar.json.observacoes.length >= 2, 'diferenças entre RFM e motor de audiência são declaradas');
-  assert.ok(criar.json.segmento.filtros.every((f) => ['diasSemComprar', 'quantidadePedidos', 'totalGasto'].includes(f.field)), 'filtros vêm do predicado do servidor');
+  // Rodada 5: o segmento RFM persiste UM filtro `rfm` (avaliado pela mesma classificação da matriz), não quatro filtros genéricos
+  // com semântica diferente — logo não há mais "diferença entre RFM e motor de audiência" a declarar para segmentos novos.
+  assert.deepEqual(criar.json.observacoes, []);
+  assert.equal(criar.json.segmento.filtros.length, 1);
+  assert.equal(criar.json.segmento.filtros[0].field, 'rfm', 'o filtro vem do predicado calculado no servidor, não do corpo');
+  assert.notEqual(criar.json.segmento.filtros[0].value.segmento, 'XX');
   const { rows: [linha] } = await sup.query('SELECT * FROM segments WHERE id = $1', [criar.json.segmento.id]);
   assert.equal(linha.origem, 'rfm');
   assert.equal(linha.rfm_versao, resumo.rfm.regraVersao, 'o segmento guarda a versão da REGRA, não só a do algoritmo');
@@ -352,7 +356,8 @@ test('segmento RFM: definição vem do servidor, fica dinâmica com versão e da
 
   const prev = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: linha.filtros, exclusions: { semOptIn: false, numeroInvalido: false } } });
   assert.equal(prev.status, 200, prev.texto);
-  assert.ok(Math.abs(prev.json.matched - alvo.clientes) <= 2, `preview ${prev.json.matched} vs segmento ${alvo.clientes} (bordas de 1 dia)`);
+  assert.equal(prev.json.matched, alvo.clientes, 'a Audiência do segmento é a MESMA população da matriz');
+  assert.equal(prev.json.rfm.equivalencia, 'exata');
 
   // Clicar de novo com a mesma regra reaproveita o segmento salvo, em vez de gerar duplicata.
   const repetido = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Outro nome', origem: 'rfm', segmento: alvo.id } });
@@ -415,20 +420,152 @@ test('ida e volta com Campanhas: para TODO segmento, o que foi persistido é a r
     assert.equal(linha.rfm_versao, resumo.rfm.regraVersao);
     assert.ok(linha.classificado_em);
     assert.deepEqual(linha.predicado, seg.predicado, 'a regra persistida é a que o resumo mostra');
-    // 2) os filtros persistidos são a tradução do predicado persistido (e só ele).
-    assert.deepEqual(linha.filtros, filtrosDoPredicado(linha.predicado));
-    // 3) a prévia, chamada com os filtros lidos do banco (o que a tela de Nova campanha faz), devolve a contagem esperada.
+    // 2) o filtro persistido é UM filtro `rfm` com regra, data de classificação e o predicado (com o corte SALVO) — e só ele.
+    assert.deepEqual(linha.filtros, [{ field: 'rfm', op: 'segmento', value: { segmento: seg.id, regraVersao: resumo.rfm.regraVersao, classificadoEm: linha.filtros[0].value.classificadoEm, predicado: linha.predicado } }]);
+    assert.equal(new Date(linha.filtros[0].value.classificadoEm).toISOString(), new Date(linha.classificado_em).toISOString());
+    // 3) a prévia, chamada com os filtros lidos do banco (o que a tela de Nova campanha faz), devolve EXATAMENTE a população da matriz.
     const prev = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: linha.match, filters: linha.filtros, exclusions: { semOptIn: false, numeroInvalido: false } } });
     assert.equal(prev.status, 200, prev.texto);
-    assert.equal(prev.json.matched, audienciaEsperada(pedidosA, linha.filtros), `segmento ${seg.id}: prévia × contagem independente`);
-    // 4) contra a RFM: a diferença possível é só a documentada (quem só tem troca paga conta como comprador na audiência).
-    assert.ok(prev.json.matched >= seg.clientes && prev.json.matched - seg.clientes <= 2, `${seg.id}: RFM ${seg.clientes} × audiência ${prev.json.matched}`);
+    assert.equal(prev.json.matched, seg.clientes, `segmento ${seg.id}: Audiência × matriz`);
+    assert.equal(prev.json.rfm.universos.segmento, seg.clientes);
+    assert.equal(prev.json.rfm.regraVersao, resumo.rfm.regraVersao);
+    assert.ok(prev.json.rfm.universos.pessoasComPedido >= prev.json.rfm.universos.compradoresValidos && prev.json.rfm.universos.compradoresValidos === resumo.rfm.universo);
+    // 4) COMPAT: os filtros genéricos equivalentes (o que o segmento persistia antes) seguem funcionando como sempre e continuam
+    //    a divergir da matriz só pelo que está documentado (só-troca conta como comprador; janela/24h) — nada foi alterado neles.
+    const genericos = filtrosDoPredicado(linha.predicado);
+    const prevGenerico = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: genericos, exclusions: { semOptIn: false, numeroInvalido: false } } });
+    assert.equal(prevGenerico.status, 200, prevGenerico.texto);
+    assert.equal(prevGenerico.json.matched, audienciaEsperada(pedidosA, genericos), `segmento ${seg.id}: caminho genérico × contagem independente (compat)`);
+    assert.ok(prevGenerico.json.matched >= seg.clientes && prevGenerico.json.matched - seg.clientes <= 2, `${seg.id}: RFM ${seg.clientes} × genérico ${prevGenerico.json.matched}`);
+    assert.equal(prevGenerico.json.rfm, undefined, 'sem filtro RFM a resposta não ganha bloco rfm');
     somaDasPrevias.push(prev.json.matched);
   }
   assert.ok(somaDasPrevias.every((n) => n > 0));
   // Nada foi disparado nem publicado por este fluxo.
   assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaigns')).rows[0].n, 0);
   assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients')).rows[0].n, 0);
+});
+
+// ── Rodada 5: Audiência exata (RFM → público comercial → elegíveis) ────────────────────────────────────
+// Universo → segmento (matriz) → população comercial (Audiência) → exclusões de contato (só depois, por motivo, na ordem opt-in →
+// telefone). O esperado vem da LISTA de Clientes filtrada por segmento (a matriz), não do motor de audiência.
+const digitos = (v) => String(v || '').replace(/\D/g, '');
+
+test('Audiência exata: população = matriz; exclusões de contato só atuam depois e são discriminadas por motivo; opt-in e telefone batem com a lista', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const { json: resumo } = await a.req('GET', '/api/admin/clientes/resumo');
+  const seg = resumo.rfm.segmentos.filter((s) => s.clientes > 3 && s.clientes <= 100).sort((x, y) => y.clientes - x.clientes)[0];
+  const criar = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: `Exclusões ${seg.id}`, origem: 'rfm', segmento: seg.id } });
+  assert.ok([200, 201].includes(criar.status), criar.texto);
+  const filtros = criar.json.segmento.filtros;
+  const membros = (await a.req('GET', `/api/admin/clientes/lista?tipo=com_pedido&per_page=100&segmento=${seg.id}`)).json.clientes;
+  assert.equal(membros.length, seg.clientes);
+
+  // Esperado independente: a ordem das exclusões é opt-in → telefone válido (≥ 10 dígitos).
+  const semOptIn = membros.filter((m) => !m.aceitaMarketing);
+  const comOptIn = membros.filter((m) => m.aceitaMarketing);
+  const semTelefone = comOptIn.filter((m) => digitos(m.telefone).length < 10);
+  const elegiveis = comOptIn.length - semTelefone.length;
+  assert.ok(semOptIn.length > 0, 'a base do teste tem gente sem opt-in neste segmento');
+
+  const sem = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: filtros, exclusions: { semOptIn: false, numeroInvalido: false } } });
+  assert.equal(sem.json.matched, seg.clientes);
+  assert.equal(sem.json.excluded, 0, 'sem exclusões marcadas, a população comercial inteira é elegível');
+
+  const com = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: filtros, exclusions: { semOptIn: true, numeroInvalido: true } } });
+  assert.equal(com.status, 200, com.texto);
+  assert.equal(com.json.matched, seg.clientes, 'as exclusões de contato NÃO mudam a população comercial');
+  assert.equal(com.json.breakdown.optOut, semOptIn.length);
+  assert.equal(com.json.breakdown.numeroInvalido, semTelefone.length);
+  assert.equal(com.json.eligible, elegiveis);
+  assert.equal(com.json.matched - com.json.excluded, com.json.eligible);
+  assert.equal(com.json.excluded, Object.values(com.json.breakdown).reduce((x, y) => x + y, 0), 'cada excluído tem exatamente um motivo');
+});
+
+test('Audiência exata: o filtro RFM é OBRIGATÓRIO mesmo com match ANY (um OU nunca alarga para "todos os clientes")', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const { json: resumo } = await a.req('GET', '/api/admin/clientes/resumo');
+  const seg = resumo.rfm.segmentos.filter((s) => s.clientes > 3 && s.clientes <= 100)[0];
+  const criar = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: `ANY ${seg.id}`, origem: 'rfm', segmento: seg.id } });
+  const [filtroRfm] = criar.json.segmento.filtros;
+  const excl = { semOptIn: false, numeroInvalido: false };
+  const membros = (await a.req('GET', `/api/admin/clientes/lista?tipo=com_pedido&per_page=100&segmento=${seg.id}`)).json.clientes;
+  // UF inexistente + ANY: só o segmento RFM não basta para entrar — a condição adicional também vale sobre o público RFM.
+  const nenhum = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ANY', filters: [filtroRfm, { field: 'uf', op: 'eq', value: 'ZZ' }], exclusions: excl } });
+  assert.equal(nenhum.json.matched, 0);
+  const soOptIn = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ANY', filters: [filtroRfm, { field: 'optIn', value: true }], exclusions: excl } });
+  assert.equal(soOptIn.json.matched, membros.filter((m) => m.aceitaMarketing).length);
+  assert.ok(soOptIn.json.matched <= seg.clientes, 'nunca passa do público do segmento');
+});
+
+test('Audiência exata: filtro RFM em erro é 409 acionável (nunca "todos os clientes" nem a última resposta) e a campanha não inicia', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const criar = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Erro RFM', origem: 'rfm', segmento: 'novos' } });
+  const bom = criar.json.segmento.filtros[0];
+  const excl = { semOptIn: false, numeroInvalido: false };
+  const ruins = [
+    ['RFM_FILTRO_INVALIDO', { ...bom, value: { ...bom.value, predicado: undefined } }],
+    ['RFM_FILTRO_INVALIDO', { field: 'rfm', op: 'segmento', value: 'novos' }],
+    ['RFM_REGRA_DIVERGENTE', { ...bom, value: { ...bom.value, regraVersao: 'rfm-v1:00000000' } }],
+  ];
+  for (const [codigo, filtro] of ruins) {
+    const r = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: [filtro], exclusions: excl } });
+    assert.equal(r.status, 409, r.texto);
+    assert.equal(r.json.codigo, codigo);
+    assert.equal(r.json.matched, undefined, 'nenhuma contagem acompanha o erro');
+    assert.match(r.json.error, /segmento|regra|Clientes/i);
+  }
+  const dois = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: [bom, bom], exclusions: excl } });
+  assert.equal(dois.status, 409);
+
+  // Iniciar uma campanha com esse filtro falha ANTES de criar destinatários e a campanha segue em rascunho.
+  const camp = await a.req('POST', '/api/admin/campaigns', { corpo: { nome: 'Campanha com filtro RFM quebrado', templateNome: 'tpl_teste', audienceDefinition: { match: 'ALL', filtros: [ruins[2][1]], exclusoes: {} } } });
+  assert.equal(camp.status, 200, camp.texto);
+  const id = camp.json.campanha.id;
+  try {
+    const inicio = await a.req('POST', `/api/admin/campaigns/${id}/start`);
+    assert.equal(inicio.status, 409, inicio.texto);
+    assert.match(inicio.json.error, /regra RFM mudou/);
+    assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients WHERE campaign_id = $1', [id])).rows[0].n, 0);
+    assert.equal((await sup.query('SELECT status FROM campaigns WHERE id = $1', [id])).rows[0].status, 'draft');
+  } finally {
+    await sup.query('DELETE FROM campaigns WHERE id = $1', [id]);
+  }
+});
+
+test('prévia × revisão: reavaliar depois de um pedido novo muda a população E o asOf — a prévia não é uma foto que envelhece em silêncio; nada é disparado', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const criar = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Prévia × revisão', origem: 'rfm', segmento: 'novos' } });
+  const filtros = criar.json.segmento.filtros;
+  const excl = { semOptIn: false, numeroInvalido: false };
+  const p1 = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: filtros, exclusions: excl } });
+  await new Promise((r) => setTimeout(r, 15));
+  // Um comprador de 1 pedido de "Novos" faz a 2ª compra hoje: sai de Novos (F=2 → Potenciais leais).
+  const { json: lista } = await a.req('GET', '/api/admin/clientes/lista?tipo=com_pedido&per_page=100&segmento=novos');
+  const alvo = lista.clientes[0];
+  const { rows: [origem] } = await sup.query(`SELECT buyer_documento, buyer_telefone, buyer_email, buyer_nome FROM pedidos_ink WHERE organization_id = $1 AND buyer_nome = $2 LIMIT 1`, [ORG_A, alvo.nome]);
+  await pedido(ORG_A, { doc: origem.buyer_documento, tel: origem.buyer_telefone, email: origem.buyer_email, nome: origem.buyer_nome, dias: 0, valorItem: 30 });
+  const p2 = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: filtros, exclusions: excl } });
+  assert.equal(p2.json.matched, p1.json.matched - 1, 'quem comprou de novo saiu do segmento');
+  assert.ok(new Date(p2.json.rfm.asOf).getTime() > new Date(p1.json.rfm.asOf).getTime(), 'cada avaliação carrega o SEU asOf');
+  assert.equal(p2.json.rfm.divergente, p1.json.rfm.divergente);
+  assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients')).rows[0].n, 0);
+});
+
+test('Audiência exata: multi-tenant — o mesmo filtro RFM avaliado na Organization B usa SÓ a base da B; segmento salvo na A não existe para a B', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const b = await navegador().entrar('cli-b@teste.oria');
+  const criar = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Só da A', origem: 'rfm', segmento: 'hibernando' } });
+  const filtro = criar.json.segmento.filtros[0];
+  const resumoB = (await b.req('GET', '/api/admin/clientes/resumo')).json;
+  const previaB = await b.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: [filtro], exclusions: { semOptIn: false, numeroInvalido: false } } });
+  if (previaB.status === 200) {
+    assert.equal(previaB.json.rfm.universos.compradoresValidos, resumoB.rfm.universo, 'universo = o da B');
+    assert.notEqual(previaB.json.rfm.universos.compradoresValidos, (await a.req('GET', '/api/admin/clientes/resumo')).json.rfm.universo);
+  } else {
+    assert.equal(previaB.status, 409, 'a B não tem base suficiente para essa regra: erro acionável, nunca a base da A');
+  }
+  assert.ok(!(await b.req('GET', '/api/admin/segments')).texto.includes('Só da A'));
 });
 
 // ── Matriz × lista × cadastro remoto ────────────────────────────────────────────────────────────────
@@ -588,13 +725,16 @@ test('segmento RFM salvo: pessoas dinâmicas, corte de valor materializado — n
   assert.deepEqual(depois, antes);
 
   // A Audiência usa o corte SALVO (número persistido), não o percentil de hoje: bate com a contagem independente feita com o corte salvo.
-  const { rows: pedidosA } = await sup.query(
-    `SELECT buyer_documento, buyer_telefone, buyer_email, payment_status, total_value, criado_em FROM pedidos_ink WHERE organization_id = $1
-      AND COALESCE(NULLIF(buyer_documento,''), NULLIF(buyer_telefone,''), NULLIF(buyer_email,'')) IS NOT NULL ORDER BY criado_em DESC`, [ORG_A]);
   const prev = await a.req('POST', '/api/admin/campaigns/audience/preview', { corpo: { match: 'ALL', filters: depois.filtros, exclusions: { semOptIn: false, numeroInvalido: false } } });
-  assert.equal(prev.json.matched, audienciaEsperada(pedidosA, depois.filtros), 'a prévia aplica o corte salvo');
+  assert.equal(prev.status, 200, prev.texto);
+  assert.equal(prev.json.matched, mine.pessoas.comRegraSalva, 'a prévia aplica o corte SALVO: mesma contagem que a classificação de hoje com o predicado salvo');
+  assert.equal(prev.json.rfm.corteSalvo.valor, corteSalvo);
+  assert.equal(prev.json.rfm.corteAtual.valor, r1.rfm.valorAlto);
+  assert.equal(prev.json.rfm.divergente, true);
+  assert.equal(prev.json.rfm.pessoasNoSegmentoDeHoje, r1.rfm.segmentos.find((x) => x.id === 'novos').clientes);
   const novosHoje = r1.rfm.segmentos.find((x) => x.id === 'novos').clientes;
   assert.notEqual(prev.json.matched, novosHoje, 'com o corte defasado, a audiência salva difere do segmento de hoje: por isso a divergência é exibida');
+  assert.equal(mine.equivalencia, 'exata');
 
   // Criar de novo com a regra de HOJE gera um segmento NOVO (o antigo não é reescrito).
   const novo = await a.req('POST', '/api/admin/clientes/segmentos', { corpo: { nome: 'Corte atual', origem: 'rfm', segmento: 'novos' } });

@@ -17,7 +17,8 @@ const metaCriativos = require('./lib/meta/criativos');
 const financeiroConsolidado = require('./lib/financeiro/consolidado');
 const clientesLista = require('./lib/clientes/lista');
 const clientesCadastro = require('./lib/clientes/cadastro');
-const { agruparPedidosPorIdentidade } = require('./lib/clientes/identidade');
+const clientesAgregado = require('./lib/clientes/agregado');
+const clientesAudienciaRfm = require('./lib/clientes/audiencia-rfm');
 const clientesAnalise = require('./lib/clientes/analise');
 const clientesMetricas = require('./lib/clientes/metricas');
 const clientesDetalhe = require('./lib/clientes/detalhe');
@@ -7855,7 +7856,8 @@ app.get('/api/admin/clientes/segmentos/estado', requireAdmin, async (req, res) =
   if (!pgPool) return res.status(503).json({ error: 'segmentos exigem Postgres configurado' });
   try {
     const { rows } = await pgPool.query(
-      `SELECT id, nome, rfm_segmento, rfm_versao, classificado_em, predicado FROM segments WHERE origem = 'rfm' ORDER BY criado_em DESC`
+      `SELECT id, nome, rfm_segmento, rfm_versao, classificado_em, predicado, (filtros @> '[{"field":"rfm"}]'::jsonb) AS avaliacao_exata
+       FROM segments WHERE origem = 'rfm' ORDER BY criado_em DESC`
     );
     // Sem segmento RFM salvo não há o que comparar: nem calcula a classificação (a tela consulta isto ao abrir Clientes).
     if (!rows.length) return res.json({ classificadoEm: null, regraVersao: null, amostraSuficiente: null, segmentos: [] });
@@ -7866,6 +7868,9 @@ app.get('/api/admin/clientes/segmentos/estado', requireAdmin, async (req, res) =
       amostraSuficiente: analise.rfm.amostraSuficiente,
       segmentos: rows.map((r) => ({
         id: String(r.id), nome: r.nome, rfmSegmento: r.rfm_segmento,
+        // 'exata': a Audiência avalia pela classificação RFM (filtro `rfm`); 'aproximada': segmento salvo com filtros genéricos
+        // (troca paga, sem janela, 24h) — pode divergir da matriz e é preservado como está.
+        equivalencia: r.avaliacao_exata ? 'exata' : 'aproximada',
         ...clientesSegmento.estadoDoSegmentoSalvo(
           { predicado: r.predicado, regraVersao: r.rfm_versao, classificadoEm: r.classificado_em, rfmSegmento: r.rfm_segmento },
           analise.rfm,
@@ -7905,11 +7910,13 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
       if (!seg || !seg.predicado) return res.status(404).json({ error: 'segmento RFM não encontrado' });
       origem = 'rfm';
       predicado = seg.predicado;
-      filtros = clientesSegmento.filtrosDoPredicado(predicado);
-      observacoes = clientesSegmento.observacoesDoPredicado({ janelaAbrangeHistoricoObservado: analise.rfm.janelaAbrangeHistoricoObservado });
       rfmSegmento = seg.id;
       rfmVersao = analise.rfm.regraVersao;
       classificadoEm = analise.rfm.asOf;
+      // Um único filtro `rfm` (predicado + corte SALVO + regra): a Audiência o avalia pela MESMA classificação da matriz, em vez
+      // de quatro filtros genéricos com semântica diferente (troca paga, janela, 24h × calendário).
+      filtros = [clientesAudienciaRfm.filtroRfmDoSegmento({ segmento: rfmSegmento, regraVersao: rfmVersao, classificadoEm, predicado })];
+      observacoes = [];
     } else if (corpo.origem === 'clientes') {
       const consulta = clientesLista.normalizarConsulta(corpo.filtros && typeof corpo.filtros === 'object' ? corpo.filtros : {});
       if (consulta.segmentos.length) return res.status(400).json({ error: 'para salvar um segmento RFM use origem "rfm"; filtros combinados não levam segmento' });
@@ -7926,7 +7933,8 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
     // Mesmo segmento RFM com a mesma regra já salvo: reaproveita em vez de criar duplicata a cada clique.
     if (origem === 'rfm') {
       const existente = await pgPool.query(
-        `SELECT ${SEGMENTO_COLUNAS} FROM segments WHERE origem = 'rfm' AND rfm_segmento = $1 AND predicado = $2::jsonb ORDER BY criado_em DESC LIMIT 1`,
+        `SELECT ${SEGMENTO_COLUNAS} FROM segments WHERE origem = 'rfm' AND rfm_segmento = $1 AND predicado = $2::jsonb
+           AND filtros @> '[{"field":"rfm"}]'::jsonb ORDER BY criado_em DESC LIMIT 1`,
         [rfmSegmento, JSON.stringify(predicado)]
       );
       if (existente.rows[0]) {
@@ -7970,10 +7978,8 @@ app.post('/api/admin/clientes/segmentos', requireAdmin, async (req, res) => {
 // pedidos (uma leitura só, sem janela para um webhook mudar o histórico entre duas consultas).
 async function buscarClientesAgregados(linhasPrelidas = null) {
   const escopo = escopoDaStore(2);
-  const temIdentidade = (r) => !!(r.buyer_documento || r.buyer_telefone || r.buyer_email);
   const rows = linhasPrelidas
-    ? linhasPrelidas.filter(temIdentidade)
-    : (await pgPool.query(
+    || (await pgPool.query(
       `SELECT loja, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing,
               buyer_uf, payment_status, total_value, criado_em, lucro_operacional, is_troca
        FROM pedidos_ink
@@ -7982,78 +7988,9 @@ async function buscarClientesAgregados(linhasPrelidas = null) {
        ORDER BY criado_em DESC`,
       [orgDoContexto(), ...escopo.params]
     )).rows;
-
-  // Identidade nunca cruza lojas diferentes (mesmo documento podendo se repetir em 2 lojas
-  // distintas, cada loja mantém seus próprios registros de cliente) — agrupa por loja primeiro.
-  // A Store nativa grava `loja` NULA nos pedidos; o cliente da Ink chega com a chave da Store
-  // (`chaveDaStore()`). A tela cruza os dois por `loja + documento/telefone`, então a chave precisa ser a mesma.
-  const chaveDoContexto = chaveDaStore();
-  const pedidosPorLoja = new Map();
-  for (const r of rows) {
-    const chave = r.loja || chaveDoContexto;
-    if (!pedidosPorLoja.has(chave)) pedidosPorLoja.set(chave, []);
-    pedidosPorLoja.get(chave).push(r);
-  }
-
-  const agora = Date.now();
-  const clientes = [];
-  for (const [loja, pedidos] of pedidosPorLoja) {
-    // Regra de identidade única (lib/clientes/identidade.js), a mesma da RFM e da lista de Clientes.
-    const grupos = agruparPedidosPorIdentidade(pedidos).map((g) => g.pedidos);
-
-    for (const pedidosDoGrupo of grupos) {
-      const maisRecente = pedidosDoGrupo[0]; // grupo preserva a ordem DESC por criado_em da query
-      const pedidosPagos = pedidosDoGrupo.filter((p) => PAYMENT_STATUSES_CONVERTIDO.has(p.payment_status));
-      const totalCompras = pedidosPagos.length;
-      const totalGasto = pedidosPagos.reduce((acc, p) => acc + (Number(p.total_value) || 0), 0);
-      // Lucro que o cliente deixou pra loja (ver financeiroPedidoInk): troca não é venda e fica fora;
-      // pedido pago ainda sem custo calculado é contado à parte, pra tela não mostrar lucro menor.
-      const pagosSemTroca = pedidosPagos.filter((p) => !p.is_troca);
-      const lucroOperacional = pagosSemTroca.reduce((acc, p) => acc + (Number(p.lucro_operacional) || 0), 0);
-      const pedidosSemFinanceiro = pagosSemTroca.filter((p) => p.lucro_operacional == null).length;
-      const ultimaCompraEm = pedidosPagos.reduce((max, p) => (!max || p.criado_em > max ? p.criado_em : max), null);
-      const primeiraCompraEm = pedidosPagos.reduce((min, p) => (!min || p.criado_em < min ? p.criado_em : min), null);
-      // UF do pedido mais recente QUE TEM uf preenchida — pedidos antigos (antes desse campo
-      // existir) não têm buyer_uf, pegar sempre o mais recente sem filtro perderia a UF de quem
-      // não comprou de novo depois que passou a ser capturada.
-      const ufRecente = pedidosDoGrupo.find((p) => p.buyer_uf);
-
-      // Toda chave de identidade (documento||telefone||email de CADA pedido, na preferência de
-      // sempre) que já apareceu nesse grupo — usada por avaliarAudienciaCampanha pra achar
-      // histórico de campanha gravado sob uma chave "antiga" (de antes dessa mesclagem existir),
-      // sem perder "já recebeu campanha" por causa da identidade ter sido calculada diferente.
-      const chavesHistoricas = new Set();
-      for (const p of pedidosDoGrupo) {
-        const chave = p.buyer_documento || p.buyer_telefone || p.buyer_email;
-        if (chave) chavesHistoricas.add(chave);
-      }
-
-      clientes.push({
-        loja,
-        // Preferência documento > telefone > email do PEDIDO MAIS RECENTE do grupo (mesma regra
-        // de sempre) — vai ser a chave usada em NOVOS envios de campanha daqui pra frente.
-        customerKey: maisRecente.buyer_documento || maisRecente.buyer_telefone || maisRecente.buyer_email,
-        legacyCustomerKeys: Array.from(chavesHistoricas),
-        nome: maisRecente.buyer_nome,
-        telefone: maisRecente.buyer_telefone,
-        email: maisRecente.buyer_email,
-        documento: maisRecente.buyer_documento,
-        aceitaMarketing: maisRecente.buyer_aceita_marketing,
-        uf: ufRecente ? ufRecente.buyer_uf : null,
-        totalCompras,
-        totalGasto,
-        ticketMedio: totalCompras > 0 ? totalGasto / totalCompras : null,
-        lucroOperacional: Math.round(lucroOperacional * 100) / 100,
-        pedidosSemFinanceiro,
-        ultimaCompraEm,
-        primeiraCompraEm,
-        diasSemComprar: ultimaCompraEm ? Math.floor((agora - new Date(ultimaCompraEm).getTime()) / 86400000) : null,
-      });
-    }
-  }
-
-  clientes.sort((a, b) => b.totalCompras - a.totalCompras);
-  return clientes;
+  // A conta (identidade única, compra = pagamento convertido, janela móvel de 24h) vive em lib/clientes/agregado.js — pura
+  // e testada com relógio controlado. A Store nativa grava `loja` nula: o cliente da Ink chega com a chave da Store.
+  return clientesAgregado.agregarClientesDePedidos(rows, { agora: Date.now(), chaveDoContexto: chaveDaStore(), statusConvertido: PAYMENT_STATUSES_CONVERTIDO });
 }
 
 // ── Campanhas/Remarketing — audiência (Fase 3 do plano) ──────────────────────
@@ -8066,25 +8003,29 @@ const AUDIENCIA_CAMPOS_FILTRO = [
   'optIn', 'temCarrinhoAbandonado', 'recebeuCampanha', 'naoRecebeuCampanha', 'recebeuCampanhaNosUltimosDias',
 ];
 
-function compararNumero(valor, op, alvo) {
-  if (valor == null || alvo == null) return false;
-  switch (op) {
-    case 'gt': return valor > alvo;
-    case 'gte': return valor >= alvo;
-    case 'lt': return valor < alvo;
-    case 'lte': return valor <= alvo;
-    case 'eq': return valor === alvo;
-    default: return false;
-  }
-}
-
 // Reexecuta os filtros no backend, nunca no navegador (spec, "Contagem da audiência"). Usada por
 // dois consumidores: o preview (só quer a contagem, clientes nunca chegam ao frontend) e o
 // disparo real da campanha (Fase 5, precisa da lista de elegíveis pra montar o snapshot em
 // campaign_recipients) — por isso sempre calcula e devolve `elegiveis`; quem só quer a contagem
 // (calcularAudienciaCampanha, abaixo) simplesmente ignora o array.
-async function avaliarAudienciaCampanha(loja, matchTipo, filtros, exclusoes) {
-  const clientes = await buscarClientesAgregados();
+async function avaliarAudienciaCampanha(loja, matchTipo, filtrosBrutos, exclusoes) {
+  // Segmento de origem RFM: um filtro `rfm` OBRIGATÓRIO (mesmo com match ANY), avaliado pela MESMA classificação da matriz de
+  // Clientes — mesmas linhas, mesmo `asOf`, mesma regra e corte salvo (lib/clientes/audiencia-rfm.js). Qualquer defeito LANÇA:
+  // nunca degrada para "todos os clientes". As demais condições e as exclusões de contato atuam sobre esse público.
+  const { rfm: filtroRfm, demais: filtros } = clientesAudienciaRfm.separarFiltros(filtrosBrutos);
+  let clientes;
+  let rfmResumo = null;
+  if (filtroRfm) {
+    const asOf = new Date();
+    const linhasDaStore = await lerPedidosParaClientes();
+    const analise = clientesAnalise.analisarRfm(linhasDaStore, { asOf, fuso: FUSO_ORGANIZACAO, chaveDoContexto: chaveDaStore() });
+    const agregados = clientesAgregado.agregarClientesDePedidos(analise.linhas, { agora: asOf.getTime(), chaveDoContexto: chaveDaStore(), statusConvertido: PAYMENT_STATUSES_CONVERTIDO });
+    const populacao = clientesAudienciaRfm.resolverPopulacaoRfm({ agregados, analise, filtro: filtroRfm });
+    clientes = populacao.membros;
+    rfmResumo = populacao.resumo;
+  } else {
+    clientes = await buscarClientesAgregados();
+  }
 
   let telefonesComCarrinho = new Set();
   if ((filtros || []).some((f) => f.field === 'temCarrinhoAbandonado')) {
@@ -8136,16 +8077,10 @@ async function avaliarAudienciaCampanha(loja, matchTipo, filtros, exclusoes) {
     const { field, op, value } = filtro;
     switch (field) {
       case 'diasSemComprar':
-        // "nunca comprou" (null) só bate em "há mais de N dias" — pra "menos de N dias" ele
-        // simplesmente não se aplica (não é uma resposta válida pra quem nunca comprou).
-        if (cliente.diasSemComprar == null) return op === 'gte' || op === 'gt';
-        return compararNumero(cliente.diasSemComprar, op, value);
       case 'quantidadePedidos':
-        return compararNumero(cliente.totalCompras, op, value);
       case 'totalGasto':
-        return compararNumero(cliente.totalGasto, op, value);
       case 'ticketMedio':
-        return compararNumero(cliente.ticketMedio, op, value);
+        return clientesAgregado.avaliarFiltroNumerico(cliente, filtro);
       case 'uf':
         return !!cliente.uf && cliente.uf === String(value || '').toUpperCase();
       case 'optIn':
@@ -8204,7 +8139,7 @@ async function avaliarAudienciaCampanha(loja, matchTipo, filtros, exclusoes) {
     elegiveis.push(cliente);
   }
 
-  return { matched: matched.length, excluded: matched.length - elegiveis.length, eligible: elegiveis.length, breakdown, elegiveis };
+  return { matched: matched.length, excluded: matched.length - elegiveis.length, eligible: elegiveis.length, breakdown, ...(rfmResumo ? { rfm: rfmResumo } : {}), elegiveis };
 }
 
 // Wrapper pro endpoint de preview — mesma função acima, só sem devolver a lista de clientes pro
@@ -8222,6 +8157,8 @@ app.post('/api/admin/campaigns/audience/preview', requireAdmin, async (req, res)
     const resultado = await calcularAudienciaCampanha(loja, match === 'ANY' ? 'ANY' : 'ALL', filters || [], exclusions || {});
     res.json(resultado);
   } catch (err) {
+    // Filtro RFM em erro é um estado verdadeiro e acionável (409), nunca uma audiência sem o filtro.
+    if (err instanceof clientesAudienciaRfm.ErroAudienciaRfm) return res.status(err.status).json({ error: err.message, codigo: err.codigo });
     console.error(`[CAMPANHAS] falha ao calcular audiência: ${err.message}`);
     res.status(500).json({ error: 'não foi possível calcular a audiência' });
   }
