@@ -111,8 +111,11 @@ function createProductAnalyticsComposition({
 
   // Gate C ("Jornada de Valor") · consome productPerformanceService + reconciliationService JÁ
   // montados acima (mesmo ReportCache, nenhuma chamada nova ao GA4/Ink) — nunca um segundo motor.
+  // `catalogRepository` (rodada "corrigir o gargalo real"): resolve nome/imagem só dos candidatos
+  // finais, nunca do catálogo inteiro — mesma instância já usada por productPerformanceService.
   const opportunityDiagnosticsService = createOpportunityDiagnosticsService({
-    productPerformanceService, reconciliationService, analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
+    productPerformanceService, reconciliationService, catalogRepository,
+    analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
   });
 
   // Rodada M · achado real: `runCatalogSync` (Fase D, lib/product-analytics/catalog-sync.js) nunca

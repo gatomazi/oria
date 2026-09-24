@@ -9,6 +9,31 @@
 // jornada: nenhuma chamada nova ao GA4/Ink/Meta além das que os dois services acima já fazem (o
 // ReportCache de 15min deles é reaproveitado de graça — ver product-performance-service.js).
 //
+// Rodada "corrigir o gargalo real" · reescrito pra eliminar o gargalo medido em produção (>23min
+// sem terminar com 85 mil produtos/20 mil itemIds observados, confirmado via profiling — ver
+// scripts/dev/scale-test-catalog-85k.cjs e docs/features/jornada-valor-cliente-relatorio.md). Causa
+// raiz: a versão anterior paginava o catálogo inteiro (`productPerformanceService.getProductPerformance`
+// em páginas de 200 — ~425 chamadas pra 85k produtos) só pra montar os sinais 1-3, e CADA chamada
+// refazia a resolução de identity do conjunto INTEIRO de itemIds observados (O(páginas × itemIds)).
+// A reconciliação (sinal 4) fazia uma SEGUNDA varredura completa e independente, dobrando o custo.
+//
+// Arquitetura nova — O(itemIds + produtos-commerce-ativos + candidatos finais), NUNCA
+// O(páginas × itemIds), NUNCA carrega o catálogo inteiro em memória:
+//
+//   1. `productPerformanceService.prepareStoreAnalytics` — relatório GA4 (cache) + resolução de
+//      identity + agregação por commerceProductId, tudo UMA VEZ (nunca por página).
+//   2. `reconciliationService.getCommerceUnitsAggregation` — unidades/receita Commerce por produto,
+//      já eficiente por natureza (pagina PEDIDOS, não o catálogo — tipicamente centenas, não dezenas
+//      de milhares).
+//   3. Os sinais 1-3 e a cobertura (sinal 5) são calculados DIRETO sobre o Map de (1) — nunca
+//      tocam o catálogo (`commerce_products`). O sinal 4 cruza (1) com (2) — para produtos com
+//      venda Commerce mas ZERO atividade GA4 no período, `idsComIdentidadeParaProdutos` confere (só
+//      pra esse conjunto pequeno) se a identity já existe historicamente, pra nunca excluir "vendeu
+//      no Commerce, GA4 não viu nada este período" do sinal de divergência.
+//   4. SÓ NO FINAL, depois de rankear e cortar em `limit`, os poucos candidatos vencedores têm seus
+//      dados de catálogo (nome/imagem/tipo) resolvidos em UM `catalogRepository.getByIds` em lote —
+//      nunca antes disso, nunca pro conjunto inteiro.
+//
 // Vocabulário do comando (§3.2): esta camada só produz `hypothesis` (explicação possível, com ação
 // de verificação) fundamentada em `observed`/`linked` — nunca `hypothesis` apresentada como fato, e
 // nunca um diagnóstico sem volume mínimo (`insufficient_data` em vez de "oportunidade" fabricada).
@@ -22,7 +47,7 @@
 //   1. low_view_to_cart            — itemsAddedToCartPerItemViewed abaixo do baseline da Store
 //   2. low_cart_to_checkout        — itemsCheckedOutPerItemAddedToCart abaixo do baseline da Store
 //   3. low_checkout_to_purchase    — itemsPurchasedPerItemCheckedOut abaixo do baseline da Store
-//   4. units_divergent_ga4_commerce — ReconciliationService marcou 'divergent' com volume relevante
+//   4. units_divergent_ga4_commerce — GA4×Commerce divergem (classificarDivergencia, reconciliation.js) com volume relevante
 //   5. identity_coverage_low       — muitos itemId GA4 observados sem produto canônico resolvido
 //
 // Baseline: mediana da Store entre produtos com volume >= amostra mínima do PRÓPRIO sinal (nunca um
@@ -30,6 +55,8 @@
 // documentada abaixo, nunca "receita perdida" nem previsão).
 
 const { classificarIndisponibilidade } = require('./journey-analytics-service');
+const { calcularItemRatios } = require('./product-performance-service');
+const { classificarDivergencia, DIVERGENCE_TOLERANCE_PADRAO } = require('./reconciliation');
 
 // Amostra mínima por sinal — configurável por chamada (`minSamples`), nunca um valor universal
 // promovido a verdade fixa; estes são só o default operacional documentado (§4.2 pede "mínimo de
@@ -83,47 +110,33 @@ function forcaDaEvidencia(volume, minimo) {
   return volume >= minimo * 2 ? 'suficiente' : 'limitada';
 }
 
-// ── Full-store pagination do ProductPerformanceService (mesmo padrão de reconciliation.js
-// `agregarAnalyticsCompleto` — nunca uma chamada de analytics por página: o ReportCache faz o
-// relatório ser 1 chamada real ao provider, reusada por todas as páginas deste loop). Duplicado
-// aqui (em vez de importado de reconciliation.js, que não exporta a função) de propósito: acoplar
-// dois módulos por uma função privada de 8 linhas custaria mais do que os repetir. ──
-async function paginarDesempenhoCompleto(productPerformanceService, entrada) {
-  const items = [];
-  let cursor = null;
-  let coverage = null;
-  do {
-    // eslint-disable-next-line no-await-in-loop
-    const pagina = await productPerformanceService.getProductPerformance({ ...entrada, pagination: { limit: 200, cursor } });
-    items.push(...pagina.items);
-    coverage = pagina.coverage;
-    cursor = pagina.nextCursor;
-  } while (cursor);
-  return { items, coverage };
-}
+// ── Geradores de sinal — cada um trabalha DIRETO sobre o Map de agregação (commerceProductId →
+// {metrics, externalIds}), nunca sobre uma linha de catálogo. Candidatos saem com `productId`, não
+// `product` — a resolução de catálogo é UMA VEZ, no final, só pros vencedores (ver getOpportunities). ──
 
-// ── Geradores de sinal — cada um só recebe o que precisa, cada um só emite candidatos com volume
-// mínimo E desvio mínimo (nunca "toda diferença é oportunidade"). ──
-
-function gerarSinalDeRazao({ items, campo, denominadorCampo, tipo, minimo, desvioMinimo, hipotese, acao }) {
+function gerarSinalDeRazao({ metricasPorProduto, campo, denominadorCampo, tipo, minimo, desvioMinimo, hipotese, acao }) {
   // Baseline: mediana da Store entre produtos com volume suficiente NESTE sinal — nunca todo o
   // catálogo (um produto com 2 visualizações não deveria puxar o baseline de quem tem 3000).
-  const elegiveis = items.filter((it) => it.metrics && it.metrics[denominadorCampo] !== null && it.metrics[denominadorCampo] >= minimo);
-  const razoes = elegiveis.map((it) => it.itemRatios[campo]).filter((r) => r !== null && r !== undefined);
+  const elegiveis = [];
+  for (const [productId, acumulado] of metricasPorProduto) {
+    const volume = acumulado.metrics[denominadorCampo];
+    if (volume === null || volume === undefined || volume < minimo) continue;
+    elegiveis.push({ productId, volume, itemRatios: calcularItemRatios(acumulado.metrics) });
+  }
+  const razoes = elegiveis.map((e) => e.itemRatios[campo]).filter((r) => r !== null && r !== undefined);
   const baseline = mediana(razoes);
   if (baseline === null || !(baseline > 0)) return [];
 
   const candidatos = [];
-  for (const it of elegiveis) {
-    const razao = it.itemRatios[campo];
+  for (const { productId, volume, itemRatios } of elegiveis) {
+    const razao = itemRatios[campo];
     if (razao === null || razao === undefined) continue;
-    const volume = it.metrics[denominadorCampo];
     const desvio = (baseline - razao) / baseline;
     if (desvio < desvioMinimo) continue; // só "abaixo" do baseline interessa aqui — acima não é problema
     candidatos.push({
       type: tipo,
       scope: 'product',
-      product: it.product,
+      productId,
       evidence: {
         [denominadorCampo]: volume,
         [campo]: Number(razao.toFixed(4)),
@@ -140,26 +153,31 @@ function gerarSinalDeRazao({ items, campo, denominadorCampo, tipo, minimo, desvi
   return candidatos;
 }
 
-function gerarSinalDeCheckoutParaCompra({ items, minimo, desvioMinimo, hipotese, acao }) {
+function gerarSinalDeCheckoutParaCompra({ metricasPorProduto, minimo, desvioMinimo, hipotese, acao }) {
   // itemsPurchasedPerItemCheckedOut não existe em CAMPOS_RATIO (product-performance-service.js só
   // tem a razão contra itemsViewed) — calculado aqui, localmente, a partir de métricas JÁ trazidas
   // pelo service (nunca um campo novo pedido ao provider).
-  const elegiveis = items.filter((it) => it.metrics && it.metrics.itemsCheckedOut !== null && it.metrics.itemsCheckedOut >= minimo);
-  const comRazao = elegiveis.map((it) => ({ it, razao: taxaSegura(it.metrics.itemsPurchased, it.metrics.itemsCheckedOut) })).filter((x) => x.razao !== null);
+  const comRazao = [];
+  for (const [productId, acumulado] of metricasPorProduto) {
+    const volume = acumulado.metrics.itemsCheckedOut;
+    if (volume === null || volume === undefined || volume < minimo) continue;
+    const razao = taxaSegura(acumulado.metrics.itemsPurchased, acumulado.metrics.itemsCheckedOut);
+    if (razao === null) continue;
+    comRazao.push({ productId, volume, razao, itemsPurchased: acumulado.metrics.itemsPurchased });
+  }
   const baseline = mediana(comRazao.map((x) => x.razao));
   if (baseline === null || !(baseline > 0)) return [];
 
   const candidatos = [];
-  for (const { it, razao } of comRazao) {
-    const volume = it.metrics.itemsCheckedOut;
+  for (const { productId, volume, razao, itemsPurchased } of comRazao) {
     const desvio = (baseline - razao) / baseline;
     if (desvio < desvioMinimo) continue;
     candidatos.push({
       type: 'low_checkout_to_purchase',
       scope: 'product',
-      product: it.product,
+      productId,
       evidence: {
-        itemsCheckedOut: volume, itemsPurchased: it.metrics.itemsPurchased,
+        itemsCheckedOut: volume, itemsPurchased,
         itemsPurchasedPerItemCheckedOut: Number(razao.toFixed(4)), storeBaseline: Number(baseline.toFixed(4)),
         deviation: Number(desvio.toFixed(4)), sampleMinimum: minimo,
       },
@@ -172,26 +190,44 @@ function gerarSinalDeCheckoutParaCompra({ items, minimo, desvioMinimo, hipotese,
   return candidatos;
 }
 
-function gerarSinalDeDivergencia({ reconciliation, minimo }) {
-  if (!reconciliation || reconciliation.status !== 'ok') return [];
+// `metricasPorProduto`: lado GA4 (produtos com atividade NESTE período). `commercePorProduto`: lado
+// Commerce (unidades pagas no período, já vem de `getCommerceUnitsAggregation` — pagina PEDIDOS,
+// nunca o catálogo). `idsComIdentidadeHistorica`: Set de commerceProductIds (dentre os que têm
+// venda Commerce mas NÃO aparecem em `metricasPorProduto`) que JÁ têm identity ga4.item_id
+// resolvida historicamente — cobre "vendeu no Commerce, GA4 não viu nada ESTE período" como zero
+// real (nunca excluído, § comando Gate 1.6) sem tratar "nunca teve identity nenhuma" como o mesmo
+// caso (esse último fica de fora do sinal — não é divergência, é ausência de correlação possível).
+function gerarSinalDeDivergencia({ metricasPorProduto, commercePorProduto, idsComIdentidadeHistorica, minimo, tolerancia }) {
+  if (!commercePorProduto) return [];
   const candidatos = [];
-  for (const item of reconciliation.items) {
-    if (item.status !== 'divergent') continue;
-    if (item.commerceUnits === null || item.commerceUnits < minimo) continue; // ruído de 1-2 pedidos não é sinal
-    const base = Math.max(item.analyticsUnits, item.commerceUnits, 1);
-    const deltaRate = Math.abs(item.analyticsUnits - item.commerceUnits) / base;
+  for (const [productId, commerce] of commercePorProduto) {
+    if (commerce.unitsSold < minimo) continue; // ruído de 1-2 pedidos não é sinal
+    const acumuladoGa4 = metricasPorProduto.get(productId);
+    let analyticsUnits;
+    if (acumuladoGa4) {
+      analyticsUnits = acumuladoGa4.metrics.itemsPurchased; // número real (0 incluso) ou null (métrica indisponível)
+    } else if (idsComIdentidadeHistorica.has(productId)) {
+      analyticsUnits = 0; // identity resolvida, zero atividade GA4 neste período — zero real, nunca excluído
+    } else {
+      continue; // sem identity GA4 nenhuma pra este produto — fora do sinal (não dá pra comparar)
+    }
+    if (analyticsUnits === null) continue; // métrica indisponível na propriedade — não dá pra comparar
+    const status = classificarDivergencia(analyticsUnits, commerce.unitsSold, tolerancia);
+    if (status !== 'divergent') continue; // 'aligned' ou 'insufficient_data' — nunca um sinal
+    const base = Math.max(analyticsUnits, commerce.unitsSold, 1);
+    const deltaRate = Math.abs(analyticsUnits - commerce.unitsSold) / base;
     candidatos.push({
       type: 'units_divergent_ga4_commerce',
       scope: 'product',
-      product: item.product,
+      productId,
       evidence: {
-        analyticsUnits: item.analyticsUnits, commerceUnits: item.commerceUnits,
-        paidOrdersDistinct: item.paidOrdersDistinct, deviation: Number(deltaRate.toFixed(4)),
+        analyticsUnits, commerceUnits: commerce.unitsSold,
+        paidOrdersDistinct: commerce.paidOrders.size, deviation: Number(deltaRate.toFixed(4)),
       },
       hypothesis: 'Pode existir divergência operacional ou de tracking entre o que o GA4 observou como compra e o que o Commerce confirmou como pago.',
       suggestedAction: 'Conferir IDs de transação, datas (createdAt vs. paidAt), estornos e possível duplicação de evento de purchase.',
-      evidenceStrength: forcaDaEvidencia(item.commerceUnits, minimo),
-      score: item.commerceUnits * deltaRate,
+      evidenceStrength: forcaDaEvidencia(commerce.unitsSold, minimo),
+      score: commerce.unitsSold * deltaRate,
     });
   }
   return candidatos;
@@ -204,7 +240,7 @@ function gerarSinalDeCoberturaBaixa({ coverage, minimoObservados, coberturaMinim
   return [{
     type: 'identity_coverage_low',
     scope: 'store',
-    product: null,
+    productId: null,
     evidence: {
       observedAnalyticsIds: coverage.observedAnalyticsIds,
       matchedAnalyticsIds: coverage.matchedAnalyticsIds,
@@ -220,14 +256,21 @@ function gerarSinalDeCoberturaBaixa({ coverage, minimoObservados, coberturaMinim
 }
 
 /**
- * @param {{productPerformanceService, reconciliationService, analyticsProvider: string, commerceProvider: string}} deps
+ * @param {{productPerformanceService, reconciliationService, catalogRepository, analyticsProvider: string, commerceProvider: string}} deps
+ *   `catalogRepository`: Rodada "corrigir o gargalo real" — resolve nome/imagem/tipo só dos
+ *   candidatos finais (getByIds em lote), nunca do catálogo inteiro nem do conjunto elegível
+ *   completo.
  */
-function createOpportunityDiagnosticsService({ productPerformanceService, reconciliationService, analyticsProvider, commerceProvider }) {
-  if (!productPerformanceService || typeof productPerformanceService.getProductPerformance !== 'function') {
-    throw new Error('createOpportunityDiagnosticsService exige productPerformanceService');
+function createOpportunityDiagnosticsService({ productPerformanceService, reconciliationService, catalogRepository, analyticsProvider, commerceProvider }) {
+  if (!productPerformanceService || typeof productPerformanceService.prepareStoreAnalytics !== 'function'
+    || typeof productPerformanceService.idsComIdentidadeParaProdutos !== 'function') {
+    throw new Error('createOpportunityDiagnosticsService exige productPerformanceService (prepareStoreAnalytics + idsComIdentidadeParaProdutos)');
   }
-  if (!reconciliationService || typeof reconciliationService.reconcileProductPerformance !== 'function') {
-    throw new Error('createOpportunityDiagnosticsService exige reconciliationService');
+  if (!reconciliationService || typeof reconciliationService.getCommerceUnitsAggregation !== 'function') {
+    throw new Error('createOpportunityDiagnosticsService exige reconciliationService (getCommerceUnitsAggregation)');
+  }
+  if (!catalogRepository || typeof catalogRepository.getByIds !== 'function') {
+    throw new Error('createOpportunityDiagnosticsService exige catalogRepository (getByIds)');
   }
   if (!analyticsProvider) throw new Error('createOpportunityDiagnosticsService exige analyticsProvider');
   if (!commerceProvider) throw new Error('createOpportunityDiagnosticsService exige commerceProvider');
@@ -246,58 +289,101 @@ function createOpportunityDiagnosticsService({ productPerformanceService, reconc
     // Funil (GA4) — nunca derruba a chamada inteira se GA4 estiver desconectado/indisponível (mesmo
     // padrão de tier `available/status/reason` de journey-analytics-service.js): sem GA4, os sinais
     // 1-3 e 5 ficam vazios (candidatos = []), nunca um erro 500/409 pra quem só quer ver o que já dá
-    // pra saber com o Commerce sozinho.
-    let items = [];
+    // pra saber com o Commerce sozinho. UMA chamada — `prepareStoreAnalytics` — nunca mais 425.
+    let metricasPorProduto = new Map();
     let coverage = null;
     let funnelSource = { available: false, status: 'not_connected', reason: null };
     try {
-      const completo = await paginarDesempenhoCompleto(productPerformanceService, { organizationId, storeId, analyticsProvider, startDate, endDate });
-      items = completo.items;
-      coverage = completo.coverage;
+      const agregacao = await productPerformanceService.prepareStoreAnalytics({ organizationId, storeId, analyticsProvider, startDate, endDate });
+      metricasPorProduto = agregacao.metricasPorProduto;
+      coverage = agregacao.coverage;
       funnelSource = { available: coverage.status === 'ok', status: coverage.status === 'ok' ? 'available' : classificarIndisponibilidade(coverage.status), reason: coverage.status === 'ok' ? null : coverage.status };
     } catch (err) {
       const reason = err.codigo || 'ANALYTICS_UNAVAILABLE';
       funnelSource = { available: false, status: classificarIndisponibilidade(reason), reason };
     }
 
-    // Reconciliação (Commerce) — mesma tolerância: sem Commerce conectado, ou período fora do
-    // histórico local confiável, o sinal 4 fica vazio, nunca derruba os outros quatro.
-    let reconciliation = null;
+    // Commerce — mesma tolerância: sem Commerce conectado, ou período fora do histórico local
+    // confiável, o sinal 4 fica vazio, nunca derruba os outros quatro. `getCommerceUnitsAggregation`
+    // pagina PEDIDOS (nunca o catálogo) — já eficiente por natureza, sem mudança de custo aqui.
+    let commercePorProduto = null;
     let commerceSource = { available: false, status: 'not_connected', reason: null };
     try {
-      reconciliation = await reconciliationService.reconcileProductPerformance({ organizationId, storeId, commerceProvider, analyticsProvider, startDate, endDate });
-      commerceSource = reconciliation.status === 'ok'
-        ? { available: true, status: 'available', reason: null }
-        : { available: false, status: classificarIndisponibilidade(reconciliation.reason), reason: reconciliation.reason };
+      const comercio = await reconciliationService.getCommerceUnitsAggregation({ organizationId, storeId, commerceProvider, startDate, endDate });
+      if (comercio.status === 'ok') {
+        commercePorProduto = comercio.porProduto;
+        commerceSource = { available: true, status: 'available', reason: null };
+      } else {
+        commerceSource = { available: false, status: classificarIndisponibilidade(comercio.reason), reason: comercio.reason };
+      }
     } catch (err) {
       const reason = err.codigo || 'COMMERCE_UNAVAILABLE';
       commerceSource = { available: false, status: classificarIndisponibilidade(reason), reason };
     }
 
+    // Gate 1.6 · pro sinal de divergência, produtos com venda Commerce mas SEM linha em
+    // `metricasPorProduto` (zero atividade GA4 neste período) só entram se já tiverem identity
+    // ga4.item_id resolvida historicamente — 1 consulta cheia, restrita a este conjunto PEQUENO
+    // (produtos com pedido pago no período, nunca o catálogo inteiro).
+    let idsComIdentidadeHistorica = new Set();
+    if (commercePorProduto && commercePorProduto.size) {
+      const semAtividadeEstePeriodo = [...commercePorProduto.keys()].filter((id) => !metricasPorProduto.has(id));
+      if (semAtividadeEstePeriodo.length) {
+        idsComIdentidadeHistorica = await productPerformanceService.idsComIdentidadeParaProdutos({
+          organizationId, storeId, analyticsProvider, ids: semAtividadeEstePeriodo,
+        });
+      }
+    }
+
     const candidatos = [
       ...gerarSinalDeRazao({
-        items, campo: 'itemsAddedToCartPerItemViewed', denominadorCampo: 'itemsViewed', tipo: 'low_view_to_cart',
+        metricasPorProduto, campo: 'itemsAddedToCartPerItemViewed', denominadorCampo: 'itemsViewed', tipo: 'low_view_to_cart',
         minimo: minSamples.viewToCart, desvioMinimo: minDeviation,
         hipotese: 'A oferta ou a apresentação deste produto pode merecer revisão — o volume de visualizações não está convertendo em adição ao carrinho na mesma proporção de produtos comparáveis da Store.',
         acao: 'Inspecionar foto, preço, descrição, tamanhos/variações e a promessa do anúncio que traz tráfego pra este produto.',
       }),
       ...gerarSinalDeRazao({
-        items, campo: 'itemsCheckedOutPerItemAddedToCart', denominadorCampo: 'itemsAddedToCart', tipo: 'low_cart_to_checkout',
+        metricasPorProduto, campo: 'itemsCheckedOutPerItemAddedToCart', denominadorCampo: 'itemsAddedToCart', tipo: 'low_cart_to_checkout',
         minimo: minSamples.cartToCheckout, desvioMinimo: minDeviation,
         hipotese: 'Pode haver fricção depois do carrinho — a proporção de itens que avançam para o checkout está abaixo de produtos comparáveis, mas o GA4 não localiza a causa.',
         acao: 'Conferir custo/prazo de frete, disponibilidade da variante e a experiência de carrinho, se houver dado que sustente a hipótese.',
       }),
       ...gerarSinalDeCheckoutParaCompra({
-        items, minimo: minSamples.checkoutToPurchase, desvioMinimo: minDeviation,
+        metricasPorProduto, minimo: minSamples.checkoutToPurchase, desvioMinimo: minDeviation,
         hipotese: 'Vale investigar a etapa final — a proporção de checkouts que viram compra observada está abaixo de produtos comparáveis.',
         acao: 'Conferir meios de pagamento, frete no checkout e eventos de purchase; cruzar com o pedido confirmado no Commerce quando existir.',
       }),
-      ...gerarSinalDeDivergencia({ reconciliation, minimo: minSamples.commerceUnits }),
+      ...gerarSinalDeDivergencia({
+        metricasPorProduto, commercePorProduto, idsComIdentidadeHistorica,
+        minimo: minSamples.commerceUnits, tolerancia: DIVERGENCE_TOLERANCE_PADRAO,
+      }),
       ...gerarSinalDeCoberturaBaixa({ coverage, minimoObservados: minSamples.observedIdsCoverage, coberturaMinima: minCoverage }),
     ];
 
     candidatos.sort((a, b) => b.score - a.score);
-    const opportunities = candidatos.slice(0, limit).map((c) => Object.freeze({ ...c, product: c.product ? Object.freeze({ ...c.product }) : null }));
+    const totalCandidates = candidatos.length;
+    // Corte ANTES de resolver catálogo (Gate 1.6/1.7 do comando) — nunca busca produto de um
+    // candidato que não vai aparecer; `totalCandidates` acima já reflete o total REAL antes do
+    // corte, então cortar cedo aqui não esconde quantidade nenhuma da resposta.
+    const vencedores = candidatos.slice(0, limit);
+
+    // Gate 1.7 · resolve catálogo SÓ pros vencedores, em UM lote — nunca por candidato, nunca pro
+    // conjunto elegível inteiro. Sinais de escopo 'store' (productId: null) não pedem produto.
+    const idsParaResolver = [...new Set(vencedores.map((c) => c.productId).filter(Boolean))];
+    const produtosResolvidos = idsParaResolver.length
+      ? await catalogRepository.getByIds({ organizationId, storeId, ids: idsParaResolver })
+      : [];
+    const produtoPorId = new Map(produtosResolvidos.map((p) => [p.id, p]));
+
+    const opportunities = [];
+    for (const c of vencedores) {
+      const { productId, ...resto } = c;
+      // Defensivo: um candidato cujo produto sumiu do catálogo entre a agregação e a resolução
+      // (ex.: desativado por um sync concorrente) nunca vira uma linha quebrada na tela — é
+      // descartado, nunca mostrado com `product: undefined`.
+      if (productId && !produtoPorId.has(productId)) continue;
+      opportunities.push(Object.freeze({ ...resto, product: productId ? Object.freeze({ ...produtoPorId.get(productId) }) : null }));
+    }
 
     return Object.freeze({
       period: { startDate, endDate },
@@ -305,7 +391,7 @@ function createOpportunityDiagnosticsService({ productPerformanceService, reconc
       config: Object.freeze({ minSamples: Object.freeze(minSamples), minDeviation, minCoverage, limit }),
       sources: Object.freeze({ productFunnel: Object.freeze(funnelSource), commerceReconciliation: Object.freeze(commerceSource) }),
       opportunities: Object.freeze(opportunities),
-      totalCandidates: candidatos.length,
+      totalCandidates,
     });
   }
 
