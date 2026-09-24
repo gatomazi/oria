@@ -37,7 +37,7 @@ from .domain.remarketing import (
 from . import model_router as mr
 from . import planner_v2, prompt_v2
 from .compiler import compile_prompt, prompt_info
-from .angle_catalog import canonical_legacy_angle_id, recommend_angle, resolve_angle_meta
+from .angle_catalog import canonical_legacy_angle_id, family_presets, recommend_angle, resolve_angle_meta
 from .angles import CORE_ANGLES, angle_descriptor, angle_is_available
 from .blocks import (
     COMMUNICATION,
@@ -257,11 +257,34 @@ def _resolve_angle_id(request: dict, products: list, product_mode: str, brand: d
         return requested, "user", []
     hint = request.get("angle_family_hint")
     if hint and hint.get("family"):
-        legacy_id = canonical_legacy_angle_id(hint["family"], hint.get("preset"))
+        family = hint["family"]
+        preset = hint.get("preset")
+        legacy_id = canonical_legacy_angle_id(family, preset)
         if legacy_id is None:
-            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": hint["family"],
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": family,
                                                          "reason": "family has no generation route yet"})
-        return legacy_id, "user", [f"angle_family_hint:{hint['family']}"]
+        # Achado real (primeiro uso): a UI só oferece o CARTÃO da família, nunca um preset específico —
+        # `preset` aqui é sempre None hoje. Uma escolha explícita de PRESET (chamador futuro/custom angle
+        # replay) continua honrada exatamente como pedida, sem substituição silenciosa. Só a família (sem
+        # preset) procura outro preset REAL dentro da MESMA família antes de recusar — nunca cruza para
+        # outra família: isso trairia a escolha do lojista, que é o próprio ponto do family_hint.
+        if preset is None and not angle_is_available(legacy_id, brand, niche):
+            tried = [legacy_id]
+            achado = None
+            for hnt, lid in family_presets(family):
+                if lid == legacy_id:
+                    continue
+                if angle_is_available(lid, brand, niche):
+                    achado = (hnt, lid)
+                    break
+                tried.append(lid)
+            if achado:
+                hnt, legacy_id = achado
+                return legacy_id, "user", [f"angle_family_hint:{family}", f"preset_fallback:{legacy_id}:tried={','.join(tried)}"]
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": legacy_id, "brand_kit": (brand or {}).get("id"),
+                                                         "niche_kit": (niche or {}).get("id"), "family": family,
+                                                         "reason": "no_angle_available_for_brand_or_niche", "tried": tried})
+        return legacy_id, "user", [f"angle_family_hint:{family}"]
     # brand/niche entram aqui (achado real, primeiro uso da conta interna) para que a recomendação
     # automática nunca escolha um ângulo que ela própria sabe que `angle_is_available` vai recusar
     # mais abaixo — ver a cadeia de alternativas em `_FALLBACKS`, angle_catalog.py.

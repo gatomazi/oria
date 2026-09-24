@@ -77,6 +77,25 @@ def canonical_legacy_angle_id(family: str, objective_hint: str | None = None) ->
     return routing["default"]
 
 
+def family_presets(family: str) -> list[tuple[str | None, str]]:
+    """Every (hint, legacy_id) this family can resolve to — the default first (hint `None`), then each
+    `by_hint` preset in catalog order, de-duplicated (some presets share a legacy id, e.g. product_focus's
+    "technical_fit"/"fit_full_body" both route to CAIMENTO). Empty for a family with no legacy mapping at
+    all (`action_movement`). Used when a human picked a FAMILY (never a specific preset — the UI only ever
+    offers the family card) so an unavailable default can look for another real preset within the SAME
+    family before giving up — never crossing into a different family the human didn't choose."""
+    routing = CANONICAL_LEGACY_FOR.get(family)
+    if routing is None:
+        return []
+    seen: set[str] = set()
+    out: list[tuple[str | None, str]] = []
+    for hint, legacy_id in [(None, routing["default"]), *routing.get("by_hint", {}).items()]:
+        if legacy_id not in seen:
+            seen.add(legacy_id)
+            out.append((hint, legacy_id))
+    return out
+
+
 def _people_count(inputs: dict) -> int:
     subjects = inputs.get("subjects")
     if subjects:

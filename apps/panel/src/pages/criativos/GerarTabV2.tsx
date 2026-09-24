@@ -47,7 +47,7 @@ import { plural } from '../../lib/format';
 import { ENGINE_LABEL, FUNNEL_STAGE_LABEL, INTENT_DESCRICAO, INTENT_LABEL, type TextoMotor } from './criativosMotores';
 import {
   CHAVES_FUNIL, CHAVES_REMARKETING, funnelOptions, intentsDisponiveis, limiteDeProdutos, lista_de, MAX_SUBJECTS_EDITAVEIS,
-  overridesAoTrocarDeMotor, remarketingOptions, restoDe, subjectsComOverride, texto_de, TEXTO_MOTOR_VAZIO,
+  overridesAoTrocarDeMotor, remarketingOptions, restoDe, subjectsComOverride, texto_de, textoAviso, TEXTO_MOTOR_VAZIO,
 } from './criativosMotorInput.mjs';
 
 // Fase E — UI V2 do gerador (Ângulos Limpos, produto único): "backend rico, planner inteligente, UI simples".
@@ -128,7 +128,7 @@ function CardSugestao({ rec, familias, interactions, preview, ocupado, onGerarAs
         </ul>
       )}
       {geral && <p className="criativos-v2__sugestao-nota">Sugestão geral — cadastre o significado da estampa para uma recomendação mais precisa.</p>}
-      {preview.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.warnings.join(', ')}</Callout>}
+      {preview.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.warnings.map(textoAviso).join(', ')}</Callout>}
       <FormActions>
         <Button disabled={ocupado} onClick={onGerarAssim}>Gerar assim</Button>
         <Button variant="secondary" disabled={ocupado} onClick={onPersonalizar}>Personalizar</Button>
@@ -330,7 +330,15 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     const temporizador = setTimeout(() => {
       previewJob(input)
         .then((r) => { if (!ignorar) setPreview({ total: r.total, first: r.first }); })
-        .catch((e: Error) => { if (!ignorar) setErro(e.message); })
+        .catch((e: Error) => {
+          if (ignorar) return;
+          // Achado real de uso: um erro aqui NUNCA pode deixar a prévia de uma seleção ANTERIOR visível —
+          // sem isto, trocar de estilo e cair num ângulo indisponível mostrava o erro embaixo enquanto o
+          // painel "Prévia" continuava com os dados do estilo anterior, como se ainda correspondessem à
+          // seleção atual. `erro` e `preview` sempre trocam juntos: nunca os dois setados ao mesmo tempo.
+          setPreview(null);
+          setErro(e.message);
+        })
         .finally(() => { if (!ignorar) setOcupado(false); });
     }, 350);
     return () => { ignorar = true; clearTimeout(temporizador); };
@@ -686,7 +694,11 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
             {erro && <p className="ds-form-error" role="alert">{erro}</p>}
             {!origem && (
               <FormActions>
-                <Button disabled={!placements.length || ocupado || !status.openaiKey.configured} onClick={gerar}>
+                {/* Achado real de uso: a seleção atual pode não ter uma prévia válida (erro de
+                    disponibilidade, ou uma nova seleção ainda não recalculada) — gerar nesse estado
+                    mandaria um request que não corresponde ao que a tela mostra, ou pior, ao último
+                    request que DEU CERTO para uma seleção diferente. `erro` bloqueia sempre. */}
+                <Button disabled={!placements.length || ocupado || Boolean(erro) || !status.openaiKey.configured} onClick={gerar}>
                   {`Gerar ${plural(quantity, 'criativo', 'criativos')}`}
                 </Button>
               </FormActions>
@@ -697,7 +709,13 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
 
       <div className="criativos-layout__preview">
         <Card title="Prévia" description="Resumo do plano do primeiro criativo — sempre o mesmo request que seria enviado a /jobs.">
-          {!preview && !rec && <p>Escolha um produto{engine !== 'CLEAN_ANGLES' ? ' e um objetivo' : ''} para ver a recomendação.</p>}
+          {/* Achado real de uso: a prévia de uma seleção ANTERIOR nunca fica visível sob uma seleção
+              NOVA que falhou — `preview` e `erro` sempre trocam juntos (mesmo efeito, acima), então aqui
+              é só decidir QUAL mensagem mostrar; nunca uma dl desatualizada ao lado de um erro. */}
+          {erro && !preview && (
+            <Callout tone="danger" title="Prévia indisponível para esta seleção">{erro}</Callout>
+          )}
+          {!erro && !preview && !rec && <p>Escolha um produto{engine !== 'CLEAN_ANGLES' ? ' e um objetivo' : ''} para ver a recomendação.</p>}
           {preview && (
             <dl className="criativos-resumo">
               <dt>Produtos</dt><dd>{productIds.length} · {produtosSelecionados.map((p) => p.name).join(', ')}</dd>
@@ -727,7 +745,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               <dt>Quantidade</dt><dd>{preview.total}</dd>
             </dl>
           )}
-          {preview && preview.first.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.first.warnings.join(', ')}</Callout>}
+          {preview && preview.first.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.first.warnings.map(textoAviso).join(', ')}</Callout>}
         </Card>
       </div>
 
