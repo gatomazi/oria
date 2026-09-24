@@ -133,6 +133,16 @@ export interface Campanha {
   mensagemWebId: string | null;
   mensagemWebNome: string | null;
   mensagemWebCongelada: boolean;
+  // Por que esta campanha (rascunho/agendada) NÃO poderá ser executada como está. `null` = nenhum bloqueio conhecido.
+  bloqueio?: CampanhaBloqueio | null;
+}
+
+export interface CampanhaBloqueio {
+  codigo: string; // AUDIENCIA_FILTRO_INVALIDO | AUDIENCIA_SEM_FILTRO | RFM_SEGMENTO_APROXIMADO | RFM_REGRA_DIVERGENTE | …
+  mensagem: string;
+  origem: 'definicao' | 'agendador';
+  desde?: string;
+  ultimaTentativa?: string;
 }
 
 export interface CampanhaInput {

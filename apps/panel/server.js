@@ -20,6 +20,8 @@ const clientesCadastro = require('./lib/clientes/cadastro');
 const clientesAgregado = require('./lib/clientes/agregado');
 const clientesAudienciaRfm = require('./lib/clientes/audiencia-rfm');
 const audienciaFiltros = require('./lib/campanhas/audiencia-filtros');
+const campanhasAgendadas = require('./lib/campanhas/agendadas');
+const bloqueiosDeCampanha = campanhasAgendadas.criarRegistroDeBloqueios();
 const clientesAnalise = require('./lib/clientes/analise');
 const clientesMetricas = require('./lib/clientes/metricas');
 const clientesDetalhe = require('./lib/clientes/detalhe');
@@ -8569,7 +8571,7 @@ app.get('/api/admin/campaigns', requireAdmin, async (req, res) => {
     // Store tem chave legada — Store nativa nunca enxerga linha que não seja dela.
     const escopo = escopoDaStore(1);
     const { rows } = await pgPool.query(`SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns WHERE ${escopo.sql} ORDER BY criado_em DESC`, escopo.params);
-    res.json({ campanhas: rows.map(mapCampanhaRow) });
+    res.json({ campanhas: await Promise.all(rows.map(campanhaParaTela)) });
   } catch (err) {
     console.error(`[CAMPANHAS] falha ao listar campanhas: ${err.message}`);
     res.status(500).json({ error: 'não foi possível listar campanhas' });
@@ -8581,12 +8583,34 @@ app.get('/api/admin/campaigns/:id', requireAdmin, exigirRecurso('campaigns'), as
   try {
     const { rows } = await pgPool.query(`SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns WHERE id = $1`, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'campanha não encontrada' });
-    res.json({ campanha: mapCampanhaRow(rows[0]) });
+    res.json({ campanha: await campanhaParaTela(rows[0]) });
   } catch (err) {
     console.error(`[CAMPANHAS] falha ao buscar campanha: ${err.message}`);
     res.status(500).json({ error: 'não foi possível buscar a campanha' });
   }
 });
+
+// Motivo pelo qual uma campanha (rascunho/agendada) NÃO poderá ser executada como está — para o administrador ver na lista e no
+// detalhe, em vez de só num log. Estático (definição salva) + o que o agendador já tentou e recusou. `null` = sem bloqueio conhecido.
+async function bloqueioDaCampanha(r) {
+  if (r.status !== 'draft' && r.status !== 'scheduled') return null;
+  const def = r.audience_definition && typeof r.audience_definition === 'object' ? r.audience_definition : {};
+  const estatico = audienciaFiltros.diagnosticarDefinicao(def, { agendada: r.status === 'scheduled' });
+  if (estatico) return estatico;
+  const aprox = def.aproximadoConfirmado === true ? null : await segmentoRfmAproximadoDaDefinicao(def.filtros, r.segmento_id);
+  if (aprox) {
+    return {
+      codigo: 'RFM_SEGMENTO_APROXIMADO', origem: 'definicao', detalhes: [],
+      mensagem: `A audiência vem do segmento RFM "${aprox.nome}", salvo com avaliação aproximada. Abra a campanha e confirme o uso do público aproximado ou recrie o segmento na avaliação exata.`,
+    };
+  }
+  const tentado = bloqueiosDeCampanha.obter(r.id);
+  return tentado ? { codigo: tentado.codigo, mensagem: tentado.mensagem, detalhes: tentado.detalhes, origem: tentado.origem, desde: tentado.desde, ultimaTentativa: tentado.ultimaTentativa } : null;
+}
+
+async function campanhaParaTela(r) {
+  return { ...mapCampanhaRow(r), bloqueio: await bloqueioDaCampanha(r) };
+}
 
 // Definição de audiência recebida numa campanha NOVA/editada: se traz condições (`match`/`filtros`) — ou se vai ser AGENDADA —
 // é validada pelo contrato fail-closed. Rascunho sem audiência ainda é permitido (`{}`), mas nunca é enviado: `/start` e o agendador
@@ -8654,6 +8678,7 @@ app.put('/api/admin/campaigns/:id', requireAdmin, exigirRecurso('campaigns'), as
       [String(nome).trim(), descricao || null, templateNome || null, segmentoId || null, JSON.stringify(audienceDefinition || {}),
         novoStatus, novoStatus === 'scheduled' ? agendadaPara : null, tamanhoLote, req.params.id, mensagemWebId]
     );
+    bloqueiosDeCampanha.limpar(req.params.id); // definição editada: o motivo antigo não vale mais (o agendador tenta de novo)
     res.json({ campanha: mapCampanhaRow(rows[0]) });
   } catch (err) {
     if (responderErroDeAudiencia(res, err)) return;
@@ -8674,6 +8699,7 @@ app.delete('/api/admin/campaigns/:id', requireAdmin, exigirRecurso('campaigns'),
       return res.status(409).json({ error: 'campanha já iniciada não pode ser cancelada por aqui' });
     }
     await pgPool.query('DELETE FROM campaigns WHERE id = $1', [req.params.id]);
+    bloqueiosDeCampanha.limpar(req.params.id);
     res.json({ ok: true });
   } catch (err) {
     console.error(`[CAMPANHAS] falha ao cancelar campanha: ${err.message}`);
@@ -15237,24 +15263,16 @@ const CAMPANHA_LOTE_TAMANHO = 10;
 
 // Campanhas 'scheduled' cuja hora chegou viram 'preparing' (snapshot de destinatários) — mesma
 // função usada pelo endpoint /start, só que disparada pelo relógio em vez de um clique.
-const agendadasBloqueadasJaLogadas = new Set();
 async function iniciarCampanhasAgendadasVencidas() {
+  // Campanhas bloqueadas há pouco (definição recusada) ficam fora da janela de 5: não podem monopolizá-la e travar as válidas.
+  const emEspera = bloqueiosDeCampanha.idsEmEspera();
   const { rows } = await pgPool.query(
-    `SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns WHERE status = 'scheduled' AND agendada_para <= now() ORDER BY agendada_para ASC LIMIT 5`
+    `SELECT ${CAMPAIGN_SELECT_COLS} FROM campaigns WHERE status = 'scheduled' AND agendada_para <= now() AND NOT (id = ANY($1::bigint[])) ORDER BY agendada_para ASC LIMIT 5`,
+    [emEspera]
   );
-  for (const campanha of rows) {
-    try {
-      await iniciarDisparoCampanha(campanha);
-    } catch (err) {
-      // Definição de audiência recusada (fail-closed): a campanha continua 'scheduled', sem destinatários, até alguém corrigir/confirmar
-      // na Revisão. O log sai UMA vez por campanha+causa, não a cada ciclo do agendador.
-      const chaveLog = `${campanha.id}:${err.codigo || err.message}`;
-      if (!agendadasBloqueadasJaLogadas.has(chaveLog)) {
-        agendadasBloqueadasJaLogadas.add(chaveLog);
-        console.error(`[CAMPANHAS_FILA] campanha agendada ${campanha.id} NÃO iniciada${err.codigo ? ` (${err.codigo})` : ''}: ${err.message}`);
-      }
-    }
-  }
+  // Definição recusada (fail-closed) NÃO dispara: a campanha continua 'scheduled', sem destinatários, e o motivo fica visível para o
+  // administrador (lista/detalhe da campanha) — ver lib/campanhas/agendadas.js.
+  await campanhasAgendadas.iniciarAgendadasVencidas({ campanhas: rows, iniciar: iniciarDisparoCampanha, bloqueios: bloqueiosDeCampanha });
 }
 
 // Processa um lote de destinatários 'pending' de UMA campanha (preparing/sending) por tick —

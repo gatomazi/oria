@@ -751,6 +751,74 @@ test('segmento RFM legado ("avaliação aproximada"): preservado, sinalizado e e
   assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients')).rows[0].n, 0, 'nada foi criado para envio');
 });
 
+test('campanhas bloqueadas têm MOTIVO visível (lista e detalhe); válidas e rascunho vazio não; editar limpa; nada é enviado nem criado', async () => {
+  const a = await navegador().entrar('cli-a@teste.oria');
+  const { json: resumo } = await a.req('GET', '/api/admin/clientes/resumo');
+  const alvo = resumo.rfm.segmentos.find((x) => x.id === 'hibernando') || resumo.rfm.segmentos.find((x) => x.clientes > 3);
+  const genericos = filtrosDoPredicado(alvo.predicado);
+  const { rows: [seg] } = await sup.query(
+    `INSERT INTO segments (organization_id, nome, match, filtros, exclusoes, criado_por, origem, politica, predicado, rfm_versao, classificado_em, rfm_segmento)
+     VALUES ($1,'RFM legado (bloqueio visível)','ALL',$2,'{}','admin','rfm','dinamico',$3,$4,now(),$5) RETURNING id`,
+    [ORG_A, JSON.stringify(genericos), JSON.stringify(alvo.predicado), resumo.rfm.regraVersao, alvo.id]
+  );
+  const futuro = "now() + interval '30 days'";
+  const cria = async (nome, def, status) => (await sup.query(
+    `INSERT INTO campaigns (organization_id, store_id, loja, nome, template_nome, audience_definition, status, agendada_para, criado_por)
+     VALUES ($1,$2,$3,$4,'tpl_teste',$5,$6,${status === 'scheduled' ? futuro : 'NULL'},'admin') RETURNING id`,
+    [ORG_A, STORE_A, LOJA[ORG_A], nome, JSON.stringify(def), status]
+  )).rows[0].id;
+  const ids = {
+    campoInvalido: await cria('agendada campo desconhecido', { match: 'ALL', filtros: [{ field: 'segmentoAntigo', value: 'vip' }], exclusoes: {} }, 'scheduled'),
+    semCondicao: await cria('agendada sem condição (antigo "todos")', { match: 'ALL', filtros: [], exclusoes: {} }, 'scheduled'),
+    aproximado: await cria('agendada de segmento RFM aproximado', { match: 'ALL', filtros: genericos, exclusoes: {} }, 'scheduled'),
+    valida: await cria('agendada válida', { match: 'ALL', filtros: [{ field: 'uf', value: 'RS' }], exclusoes: {} }, 'scheduled'),
+    todosExplicito: await cria('agendada "todos" explícito', { match: 'ALL', filtros: [{ field: 'todosClientes', value: true }], exclusoes: {} }, 'scheduled'),
+    rascunhoVazio: await cria('rascunho vazio', {}, 'draft'),
+    rascunhoInvalido: await cria('rascunho legado inválido', { match: 'ANY', filtros: [{ field: 'cidade', value: 'POA' }], exclusoes: {} }, 'draft'),
+  };
+  try {
+    const lista = (await a.req('GET', '/api/admin/campaigns')).json.campanhas;
+    const por = (id) => lista.find((c) => c.id === String(id));
+    assert.equal(por(ids.campoInvalido).bloqueio.codigo, 'AUDIENCIA_FILTRO_INVALIDO');
+    assert.match(por(ids.campoInvalido).bloqueio.mensagem, /segmentoAntigo/);
+    assert.equal(por(ids.campoInvalido).bloqueio.origem, 'definicao');
+    assert.equal(por(ids.semCondicao).bloqueio.codigo, 'AUDIENCIA_SEM_FILTRO');
+    assert.equal(por(ids.aproximado).bloqueio.codigo, 'RFM_SEGMENTO_APROXIMADO');
+    assert.match(por(ids.aproximado).bloqueio.mensagem, /avaliação aproximada/);
+    assert.equal(por(ids.rascunhoInvalido).bloqueio.codigo, 'AUDIENCIA_FILTRO_INVALIDO', 'rascunho legado inválido também mostra o motivo');
+    for (const k of ['valida', 'todosExplicito', 'rascunhoVazio']) assert.equal(por(ids[k]).bloqueio, null, `${k}: sem bloqueio`);
+    // detalhe (o que a tela de edição abre)
+    const d = (await a.req('GET', `/api/admin/campaigns/${ids.campoInvalido}`)).json.campanha;
+    assert.equal(d.bloqueio.codigo, 'AUDIENCIA_FILTRO_INVALIDO');
+    assert.equal(d.status, 'scheduled', 'continua agendada, sem ser reescrita');
+    // corrigir pela edição: o servidor aceita a definição válida e o bloqueio some
+    const editada = await a.req('PUT', `/api/admin/campaigns/${ids.campoInvalido}`, { corpo: { nome: 'agendada campo desconhecido', templateNome: 'tpl_teste', status: 'scheduled', agendadaPara: '2031-01-01T10:00:00Z', audienceDefinition: { match: 'ALL', filtros: [{ field: 'uf', value: 'RS' }], exclusoes: {} } } });
+    assert.equal(editada.status, 200, editada.texto);
+    assert.equal((await a.req('GET', `/api/admin/campaigns/${ids.campoInvalido}`)).json.campanha.bloqueio, null);
+    // as bloqueadas NÃO iniciam pelo /start (mesmo caminho do agendador) e nada foi criado
+    // (/start só aceita rascunho; as AGENDADAS só iniciam pelo agendador, que usa a mesma função e tem teste próprio —
+    //  campanhas-agendadas.test.js — e é coberto pelo diagnóstico acima.)
+    const rascunho = await a.req('POST', `/api/admin/campaigns/${ids.rascunhoInvalido}/start`);
+    assert.equal(rascunho.status, 400, rascunho.texto);
+    assert.equal(rascunho.json.codigo, 'AUDIENCIA_FILTRO_INVALIDO');
+    for (const k of ['semCondicao', 'aproximado']) assert.equal((await a.req('POST', `/api/admin/campaigns/${ids[k]}/start`)).status, 409, `${k}: agendada não inicia pelo /start`);
+    // O mesmo rascunho de segmento aproximado, sem confirmar, é recusado antes de criar destinatários:
+    const idAprox = await cria('rascunho de segmento RFM aproximado', { match: 'ALL', filtros: genericos, exclusoes: {} }, 'draft');
+    ids.rascunhoAproximado = idAprox;
+    const rAprox = await a.req('POST', `/api/admin/campaigns/${idAprox}/start`);
+    assert.equal(rAprox.status, 409, rAprox.texto);
+    assert.equal(rAprox.json.codigo, 'RFM_SEGMENTO_APROXIMADO');
+    assert.equal((await sup.query('SELECT count(*)::int AS n FROM campaign_recipients WHERE campaign_id = ANY($1::bigint[])', [Object.values(ids)])).rows[0].n, 0);
+    // outra Organization nunca vê estas campanhas nem seus motivos
+    const b = await navegador().entrar('cli-b@teste.oria');
+    assert.ok(!(await b.req('GET', '/api/admin/campaigns')).texto.includes('segmentoAntigo'));
+    assert.equal((await b.req('GET', `/api/admin/campaigns/${ids.semCondicao}`)).status, 404);
+  } finally {
+    await sup.query('DELETE FROM campaigns WHERE id = ANY($1::bigint[])', [Object.values(ids)]);
+    await sup.query('DELETE FROM segments WHERE id = $1', [seg.id]);
+  }
+});
+
 // ── Matriz × lista × cadastro remoto ────────────────────────────────────────────────────────────────
 // A Ink (cadastro de quem nunca pediu) pode ficar fora do ar ou lenta. Isso nunca pode: bloquear pedidos locais já
 // sincronizados, contaminar a lista de um segmento RFM, nem ser cacheado como se fosse resposta boa.

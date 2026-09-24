@@ -78,6 +78,15 @@ export function CampanhasPage() {
               label: 'Status',
               render: (c) => {
                 const meta = lookup(CAMPANHA_STATUS_MAP, c.status);
+                // Campanha que NÃO poderá ser executada como está: o motivo aparece aqui (e ao abrir a campanha), não só num log.
+                if (c.bloqueio) {
+                  return (
+                    <span className="cp-bloqueio">
+                      <StatusBadge tone="warning" label={c.status === 'scheduled' ? 'Agendada · bloqueada' : 'Bloqueada'} />
+                      <span className="cp-bloqueio__motivo" title={c.bloqueio.mensagem}>{c.bloqueio.mensagem}</span>
+                    </span>
+                  );
+                }
                 return <StatusBadge tone={meta.tone} label={meta.label} />;
               },
               sortValue: (c) => c.status,

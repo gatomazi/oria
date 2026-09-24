@@ -161,7 +161,24 @@ function validarDefinicaoAudiencia(definicao) {
 
 const filtroTodosClientes = () => ({ field: CAMPO_TODOS, value: true });
 
+// Diagnóstico ESTÁTICO (puro, sem banco) de uma campanha para o administrador: a definição salva pode ser executada? Devolve
+// `{ codigo, mensagem, detalhes, origem: 'definicao' }` ou null. Rascunho vazio (`{}`) não é bloqueio — ainda está sendo montado;
+// agendada sem condição explícita é (o agendador a recusaria). Não avalia a população (isso é a prévia).
+function diagnosticarDefinicao(definicao, { agendada }) {
+  const d = ehObjeto(definicao) ? definicao : {};
+  const vazia = d.match === undefined && d.filtros === undefined;
+  if (vazia && !agendada) return null;
+  try {
+    validarDefinicaoAudiencia({ match: d.match, filtros: d.filtros, exclusoes: d.exclusoes });
+    return null;
+  } catch (err) {
+    if (err instanceof ErroAudienciaFiltro && err.codigo === CODIGO_SEM_FILTRO && !agendada) return null;
+    if (err && typeof err.codigo === 'string') return { codigo: err.codigo, mensagem: err.message, detalhes: err.detalhes || [], origem: 'definicao' };
+    throw err;
+  }
+}
+
 module.exports = {
   ErroAudienciaFiltro, CODIGO_INVALIDO, CODIGO_SEM_FILTRO, CAMPO_TODOS, CAMPOS_NUMERICOS, OPERADORES, UFS,
-  validarDefinicaoAudiencia, filtroTodosClientes,
+  validarDefinicaoAudiencia, filtroTodosClientes, diagnosticarDefinicao,
 };

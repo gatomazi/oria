@@ -1,13 +1,13 @@
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, ConfirmDialog, EmptyState, Field, FormActions, Input, MediaDropzone, PageHeader, PageStack, Skeleton, StatusBadge, Stepper } from '../../components/ds';
+import { Button, Callout, Card, ConfirmDialog, EmptyState, Field, FormActions, Input, MediaDropzone, PageHeader, PageStack, Skeleton, StatusBadge, Stepper } from '../../components/ds';
 import { adminStores } from '../../state/adminStores';
 import { lookup, TEMPLATE_META_STATUS_MAP, CAMPANHA_STATUS_MAP } from '../../lib/statusMap';
 import { contarVariaveis, extrairBotaoDinamico, extrairTextosComponentes, extrairTokensVariaveis } from '../../lib/templateVariables';
 import { listTemplates, testarTemplate, type WhatsappTemplate } from '../../api/templates';
 import { listMedia, uploadMedia, type MediaAsset } from '../../api/media';
-import { criarCampanha, editarCampanha, getCampanha, iniciarCampanha, previewAudiencia, type AudienceDefinition, type AudienciaPreviewResultado } from '../../api/campanhas';
+import { criarCampanha, editarCampanha, getCampanha, iniciarCampanha, previewAudiencia, type AudienceDefinition, type AudienciaPreviewResultado, type CampanhaBloqueio } from '../../api/campanhas';
 import { listSegmentos, type Segmento } from '../../api/segments';
 import { AvisoSegmentoRfm } from '../clientes/AvisoSegmentoRfm';
 import { AvisoCorteDaAudiencia, motivosDeExclusao } from './AudienciaResumo';
@@ -110,6 +110,8 @@ export function NovaCampanhaPage() {
   // anterior; a revisão mostra a contagem de agora, com o seu asOf, ou o erro verdadeiro — nunca a última resposta em silêncio.
   const [revisaoAud, setRevisaoAud] = useState<{ estado: 'carregando' } | { estado: 'ok' } | { estado: 'erro'; mensagem: string } | null>(null);
   const [avisoRevisao, setAvisoRevisao] = useState('');
+  // Motivo pelo qual a campanha salva não poderá ser executada como está (definição recusada / segmento aproximado / o agendador já tentou).
+  const [bloqueioSalvo, setBloqueioSalvo] = useState<CampanhaBloqueio | null>(null);
   const [segmentos, setSegmentos] = useState<Segmento[] | null>(null);
   const [segmentoSelecionado, setSegmentoSelecionado] = useState('');
 
@@ -202,6 +204,7 @@ export function NovaCampanhaPage() {
         const c = data.campanha;
         setCampanhaId(c.id);
         setStatusAtual(c.status);
+        setBloqueioSalvo(c.bloqueio ?? null);
         setNome(c.nome);
         setDescricao(c.descricao || '');
         setTemplateNome(c.templateNome);
@@ -387,6 +390,7 @@ export function NovaCampanhaPage() {
       .then((data) => {
         setCampanhaId(data.campanha.id);
         setStatusAtual(data.campanha.status);
+        setBloqueioSalvo(null); // salvou uma definição aceita pelo servidor: o motivo antigo não vale mais
         setMsg({ texto: status === 'scheduled' ? 'Campanha agendada!' : 'Rascunho salvo.', erro: false });
         if (status === 'scheduled') setTimeout(() => navigate('/admin/campanhas'), 1200);
       })
@@ -514,6 +518,16 @@ export function NovaCampanhaPage() {
 
       {!podeEditar && (
         <p className="ds-form-error">Esta campanha já foi iniciada e não pode mais ser editada por aqui.</p>
+      )}
+
+      {bloqueioSalvo && (
+        <Callout tone="warning" title={statusAtual === 'scheduled' ? 'Campanha agendada BLOQUEADA: não será enviada como está' : 'Esta campanha não poderá ser enviada como está'}>
+          <p className="cli-aviso" role="alert">{bloqueioSalvo.mensagem}</p>
+          <p className="cli-aviso cli-aviso--nota">
+            Nada foi enviado e nenhum destinatário foi criado. Corrija a audiência abaixo (ou confirme/recrie o segmento) e salve de novo.
+            {bloqueioSalvo.origem === 'agendador' && bloqueioSalvo.ultimaTentativa ? ` O agendador tentou iniciar e recusou em ${new Date(bloqueioSalvo.ultimaTentativa).toLocaleString('pt-BR')}.` : ''}
+          </p>
+        </Callout>
       )}
 
       {modoResumo && (
