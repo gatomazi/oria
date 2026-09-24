@@ -111,6 +111,11 @@ export interface PlanSummary {
   angle_recommendation: AngleRecommendation | null;
   placement: string;
   persona: string | null;
+  // Fase G.2 — "quem veste o quê", leitura do que o plano já resolveu (nunca calculado na tela). Mesmo tipo
+  // de "Copiar dados" (`CenaPessoa`): um item daqui pode voltar, sem alteração, dentro de `subjects` de um
+  // POST /jobs novo — só `wears_product_id` é editável na UI. `product_name` (extra, via índice) é só para
+  // exibição. Vazio/ausente quando o plano não usa pessoa nenhuma.
+  subjects: CenaPessoa[];
   scene: string;
   context_id: string;
   context_provider: string;

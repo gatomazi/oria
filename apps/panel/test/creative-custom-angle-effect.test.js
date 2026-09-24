@@ -241,6 +241,45 @@ test('planSummary: sem angle_recommendation no plano, o campo é null (a tela nu
   assert.equal(resumo.angle_recommendation, null);
 });
 
+// ---------------------------------------------------- Fase G.2 · planSummary expõe "quem veste o quê" (§1)
+test('planSummary: subjects resume "quem veste o quê" do plano real, com o nome do produto para exibição', () => {
+  const plano = {
+    products: [{ id: 'prod-a', name: 'Camiseta Infantil A' }, { id: 'prod-b', name: 'Camiseta Infantil B' }],
+    subjects: [
+      { id: 's1', role: 'primary', label: 'Menina 8 anos', persona: { label: 'Menina 8 anos' }, age_band: 'child_6_9',
+        product_use: 'wears', product_id: 'prod-a', relation_to_primary: null, relation_label: null, prominence: 'hero', source: 'user' },
+      { id: 's2', role: 'supporting', label: 'Menino 6 anos', persona: { label: 'Menino 6 anos' }, age_band: 'child_3_5',
+        product_use: 'wears', product_id: 'prod-b', relation_to_primary: 'sibling', relation_label: null, prominence: 'secondary', source: 'user' },
+    ],
+  };
+  const resumo = planSummary(plano);
+  assert.equal(resumo.subjects.length, 2);
+  assert.deepEqual(resumo.subjects[0], {
+    id: 's1', role: 'primary', persona: { label: 'Menina 8 anos' }, age_band: 'child_6_9',
+    relation_to_primary: null, relation_label: null, wears_product_id: 'prod-a', product_name: 'Camiseta Infantil A', prominence: 'hero',
+  });
+  assert.equal(resumo.subjects[1].product_name, 'Camiseta Infantil B');
+  assert.equal(resumo.subjects[1].relation_to_primary, 'sibling');
+});
+
+test('planSummary: pessoa de apoio sem peça (product_use "none") vira wears_product_id/product_name null — nunca tratado como item perdido', () => {
+  const plano = {
+    products: [{ id: 'prod-a', name: 'Camiseta A' }],
+    subjects: [
+      { id: 's1', role: 'primary', label: 'Adulto', persona: { label: 'Adulto' }, product_use: 'wears', product_id: 'prod-a', prominence: 'hero' },
+      { id: 's2', role: 'supporting', label: 'Amigo', persona: { label: 'Amigo' }, product_use: 'none', product_id: null, prominence: 'secondary' },
+    ],
+  };
+  const resumo = planSummary(plano);
+  assert.equal(resumo.subjects[1].wears_product_id, null);
+  assert.equal(resumo.subjects[1].product_name, null);
+});
+
+test('planSummary: sem subjects no plano (produto único sem pessoa, ou nenhuma cena), o campo é uma lista vazia — nunca undefined nem inventado', () => {
+  assert.deepEqual(planSummary({}).subjects, []);
+  assert.deepEqual(planSummary({ subjects: [] }).subjects, []);
+});
+
 // ------------------------------------------------------------------ Copiar dados recupera o ângulo (§6)
 test('Copiar dados: o form traz custom_angle_preview (exibição) + custom_angle_replay_of (o que volta no POST), e angle_ids vira ["auto"]', async () => {
   const store = createMemoryStore();

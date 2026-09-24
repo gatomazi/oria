@@ -63,3 +63,62 @@ export function funnelOptions(texto, stage, extra = {}) {
 export function textoAoTrocarDeMotor() {
   return { ...TEXTO_MOTOR_VAZIO };
 }
+
+// ------------------------------------------------------------------ Fase G.2 — multipeça
+
+// `product_view` (Remarketing) é só-produto-único no core (MULTI_PRODUCT_RULES.REMARKETING.
+// singleOnlyIntents) — nunca oferecido como opção quando o lojista já escolheu multipeça, em vez de
+// deixar o core recusar depois de uma prévia inteira calculada.
+export function intentsDisponiveis(todosOsIntents, productMode) {
+  if (productMode !== 'multi_product') return todosOsIntents;
+  return todosOsIntents.filter((i) => i !== 'product_view');
+}
+
+// Limite real de produtos por motor+modo — mesma fonte que a V1 já lê (`catalog.multiProductRules`,
+// espelho de MULTI_PRODUCT_RULES do core). `regra` pode ser undefined (motor sem multipeça
+// cadastrada no catálogo) — nunca inventa um intervalo.
+export function limiteDeProdutos(productMode, regra) {
+  if (productMode === 'single_product') return { min: 1, max: 1 };
+  return { min: regra?.min ?? 2, max: regra?.max ?? 6 };
+}
+
+// Campos que o backend aceita de volta num `subjects[i]` (requests.js::SUBJECT_KEYS) — whitelist
+// espelhada aqui de propósito: `planSummary()` devolve campos A MAIS só para EXIBIÇÃO (ex.:
+// `product_name`) que o backend rejeita com "campo desconhecido" se voltarem no request. Nunca
+// espalhar (`...s`) o objeto da prévia inteiro — só os campos que o backend realmente aceita.
+const CAMPOS_SUBJECT_ACEITOS = ['id', 'role', 'persona', 'age_band', 'relation_to_primary', 'relation_label', 'wears_product_id', 'prominence'];
+
+// "Quem veste o quê": aplica as edições humanas (subjectId -> wears_product_id | null) SOBRE os
+// `subjects` que a prévia real devolveu — nunca reconstrói persona/role/relation do zero (isso viria
+// do próprio plano, opaco). Sem NENHUMA edição, devolve `undefined` (o request não deve carregar
+// `subjects` nenhum — o core decide sozinho, exatamente como no clique de 1 passo). Uma vez que há
+// QUALQUER edição, TODAS as linhas voltam explícitas (nunca um mix "algumas explícitas, outras
+// implícitas" que poderia ficar ambíguo de novo).
+export function subjectsComOverride(subjectsDaPrevia, overrides) {
+  if (!overrides || !Object.keys(overrides).length || !Array.isArray(subjectsDaPrevia) || !subjectsDaPrevia.length) {
+    return undefined;
+  }
+  return subjectsDaPrevia.map((s) => {
+    const limpo = {};
+    for (const campo of CAMPOS_SUBJECT_ACEITOS) {
+      if (campo === 'wears_product_id') continue; // tratado abaixo — é o único campo em que `null` é um valor válido
+      // Achado real do smoke visual G.2 (2ª rodada): ao contrário de `wears_product_id`, o contrato do
+      // core (`contracts.py::RequestSubject`) NÃO marca `relation_to_primary`/`relation_label`/`age_band`
+      // como `nullable` — o campo deve ficar AUSENTE quando não se aplica, nunca `null` explícito
+      // ("must not be null"). `planSummary()` pode devolver esses campos como `null` (vindos do próprio
+      // plano); nunca repassar esse `null` — omitir o campo em vez de copiá-lo.
+      if (Object.prototype.hasOwnProperty.call(s, campo) && s[campo] !== null && s[campo] !== undefined) {
+        limpo[campo] = s[campo];
+      }
+    }
+    limpo.wears_product_id = Object.prototype.hasOwnProperty.call(overrides, s.id) ? overrides[s.id] : (s.wears_product_id ?? null);
+    return limpo;
+  });
+}
+
+// Estado de "quem veste o quê" a preservar ao trocar de motor: nenhum — a atribuição de peças é
+// específica da CENA que o motor anterior calculou (layout, people_needed); o motor novo recalcula a
+// sua própria a partir do zero (mesma regra de `textoAoTrocarDeMotor`, mesmo motivo).
+export function overridesAoTrocarDeMotor() {
+  return {};
+}

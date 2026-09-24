@@ -15,6 +15,7 @@ import {
   RadioCardGroup,
   Select,
   StatusBadge,
+  Switch,
   Textarea,
 } from '../../components/ds';
 import {
@@ -28,6 +29,7 @@ import {
   type AngleFamily,
   type AngleFamilyId,
   type AnglesResponse,
+  type CenaPessoa,
   type CopiaDados,
   type CriativosStatus,
   type Catalog,
@@ -37,24 +39,30 @@ import {
   type JobInput,
   type PlanSummary,
   type Product,
+  type ProductMode,
   type ProfileRow,
   type RemarketingIntent,
 } from '../../api/criativos';
 import { plural } from '../../lib/format';
 import { ENGINE_LABEL, FUNNEL_STAGE_LABEL, INTENT_DESCRICAO, INTENT_LABEL, type TextoMotor } from './criativosMotores';
-import { CHAVES_FUNIL, CHAVES_REMARKETING, funnelOptions, lista_de, remarketingOptions, restoDe, texto_de, TEXTO_MOTOR_VAZIO } from './criativosMotorInput.mjs';
+import {
+  CHAVES_FUNIL, CHAVES_REMARKETING, funnelOptions, intentsDisponiveis, limiteDeProdutos, lista_de, overridesAoTrocarDeMotor,
+  remarketingOptions, restoDe, subjectsComOverride, texto_de, TEXTO_MOTOR_VAZIO,
+} from './criativosMotorInput.mjs';
 
 // Fase E — UI V2 do gerador (Ângulos Limpos, produto único): "backend rico, planner inteligente, UI simples".
 // A tela inicial não expõe age_band, pose_risk, semantic_context, ids de relation, provenance, compiler,
 // política de menores nem JSON bruto — isso continua só no backend. Contexto/pessoas/olhar entram em
-// "Personalizar cena"; o resto é poucas decisões: motor → produto → objetivo (Remarketing/Funil) →
+// "Personalizar cena"; o resto é poucas decisões: motor → produto(s) → objetivo (Remarketing/Funil) →
 // recomendação real do motor → Gerar assim, ou ajustar.
 //
 // Fase G.1 — Remarketing e Funil por Criativo entram na MESMA experiência (este arquivo), não mais só
-// em GerarTab.tsx (V1). Ângulos Limpos continua exatamente como era: produto único, sem objetivo, sem
-// texto na arte. V1 não foi tocada — quem não tem a flag `uiV2` continua vendo o formulário antigo, com
-// os três motores, como sempre. Multipeça fica fora desta rodada (G.2): esta tela é sempre
-// `product_mode: "single_product"`.
+// em GerarTab.tsx (V1). V1 não foi tocada — quem não tem a flag `uiV2` continua vendo o formulário
+// antigo, com os três motores, como sempre.
+//
+// Fase G.2 — Multipeça: mesmo fluxo, mais de um produto. A atribuição de "quem veste o quê" é SEMPRE a
+// que o motor calculou de verdade (nunca inventada aqui) — "Quem veste o quê" em Personalizar só deixa
+// AJUSTAR a atribuição real, pré-preenchida com ela, nunca começa em branco.
 
 // ------------------------------------------------------------------ traduções (nunca a tela "entende", só rotula códigos que o motor já devolve)
 const RAZAO_LABEL: Record<string, string> = {
@@ -98,6 +106,7 @@ function CardSugestao({ rec, familias, interactions, preview, ocupado, onGerarAs
   const razao = rec ? textoRazao(rec.reason, interactions) : '';
   const geral = !rec || rec.source !== 'planner_default' || rec.reason.length === 0;
   const overlay = resumoOverlay(preview.overlay);
+  const subjects = preview.subjects || [];
   return (
     <Card title="Sugestão para esta estampa">
       {familia && (
@@ -110,6 +119,13 @@ function CardSugestao({ rec, familias, interactions, preview, ocupado, onGerarAs
         <p className="criativos-v2__sugestao-nota">
           <strong>Texto na arte:</strong> {overlay}
         </p>
+      )}
+      {subjects.length >= 2 && (
+        <ul className="criativos-copia__lista">
+          {subjects.map((s) => (
+            <li key={String(s.id)}>{String(s.persona?.label || 'Pessoa')} veste {s.product_name ? <strong>{String(s.product_name)}</strong> : 'nenhuma peça (apoio)'}</li>
+          ))}
+        </ul>
       )}
       {geral && <p className="criativos-v2__sugestao-nota">Sugestão geral — cadastre o significado da estampa para uma recomendação mais precisa.</p>}
       {preview.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.warnings.join(', ')}</Callout>}
@@ -157,7 +173,8 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
   const [cargaErro, setCargaErro] = useState('');
 
   const [engine, setEngine] = useState<Engine | null>(motoresDisponiveis.length === 1 ? motoresDisponiveis[0] : null);
-  const [productId, setProductId] = useState<string | null>(null);
+  const [productMode, setProductMode] = useState<ProductMode>('single_product');
+  const [productIds, setProductIds] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ total: number; first: PlanSummary } | null>(null);
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -178,6 +195,14 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
   const [stage, setStage] = useState<FunnelStage>('TOFU');
   const [texto, setTexto] = useState<TextoMotor>(TEXTO_MOTOR_VAZIO);
   const [extras, setExtras] = useState<{ remarketing?: Record<string, unknown>; funnel?: Record<string, unknown> }>({});
+  // G.2 — "quem veste o quê": vazio = nenhuma edição humana, o request não carrega `subjects`
+  // nenhum (o core decide sozinho). Chave = `subject.id` da prévia mais recente; valor = o
+  // `wears_product_id` escolhido (string) ou `null` para "sem peça — apoio".
+  const [overridesElenco, setOverridesElenco] = useState<Record<string, string | null>>({});
+  // G.2 — `cart`/`checkout` multipeça exigem `products_source:"basket"` no core (REMARKETING_BASKET_
+  // INTENTS): "vários produtos avulsos" e "o carrinho/pedido real do cliente" são coisas diferentes
+  // para o motor. Mesma pergunta que a V1 já faz, mesmo texto.
+  const [cesta, setCesta] = useState(false);
 
   const [origem, setOrigem] = useState<CopiaDados | null>(null);
   const [criar, setCriar] = useState<CriarAnguloState>(ESTADO_CRIAR_ANGULO_INICIAL);
@@ -196,7 +221,8 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     const f = copia.form;
     setOrigem(copia);
     setEngine(f.engine ?? null);
-    setProductId((f.product_ids || [])[0] || null);
+    setProductMode(f.product_mode ?? 'single_product');
+    setProductIds(f.product_ids || []);
     if (f.custom_angle_replay_of) setEscolha({ tipo: 'custom', id: f.custom_angle_replay_of });
     setPlacements(f.placements || ['FEED_4X5']);
     setInteraction(f.interaction || '');
@@ -226,13 +252,19 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
 
   const anguloEscolhido = escolha.tipo === 'custom' ? [...(angulos?.organization || []), ...(angulos?.store || [])].find((a) => a.id === escolha.id) : null;
 
+  // G.2 — mesma fonte que a V1 já lê para o limite real de multipeça por motor (`catalog.multiProductRules`,
+  // espelho de `MULTI_PRODUCT_RULES` do core — nunca um número inventado na tela).
+  const regraMultipeça = engine ? catalog.multiProductRules[engine] : undefined;
+  const multiPermitido = status.flags.creative_multi_product && Boolean(regraMultipeça?.enabled);
+  const limiteProdutos = limiteDeProdutos(productMode, regraMultipeça);
+
   // A MESMA função monta tanto o request de geração quanto o de prévia — "a prévia reflete exatamente o
   // request que será enviado a /jobs" (G.1 §2) deixa de ser uma promessa e vira estruturalmente verdade:
   // não existem dois caminhos que podem divergir.
   function montarInput(): JobInput | null {
-    if (!engine || !productId || !brandInput) return null;
+    if (!engine || !productIds.length || productIds.length < limiteProdutos.min || productIds.length > limiteProdutos.max || !brandInput) return null;
     const base: JobInput = {
-      engine, product_mode: 'single_product', product_ids: [productId],
+      engine, product_mode: productMode, product_ids: productIds,
       angle_ids: ['auto'], placements, quantity, quality: 'medium', brand: brandInput,
       persona: { mode: personaMode }, context: { mode: contextMode === 'geographic' ? 'geographic' : contextMode },
       copy: { generate: false },
@@ -243,12 +275,20 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     if (escolha.tipo === 'family') base.angle_family_hint = { family: escolha.family, ...(escolha.preset ? { preset: escolha.preset } : {}) };
     else if (escolha.tipo === 'custom') base.custom_angle_id = escolha.id;
     if (engine === 'REMARKETING') {
-      base.remarketing = remarketingOptions(texto, intent, restoDe(extras.remarketing, CHAVES_REMARKETING));
+      base.remarketing = remarketingOptions(texto, intent, {
+        ...restoDe(extras.remarketing, CHAVES_REMARKETING),
+        ...(productMode === 'multi_product' && (intent === 'cart' || intent === 'checkout') && cesta ? { products_source: 'basket' } : {}),
+      });
     }
     if (engine === 'FUNNEL_VISUAL') {
       base.funnel_stage = stage;
       base.funnel = funnelOptions(texto, stage, restoDe(extras.funnel, CHAVES_FUNIL));
     }
+    // "Quem veste o quê" (G.2): só entra no request se o lojista de fato editou alguma linha — sem
+    // edição, o core decide sozinho a mesma atribuição que a prévia já mostrou (nunca uma segunda
+    // fonte de verdade). Baseado nos `subjects` da ÚLTIMA prévia real, nunca reconstruído à mão.
+    const subjects = subjectsComOverride(preview?.first.subjects, overridesElenco);
+    if (subjects) base.subjects = subjects as CenaPessoa[];
     return base;
   }
 
@@ -281,7 +321,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     }, 350);
     return () => { ignorar = true; clearTimeout(temporizador); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, productId, brandInput, escolha, interaction, personaMode, contextMode, geo, gazeMode, placements, quantity, intent, stage, texto, origem]);
+  }, [engine, productMode, productIds, brandInput, escolha, interaction, personaMode, contextMode, geo, gazeMode, placements, quantity, intent, stage, texto, overridesElenco, cesta, origem]);
 
   function gerar() {
     const input = montarInput();
@@ -313,10 +353,41 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     setStage('TOFU');
     setTexto(TEXTO_MOTOR_VAZIO);
     setExtras({});
+    setOverridesElenco(overridesAoTrocarDeMotor());
+    setCesta(false);
     setOrigem(null);
     setPreview(null);
     setErro('');
     if (novo === 'CLEAN_ANGLES') setPersonalizar(false);
+  }
+
+  // G.2 — trocar a quantidade de produtos (Um produto/Multipeça) ou a própria seleção de produtos
+  // invalida qualquer atribuição de "quem veste o quê" já feita: a cena muda de verdade (people_needed
+  // pode mudar, os ids `s1`/`s2`... passam a significar outra pessoa). Nunca carrega uma edição antiga
+  // para uma cena diferente em silêncio.
+  function escolherModoProduto(modo: ProductMode) {
+    setProductMode(modo);
+    setProductIds([]);
+    setOverridesElenco({});
+    setCesta(false);
+    setPersonalizar(false);
+    setEscolha({ tipo: 'auto' });
+    setOrigem(null);
+    // `product_view` é só-produto-único no core (MULTI_PRODUCT_RULES.REMARKETING.singleOnlyIntents) —
+    // se o lojista já tinha esse intent escolhido e muda para multipeça, ele deixa de ser uma opção
+    // válida; volta ao padrão em vez de deixar o card selecionado sumir sem explicação.
+    if (modo === 'multi_product' && intent === 'product_view') setIntent('site_visitor');
+  }
+
+  function alternarProduto(id: string) {
+    setOverridesElenco({});
+    setOrigem(null);
+    if (productMode === 'single_product') { setProductIds([id]); setPersonalizar(false); setEscolha({ tipo: 'auto' }); return; }
+    setProductIds((atual) => {
+      if (atual.includes(id)) return atual.filter((v) => v !== id);
+      if (atual.length >= limiteProdutos.max) return atual;
+      return [...atual, id];
+    });
   }
 
   async function salvarAngulo() {
@@ -345,8 +416,13 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
   if (cargaErro) return <Callout tone="danger" title="Não foi possível carregar os cadastros">{cargaErro}</Callout>;
 
   const outrosAngulos = [...(angulos?.organization || []), ...(angulos?.store || [])].filter((a) => a.active);
-  const pronto = Boolean(engine && productId && brandInput);
+  const pronto = Boolean(engine && productIds.length >= limiteProdutos.min && productIds.length <= limiteProdutos.max && brandInput);
   const rec = preview?.first.angle_recommendation ?? null;
+  const intentsMotor = intentsDisponiveis(catalog.catalog.remarketing_intents, productMode) as RemarketingIntent[];
+  // G.2 — "quem veste o quê" só faz sentido com mais de 1 pessoa na cena; com 0 ou 1, não há nada a
+  // atribuir (produto único sempre foi assim; com uma família sem pessoa, `subjects` vem vazio).
+  const subjectsDaPrevia = preview?.first.subjects || [];
+  const produtosSelecionados = produtos.filter((p) => productIds.includes(p.id));
 
   return (
     <div className="criativos-layout">
@@ -364,17 +440,34 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
 
         <FormSection title={motoresDisponiveis.length > 1 ? '2. Produto' : '1. Produto'}>
           {produtos.length === 0 && <Callout tone="info">Cadastre produtos na aba Produtos.</Callout>}
-          <div role="radiogroup" aria-label="Produto" className="criativos-lista-check">
+          {multiPermitido && (
+            <RadioCardGroup<ProductMode>
+              name="product_mode" legend="Quantidade de produtos" hideLegend columns={2}
+              value={productMode}
+              onChange={escolherModoProduto}
+              options={[
+                { value: 'single_product', title: 'Um produto' },
+                { value: 'multi_product', title: 'Multipeça', description: `${limiteDeProdutos('multi_product', regraMultipeça).min} a ${limiteDeProdutos('multi_product', regraMultipeça).max} produtos` },
+              ]}
+            />
+          )}
+          <div role={productMode === 'single_product' ? 'radiogroup' : 'group'} aria-label="Produto" className="criativos-lista-check">
             {produtos.map((p) => (
               <Checkbox
                 key={p.id}
                 label={`${p.name} (${p.type})`}
                 description={plural(p.references.length, 'imagem de referência', 'imagens de referência')}
-                checked={productId === p.id}
-                onChange={() => { setProductId(p.id); setPersonalizar(false); setEscolha({ tipo: 'auto' }); setOrigem(null); }}
+                checked={productIds.includes(p.id)}
+                disabled={productMode === 'multi_product' && !productIds.includes(p.id) && productIds.length >= limiteProdutos.max}
+                onChange={() => alternarProduto(p.id)}
               />
             ))}
           </div>
+          {productMode === 'multi_product' && (
+            <p className="criativos-v2__sugestao-nota">
+              {productIds.length} de {limiteProdutos.min} a {limiteProdutos.max} produtos escolhidos.
+            </p>
+          )}
           {!brandInput && produtos.length > 0 && <Callout tone="warning" title="Nenhum Brand Kit disponível">Cadastre um Brand Kit em "Marca e nicho" antes de gerar.</Callout>}
         </FormSection>
 
@@ -393,8 +486,11 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               name="intent" legend="Intenção de remarketing" hideLegend columns={1}
               value={intent}
               onChange={(v) => { setIntent(v); setPersonalizar(false); }}
-              options={catalog.catalog.remarketing_intents.map((i) => ({ value: i, title: INTENT_LABEL[i], description: INTENT_DESCRICAO[i] }))}
+              options={intentsMotor.map((i) => ({ value: i, title: INTENT_LABEL[i], description: INTENT_DESCRICAO[i] }))}
             />
+            {productMode === 'multi_product' && (intent === 'cart' || intent === 'checkout') && (
+              <Switch checked={cesta} onChange={setCesta} label="Estes produtos são o carrinho/pedido real do cliente" />
+            )}
           </FormSection>
         )}
         {pronto && engine === 'FUNNEL_VISUAL' && !origem && (
@@ -476,6 +572,30 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               </FormSection>
             )}
 
+            {subjectsDaPrevia.length >= 2 && (
+              <FormSection title="Quem veste o quê" description="Pré-preenchido com a atribuição real do motor. Só muda no request se você editar alguma linha aqui.">
+                <div className="criativos-lista-check">
+                  {subjectsDaPrevia.map((s) => {
+                    const idSujeito = String(s.id);
+                    const atual = Object.prototype.hasOwnProperty.call(overridesElenco, idSujeito)
+                      ? overridesElenco[idSujeito]
+                      : (s.wears_product_id ?? null);
+                    return (
+                      <Field key={idSujeito} label={String(s.persona?.label || 'Pessoa')}>
+                        <Select
+                          value={atual ?? ''}
+                          onChange={(e) => setOverridesElenco((o) => ({ ...o, [idSujeito]: e.target.value || null }))}
+                        >
+                          <option value="">Sem peça — apoio</option>
+                          {produtosSelecionados.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </Select>
+                      </Field>
+                    );
+                  })}
+                </div>
+              </FormSection>
+            )}
+
             <FormSection title="Personalizar cena">
               <FormGrid>
                 <Field label="Interação" optional>
@@ -538,6 +658,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
           {!preview && !rec && <p>Escolha um produto{engine !== 'CLEAN_ANGLES' ? ' e um objetivo' : ''} para ver a recomendação.</p>}
           {preview && (
             <dl className="criativos-resumo">
+              <dt>Produtos</dt><dd>{productIds.length} · {produtosSelecionados.map((p) => p.name).join(', ')}</dd>
               <dt>Ângulo</dt><dd>{preview.first.angle?.label}</dd>
               {rec?.family && <><dt>Família</dt><dd>{familias.find((f) => f.id === rec.family)?.label || rec.family}</dd></>}
               {anguloEscolhido && <><dt>Ângulo personalizado</dt><dd>{anguloEscolhido.name} (v{anguloEscolhido.version})</dd></>}
@@ -546,7 +667,20 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               {preview.first.layout && (<><dt>Layout</dt><dd>{preview.first.layout}</dd></>)}
               <dt>Formato</dt><dd>{preview.first.placement}</dd>
               <dt>Cena</dt><dd>{preview.first.scene} <StatusBadge tone="info" label={preview.first.context_provider} /></dd>
-              <dt>Persona</dt><dd>{preview.first.persona || '—'}</dd>
+              {subjectsDaPrevia.length >= 2 ? (
+                <>
+                  <dt>Quem veste o quê</dt>
+                  <dd>
+                    <ul className="criativos-copia__lista">
+                      {subjectsDaPrevia.map((s) => (
+                        <li key={String(s.id)}>{String(s.persona?.label || 'Pessoa')} veste {s.product_name ? <strong>{String(s.product_name)}</strong> : 'nenhuma peça (apoio)'}</li>
+                      ))}
+                    </ul>
+                  </dd>
+                </>
+              ) : (
+                <><dt>Persona</dt><dd>{preview.first.persona || '—'}</dd></>
+              )}
               <dt>Texto na imagem</dt><dd>{resumoOverlay(preview.first.overlay) || 'nenhum (imagem limpa)'}</dd>
               <dt>Quantidade</dt><dd>{preview.total}</dd>
             </dl>

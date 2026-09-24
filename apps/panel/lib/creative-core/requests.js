@@ -370,6 +370,24 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, pla
 }
 
 // Resumo seguro do plano para UI/histórico: nunca inclui o texto do prompt (conteúdo interno do produto).
+// Fase G.2 — "quem veste o quê", só leitura do que o plano JÁ calculou (planner_v2.py::build,
+// campo `fields.subjects`) — nenhuma capacidade nova do core, só um resumo seguro de um array que
+// o core sempre devolveu e o painel nunca expôs. Formato compatível com `CenaPessoa` (mesmo tipo já
+// usado por "Copiar dados"): um objeto assim pode voltar, sem alteração, dentro de `subjects` de um
+// novo /jobs — nunca reconstruído campo a campo pela tela. `product_name` é só para exibição (nunca
+// volta no request); `persona` é o objeto opaco do próprio plano — a tela não abre ele, só reenvia.
+function subjectsSummary(plan) {
+  if (!Array.isArray(plan.subjects) || !plan.subjects.length) return [];
+  const produtos = new Map((plan.products || []).map((p) => [p.id, p]));
+  return plan.subjects.map((s) => ({
+    id: s.id, role: s.role, persona: s.persona || { label: s.label || 'uma pessoa' },
+    age_band: s.age_band, relation_to_primary: s.relation_to_primary, relation_label: s.relation_label,
+    wears_product_id: s.product_id || null,
+    product_name: s.product_id ? ((produtos.get(s.product_id) || {}).name || null) : null,
+    prominence: s.prominence,
+  }));
+}
+
 function planSummary(plan) {
   return {
     plan_id: plan.plan_id,
@@ -378,6 +396,7 @@ function planSummary(plan) {
     angle: plan.angle && { id: plan.angle.id, label: plan.angle.label },
     placement: plan.placement && plan.placement.id,
     persona: plan.persona ? plan.persona.label : null,
+    subjects: subjectsSummary(plan),
     scene: plan.context && plan.context.scene,
     context_id: plan.context && plan.context.context_id,
     context_provider: plan.context && plan.context.provider,
