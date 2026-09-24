@@ -527,7 +527,17 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
             : preview ? (
               <CardSugestao rec={rec} familias={familias} interactions={interactions} preview={preview.first} ocupado={ocupado}
                 onGerarAssim={gerar} onPersonalizar={() => { if (rec?.family) setEscolha({ tipo: 'family', family: rec.family }); setPersonalizar(true); }} />
-            ) : erro ? <Callout tone="danger" title="Não foi possível calcular a recomendação">{erro}</Callout> : null
+            ) : erro ? (
+              // Achado real de uso: a recomendação automática (sem família escolhida) pode ser incompatível
+              // com o Brand Kit (ex.: `enabledAngles` restrito, escolhido sem olhar a marca) mesmo quando
+              // outra família manual funcionaria perfeitamente — antes disso travava aqui sem saída.
+              <Card title="Não foi possível calcular a recomendação">
+                <p>{erro}</p>
+                <FormActions>
+                  <Button variant="secondary" onClick={() => setPersonalizar(true)}>Escolher o estilo manualmente</Button>
+                </FormActions>
+              </Card>
+            ) : null
         )}
 
         {pronto && (personalizar || origem) && (
