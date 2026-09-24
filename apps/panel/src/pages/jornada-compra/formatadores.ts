@@ -67,11 +67,13 @@ export function formatarEvidencia(op: Opportunity): string {
   }
 }
 
-export const CONFIANCA_LABEL: Record<Opportunity['confidence'], string> = {
-  alta: 'Confiança alta',
-  media: 'Confiança média',
-  baixa: 'Confiança baixa',
+// Rodada "Jornada de Valor Operacional" (Gate C) · NUNCA "Confiança alta/média/baixa" — soa como
+// confiança estatística calibrada que este motor não tem (mediana + limiar de amostra, nunca um
+// modelo). Rótulo objetivo sobre volume de evidência, não sobre certeza do diagnóstico.
+export const EVIDENCIA_LABEL: Record<Opportunity['evidenceStrength'], string> = {
+  suficiente: 'Evidência suficiente',
+  limitada: 'Evidência limitada',
 };
-export function confiancaTone(c: Opportunity['confidence']): Tone {
-  return c === 'alta' ? 'success' : c === 'media' ? 'info' : 'neutral';
+export function evidenciaTone(e: Opportunity['evidenceStrength']): Tone {
+  return e === 'suficiente' ? 'info' : 'neutral';
 }

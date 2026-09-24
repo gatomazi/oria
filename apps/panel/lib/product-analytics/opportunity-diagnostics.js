@@ -74,6 +74,15 @@ function confiabilidade(volume, minimo) {
   return Math.max(0, Math.min(1, (volume - minimo) / (minimo * 2)));
 }
 
+// Rodada "Jornada de Valor Operacional" (Gate C) · rótulo público — nunca "confiança alta/média/
+// baixa" (§ comando: isso soa como confiança ESTATÍSTICA CALIBRADA, que este motor não tem — é
+// mediana + limiar de amostra, nunca um modelo calibrado). Binário e objetivo: 'suficiente' a partir
+// do DOBRO da amostra mínima do próprio sinal, 'limitada' entre o mínimo e o dobro — nunca abaixo do
+// mínimo (esses candidatos já foram descartados antes de chegar aqui).
+function forcaDaEvidencia(volume, minimo) {
+  return volume >= minimo * 2 ? 'suficiente' : 'limitada';
+}
+
 // ── Full-store pagination do ProductPerformanceService (mesmo padrão de reconciliation.js
 // `agregarAnalyticsCompleto` — nunca uma chamada de analytics por página: o ReportCache faz o
 // relatório ser 1 chamada real ao provider, reusada por todas as páginas deste loop). Duplicado
@@ -124,7 +133,7 @@ function gerarSinalDeRazao({ items, campo, denominadorCampo, tipo, minimo, desvi
       },
       hypothesis: hipotese,
       suggestedAction: acao,
-      confidence: confiabilidade(volume, minimo) >= 0.66 ? 'alta' : confiabilidade(volume, minimo) >= 0.33 ? 'media' : 'baixa',
+      evidenceStrength: forcaDaEvidencia(volume, minimo),
       score: volume * desvio * (0.4 + 0.6 * confiabilidade(volume, minimo)), // confiabilidade nunca zera o score: mesmo no limiar mínimo já é candidato real
     });
   }
@@ -156,7 +165,7 @@ function gerarSinalDeCheckoutParaCompra({ items, minimo, desvioMinimo, hipotese,
       },
       hypothesis: hipotese,
       suggestedAction: acao,
-      confidence: confiabilidade(volume, minimo) >= 0.66 ? 'alta' : confiabilidade(volume, minimo) >= 0.33 ? 'media' : 'baixa',
+      evidenceStrength: forcaDaEvidencia(volume, minimo),
       score: volume * desvio * (0.4 + 0.6 * confiabilidade(volume, minimo)),
     });
   }
@@ -181,7 +190,7 @@ function gerarSinalDeDivergencia({ reconciliation, minimo }) {
       },
       hypothesis: 'Pode existir divergência operacional ou de tracking entre o que o GA4 observou como compra e o que o Commerce confirmou como pago.',
       suggestedAction: 'Conferir IDs de transação, datas (createdAt vs. paidAt), estornos e possível duplicação de evento de purchase.',
-      confidence: item.commerceUnits >= minimo * 3 ? 'alta' : item.commerceUnits >= minimo * 2 ? 'media' : 'baixa',
+      evidenceStrength: forcaDaEvidencia(item.commerceUnits, minimo),
       score: item.commerceUnits * deltaRate,
     });
   }
@@ -205,7 +214,7 @@ function gerarSinalDeCoberturaBaixa({ coverage, minimoObservados, coberturaMinim
     },
     hypothesis: 'Uma parte relevante do que o GA4 observou não tem produto canônico correspondente — decisões por produto ficam incompletas para esses itens.',
     suggestedAction: 'Conferir se o catálogo (commerce_products) está sincronizado e revisar a identidade dos itemIds sem match.',
-    confidence: coverage.coverageRate < coberturaMinima / 2 ? 'alta' : 'media',
+    evidenceStrength: forcaDaEvidencia(coverage.observedAnalyticsIds, minimoObservados),
     score: coverage.unmatchedAnalyticsIds,
   }];
 }

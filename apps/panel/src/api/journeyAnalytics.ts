@@ -185,7 +185,11 @@ export interface Opportunity {
   evidence: Record<string, number>;
   hypothesis: string;
   suggestedAction: string;
-  confidence: 'baixa' | 'media' | 'alta';
+  // Rodada "Jornada de Valor Operacional" (Gate C) · NUNCA "confidence"/estatística calibrada — é
+  // mediana da Store + limiar de amostra, nunca um modelo. 'suficiente' a partir do dobro da amostra
+  // mínima do próprio sinal; 'limitada' entre o mínimo e o dobro (ainda um candidato real, só com
+  // menos volume por trás).
+  evidenceStrength: 'limitada' | 'suficiente';
   score: number;
 }
 

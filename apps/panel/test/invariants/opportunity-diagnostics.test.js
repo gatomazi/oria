@@ -49,13 +49,21 @@ function coberturaOk({ observed, matched }) {
   };
 }
 
-// `itemsPorPagina`: 1 array só = 1 página só (a paginação em si já é coberta pelo padrão idêntico
-// em reconciliation.test.js — aqui o alvo é a matemática, não o loop de cursor).
+// Pagina de verdade por `pagination.limit`/`pagination.cursor` (cursor = número da próxima página,
+// como string — mesma convenção de catalog-sync.js/reconciliation.js) pra exercitar o loop
+// `while (cursor)` de opportunity-diagnostics.js#paginarDesempenhoCompleto de ponta a ponta — um
+// candidato fora da 1ª página só prova "universo elegível inteiro, nunca só a 1ª página" se a
+// paginação for real.
 function fakeProductPerformanceService({ items = [], coverage = coberturaOk({ observed: 0, matched: 0 }), erro = null } = {}) {
   return {
-    async getProductPerformance() {
+    async getProductPerformance({ pagination = {} } = {}) {
       if (erro) throw erro;
-      return { items, nextCursor: null, totalCount: items.length, coverage };
+      const limite = pagination.limit || items.length || 1;
+      const pagina = pagination.cursor ? Number(pagination.cursor) : 1;
+      const inicio = (pagina - 1) * limite;
+      const fatia = items.slice(inicio, inicio + limite);
+      const nextCursor = inicio + fatia.length < items.length ? String(pagina + 1) : null;
+      return { items: fatia, nextCursor, totalCount: items.length, coverage };
     },
   };
 }
@@ -295,6 +303,42 @@ test('C · limite (Prioridades de hoje é curto de propósito): corta em `limit`
   assert.equal(r.opportunities.length, 3);
   assert.equal(r.totalCandidates, 5); // todos os 5 "ruins" passam no critério — só a APRESENTAÇÃO corta em 3
   assert.equal(r.config.limit, 3);
+});
+
+test('C · Gate C (rodada "Jornada de Valor Operacional"): rótulo é evidenceStrength suficiente/limitada — NUNCA "confidence"/"confiança alta/média/baixa" (soaria como confiança estatística calibrada que este motor não tem)', async () => {
+  const items = [
+    linha('base1', { itemsViewed: 100, itemsAddedToCart: 20 }),
+    linha('base2', { itemsViewed: 100, itemsAddedToCart: 20 }),
+    linha('base3', { itemsViewed: 100, itemsAddedToCart: 20 }),
+    // No limiar mínimo exato (30) — evidência LIMITADA.
+    linha('no-limiar', { itemsViewed: 30, itemsAddedToCart: 0 }),
+    // Bem acima do dobro do mínimo (60) — evidência SUFICIENTE.
+    linha('bem-acima', { itemsViewed: 5000, itemsAddedToCart: 1 }),
+  ];
+  const pps = fakeProductPerformanceService({ items, coverage: coberturaOk({ observed: 5, matched: 5 }) });
+  const r = await servico({ pps }).getOpportunities(PERIODO);
+  for (const o of r.opportunities) {
+    assert.equal('confidence' in o, false, 'campo "confidence" não pode existir — usar evidenceStrength');
+    assert.ok(['suficiente', 'limitada'].includes(o.evidenceStrength), `evidenceStrength inválido: ${o.evidenceStrength}`);
+  }
+  const noLimiar = r.opportunities.find((o) => o.product?.id === 'no-limiar');
+  const bemAcima = r.opportunities.find((o) => o.product?.id === 'bem-acima');
+  assert.equal(noLimiar.evidenceStrength, 'limitada');
+  assert.equal(bemAcima.evidenceStrength, 'suficiente');
+});
+
+test('C · Gate C: ranking encontra a oportunidade forte mesmo com o candidato fora da "primeira página" (catálogo de 250 produtos, paginado internamente em fatias de 200 pelo próprio motor)', async () => {
+  // 249 produtos "normais" (ratio de baseline saudável) + 1 forte candidato — o candidato é o
+  // PRODUTO 250 (fora da 1ª página de 200 que o motor usa internamente pra paginar
+  // productPerformanceService.getProductPerformance). O universo de comparação/ranking tem que ser
+  // o conjunto elegível INTEIRO, nunca só a primeira página interna.
+  const base = Array.from({ length: 249 }, (_, i) => linha(`base${i}`, { itemsViewed: 100, itemsAddedToCart: 20 }));
+  const forte = linha('produto-250-fora-da-pagina', { itemsViewed: 10000, itemsAddedToCart: 5 });
+  const items = [...base, forte];
+  const pps = fakeProductPerformanceService({ items, coverage: coberturaOk({ observed: items.length, matched: items.length }) });
+  const r = await servico({ pps }).getOpportunities({ ...PERIODO, limit: 1 });
+  assert.equal(r.opportunities.length, 1);
+  assert.equal(r.opportunities[0].product.id, 'produto-250-fora-da-pagina', 'o sinal mais forte tem que vencer o ranking mesmo vindo depois do 200º item');
 });
 
 test('C · limiares configuráveis (minSamples/minDeviation/minCoverage) — nunca hardcoded, sempre repassados e refletidos em config', async () => {
