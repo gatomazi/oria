@@ -17,3 +17,10 @@ adiados, para não abrir novas microfases de validação. Cada item cita onde fo
   V1/core Python seguem intocados por esta e pelas rodadas anteriores, então o risco de regressão
   real é baixo, mas o gate formal completo continua pendente para antes de um lançamento amplo
   (fora desta conta interna).
+- **`test_enrichment.py`/`test_enrichment_openai.py` (F.2.B.1) rodam sob `run_tests.py` só como "importa
+  sem quebrar"** — o runner chama cada suíte como script solto (`python3 suite.py`) e só olha o exit
+  code; como essas duas são pytest-style puro (sem `run()` no fim, ao contrário de toda outra suíte),
+  suas asserções nunca foram de fato coletadas/executadas por ele, antes ou depois do fix de CI desta
+  rodada (que só resolveu o import quebrado). Rodar de verdade exige `pytest` de fato (coleção), não
+  só o módulo instalado — mudança maior no runner, fora do escopo de um hotfix de CI. (Achado na
+  integração do Gerador V2, ao investigar a primeira falha real de CI do branch.)

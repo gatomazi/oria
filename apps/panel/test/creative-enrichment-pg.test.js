@@ -3,7 +3,8 @@
 // Fase F.1 · Product Enrichment contra um Postgres de verdade: FK composta (product_id, organization_id)
 // protege contra um product_id de outra Organization mesmo passando por cima da RLS (owner), a RLS em si
 // isola entre Organizations, e só uma proposta pendente por produto (índice único parcial). Roda com
-// `node scripts/test-db.mjs run -- ...`.
+// `node scripts/test-db.mjs run -- ...`; com TEST_APP_ROLE=1 o store roda como oria_app (RLS forçada),
+// como no server.js — mesmo padrão de creative-feedback-pg.test.js/creative-angles-pg.test.js.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -15,13 +16,41 @@ const opcoes = { skip: URL_TESTE ? false : 'defina CREATIVE_TEST_DATABASE_URL pa
 const TENANT = 'a1000000-0000-4000-8000-000000000001';
 const OUTRO = 'a1000000-0000-4000-8000-000000000002';
 
+// Mesmo helper de creative-feedback-pg.test.js/creative-angles-pg.test.js/creative-core-pg.test.js:
+// envolve o store para abrir o contexto de tenant (comContexto) a cada chamada, lendo o organizationId
+// do próprio argumento — sem isso, RLS bloqueia toda escrita/leitura sob oria_app (a app real abre esse
+// contexto por request, no middleware; aqui não há request, então a proxy faz esse papel).
+function storeNoContexto(store) {
+  const { comContexto } = require('../lib/platform/tenant-runtime');
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return new Proxy(store, {
+    get(alvo, prop) {
+      const v = alvo[prop];
+      if (typeof v !== 'function') return v;
+      return (...args) => {
+        const organizationId = [args[0], args[1]].find((a) => UUID.test(String(a)));
+        return comContexto({ organizationId, origem: 'teste' }, () => v.apply(alvo, args));
+      };
+    },
+  });
+}
+
 test('creative_enrichment_proposals: FK composta, RLS, uma pendente por produto', opcoes, async () => {
   const { Pool } = require('pg');
   const { createPgStore } = require('../lib/creative-core/pgStore');
+  const { criarPoolTenant } = require('../lib/platform/tenant-runtime');
 
-  const dono = new Pool({ connectionString: URL_TESTE });
+  const modoApp = process.env.TEST_APP_ROLE === '1';
+  // `dono`: sempre a URL com privilégio — seed/limpeza de fixture (organizations/users) e as duas
+  // asserções de violação de constraint abaixo (FK composta, índice único), que testam a CONSTRAINT,
+  // não RLS; rodar essas sob oria_app tropeçaria primeiro na RLS (organizations/creative_products
+  // exigem contexto de tenant) em vez de provar a constraint em si.
+  const dono = new Pool({ connectionString: modoApp ? process.env.TEST_OWNER_DATABASE_URL : URL_TESTE });
+  const poolApp = modoApp ? new Pool({ connectionString: URL_TESTE }) : null;
   try {
-    const store = createPgStore(dono);
+    // `store`: sob app-role, com contexto de tenant aberto por chamada (prova que lib/creative-core
+    // funciona sob oria_app, como no server.js real); sem app-role, o padrão simples de sempre.
+    const store = modoApp ? storeNoContexto(createPgStore(criarPoolTenant(poolApp))) : createPgStore(dono);
     await dono.query(`INSERT INTO organizations (id, nome) VALUES ($1, 'F1 A'), ($2, 'F1 B') ON CONFLICT (id) DO NOTHING`, [TENANT, OUTRO]);
     const { rows: [revisor] } = await dono.query(
       `INSERT INTO users (email, password_hash) VALUES ($1, 'scrypt$1$x') RETURNING id`,
@@ -107,6 +136,7 @@ test('creative_enrichment_proposals: FK composta, RLS, uma pendente por produto'
     await dono.query('DELETE FROM creative_products WHERE organization_id = ANY($1)', [[TENANT, OUTRO]]).catch(() => {});
     await dono.query(`DELETE FROM users WHERE email LIKE 'f1-revisor-%@teste.oria'`).catch(() => {});
     await dono.end();
+    if (poolApp) await poolApp.end();
   }
 });
 
@@ -115,18 +145,27 @@ test('creative_enrichment_proposals: FK composta, RLS, uma pendente por produto'
 // nenhum teste em memória prova isto, porque o event loop do Node já serializa chamadas "concorrentes"
 // dentro do MESMO processo. Aqui, `Promise.all` dispara as reservas em paralelo, cada uma na sua própria
 // conexão do pool, para que a corrida aconteça de fato no banco.
-test('creative_enrichment_pilot_attempts: reserva atômica — 2 requests simultâneos no mesmo produto geram no máximo 1 reserva', opcoes, async () => {
+//
+// `creative_enrichment_pilot_attempts` tem TODO acesso direto revogado de PUBLIC (só as duas funções
+// SECURITY DEFINER — migration 0038/0041 — têm EXECUTE); por isso `reservar`/`finalizar` (que só chamam
+// essas funções) funcionam sob `appRole` mesmo sem contexto de tenant algum, mas o SELECT/UPDATE/DELETE
+// *diretos* que este arquivo usa para inspecionar/limpar o estado interno da reserva precisam da URL
+// dona — nenhum papel de aplicação tem (nem deveria ter) grant nessa tabela.
+function conexoesPiloto() {
   const { Pool } = require('pg');
-  const enrichmentPilotBudget = require('../lib/creative-core/enrichmentPilotBudget');
+  const modoApp = process.env.TEST_APP_ROLE === '1';
+  const appRole = new Pool({ connectionString: URL_TESTE });
+  const dono = modoApp ? new Pool({ connectionString: process.env.TEST_OWNER_DATABASE_URL }) : appRole;
+  return { appRole, dono, q: (sql, params) => appRole.query(sql, params) };
+}
 
-  const dono = new Pool({ connectionString: URL_TESTE });
-  const q = (sql, params) => dono.query(sql, params);
+test('creative_enrichment_pilot_attempts: reserva atômica — 2 requests simultâneos no mesmo produto geram no máximo 1 reserva', opcoes, async () => {
+  const enrichmentPilotBudget = require('../lib/creative-core/enrichmentPilotBudget');
+  const { appRole, dono, q } = conexoesPiloto();
   try {
     await dono.query(`INSERT INTO organizations (id, nome) VALUES ($1, 'F2B A'), ($2, 'F2B B') ON CONFLICT (id) DO NOTHING`, [TENANT, OUTRO]);
     const produto = crypto.randomUUID();
 
-    // Duas "requisições simultâneas" de verdade: disparadas juntas, cada uma resolvida pelo Postgres
-    // (advisory lock + índice único parcial), nunca serializadas pelo processo Node que as chama.
     const [r1, r2] = await Promise.all([
       enrichmentPilotBudget.reservar(q, { organizationId: TENANT, productId: produto, custoEstimadoUsd: 0.001, limiteChamadas: 3, limiteUsd: 0.05 }),
       enrichmentPilotBudget.reservar(q, { organizationId: TENANT, productId: produto, custoEstimadoUsd: 0.001, limiteChamadas: 3, limiteUsd: 0.05 }),
@@ -150,16 +189,14 @@ test('creative_enrichment_pilot_attempts: reserva atômica — 2 requests simult
     assert.equal(terceira.ok, true, 'com a anterior finalizada, uma NOVA tentativa (não automática) é permitida');
   } finally {
     await dono.query('DELETE FROM creative_enrichment_pilot_attempts WHERE organization_id = ANY($1)', [[TENANT, OUTRO]]).catch(() => {});
-    await dono.end();
+    await appRole.end();
+    if (dono !== appRole) await dono.end();
   }
 });
 
 test('creative_enrichment_pilot_attempts: produtos/Organizations diferentes não bloqueiam entre si; orçamento é do piloto inteiro', opcoes, async () => {
-  const { Pool } = require('pg');
   const enrichmentPilotBudget = require('../lib/creative-core/enrichmentPilotBudget');
-
-  const dono = new Pool({ connectionString: URL_TESTE });
-  const q = (sql, params) => dono.query(sql, params);
+  const { appRole, dono, q } = conexoesPiloto();
   try {
     await dono.query(`INSERT INTO organizations (id, nome) VALUES ($1, 'F2B C'), ($2, 'F2B D') ON CONFLICT (id) DO NOTHING`, [TENANT, OUTRO]);
     const produtoA = crypto.randomUUID();
@@ -186,16 +223,14 @@ test('creative_enrichment_pilot_attempts: produtos/Organizations diferentes não
     assert.equal(r4.motivo, 'orcamento_excedido');
   } finally {
     await dono.query('DELETE FROM creative_enrichment_pilot_attempts WHERE organization_id = ANY($1)', [[TENANT, OUTRO]]).catch(() => {});
-    await dono.end();
+    await appRole.end();
+    if (dono !== appRole) await dono.end();
   }
 });
 
 test('creative_enrichment_pilot_attempts: teto de VALOR bloqueia mesmo com chamadas sobrando', opcoes, async () => {
-  const { Pool } = require('pg');
   const enrichmentPilotBudget = require('../lib/creative-core/enrichmentPilotBudget');
-
-  const dono = new Pool({ connectionString: URL_TESTE });
-  const q = (sql, params) => dono.query(sql, params);
+  const { appRole, dono, q } = conexoesPiloto();
   try {
     await dono.query(`INSERT INTO organizations (id, nome) VALUES ($1, 'F2B E') ON CONFLICT (id) DO NOTHING`, [TENANT]);
     const produto1 = crypto.randomUUID();
@@ -208,16 +243,14 @@ test('creative_enrichment_pilot_attempts: teto de VALOR bloqueia mesmo com chama
     assert.equal(r2.motivo, 'orcamento_excedido');
   } finally {
     await dono.query('DELETE FROM creative_enrichment_pilot_attempts WHERE organization_id = $1', [TENANT]).catch(() => {});
-    await dono.end();
+    await appRole.end();
+    if (dono !== appRole) await dono.end();
   }
 });
 
 test('creative_enrichment_pilot_attempts: TTL libera uma reserva travada (crash/timeout) sem devolver o orçamento já contado', opcoes, async () => {
-  const { Pool } = require('pg');
   const enrichmentPilotBudget = require('../lib/creative-core/enrichmentPilotBudget');
-
-  const dono = new Pool({ connectionString: URL_TESTE });
-  const q = (sql, params) => dono.query(sql, params);
+  const { appRole, dono, q } = conexoesPiloto();
   try {
     await dono.query(`INSERT INTO organizations (id, nome) VALUES ($1, 'F2B F') ON CONFLICT (id) DO NOTHING`, [TENANT]);
     const produto = crypto.randomUUID();
@@ -237,6 +270,7 @@ test('creative_enrichment_pilot_attempts: TTL libera uma reserva travada (crash/
     assert.equal(expirada.error_code, 'reservation_expired');
   } finally {
     await dono.query('DELETE FROM creative_enrichment_pilot_attempts WHERE organization_id = $1', [TENANT]).catch(() => {});
-    await dono.end();
+    await appRole.end();
+    if (dono !== appRole) await dono.end();
   }
 });

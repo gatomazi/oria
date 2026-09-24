@@ -8,8 +8,16 @@ timeout, 429, 5xx, resposta vazia, duas referências, limite de custo, concorrê
 from __future__ import annotations
 
 import base64
+import sys
+from pathlib import Path
 
 import pytest
+
+# Mesmo truque de _support.py: este arquivo roda tanto por `pytest` (rootdir cuida disso sozinho)
+# quanto por `run_tests.py` (script solto — precisa do repo do core no sys.path na mão).
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 from creative_core import contracts, enrichment
 from creative_core import model_router as mr

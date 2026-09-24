@@ -404,7 +404,7 @@ test('traceDoResultado normaliza os campos escalares e limita o tamanho dos text
 });
 
 test('migration 0031 (trace) é só acréscimo de coluna em creative_generations', () => {
-  const up = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0031-creative-trace.up.sql'), 'utf8')
+  const up = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0034-creative-trace.up.sql'), 'utf8')
     .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
   assert.doesNotMatch(up, /\b(DROP|DELETE|TRUNCATE|UPDATE|RENAME)\b/i);
   const alters = [...up.matchAll(/ALTER TABLE (\w+)\s+ADD COLUMN IF NOT EXISTS (\w+) (\w+);/g)];
@@ -732,7 +732,7 @@ test('semantic_context gravado no produto viaja no campo tipado do request, fora
 });
 
 test('migration 0032 (plano/compiler) só acrescenta colunas em creative_generations e copia o que o plano já diz', () => {
-  const up = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0032-creative-plan-v2.up.sql'), 'utf8')
+  const up = fs.readFileSync(path.join(__dirname, '..', 'migrations', 'sql', '0035-creative-plan-v2.up.sql'), 'utf8')
     .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
   assert.doesNotMatch(up, /\b(DROP|DELETE|TRUNCATE|RENAME)\b/i);
   const alters = [...up.matchAll(/ALTER TABLE (\w+)\s+ADD COLUMN IF NOT EXISTS (\w+) (\w+);/g)];
