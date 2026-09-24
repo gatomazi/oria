@@ -8,6 +8,7 @@ import {
   type EnrichmentProposal,
   type Product,
 } from '../../api/criativos';
+import { CAMPO_EXCLUSAO, camposNaoVazios, camposPositivos, temExclusaoProposta } from './enrichmentReviewFields.mjs';
 
 // Fase F.1 — Product Enrichment: revisão em poucos segundos (§5). "Sugestão para esta estampa" + Aprovar
 // sugestão / Ajustar / Descartar.
@@ -41,10 +42,6 @@ function confiancaBaixa(confidence: number | null | undefined): boolean {
   return typeof confidence === 'number' && confidence < 0.5;
 }
 
-function camposNaoVazios(proposed: EnrichmentProposal['proposed']): EnrichmentAcceptableField[] {
-  return (Object.keys(CAMPO_LABEL) as EnrichmentAcceptableField[]).filter((c) => Array.isArray(proposed[c]) && (proposed[c] as string[]).length > 0);
-}
-
 export function EnrichmentReviewModal({ product, onClose, onDecided }: { product: Product; onClose: () => void; onDecided: () => void }) {
   const [proposta, setProposta] = useState<EnrichmentProposal | null>(null);
   const [erro, setErro] = useState('');
@@ -57,7 +54,10 @@ export function EnrichmentReviewModal({ product, onClose, onDecided }: { product
     setCarregando(true);
     setErro('');
     proposeEnrichment(product.id)
-      .then((p) => { setProposta(p); setAceitos(new Set(camposNaoVazios(p.proposed))); })
+      // F.2.B.1 §3: o campo de EXCLUSÃO (incompatible_auto_supporting_roles) começa DESMARCADO — o
+      // lojista precisa ver seus valores reais (abaixo, no checkbox) e marcá-lo deliberadamente; os
+      // demais campos (positivos/descritivos) continuam pré-marcados como antes.
+      .then((p) => { setProposta(p); setAceitos(new Set(camposPositivos(p.proposed) as EnrichmentAcceptableField[])); })
       .catch((e: Error) => setErro(e.message))
       .finally(() => setCarregando(false));
   }, [product.id]);
@@ -75,11 +75,11 @@ export function EnrichmentReviewModal({ product, onClose, onDecided }: { product
       .finally(() => setDecidindo(false));
   }
 
-  const camposComValor = proposta ? camposNaoVazios(proposta.proposed) : [];
-  const resumo = proposta && [
-    valores(proposta.proposed.relationship_themes) || valores(proposta.proposed.recommended_supporting_roles),
-    valores(proposta.proposed.scene_intents),
-  ].filter(Boolean).join(' · ');
+  const camposComValor = proposta ? (camposNaoVazios(proposta.proposed) as EnrichmentAcceptableField[]) : [];
+  // F.2.B.1 §3 — a exclusão (incompatible_auto_supporting_roles) NUNCA entra no caminho rápido de
+  // aprovação: só é aplicada através do opt-in explícito no modo Ajustar (ver `aceitos` acima).
+  const camposPositivosLista = proposta ? (camposPositivos(proposta.proposed) as EnrichmentAcceptableField[]) : [];
+  const temExclusao = proposta ? temExclusaoProposta(proposta.proposed) : false;
 
   return (
     <Modal
@@ -95,15 +95,29 @@ export function EnrichmentReviewModal({ product, onClose, onDecided }: { product
       )}
       {proposta && camposComValor.length > 0 && !ajustando && (
         <>
-          <p className="criativos-v2__sugestao">{resumo || 'Sugestão calculada'}</p>
+          {/* F.2.B.1 §3 — TODO campo positivo populado aparece aqui, com seu rótulo E seus valores
+              reais; nada que "Aprovar sugestão" for aplicar fica de fora deste resumo. */}
+          <ul className="criativos-v2__sugestao-campos">
+            {camposPositivosLista.map((campo) => (
+              <li key={campo}><strong>{CAMPO_LABEL[campo]}:</strong> {valores(proposta.proposed[campo] as string[])}</li>
+            ))}
+          </ul>
           <p className="criativos-v2__sugestao-nota">
             {origemLabel(proposta.provider)} — nada foi aplicado ao produto ainda.
           </p>
           {confiancaBaixa(proposta.proposed.confidence) && (
             <Callout tone="warning" title="Confiança baixa">Pouca evidência no produto — revise com atenção antes de aprovar.</Callout>
           )}
+          {temExclusao && (
+            <Callout tone="warning" title={`${CAMPO_LABEL[CAMPO_EXCLUSAO as EnrichmentAcceptableField]} (não aplicado por "Aprovar sugestão")`}>
+              A sugestão marca estes papéis para NÃO recomendar automaticamente: {valores(proposta.proposed.incompatible_auto_supporting_roles)}.
+              Isto não é aplicado pelo clique rápido — use "Ajustar" para revisar e aceitar esta exclusão explicitamente.
+            </Callout>
+          )}
           <FormActions>
-            <Button disabled={decidindo} onClick={() => decidir('approved', camposComValor)}>Aprovar sugestão</Button>
+            {camposPositivosLista.length > 0 && (
+              <Button disabled={decidindo} onClick={() => decidir('approved', camposPositivosLista)}>Aprovar sugestão</Button>
+            )}
             <Button variant="secondary" disabled={decidindo} onClick={() => setAjustando(true)}>Ajustar</Button>
             <Button variant="ghost" disabled={decidindo} onClick={() => decidir('rejected', [])}>Descartar</Button>
           </FormActions>
