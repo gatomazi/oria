@@ -23,6 +23,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
@@ -107,6 +108,7 @@ try {
   if (!store) throw new Error(`informe --store (a Organization tem ${stores.length} Stores)`);
 
   // Mesmo predicado de `escopoDaStore` do painel: Store canônica OU linha legada (sem store_id) da chave legada da Store.
+  const t0 = performance.now();
   const { rows } = await client.query(
     `SELECT loja, ink_order_id, buyer_documento, buyer_telefone, buyer_email, payment_status, order_status, total_value, criado_em, is_troca, frete, descontos, items_count
        FROM pedidos_ink
@@ -120,11 +122,15 @@ try {
   const ultimo = (await client.query(`SELECT status FROM pedidos_backfill_jobs WHERE organization_id = $1 AND ${escopoJob} ORDER BY criado_em DESC LIMIT 1`, [a.organization, store.id, store.loja_legada])).rows[0];
   const concluido = (await client.query(`SELECT MIN(desde) AS desde FROM pedidos_backfill_jobs WHERE organization_id = $1 AND ${escopoJob} AND status = 'concluido'`, [a.organization, store.id, store.loja_legada])).rows[0];
   await client.query('ROLLBACK');
+  const tLeituraMs = performance.now() - t0;
 
+  const t1 = performance.now();
   const relatorio = gerarRelatorio(rows, {
     asOf, chaveDoContexto: store.loja_legada || store.id,
     backfill: { ultimoStatus: ultimo ? ultimo.status : null, concluidoDesde: concluido && concluido.desde ? concluido.desde : null },
   });
+  // Volume e custo medidos NA MÁQUINA de quem executa (subsídio para decidir se snapshot persistido se justifica; não é a carga do servidor).
+  relatorio.metodologia.desempenho = { pedidosLidos: rows.length, compradoresClassificados: relatorio.universo ? relatorio.universo.compradores : null, tempoDeLeituraMs: Math.round(tLeituraMs), tempoDeCalculoMs: Math.round(performance.now() - t1) };
   // Proveniência sem dado pessoal: prefixos curtos dos ids (não identificam clientes).
   relatorio.metodologia.origem = { linhasLidas: rows.length, organizacao: a.organization.slice(0, 8), store: store.id.slice(0, 8), hostConfirmado: host };
   const md = paraMarkdown(relatorio);

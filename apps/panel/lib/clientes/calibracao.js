@@ -417,6 +417,10 @@ function paraMarkdown(r) {
   tabela(['Alternativa', 'Leais atual', 'Leais alt.', 'Campeões atual', 'Campeões alt.', 'Campeões→Leais', 'Leais→Campeões', 'Outros→Leais', 'Leais→outros'],
     r.alternativas.map((a) => [a.nome, a.impactoNosLeais.leaisAtual, a.impactoNosLeais.leaisAlternativa, a.impactoNosLeais.campeoesAtual, a.impactoNosLeais.campeoesAlternativa, a.impactoNosLeais.deCampeoesParaLeais, a.impactoNosLeais.deLeaisParaCampeoes, a.impactoNosLeais.deOutrosParaLeais, a.impactoNosLeais.deLeaisParaOutros]));
   L.push('## 6. Amostras limítrofes (rótulos opacos)', '', '```json', JSON.stringify(r.amostrasLimitrofes), '```', '', '## 7. Conferências', '', '```json', JSON.stringify(r.conferencias), '```', '');
+  if (r.metodologia && r.metodologia.desempenho) {
+    const d = r.metodologia.desempenho;
+    L.push('## 8. Volume e custo desta execução (subsídio para decidir snapshot)', '', `Pedidos lidos: **${nd(d.pedidosLidos)}** · compradores classificados: **${nd(d.compradoresClassificados)}** · leitura ${nd(d.tempoDeLeituraMs)} ms · cálculo ${nd(d.tempoDeCalculoMs)} ms.`, '> Medido na máquina de quem executou o script, uma vez; **não** é a carga do servidor (que relê e reclassifica a cada requisição da tela de Clientes). Só com volume e latência reais de produção se decide se a materialização se justifica.', '');
+  }
   return L.join('\n');
 }
 

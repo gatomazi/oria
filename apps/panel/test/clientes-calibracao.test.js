@@ -307,3 +307,16 @@ test('impacto nos Leais: métrica por ticket move recorrentes de "baixo ticket" 
   assert.ok(porTicket.impactoNosLeais.leaisAlternativa >= 6, `pelo ticket, ${porTicket.impactoNosLeais.leaisAlternativa} viram Leais`);
   assert.ok(porTicket.impactoNosLeais.deCampeoesParaLeais >= 6);
 });
+
+test('relatório: volume e custo da execução entram no markdown quando informados (para decidir snapshot) — sem "undefined" e sem dado pessoal', () => {
+  const r = gerarRelatorio(base(), { asOf: AS_OF });
+  const sem = paraMarkdown(r);
+  assert.ok(!/## 8\. Volume e custo/.test(sem), 'sem medição, a seção não aparece');
+  r.metodologia.desempenho = { pedidosLidos: 1234, compradoresClassificados: 987, tempoDeLeituraMs: 210, tempoDeCalculoMs: 480 };
+  const md = paraMarkdown(r);
+  assert.match(md, /## 8\. Volume e custo desta execução/);
+  assert.match(md, /Pedidos lidos: \*\*1234\*\*/);
+  assert.match(md, /não\*\* é a carga do servidor/);
+  assert.ok(!/undefined|NaN/.test(md));
+  assert.ok(md.indexOf('## 7. Conferências') < md.indexOf('## 8. Volume e custo'), 'a seção vem depois das conferências');
+});

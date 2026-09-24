@@ -53,6 +53,18 @@ Abra o `.md` e confira, **nesta ordem** (o restante só vale se estas passarem):
 | 7 | §5 Regra × alternativas | Mesma população e instante (`todasAlternativasNaMesmaPopulacaoEInstante = true`); olhar o impacto em **Campeões/Leais** e a receita por segmento. |
 | 8 | §7 Conferências | As três somas (`segmentos = universo`, `receita = LTV`, `pedidos = válidos`) têm de ser `true`. |
 
+### 3.1 As cinco decisões que o relatório real deve permitir (decidir em conjunto — nunca uma isolada)
+
+| Decisão | Onde olhar no relatório | Sem dado real |
+|---|---|---|
+| (i) qualidade/alcance do backfill; `paid` + pedido encerrado | §0 Cobertura; §1 Integridade (cruzamento `pagamento × pedido`) | regra atual de `payment_status` mantida, limitações exibidas |
+| (ii) reembolso parcial e limite do dado | §1 Integridade (`Reembolso parcial não é rastreado`) | não se inventa valor reembolsado |
+| (iii) distribuição e intervalos reais de recompra | §2 Distribuições; §4 Recompra (só janelas com `Elegível? = sim`) | limiares 45/90/180/365 mantidos |
+| (iv) soma × ticket médio para o corte de valor (comportamento de **Leais**) | §5 Regra atual × alternativas (impacto em Campeões/Leais) | `rfm-v1:c35267c2`, P75 da soma, opção A mantidos |
+| (v) volume/carga que justifique snapshot persistido | §8 Volume e custo desta execução + latência real da tela de Clientes em produção | snapshots/job diário **não** implementados |
+
+Sem acesso autorizado: **documentar o bloqueio e não alterar a regra**. O benchmark de 100 mil pedidos da Rodada 5 é sintético e não entra nesta decisão.
+
 ## 4. O que fazer com o resultado
 
 - Guardar os arquivos onde o time de dados/produto combinar (nunca no repositório). Compartilhar só o `.md`/`.json` (agregados).
