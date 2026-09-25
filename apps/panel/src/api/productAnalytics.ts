@@ -14,9 +14,11 @@ export interface ProductAnalyticsProduct {
   productType: string | null;
   provider: string;
   providerProductId: string;
-  // false = o full sync do catálogo marcou o produto como fora da Ink. Opcional: respostas de
-  // detalhe/oportunidades antigas não trazem.
+  // Ativo no sentido do lojista: publicado na Ink E ainda listado no último sync. false = desativado
+  // (não publicado, recusado, arte inválida… ou fora da Ink). Opcional: respostas antigas não trazem.
   isActive?: boolean;
+  // `status` cru da Ink (ex.: 'not_published', 'refused') — a tela diz POR QUE está desativado.
+  providerStatus?: string | null;
 }
 
 export interface ProductAnalyticsMetrics {
@@ -89,6 +91,9 @@ export interface ProductAnalyticsFiltros {
 }
 
 export interface ProductAnalyticsQuery extends ProductAnalyticsFiltros {
+  // Busca pelo NOME. Preenchida, o servidor ignora todos os outros filtros e devolve o produto de
+  // qualquer situação (ativo ou não).
+  q?: string;
   startDate: string;
   endDate: string;
   cursor?: string | null;
@@ -112,6 +117,7 @@ export function listProductAnalytics(q: ProductAnalyticsQuery): Promise<ProductA
   if (q.sort) params.set('sort', q.sort);
   if (q.sortDir) params.set('sortDir', q.sortDir);
   if (q.provider) params.set('provider', q.provider);
+  if (q.q && q.q.trim()) params.set('q', q.q.trim());
   if (q.status && q.status !== 'active') params.set('status', q.status);
   for (const chave of ['minViewed', 'minAddedToCart', 'minCheckedOut', 'minPurchased', 'minRevenue'] as const) {
     const valor = q[chave];
@@ -178,12 +184,18 @@ export interface ReconciliationResponse {
   reason?: string;
   historyStartsAt?: string;
   items: ReconciliationItem[];
+  // Paginação no servidor (ausentes quando `status` é 'insufficient_data').
+  nextCursor?: string | null;
+  totalCount?: number;
   coverage?: ProductAnalyticsCoverage;
   caveats: string[];
 }
 
-export function getReconciliation(periodo: { startDate: string; endDate: string }): Promise<ReconciliationResponse> {
-  return api<ReconciliationResponse>(`/api/admin/product-analytics/reconciliation?${periodoParams(periodo).toString()}`);
+export function getReconciliation(q: { startDate: string; endDate: string; cursor?: string | null; limit?: number }): Promise<ReconciliationResponse> {
+  const params = periodoParams(q);
+  if (q.cursor) params.set('cursor', q.cursor);
+  if (q.limit) params.set('limit', String(q.limit));
+  return api<ReconciliationResponse>(`/api/admin/product-analytics/reconciliation?${params.toString()}`);
 }
 
 // Rodada M · o catálogo canônico (commerce_products) — do qual TODA identidade de produto aqui

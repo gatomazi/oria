@@ -122,3 +122,8 @@
   pointer-events: none;
   transition: opacity 0.15s;
 }
+
+/* Busca por nome: ocupa a linha inteira da grade de filtros. */
+.pa-filtros__busca {
+  grid-column: 1 / -1;
+}
