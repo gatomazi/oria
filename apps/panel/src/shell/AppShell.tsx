@@ -255,7 +255,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { logout, usuario, organizacaoAtiva } = useAuth();
   const [settings, setSettings] = useState<ProductSettings | null>(null);
   const [navOpen, setNavOpen] = useState(false);
-  // Preferências locais da navegação (sidebar reduzida + grupos fechados). A reduzida só vale no desktop: o drawer do mobile não muda.
+  // Navegação: sidebar reduzida (lembrada localmente) e grupos abertos (só nesta sessão; todo carregamento começa com tudo fechado). A reduzida só vale no desktop: o drawer do mobile não muda.
   const [prefs, setPrefs] = useState<NavPrefs>(() => lerPrefs());
   const desktop = useMediaQuery('(min-width: 1024px)');
   const reduzida = prefs.colapsada && desktop;
