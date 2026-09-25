@@ -69,14 +69,25 @@ def test_given_no_plan_schema_then_the_plan_is_the_v1_plan_with_none_of_the_v2_f
 
 
 def test_given_every_fixture_when_planned_as_v2_then_plan_is_valid_and_carries_every_v1_field_unchanged():
+    # Exceção única e documentada: "fixture-funnel-tofu-single" tem um produto com state/city reais
+    # (Maringá, PR) que não está no dataset curado de cidades — achado real (primeiro uso, conta
+    # interna, 24/09): v1 caía num grab-bag de nicho multi-UF (podia emprestar a paisagem de OUTRO
+    # estado); v2 corrige isso para um contexto neutro (context_intelligence.py, `resolve_context(...,
+    # v2=True)`). Deliberado: content-fix só no v2, nunca no v1 (546+ goldens continuam byte a byte).
+    # Nenhum outro campo, nenhuma outra fixture, é afetado.
+    EXCECAO_CONTEXTO_V1_V2 = {"fixture-funnel-tofu-single"}
     for fixture in all_fixtures():
         request = fixture["input"]
         v1 = plan_creative(request, router=ROUTER)
         v2 = plan_creative({**request, "plan_schema_version": 2}, router=ROUTER)
         assert contracts.validate("CreativePlan", v2) == [], fixture["name"]
         assert v2["schema_version"] == 2 and v2["mode"] == "creative"
-        for field in ("strategy", "product_mode", "products", "angle", "placement", "persona", "context", "brand_kit",
-                      "niche_kit", "funnel_stage", "remarketing_intent", "layout", "overlay", "copy", "references", "model"):
+        campos = ["strategy", "product_mode", "products", "angle", "placement", "persona", "context", "brand_kit",
+                  "niche_kit", "funnel_stage", "remarketing_intent", "layout", "overlay", "copy", "references", "model"]
+        if fixture["name"] in EXCECAO_CONTEXTO_V1_V2:
+            campos.remove("context")
+            assert v1["context"]["provider"] == "niche" and v2["context"]["provider"] == "geographic_unresolved", fixture["name"]
+        for field in campos:
             assert v2[field] == v1[field], (fixture["name"], field)
         assert v2["versions"]["compiler_version"] == COMPILER_VERSION and v2["versions"]["schema_version"] == v1["versions"]["schema_version"]
 

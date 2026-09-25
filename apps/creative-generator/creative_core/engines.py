@@ -401,14 +401,28 @@ def plan_creative(
     if prompt_version == 2:
         core_rules = prompt_v2.narrow_model_rule(core_rules, angle_id, len(products))
     hints = request.get("history_hints") or {}
+    # plan_schema decidido AQUI (adiantado do lugar de sempre, mais abaixo) só para chegar a
+    # resolve_context: o fallback geográfico "neutro em vez do grab-bag de nicho" (achado real, 24/09)
+    # é código NOVO, então só se aplica ao plano v2 — v1 mantém byte a byte o comportamento de sempre
+    # (os 546 goldens não sabem de UF nenhuma; mudar o texto da cena ali seria uma mudança de V1 de
+    # verdade, nunca o escopo deste hotfix).
+    plan_schema = request.get("plan_schema_version", default_plan_schema_version)
     context, _profile = resolve_context(
         request.get("context"), brand_kit=brand, niche_kit=niche, products=products, angle=angle,
         seed=seed, recent_scenes=hints.get("recent_scenes"), geographic=geographic,
+        v2=plan_schema == PLAN_SCHEMA_V2,
     )
     if (request.get("context") or {"mode": "automatic"}).get("mode") == "automatic" \
-            and brand.get("defaultContextProvider") == "geographic" and context["provider"] == "niche":
-        # Never guessed: an unresolved city falls back to the niche context, visibly.
-        warnings.append("geographic_context_unresolved_used_niche_context")
+            and brand.get("defaultContextProvider") == "geographic":
+        # Achado real (primeiro uso): dois casos bem diferentes, nunca confundidos. "niche" = o produto
+        # não tem localização nenhuma cadastrada — usa o contexto do nicho/marca (comportamento de
+        # sempre). "geographic_unresolved" = o produto TEM state/city, mas a cidade não está no
+        # catálogo — nunca usa o grab-bag multi-UF do nicho (poderia emprestar paisagem de outro
+        # estado); usa um ambiente neutro em vez disso (ver context_intelligence.py). Só existe no v2.
+        if context["provider"] == "niche":
+            warnings.append("geographic_context_unresolved_used_niche_context")
+        elif context["provider"] == "geographic_unresolved":
+            warnings.append("geographic_city_unrecognized_used_neutral_context")
     uses_person = people_needed > 0
     persona = resolve_persona(
         request.get("persona_mode", "automatic"), request.get("persona"), brand_kit=brand, niche_kit=niche,
@@ -416,7 +430,6 @@ def plan_creative(
     )
     people = _people(people_needed, persona_pool(brand, niche), seed, persona) if people_needed > 1 else []
 
-    plan_schema = request.get("plan_schema_version", default_plan_schema_version)
     if plan_schema != PLAN_SCHEMA_V2:
         # Who is in the scene and what they do only exists in a v2 plan. A v1 plan cannot honor these, and dropping
         # them would silently change the creative (or its minor-safety input): refuse instead.
