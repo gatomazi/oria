@@ -362,3 +362,14 @@ Detalhe em `docs/features/oria-clientes-rfm-rodada6.md`. Resumo: contrato único
 explícito; segmentos RFM legados preservados e com confirmação/recriação explícita antes de executar; Revisão reavalia ao entrar e antes de
 confirmar; `ReportCache` com relógio injetável; runbook com as cinco decisões da calibração real. Suíte integral: 1.951/1.952 (1 falha de
 temporização de job de fundo, isolada verde). Opção A, `rfm-v1:c35267c2` e limiares intactos; sem snapshots; nada enviado.
+
+## Distribuição RFM — visão "Visual" (treemap) ao lado da "Lista"
+
+Só apresentação (`RfmExplorer.tsx`, `RfmVisual.tsx`, `rfmTreemap.ts`, `clientes.css`); nada de regra RFM, backend, Audiência, Campanhas ou migração.
+
+- **Alternância "Lista | Visual"** no cabeçalho da Distribuição. **Lista é o padrão** (a visão da Rodada 4, intacta); a escolha é lembrada por visualizador (`localStorage`, opcional).
+- **Visual:** treemap squarified com áreas proporcionais ao valor mostrado (clientes ou receita), cor pelo grupo do ciclo de vida, + **legenda completa** (11 botões reais com nome, número e %).
+- **Segmentos pequenos nunca ficam sem identificação:** bloco < 1,2% do total usa uma **área mínima declarada** (o número é o dado; a nota da tela diz isso); o que cabe dentro do bloco depende do tamanho (nome+valor+% → nome+valor → só valor → marcador), mas **todo bloco tem tooltip com o nome**, e **a legenda lista os 11 segmentos** (inclusive os de 0 cliente, que não têm bloco). Passar o mouse/foco num lado destaca o outro.
+- **Compartilhado entre as duas visões:** seleção (mesmo estado), métrica Clientes/Receita, "Limpar seleção" e **o mesmo painel do segmento** (lateral no desktop; no celular, uma única instância sob o item da legenda/linha selecionado). Trocar de visão ou de métrica não faz requisição.
+- **Acessibilidade:** o mapa é ponteiro/toque (`aria-hidden`); teclado e leitor de tela usam a legenda (botões reais, `aria-pressed`, `aria-label`, ≥ 44 px no celular); contraste AA; `prefers-reduced-motion` respeitado.
+- **Testes:** `clientes-rfm-treemap.test.js` (12: soma das áreas, proporção, sem sobreposição/fora dos limites, 0 sem área, piso, todos os segmentos representados, Clientes × Receita, níveis de rótulo). Playwright `qa-rfm-visual.mjs` **190/190** (1440, 1280, 768, 390, 549, 320, sintético) + regressões `qa-rfm-ui` 158/158, `smoke-viewport` 38/38, `smoke-lista` 13/13.
