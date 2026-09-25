@@ -64,6 +64,16 @@
     "angle": {
       "$ref": "#/$defs/Angle"
     },
+    "angle_recommendation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AngleRecommendation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "placement": {
       "$ref": "#/$defs/Placement"
     },
@@ -163,6 +173,65 @@
       "items": {
         "type": "string"
       }
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "creative"
+      ]
+    },
+    "objective": {
+      "type": "string",
+      "enum": [
+        "clean_creative",
+        "remarketing",
+        "funnel_visual"
+      ]
+    },
+    "subjects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PlanSubject"
+      }
+    },
+    "scene": {
+      "$ref": "#/$defs/PlanScene"
+    },
+    "composition": {
+      "$ref": "#/$defs/PlanComposition"
+    },
+    "minor_safety": {
+      "$ref": "#/$defs/MinorSafety"
+    },
+    "semantics": {
+      "$ref": "#/$defs/PlanSemantics"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "provenance_sources": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "resolved_inputs": {
+      "$ref": "#/$defs/ResolvedInputs"
+    },
+    "compiler": {
+      "$ref": "#/$defs/CompilerInfo"
+    },
+    "seed": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "$defs": {
@@ -210,6 +279,143 @@
         "multi_product_limit": {
           "type": "integer",
           "minimum": 1
+        }
+      }
+    },
+    "AngleRecommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "angle_id",
+        "family",
+        "scope",
+        "version",
+        "source"
+      ],
+      "properties": {
+        "angle_id": {
+          "type": "string"
+        },
+        "family": {
+          "type": "string",
+          "enum": [
+            "lifestyle",
+            "connection",
+            "editorial_portrait",
+            "action_movement",
+            "product_focus",
+            "product_no_person",
+            "creator_social"
+          ]
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "objective_hints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "system",
+            "organization",
+            "store"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "product",
+            "product_enrichment",
+            "brand",
+            "niche",
+            "persona",
+            "angle",
+            "planner_default",
+            "safety_policy"
+          ]
+        },
+        "custom_angle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CustomAngle"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CompilerInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "sections"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompilerSection"
+          }
+        }
+      }
+    },
+    "CompilerSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "source",
+        "value",
+        "length"
+      ],
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "value": {
+          "type": "string"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -283,6 +489,226 @@
         "metadata": {
           "type": "object",
           "additionalProperties": true
+        },
+        "semantic_context": {
+          "$ref": "#/$defs/ProductSemanticContext"
+        }
+      }
+    },
+    "CustomAngle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope",
+        "organization_id",
+        "slug",
+        "name",
+        "family",
+        "people_mode",
+        "active",
+        "version",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "organization",
+            "store"
+          ]
+        },
+        "organization_id": {
+          "type": "string"
+        },
+        "store_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "family": {
+          "type": "string",
+          "enum": [
+            "lifestyle",
+            "connection",
+            "editorial_portrait",
+            "action_movement",
+            "product_focus",
+            "product_no_person",
+            "creator_social"
+          ]
+        },
+        "people_mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "optional",
+            "required"
+          ]
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 60
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "definition": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "allowed_interactions": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allowed_product_modes": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "single_product",
+                  "multi_product"
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default_gaze": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "camera",
+                "interaction",
+                "off_camera",
+                "product",
+                "none"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      }
+    },
+    "GazeResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "requested",
+        "source",
+        "reason"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "camera",
+            "interaction",
+            "off_camera",
+            "product",
+            "none"
+          ]
+        },
+        "requested": {
+          "type": "string",
+          "enum": [
+            "camera",
+            "interaction",
+            "off_camera",
+            "product",
+            "auto"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "product",
+            "product_enrichment",
+            "brand",
+            "niche",
+            "persona",
+            "angle",
+            "planner_default",
+            "safety_policy"
+          ]
+        },
+        "reason": {
+          "type": "string"
         }
       }
     },
@@ -299,6 +725,45 @@
         },
         "version": {
           "type": "integer"
+        }
+      }
+    },
+    "MinorSafety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applies",
+        "minor_subject_ids",
+        "global"
+      ],
+      "properties": {
+        "applies": {
+          "type": "boolean"
+        },
+        "minor_subject_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "global": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "brand": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basis": {
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
@@ -477,6 +942,20 @@
             "automatic",
             "custom"
           ]
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
+            "teen",
+            "adult",
+            "senior",
+            "unknown"
+          ]
         }
       }
     },
@@ -509,6 +988,405 @@
         },
         "api_size": {
           "type": "string"
+        }
+      }
+    },
+    "PlanComposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "people_count",
+        "pose_risk",
+        "risk_reasons"
+      ],
+      "properties": {
+        "people_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pose_risk": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "risk_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "PlanScene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gaze",
+        "picks",
+        "prompt_version"
+      ],
+      "properties": {
+        "gaze": {
+          "$ref": "#/$defs/GazeResolution"
+        },
+        "picks": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "prompt_version": {
+          "type": "integer"
+        },
+        "interaction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interaction_source": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "user",
+                "product",
+                "product_enrichment",
+                "brand",
+                "niche",
+                "persona",
+                "angle",
+                "planner_default",
+                "safety_policy"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interaction_detail": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scene_mode": {
+          "type": "string",
+          "enum": [
+            "template",
+            "frame"
+          ]
+        },
+        "composition_source": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "recommended",
+            "legacy"
+          ]
+        }
+      }
+    },
+    "PlanSemantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "products",
+        "warnings"
+      ],
+      "properties": {
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "supporting": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "PlanSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role",
+        "label",
+        "age_band",
+        "is_minor",
+        "product_use",
+        "prominence",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "primary",
+            "supporting"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "persona": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "age_band": {
+          "type": "string",
+          "enum": [
+            "baby",
+            "child",
+            "child_3_5",
+            "child_6_9",
+            "child_10_12",
+            "teen",
+            "adult",
+            "senior",
+            "unknown"
+          ]
+        },
+        "is_minor": {
+          "type": "boolean"
+        },
+        "minor_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "age_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "product_use": {
+          "type": "string",
+          "enum": [
+            "wears",
+            "uses",
+            "none"
+          ]
+        },
+        "product_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role_hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relation_to_primary": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "mother",
+                "father",
+                "daughter",
+                "son",
+                "sibling",
+                "partner",
+                "friend",
+                "grandparent",
+                "custom"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relation_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prominence": {
+          "type": "string",
+          "enum": [
+            "hero",
+            "secondary",
+            "background"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "product",
+            "product_enrichment",
+            "brand",
+            "niche",
+            "persona",
+            "angle",
+            "planner_default",
+            "safety_policy"
+          ]
+        }
+      }
+    },
+    "ProductSemanticContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "wearer_roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "relationship_themes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "recommended_supporting_roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "incompatible_auto_supporting_roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "scene_intents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "maxItems": 10
+        },
+        "visible_text": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "maxItems": 10
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "enrichment"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "field_sources": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "field_confidence": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -552,6 +1430,12 @@
         },
         "length": {
           "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
         }
       }
     },
@@ -641,6 +1525,29 @@
         },
         "profile_version": {
           "type": "integer"
+        }
+      }
+    },
+    "ResolvedInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "brand",
+        "niche",
+        "strategy"
+      ],
+      "properties": {
+        "brand": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "niche": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "strategy": {
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },

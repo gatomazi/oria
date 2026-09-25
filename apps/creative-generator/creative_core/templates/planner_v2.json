@@ -1,0 +1,419 @@
+{
+  "_doc": "Data of the CreativePlan v2 planner. Everything the planner decides that the image model used to decide by itself lives here or in the plan, never as loose prompt prose: gaze defaults per angle, gaze of each pool entry, age parsing vocabulary, role vocabulary. A gaze of 'auto' never reaches the compiler: it is resolved to a concrete mode against this table.",
+  "gaze_defaults": {
+    "_doc": "single = one person in the frame, multi = two or more. 'none' = the angle has nobody in the frame. Requested by the product owner: single+CAIMENTO camera; editorial/portrait camera; product in focus camera; lifestyle camera or off_camera depending on the preset (see pool_gaze); two or more people interacting -> interaction; gift/reading/play -> interaction; creator selfie camera or mirror depending on the format (see pool_gaze). 'single'/'multi' are chosen by the number of people actually in the frame (0 people is always 'none'), so the gift kit (nobody in frame) resolves to none and the two-person gift to interaction.",
+    "IDENTIDADE_ORIGEM": {
+      "single": "off_camera",
+      "multi": "interaction"
+    },
+    "LIFESTYLE_COTIDIANO": {
+      "single": "off_camera",
+      "multi": "interaction"
+    },
+    "ORGULHO_DISCRETO": {
+      "single": "camera",
+      "multi": "interaction"
+    },
+    "PERTENCIMENTO": {
+      "single": "off_camera",
+      "multi": "interaction"
+    },
+    "NOSTALGIA_ORIGEM": {
+      "single": "off_camera",
+      "multi": "interaction"
+    },
+    "CABIDE": {
+      "single": "none",
+      "multi": "none"
+    },
+    "PRODUTO_ESTAMPA": {
+      "single": "none",
+      "multi": "none"
+    },
+    "CAIMENTO": {
+      "single": "camera",
+      "multi": "camera"
+    },
+    "CLOSE_ESTAMPA": {
+      "single": "camera",
+      "multi": "camera"
+    },
+    "CLOSE_BOLSO": {
+      "single": "camera",
+      "multi": "camera"
+    },
+    "PREMIUM_ESTILO": {
+      "single": "none",
+      "multi": "none"
+    },
+    "CREATOR_STYLE": {
+      "single": "camera",
+      "multi": "camera"
+    },
+    "PRESENTE_AFETO": {
+      "single": "interaction",
+      "multi": "interaction"
+    }
+  },
+  "pool_gaze": {
+    "_doc": "Gaze of each entry of an angles_v2.json pool, by index. Overrides the angle default when the plan picked that entry (the 'preset').",
+    "LIFESTYLE_COTIDIANO": {
+      "acao": [
+        "off_camera",
+        "camera",
+        "off_camera",
+        "camera",
+        "off_camera",
+        "camera"
+      ]
+    },
+    "CREATOR_STYLE": {
+      "formato": [
+        "camera",
+        "off_camera",
+        "camera"
+      ]
+    }
+  },
+  "minor": {
+    "_doc": "Age parsing for minor detection. A number of years in the label wins; then the persona age_range; then words; then the product (an infant garment implies a child wearer). Unknown is NOT minor, but a primary wearer of an infant garment is treated as a minor.",
+    "adult_starts": [
+      "mulher",
+      "homem",
+      "mae",
+      "mãe",
+      "pai",
+      "adult",
+      "avo",
+      "avó",
+      "avô",
+      "senhora",
+      "senhor",
+      "casal"
+    ],
+    "minor_words": [
+      "crianca",
+      "criança",
+      "menino",
+      "menina",
+      "bebe",
+      "bebê",
+      "infantil",
+      "adolescente",
+      "teen",
+      "garoto",
+      "garota",
+      "pre-adolescente"
+    ],
+    "infant_product_types": [
+      "camiseta infantil",
+      "body infantil",
+      "infantil",
+      "kids",
+      "kid",
+      "bebe",
+      "bebê"
+    ],
+    "bands": {
+      "baby": [
+        0,
+        2
+      ],
+      "child_3_5": [
+        3,
+        5
+      ],
+      "child_6_9": [
+        6,
+        9
+      ],
+      "child_10_12": [
+        10,
+        12
+      ],
+      "teen": [
+        13,
+        17
+      ],
+      "adult": [
+        18,
+        64
+      ],
+      "senior": [
+        65,
+        200
+      ]
+    },
+    "infant_wearer_bands": {
+      "_doc": "Who may WEAR an infant garment (Fase C). The garment decides, the scene does not: a Subject that wears it must be in one of these bands; an adult in the scene who does not wear it is fine. The key is looked for in the product type/name; `default` covers every other infant product.",
+      "default": ["baby", "child", "child_3_5", "child_6_9", "child_10_12"],
+      "body infantil": ["baby", "child", "child_3_5"]
+    },
+    "minor_bands": [
+      "baby",
+      "child",
+      "child_3_5",
+      "child_6_9",
+      "child_10_12",
+      "teen"
+    ],
+    "adult_bands": [
+      "adult",
+      "senior"
+    ]
+  },
+  "roles": {
+    "_doc": "Role vocabulary read from persona labels, to match a supporting person against a product's semantic_context. Keywords are matched as whole words, accent-insensitive.",
+    "keywords": {
+      "mother": [
+        "mae",
+        "mamae",
+        "mother"
+      ],
+      "father": [
+        "pai",
+        "papai",
+        "father"
+      ],
+      "sibling": [
+        "irma",
+        "irmao",
+        "irmaos",
+        "irmas",
+        "sibling"
+      ],
+      "partner": [
+        "parceiro",
+        "parceira",
+        "esposa",
+        "marido",
+        "namorado",
+        "namorada",
+        "companheiro",
+        "companheira"
+      ],
+      "friend": [
+        "amigo",
+        "amiga"
+      ],
+      "grandparent": [
+        "avo",
+        "avos",
+        "vovo"
+      ]
+    },
+    "labels": {
+      "father": "homem adulto, pai da criança",
+      "mother": "mulher adulta, mãe da criança",
+      "sibling": "irmão ou irmã da criança, de idade próxima",
+      "partner": "parceiro ou parceira, adulto",
+      "friend": "amigo ou amiga da mesma faixa etária",
+      "grandparent": "avó ou avô da criança"
+    },
+    "theme_labels": {
+      "father_child": "pai e filho(a)",
+      "mother_child": "mãe e filho(a)",
+      "siblings": "irmãos",
+      "couple": "casal",
+      "friends": "amigos",
+      "grandparent_child": "avós e netos",
+      "family": "família"
+    },
+    "intent_labels": {
+      "play": "brincar",
+      "bond": "vínculo",
+      "family": "família",
+      "reading": "leitura",
+      "gift": "presente",
+      "outing": "passeio",
+      "everyday": "dia a dia",
+      "study": "estudo",
+      "celebration": "celebração"
+    },
+    "role_names": {
+      "child": "criança",
+      "baby": "bebê",
+      "teen": "adolescente",
+      "adult": "adulto",
+      "mother": "mãe",
+      "father": "pai",
+      "sibling": "irmão ou irmã",
+      "grandparent": "avó ou avô",
+      "partner": "parceiro ou parceira",
+      "friend": "amigo ou amiga"
+    },
+    "wearer_personas": {
+      "child": {
+        "label": "criança de 6 a 9 anos",
+        "age_band": "child_6_9"
+      },
+      "baby": {
+        "label": "bebê",
+        "age_band": "baby"
+      },
+      "teen": {
+        "label": "adolescente",
+        "age_band": "teen"
+      }
+    },
+    "relation_roles": {
+      "mother": "mother",
+      "father": "father",
+      "sibling": "sibling",
+      "partner": "partner",
+      "friend": "friend",
+      "grandparent": "grandparent",
+      "daughter": "child",
+      "son": "child"
+    },
+    "relation_phrases": {
+      "mother": "mãe da {ref}",
+      "father": "pai da {ref}",
+      "daughter": "filha da {ref}",
+      "son": "filho da {ref}",
+      "sibling": "irmão ou irmã da {ref}",
+      "partner": "parceiro ou parceira da {ref}",
+      "friend": "amigo ou amiga da {ref}",
+      "grandparent": "avó ou avô da {ref}"
+    },
+    "age_phrases": {
+      "baby": "bebê",
+      "child": "criança",
+      "child_3_5": "criança de 3 a 5 anos",
+      "child_6_9": "criança de 6 a 9 anos",
+      "child_10_12": "criança de 10 a 12 anos",
+      "teen": "adolescente",
+      "adult": "adulto",
+      "senior": "pessoa idosa"
+    },
+    "person_labels": {
+      "_doc": "Labels for a supporting person the planner casts from a recommended role. Neutral on purpose: the relation to the primary is structured data (subject.relation_to_primary), so the label does not repeat it.",
+      "father": "homem adulto",
+      "mother": "mulher adulta",
+      "sibling": "criança de idade próxima à da principal",
+      "grandparent": "pessoa idosa",
+      "partner": "adulto, parceiro ou parceira",
+      "friend": "amigo ou amiga da mesma faixa etária"
+    },
+    "age_printed_for": [
+      "baby",
+      "child",
+      "child_3_5",
+      "child_6_9",
+      "child_10_12",
+      "teen",
+      "senior"
+    ]
+  },
+  "pose_risk": {
+    "_doc": "Deterministic weights for the composition risk stored in the plan (used later to decide QA). people: 2 -> +1, 3 -> +2, 4 or more -> +4 (always high: a 4-person scene is advanced composition and is never suggested as the safe one); a held object -> +1 per object; physical contact between people -> +1. low <= 1, medium 2-3, high >= 4.",
+    "people": {
+      "2": 1,
+      "3": 2,
+      "4": 4
+    },
+    "held_object": 1,
+    "contact": 1,
+    "levels": {
+      "low": 1,
+      "medium": 3
+    }
+  },
+  "pool_held_objects": {
+    "_doc": "1 where the pool entry has the person holding an object (adds pose risk), by index.",
+    "LIFESTYLE_COTIDIANO": {
+      "acao": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        0
+      ]
+    },
+    "CREATOR_STYLE": {
+      "formato": [
+        1,
+        0,
+        1
+      ]
+    }
+  },
+  "pool_contact": {
+    "_doc": "1 where the pool entry has physical contact between people (adds pose risk), by index.",
+    "PRESENTE_AFETO": {
+      "cena": [
+        1,
+        0
+      ]
+    }
+  },
+  "angle_people": {
+    "_doc": "How many people the angle's scene supports (single-product). A composition outside it is a warning (never a block); more than 4 people is always an error. `recommend` says whether the planner may ADD a supporting person on its own for this angle (never for technical/close shots or the gift scene, which has its own template).",
+    "IDENTIDADE_ORIGEM": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "LIFESTYLE_COTIDIANO": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "ORGULHO_DISCRETO": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "PERTENCIMENTO": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "NOSTALGIA_ORIGEM": {
+      "min": 1,
+      "max": 4,
+      "recommend": true
+    },
+    "CAIMENTO": {
+      "min": 1,
+      "max": 1,
+      "recommend": false
+    },
+    "CLOSE_ESTAMPA": {
+      "min": 1,
+      "max": 1,
+      "recommend": false
+    },
+    "CLOSE_BOLSO": {
+      "min": 1,
+      "max": 1,
+      "recommend": false
+    },
+    "CREATOR_STYLE": {
+      "min": 1,
+      "max": 4,
+      "recommend": false
+    },
+    "PRESENTE_AFETO": {
+      "min": 2,
+      "max": 4,
+      "recommend": false
+    },
+    "CABIDE": {
+      "min": 0,
+      "max": 0,
+      "recommend": false
+    },
+    "PRODUTO_ESTAMPA": {
+      "min": 0,
+      "max": 0,
+      "recommend": false
+    },
+    "PREMIUM_ESTILO": {
+      "min": 0,
+      "max": 0,
+      "recommend": false
+    }
+  }
+}

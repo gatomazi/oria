@@ -1,0 +1,2138 @@
+{
+ "fixture-clean-multi/CABIDE/FEED_4X5/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CABIDE/FEED_4X5/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CABIDE/FEED_4X5/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CABIDE/STORY_9X16/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CABIDE/STORY_9X16/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CABIDE/STORY_9X16/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CAIMENTO/FEED_4X5/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CAIMENTO/FEED_4X5/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CAIMENTO/FEED_4X5/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CAIMENTO/STORY_9X16/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CAIMENTO/STORY_9X16/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CAIMENTO/STORY_9X16/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_BOLSO/FEED_4X5/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_BOLSO/FEED_4X5/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_BOLSO/FEED_4X5/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_BOLSO/STORY_9X16/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_BOLSO/STORY_9X16/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_BOLSO/STORY_9X16/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_ESTAMPA/FEED_4X5/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_ESTAMPA/FEED_4X5/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_ESTAMPA/FEED_4X5/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_ESTAMPA/STORY_9X16/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_ESTAMPA/STORY_9X16/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CLOSE_ESTAMPA/STORY_9X16/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-clean-multi/CREATOR_STYLE/FEED_4X5/seed+0": {
+  "length": 3343,
+  "sha256": "e73e386147c9adf8f440db6aa4f177c9afb25b2b11c15343a970ef1ff7360fb7"
+ },
+ "fixture-clean-multi/CREATOR_STYLE/FEED_4X5/seed+1": {
+  "length": 3302,
+  "sha256": "f7bedeea68d9dea546aebb79a879cac3da32bdd1214e676dace3e4273d1acc2e"
+ },
+ "fixture-clean-multi/CREATOR_STYLE/FEED_4X5/seed+2": {
+  "length": 3338,
+  "sha256": "4a32c9dde57e07c3a404a9b66cb4e8477ad833a784f4f4c5b3b49863864de2f1"
+ },
+ "fixture-clean-multi/CREATOR_STYLE/STORY_9X16/seed+0": {
+  "length": 3460,
+  "sha256": "9b5785b3267ec2e6d2c6d5dd83954ef841314f606df7e85c9388d15154160457"
+ },
+ "fixture-clean-multi/CREATOR_STYLE/STORY_9X16/seed+1": {
+  "length": 3419,
+  "sha256": "5003bf75b95b632dd8ceef83960fdefabbc5f294ebe2d66b79bc14e6e351fdd1"
+ },
+ "fixture-clean-multi/CREATOR_STYLE/STORY_9X16/seed+2": {
+  "length": 3455,
+  "sha256": "730caf1406d221e303324c5044e736af5c014f22b518996c4f48cb26966753c1"
+ },
+ "fixture-clean-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+0": {
+  "length": 3435,
+  "sha256": "6bcb73e672ab80770930a8bd34183f9b91cc862bd132024dce20c6199bb686cb"
+ },
+ "fixture-clean-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+1": {
+  "length": 3405,
+  "sha256": "38819d22556a2c861a53af4473bc022fd8c827826bd4e8c4c7dafe6316ee818c"
+ },
+ "fixture-clean-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+2": {
+  "length": 3425,
+  "sha256": "e339d75fb80f1dfadd6d02867b8ba11a1b4f6dd6f118497fdf3caeb4d36139c4"
+ },
+ "fixture-clean-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+0": {
+  "length": 3552,
+  "sha256": "6cd8c22ca1acffbdad2f03c6166dacad87d65ec1765fd7a1761097f543eab7c1"
+ },
+ "fixture-clean-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+1": {
+  "length": 3522,
+  "sha256": "4fb8cc68771b621f33849542bc1ffe156fadd0d0a7416e1dfaf34becfc78b926"
+ },
+ "fixture-clean-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+2": {
+  "length": 3542,
+  "sha256": "2f38f8efe2a56c632507faf9779e8b0dd0214631087be2a3c280bd26e8cafda5"
+ },
+ "fixture-clean-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+0": {
+  "length": 3397,
+  "sha256": "845e9a4d7ff52f088af3d8db7768ef111cc7d41e129528ff8a2e10e0fc0f3ead"
+ },
+ "fixture-clean-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+1": {
+  "length": 3367,
+  "sha256": "e37584538a878ff4e77d5b771b8722a2954b436588387926105adc7827c5074a"
+ },
+ "fixture-clean-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+2": {
+  "length": 3387,
+  "sha256": "9ca0cfa73daf60e3cbde9a3660b38ec3c88274606170dde4d008995ac2bc7466"
+ },
+ "fixture-clean-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+0": {
+  "length": 3514,
+  "sha256": "b2be2aadedec344ec9bfc732447b20bafd714104aeda0055c4d2c0d88c71d1ef"
+ },
+ "fixture-clean-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+1": {
+  "length": 3484,
+  "sha256": "23550437f74407afbb3ae8ffb2ce3bd965b638d3fa96edc9a6283103a25d552a"
+ },
+ "fixture-clean-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+2": {
+  "length": 3504,
+  "sha256": "a1ae4b0162589aa22c50bbffa77acb21c46b11e4289eddd4fed1f19527d3a819"
+ },
+ "fixture-clean-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+0": {
+  "length": 3351,
+  "sha256": "43a9c0d7b815acc69032ade2a19a4068099a8462e59616b9a79a0f00a8de4ddd"
+ },
+ "fixture-clean-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+1": {
+  "length": 3321,
+  "sha256": "d988fd94a5c514d4b19d184e1591c92dfa8da467608add794948acd8260dd9c5"
+ },
+ "fixture-clean-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+2": {
+  "length": 3341,
+  "sha256": "b23cd1a09c120ff3780a2c568f1d295682bc1bbf1639829bfb0f08c5ceee658d"
+ },
+ "fixture-clean-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+0": {
+  "length": 3468,
+  "sha256": "fda79ec08d85fe5fc76e2b36c8ba30be49859dcc444981851427e7503ba6f82e"
+ },
+ "fixture-clean-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+1": {
+  "length": 3438,
+  "sha256": "f01edc7e97db9313f3ebc9f7005648ba37c5fd2d8895cd111de4be4312e17816"
+ },
+ "fixture-clean-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+2": {
+  "length": 3458,
+  "sha256": "c6566f353971a1fae8bf900194718036f60ff8a568a6b1887d61f32ae9e21249"
+ },
+ "fixture-clean-multi/ORGULHO_DISCRETO/FEED_4X5/seed+0": {
+  "length": 3348,
+  "sha256": "d74bff2c79b8e67a9471c8dc82b7fd0a1d31a58800e33d0c0f5586c879f0f14f"
+ },
+ "fixture-clean-multi/ORGULHO_DISCRETO/FEED_4X5/seed+1": {
+  "length": 3307,
+  "sha256": "71e342e6fb4750c58df92c5d086f1259764dff03a37b029a7190ae16a1f67837"
+ },
+ "fixture-clean-multi/ORGULHO_DISCRETO/FEED_4X5/seed+2": {
+  "length": 3343,
+  "sha256": "6ed10c012c1fea1ef386986ca1a7285db68571bedae1257c213236d50e4c567c"
+ },
+ "fixture-clean-multi/ORGULHO_DISCRETO/STORY_9X16/seed+0": {
+  "length": 3465,
+  "sha256": "8e67c39ace2843dabcf396a23f299b3be680afb9d8292583de6bfb9467076686"
+ },
+ "fixture-clean-multi/ORGULHO_DISCRETO/STORY_9X16/seed+1": {
+  "length": 3424,
+  "sha256": "3d496b2f879ca6d65385d551a275064c951baae94d8d07cd971817ba4e30fbcd"
+ },
+ "fixture-clean-multi/ORGULHO_DISCRETO/STORY_9X16/seed+2": {
+  "length": 3460,
+  "sha256": "023951619a01f163a9b1542ed8623ecc848fd9382ab0f367e610ee8e212a148a"
+ },
+ "fixture-clean-multi/PERTENCIMENTO/FEED_4X5/seed+0": {
+  "length": 3375,
+  "sha256": "34d7ad04ce75698a428a0fbac821e5ba9716c04d04c3baa4d2fc61863bf6b16f"
+ },
+ "fixture-clean-multi/PERTENCIMENTO/FEED_4X5/seed+1": {
+  "length": 3345,
+  "sha256": "9ea7581c1797ccaf11e36a389d9d603f6a8608e3280abaa5a2816fd09973ee22"
+ },
+ "fixture-clean-multi/PERTENCIMENTO/FEED_4X5/seed+2": {
+  "length": 3365,
+  "sha256": "442b47630d3b3a672c4628dc02a229672dde0349c5750e5f945d53a3e757f748"
+ },
+ "fixture-clean-multi/PERTENCIMENTO/STORY_9X16/seed+0": {
+  "length": 3492,
+  "sha256": "206f5647cedd13611a1fc6dd85a9ff48570c4a5c565a8bfd3e2fc608e390ccf9"
+ },
+ "fixture-clean-multi/PERTENCIMENTO/STORY_9X16/seed+1": {
+  "length": 3462,
+  "sha256": "4dca8af0ad8c88876f073460963fcdadbf4c0d2c2208b8d05c83c930f187447a"
+ },
+ "fixture-clean-multi/PERTENCIMENTO/STORY_9X16/seed+2": {
+  "length": 3482,
+  "sha256": "c281e7aba3710d0bb465a1ebc42b12e0c155ce98574e8b7e76d05c08ad520357"
+ },
+ "fixture-clean-multi/PREMIUM_ESTILO/FEED_4X5/seed+0": {
+  "length": 2895,
+  "sha256": "ae3f2fa2424367fc179f6f7f254f10e0dffc67f74815923d9605d692a3a847c4"
+ },
+ "fixture-clean-multi/PREMIUM_ESTILO/FEED_4X5/seed+1": {
+  "length": 2906,
+  "sha256": "b950016594decc3dff7ece910eb4b4b3a081e5e96c422b960e5ec922a8e26887"
+ },
+ "fixture-clean-multi/PREMIUM_ESTILO/FEED_4X5/seed+2": {
+  "length": 2890,
+  "sha256": "0e9d00cca974fdfd9246f9b014c6d6a4f896e1d468205c30712d3444b71e519a"
+ },
+ "fixture-clean-multi/PREMIUM_ESTILO/STORY_9X16/seed+0": {
+  "length": 3012,
+  "sha256": "7a6b5311b52f74413241599be39f7299594a34ce8da6171856cea502768e773a"
+ },
+ "fixture-clean-multi/PREMIUM_ESTILO/STORY_9X16/seed+1": {
+  "length": 3023,
+  "sha256": "839523d23f64deb0ff770aa9756230ce9a67bab6139f173385ba60460f9b905c"
+ },
+ "fixture-clean-multi/PREMIUM_ESTILO/STORY_9X16/seed+2": {
+  "length": 3007,
+  "sha256": "974ca39379272ba9c6a126704af69f74977de44a137c825b2cf8491085b7b3e9"
+ },
+ "fixture-clean-multi/PRESENTE_AFETO/FEED_4X5/seed+0": {
+  "length": 3224,
+  "sha256": "2a6710d5ae2c1ddccb13d73b57a4d628e9c310b0c602544448e19d9436cbe22c"
+ },
+ "fixture-clean-multi/PRESENTE_AFETO/FEED_4X5/seed+1": {
+  "length": 3192,
+  "sha256": "614242b99a6995a01b9c913ba1d6a4abe3e2aa99a30a0b36e72e01a0a9d985a3"
+ },
+ "fixture-clean-multi/PRESENTE_AFETO/FEED_4X5/seed+2": {
+  "length": 3219,
+  "sha256": "4cb74254e8f3c0a4f3db283e8bbb2c97dcb93068ac26038e52f17e46c51c3a88"
+ },
+ "fixture-clean-multi/PRESENTE_AFETO/STORY_9X16/seed+0": {
+  "length": 3341,
+  "sha256": "cfcd95207a919430fd9200cb75ebf3b6d8d1c10b9c0ed3941d59a8f9d53dd47c"
+ },
+ "fixture-clean-multi/PRESENTE_AFETO/STORY_9X16/seed+1": {
+  "length": 3309,
+  "sha256": "eafa7e8d5b95c6ad66b56b70d8f53a0868619d0c6450c94ab96e6eebf508e5e9"
+ },
+ "fixture-clean-multi/PRESENTE_AFETO/STORY_9X16/seed+2": {
+  "length": 3336,
+  "sha256": "c3ca2a6130619885ce1a29fba021caccde84b0fc335483bb58b7d0f5931abadc"
+ },
+ "fixture-clean-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 2985,
+  "sha256": "6f8c187d29ccae1e82b5de6d2a26292ae43e36ffd3d98b0cb470ae14f3b907ef"
+ },
+ "fixture-clean-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 3007,
+  "sha256": "07de1fd7b01d7df70ab26e63b1d18b5d9349639fb27b042ddf5d084efaed8887"
+ },
+ "fixture-clean-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 2975,
+  "sha256": "03d65092dc858e842a7f4ff938add8f3816855290e20a08f83376105f608eb33"
+ },
+ "fixture-clean-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 3102,
+  "sha256": "09e7b8c4e481a64b1570e90752a05ab0f0a33541eaac180e8c2d71496a72b722"
+ },
+ "fixture-clean-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 3124,
+  "sha256": "94937440e5ca32e507417e4b65c88d138bfe4d0ed0aa5117c15cf48d9730a699"
+ },
+ "fixture-clean-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 3092,
+  "sha256": "11c5970e04f54bc7a430e332136401bc75fec3d717466535090c95881642f7ec"
+ },
+ "fixture-clean-single/CABIDE/FEED_4X5/seed+0": {
+  "length": 5844,
+  "sha256": "f5b9b419ff62b3803dd635c35c1130948ca899f802c65ff316dafeace9901e81"
+ },
+ "fixture-clean-single/CABIDE/FEED_4X5/seed+1": {
+  "length": 5812,
+  "sha256": "60a5257d4ba8ff4cf54a76083e688b631a4c4e6578002c87db9bdd1bd7cbbd1f"
+ },
+ "fixture-clean-single/CABIDE/FEED_4X5/seed+2": {
+  "length": 5854,
+  "sha256": "55e719c731abb381545e9108ccf2611baa41a83fed087b44c397d697e05a2be2"
+ },
+ "fixture-clean-single/CABIDE/STORY_9X16/seed+0": {
+  "length": 5961,
+  "sha256": "afd67bdbaa9fee176e1784da2e11f0e9c61440672216e62aebc8203528d6f40b"
+ },
+ "fixture-clean-single/CABIDE/STORY_9X16/seed+1": {
+  "length": 5929,
+  "sha256": "4fc6f6f836d4f514eac92e4f33e0401d48d3273481efa6fa5d1c59e9fccb471e"
+ },
+ "fixture-clean-single/CABIDE/STORY_9X16/seed+2": {
+  "length": 5971,
+  "sha256": "f97d1dba6ee213642f92f912feca00af5e92138fb180dad399147d36be2cb21d"
+ },
+ "fixture-clean-single/CAIMENTO/FEED_4X5/seed+0": {
+  "length": 4118,
+  "sha256": "35aa24026c10dbbfda8ac22c562b9776cb79f989dc1c5baf2673bd5d31d40671"
+ },
+ "fixture-clean-single/CAIMENTO/FEED_4X5/seed+1": {
+  "length": 4070,
+  "sha256": "6fa52eb49a7439542fa886d4d7e6b39d97fa4cb5609f0a044320abb0f1265648"
+ },
+ "fixture-clean-single/CAIMENTO/FEED_4X5/seed+2": {
+  "length": 4084,
+  "sha256": "be400d010e2cf473abaa694452a94d7255d96c191bab119202228d42e3ad3aa0"
+ },
+ "fixture-clean-single/CAIMENTO/STORY_9X16/seed+0": {
+  "length": 4235,
+  "sha256": "991299207059ae2405455a982cfca9dc01adc30a682b4143c32e089be9f8f1da"
+ },
+ "fixture-clean-single/CAIMENTO/STORY_9X16/seed+1": {
+  "length": 4187,
+  "sha256": "a4ade3892971d88d2bf83d6e03423cfb0eed68e48de2bcd1aaaee877cf7ef9f0"
+ },
+ "fixture-clean-single/CAIMENTO/STORY_9X16/seed+2": {
+  "length": 4201,
+  "sha256": "f68a8276bb9d4fa3a2b7c7c5f63fb104e5e151f2bee668a8335ec803a99f078d"
+ },
+ "fixture-clean-single/CLOSE_BOLSO/FEED_4X5/seed+0": {
+  "length": 4134,
+  "sha256": "345ed9e965c15f1823b5f90c529dedca78395a048dc4231aef590b664cc2ac28"
+ },
+ "fixture-clean-single/CLOSE_BOLSO/FEED_4X5/seed+1": {
+  "length": 4086,
+  "sha256": "c91cf6b7a4427f739b649f4afadb9d659887147b3fc84a2d06a3aac961cb9cf0"
+ },
+ "fixture-clean-single/CLOSE_BOLSO/FEED_4X5/seed+2": {
+  "length": 4100,
+  "sha256": "1dcb16c714ed8d3af97cc8d01f63c4dd7a5b860841eb20665c07c53c3be88060"
+ },
+ "fixture-clean-single/CLOSE_BOLSO/STORY_9X16/seed+0": {
+  "length": 4251,
+  "sha256": "80e924bcf57ba9a946aaac4ee33a8998048e3fc45f5a570ba6a6261df6d0adf5"
+ },
+ "fixture-clean-single/CLOSE_BOLSO/STORY_9X16/seed+1": {
+  "length": 4203,
+  "sha256": "a01d1d4b3864be455b36c88dce1565977bc63c9bddfbd31922dc7d31ac2f2e9e"
+ },
+ "fixture-clean-single/CLOSE_BOLSO/STORY_9X16/seed+2": {
+  "length": 4217,
+  "sha256": "07a1753b0efa6a90b41786e86014bfd7a8901c59d9c867d6dadf43662374f395"
+ },
+ "fixture-clean-single/CLOSE_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 4122,
+  "sha256": "3b0e24d1f382274d5ca335666ec95fcf297b6759504a56ac95ca94d7603f22a1"
+ },
+ "fixture-clean-single/CLOSE_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 4074,
+  "sha256": "509fa9f66e736b67fa4f508f047d0fd25f8d6189d40b5b01c5f3b0340b0a509b"
+ },
+ "fixture-clean-single/CLOSE_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 4088,
+  "sha256": "2246163fdbc78bfd427d2eea8cceef661a8245f0cc7afdd5db7f812d9ce132fa"
+ },
+ "fixture-clean-single/CLOSE_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 4239,
+  "sha256": "b3db90a19e623d3cb3c61ad75049ca25249ed2c6b3bebe93d6294c04cb2b6839"
+ },
+ "fixture-clean-single/CLOSE_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 4191,
+  "sha256": "b4c55441435c5a30b8d27ae444c348c073c5033d4a95eecb3bfb020148f3722b"
+ },
+ "fixture-clean-single/CLOSE_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 4205,
+  "sha256": "0dd64fd48631615fa02ef0e74d09cc4ca9c5b58ca795595927a9e7732b1b48c0"
+ },
+ "fixture-clean-single/CREATOR_STYLE/FEED_4X5/seed+0": {
+  "length": 4105,
+  "sha256": "358883449cb1703fdd257bd80d3434ba729dc9d511beded9280d4d78c221f69e"
+ },
+ "fixture-clean-single/CREATOR_STYLE/FEED_4X5/seed+1": {
+  "length": 4057,
+  "sha256": "d52d0b838be4a4bcb042b1070f7dae9af6e9e18e38c5ba4a04a42f9b6ef0b412"
+ },
+ "fixture-clean-single/CREATOR_STYLE/FEED_4X5/seed+2": {
+  "length": 4071,
+  "sha256": "18f6fefc5cb47eb493428d0ba83f28b52709ec25505560d1d19fed67bec28da8"
+ },
+ "fixture-clean-single/CREATOR_STYLE/STORY_9X16/seed+0": {
+  "length": 4222,
+  "sha256": "212c29edd5924c74a008d092991e4f71a41d5bf009b66e7a47afc29e56218cdd"
+ },
+ "fixture-clean-single/CREATOR_STYLE/STORY_9X16/seed+1": {
+  "length": 4174,
+  "sha256": "3b615946d348d8739c4e032d9bfa09f6f4aa6b64f5ac845048e54afc9b25376d"
+ },
+ "fixture-clean-single/CREATOR_STYLE/STORY_9X16/seed+2": {
+  "length": 4188,
+  "sha256": "52eb1d62e11ddcf48ff94d2ec1c78ff34e462e6f1843259a81f96c16a774595a"
+ },
+ "fixture-clean-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+0": {
+  "length": 4188,
+  "sha256": "d5e71c99abda2359bb10b1a211daaf2dd08bd8870b8f4bac037ffac3b30d0170"
+ },
+ "fixture-clean-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+1": {
+  "length": 4140,
+  "sha256": "87ceca07a279cf0836220351d8408e2a24f978394f3c95d307a855053989e172"
+ },
+ "fixture-clean-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+2": {
+  "length": 4154,
+  "sha256": "dcf6c7dc7b477f092490679e00bd298234ca77371bcb5cda06a3690083a45af3"
+ },
+ "fixture-clean-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+0": {
+  "length": 4305,
+  "sha256": "903ce845725ff97449b7115d1bed1a91a9863894a88ee6255c7bba49f86abb81"
+ },
+ "fixture-clean-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+1": {
+  "length": 4257,
+  "sha256": "4a8d9dfba7b6e09ad51b869506095c62fabcc9599ef63deed4ed0b1c903748d7"
+ },
+ "fixture-clean-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+2": {
+  "length": 4271,
+  "sha256": "118fbc5555fa973bd38cf2ace950c8e3c274325595eb089fee7069919572438c"
+ },
+ "fixture-clean-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+0": {
+  "length": 4070,
+  "sha256": "7a5c5ca7c156bc1dedbc5d517ff8e0ffa54b45640cdb06cfe330d51be8cb3b22"
+ },
+ "fixture-clean-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+1": {
+  "length": 4022,
+  "sha256": "3673734783c8ed6be3edea86af34cdf30ebbd6a5673dd3ccddb7ec6638fea82e"
+ },
+ "fixture-clean-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+2": {
+  "length": 4036,
+  "sha256": "28d35483933257d5333d76d4c5040aa1f248b22292c559f88f645e1ddd8233e8"
+ },
+ "fixture-clean-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+0": {
+  "length": 4187,
+  "sha256": "9f5955bc84160b2594d1b7f8be7a6705628cb2798f6a79dd409c276f429cc3c6"
+ },
+ "fixture-clean-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+1": {
+  "length": 4139,
+  "sha256": "d6733df03eda5381589eab989604167e07bc0726ba062b4bf638b34bcc9eed24"
+ },
+ "fixture-clean-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+2": {
+  "length": 4153,
+  "sha256": "d98926444206114545f4eedaa081123b33317ffe464c86096be1306d2aad59eb"
+ },
+ "fixture-clean-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+0": {
+  "length": 4084,
+  "sha256": "f651c4932125580f49c2432075be5fc53c1614dfabfd371ac5767583664cf4b3"
+ },
+ "fixture-clean-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+1": {
+  "length": 4036,
+  "sha256": "8c9dee1b3f1161841d1c48600a7ba93a56f5131efef2d8080c059653d108f54e"
+ },
+ "fixture-clean-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+2": {
+  "length": 4050,
+  "sha256": "bab9ae4b03464ad743f01130478d40755cbf4349ba4c195ab6c7d6c81c34e654"
+ },
+ "fixture-clean-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+0": {
+  "length": 4201,
+  "sha256": "32b49bd295ff91c724175da53d9629ebb2e12744cfdf706497ab28888b076a7e"
+ },
+ "fixture-clean-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+1": {
+  "length": 4153,
+  "sha256": "bfe40cfff5de65cb49e186b0edb65a8cdd78d001d1f099ad7a2abed549de79bb"
+ },
+ "fixture-clean-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+2": {
+  "length": 4167,
+  "sha256": "6591177694b1ab8e1758c7bffaed2c493b3cf18bcd305aba976468114b81c078"
+ },
+ "fixture-clean-single/ORGULHO_DISCRETO/FEED_4X5/seed+0": {
+  "length": 4081,
+  "sha256": "ff9ea7715e31c63d1b1ab6c833112e1f882b14ec63eef526662ed986c3727b77"
+ },
+ "fixture-clean-single/ORGULHO_DISCRETO/FEED_4X5/seed+1": {
+  "length": 4033,
+  "sha256": "e9dcb3a36e62f84a5d5d1e6190445b08d5fec6ce70b21e5fbc1059ef99539404"
+ },
+ "fixture-clean-single/ORGULHO_DISCRETO/FEED_4X5/seed+2": {
+  "length": 4047,
+  "sha256": "b8aa841d46b97443a0725864aeef30fdeb452cf7764de28099018bdc22660410"
+ },
+ "fixture-clean-single/ORGULHO_DISCRETO/STORY_9X16/seed+0": {
+  "length": 4198,
+  "sha256": "cdd0ced7c393b237af4bc024d165751aaed7795321ad45bff6ca534f81b17764"
+ },
+ "fixture-clean-single/ORGULHO_DISCRETO/STORY_9X16/seed+1": {
+  "length": 4150,
+  "sha256": "1b9f6effbc724f476915f2b046f6c4f3f5d3ed1aa3d4075dee20c61569c60872"
+ },
+ "fixture-clean-single/ORGULHO_DISCRETO/STORY_9X16/seed+2": {
+  "length": 4164,
+  "sha256": "c8101a773fe63c82250eb04a91b30bad97f55f7c4b083979d08a6acbd75cc023"
+ },
+ "fixture-clean-single/PERTENCIMENTO/FEED_4X5/seed+0": {
+  "length": 4132,
+  "sha256": "187890d0437b4daaa1f12e77f1a873182ae3ed7067c3e2e223b830f7c9505969"
+ },
+ "fixture-clean-single/PERTENCIMENTO/FEED_4X5/seed+1": {
+  "length": 4084,
+  "sha256": "294a9293de5bade7b844013fae43607ee37b9d5238a4c86ae71cdc3e6924e050"
+ },
+ "fixture-clean-single/PERTENCIMENTO/FEED_4X5/seed+2": {
+  "length": 4098,
+  "sha256": "5224ea825d71a8876541cae0942d6cad95b1589b8121439c0a3e599d7b0bee47"
+ },
+ "fixture-clean-single/PERTENCIMENTO/STORY_9X16/seed+0": {
+  "length": 4249,
+  "sha256": "dc13fa476a1c0c5d1eb75f4d49551fde4bb3b9a773d68dcacc22167fadcf2859"
+ },
+ "fixture-clean-single/PERTENCIMENTO/STORY_9X16/seed+1": {
+  "length": 4201,
+  "sha256": "c304611dd637aef97ec39679dcac394d5ea318b8a94f9ba5fb84f4278113caea"
+ },
+ "fixture-clean-single/PERTENCIMENTO/STORY_9X16/seed+2": {
+  "length": 4215,
+  "sha256": "e905a7252f36f7588d1863f83e227398275ca67605c37fb14fa4e55856c90a0e"
+ },
+ "fixture-clean-single/PREMIUM_ESTILO/FEED_4X5/seed+0": {
+  "length": 3893,
+  "sha256": "4243cfb6fded6273acd2b5f4ddaebf577db03e169c37145396cf259508c7a4b8"
+ },
+ "fixture-clean-single/PREMIUM_ESTILO/FEED_4X5/seed+1": {
+  "length": 3861,
+  "sha256": "40b55ab0274baa123c36d67e2e473c46a94a9b2525b8e45c6af4284f6cb12488"
+ },
+ "fixture-clean-single/PREMIUM_ESTILO/FEED_4X5/seed+2": {
+  "length": 3903,
+  "sha256": "284e2513ecf064e61e08e7b088ca6eed25645bcd97436dc0cc3bb63163030b6f"
+ },
+ "fixture-clean-single/PREMIUM_ESTILO/STORY_9X16/seed+0": {
+  "length": 4010,
+  "sha256": "3ca47274ab336646daaf479df36287cc0c3aedab5d6809e2d0baa641869b86f7"
+ },
+ "fixture-clean-single/PREMIUM_ESTILO/STORY_9X16/seed+1": {
+  "length": 3978,
+  "sha256": "c29474321cffdda0673a364063b53bb42ba7299f2dbfbb41266d940bace29423"
+ },
+ "fixture-clean-single/PREMIUM_ESTILO/STORY_9X16/seed+2": {
+  "length": 4020,
+  "sha256": "b4a8b71da546d8cfbdf0ff82fb45a55c27cdd443a481526f4738c9a814d70948"
+ },
+ "fixture-clean-single/PRESENTE_AFETO/FEED_4X5/seed+0": {
+  "length": 4064,
+  "sha256": "b3e8b35eced767b71049db07a532442585750d6940bcecb7ff21b85a8ddc6420"
+ },
+ "fixture-clean-single/PRESENTE_AFETO/FEED_4X5/seed+1": {
+  "length": 4016,
+  "sha256": "0caa9ec4b66c002b866bea4715464f8a45cd613f279b59c16599945fde99514f"
+ },
+ "fixture-clean-single/PRESENTE_AFETO/FEED_4X5/seed+2": {
+  "length": 4030,
+  "sha256": "d34546c3da3eabe12091d6657f54e07090f64b525b2fda0127804be1fd49b22d"
+ },
+ "fixture-clean-single/PRESENTE_AFETO/STORY_9X16/seed+0": {
+  "length": 4181,
+  "sha256": "24bb1c34a5e77708e2eabc72ec4446bbede8f2c0441bcba3beb332dc6ca10a42"
+ },
+ "fixture-clean-single/PRESENTE_AFETO/STORY_9X16/seed+1": {
+  "length": 4133,
+  "sha256": "b882f77ca14173fb928f47f3999844ef832cce1645a9eeb67db3c84e95790e58"
+ },
+ "fixture-clean-single/PRESENTE_AFETO/STORY_9X16/seed+2": {
+  "length": 4147,
+  "sha256": "35f4644d3f9c2581a652f876b8a0a7d11d99f53f338e662bfeb12054cd93179d"
+ },
+ "fixture-clean-single/PRODUTO_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 3898,
+  "sha256": "6d2f4121831b48487825305e8ed4ff86238b654117655d054b100a2122a5550f"
+ },
+ "fixture-clean-single/PRODUTO_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 3866,
+  "sha256": "0b25f287982e9e8666dfee7b889a70f457c2d67fe5aac1472da307adb93c9ee1"
+ },
+ "fixture-clean-single/PRODUTO_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 3908,
+  "sha256": "e577a8adb6a1b5d924fab6e32637076f9b6c8a4ab1aee3ba4a32f2aff539b480"
+ },
+ "fixture-clean-single/PRODUTO_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 4015,
+  "sha256": "d2cf144e47b5b0de52138abc7a319080dfae763be2fa953717ad6077f8faae40"
+ },
+ "fixture-clean-single/PRODUTO_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 3983,
+  "sha256": "8bba6da65d26ad63f8049e4f083f59236786240b52c4009471d2f9de6b2b1a03"
+ },
+ "fixture-clean-single/PRODUTO_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 4025,
+  "sha256": "33bcf15c778127acdefb9a18c6099fb50e2bde726113d095e7a02cdfe4efcab0"
+ },
+ "fixture-funnel-bofu-single/CABIDE/FEED_4X5/seed+0": {
+  "length": 7462,
+  "sha256": "2a7736fa9269768b48152a27adf33485afd84c803b917bfbc5234300c6f028b2"
+ },
+ "fixture-funnel-bofu-single/CABIDE/FEED_4X5/seed+1": {
+  "length": 7492,
+  "sha256": "9086d70fa62de5d0fc45fcb9328417fb6110b935cea5becdcbd19a9fe0279855"
+ },
+ "fixture-funnel-bofu-single/CABIDE/FEED_4X5/seed+2": {
+  "length": 7490,
+  "sha256": "f96de313fdd6499215cc7a2af745aea9f542ad2bd52c17479284d0bd3c78956a"
+ },
+ "fixture-funnel-bofu-single/CABIDE/STORY_9X16/seed+0": {
+  "length": 7579,
+  "sha256": "80fd3df2b936d6878268d6399e1ea2318511527f11eefe8d32a705913666e5d3"
+ },
+ "fixture-funnel-bofu-single/CABIDE/STORY_9X16/seed+1": {
+  "length": 7609,
+  "sha256": "561bac18900e4033eecdd5b90b318243cb9b99f2615666f0a083a3df53277904"
+ },
+ "fixture-funnel-bofu-single/CABIDE/STORY_9X16/seed+2": {
+  "length": 7607,
+  "sha256": "cdb3243a9332bb2088dfe7709f25b4dc6d6cd050ce0f7644324a14d742541243"
+ },
+ "fixture-funnel-bofu-single/CAIMENTO/FEED_4X5/seed+0": {
+  "length": 5663,
+  "sha256": "cc0cea799bb68dcf479756f4d7c5be4850aa98875a9f71719aa139948e8fefc3"
+ },
+ "fixture-funnel-bofu-single/CAIMENTO/FEED_4X5/seed+1": {
+  "length": 5693,
+  "sha256": "e9ff8593567aaa58afd3e657561ffd8df5b08329f7f9d9ef7666d5a5b5351af7"
+ },
+ "fixture-funnel-bofu-single/CAIMENTO/FEED_4X5/seed+2": {
+  "length": 5691,
+  "sha256": "0f6c0fde6dcea4811a00d58187cc597db6befd1611e87f2eecf827b6c2494381"
+ },
+ "fixture-funnel-bofu-single/CAIMENTO/STORY_9X16/seed+0": {
+  "length": 5780,
+  "sha256": "6e191bc4442f262e5a03131e36b68557dda27be4aeff2073f532d148eeca61e1"
+ },
+ "fixture-funnel-bofu-single/CAIMENTO/STORY_9X16/seed+1": {
+  "length": 5810,
+  "sha256": "c95aa3370e110434fc2fad851e6aae161749e19e8dbe1fafcf239bd1de46909e"
+ },
+ "fixture-funnel-bofu-single/CAIMENTO/STORY_9X16/seed+2": {
+  "length": 5808,
+  "sha256": "caadb7c4eeb0af3394545fbc88f3db9bc07898a67c02f8548b6a49f5b107a4ca"
+ },
+ "fixture-funnel-bofu-single/CLOSE_BOLSO/FEED_4X5/seed+0": {
+  "length": 5679,
+  "sha256": "e1019493712ad56cc3a3eb3b9f747039e94c5aefb2dd853146bbab84575ae1a6"
+ },
+ "fixture-funnel-bofu-single/CLOSE_BOLSO/FEED_4X5/seed+1": {
+  "length": 5709,
+  "sha256": "041685a72d49d90480d42c93a6d45f8eac8e71ca423eda2020dea21f2018d821"
+ },
+ "fixture-funnel-bofu-single/CLOSE_BOLSO/FEED_4X5/seed+2": {
+  "length": 5707,
+  "sha256": "d44dd4b8a944270168995cf3ab6cc714e13446942f6f0280a0c3ea32893f93c0"
+ },
+ "fixture-funnel-bofu-single/CLOSE_BOLSO/STORY_9X16/seed+0": {
+  "length": 5796,
+  "sha256": "0836368b3f228fc6caf5cbc47c5111f40ec87ba2c533df1dff54b57d5c8366b2"
+ },
+ "fixture-funnel-bofu-single/CLOSE_BOLSO/STORY_9X16/seed+1": {
+  "length": 5826,
+  "sha256": "510f3eeb6224fe248519fdd54f4ae15b30bb27c15614547ef49e90614bc1643e"
+ },
+ "fixture-funnel-bofu-single/CLOSE_BOLSO/STORY_9X16/seed+2": {
+  "length": 5824,
+  "sha256": "d61645996d41b292b11f00f2cf799050ac443aa654603e0becad469605c71ee5"
+ },
+ "fixture-funnel-bofu-single/CLOSE_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 5667,
+  "sha256": "60b54560ae9173d939f187b5f430dbf5028455ef9828aa95f638d51d36f9e199"
+ },
+ "fixture-funnel-bofu-single/CLOSE_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 5697,
+  "sha256": "487e0b63eb2c02bc87f7dbbcbefe343bbb2b4f65d1ebe690d4389df1b7148f54"
+ },
+ "fixture-funnel-bofu-single/CLOSE_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 5695,
+  "sha256": "a78b408467fdca15d73f09c9d0225faac3a249aa8981a9897ef13144213097e3"
+ },
+ "fixture-funnel-bofu-single/CLOSE_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 5784,
+  "sha256": "2d05825e43aaf53a889c5a23fc3962adc3b7211171b54f337d957e3a23cda2f5"
+ },
+ "fixture-funnel-bofu-single/CLOSE_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 5814,
+  "sha256": "06705a13110353951901bd9616d40cf1af92abcc581cf30edef44bea50947bde"
+ },
+ "fixture-funnel-bofu-single/CLOSE_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 5812,
+  "sha256": "52ca72e268666e25809ad8bbcfaa82a2e147eee30e079e495a0ce57b964b2c58"
+ },
+ "fixture-funnel-bofu-single/CREATOR_STYLE/FEED_4X5/seed+0": {
+  "length": 5650,
+  "sha256": "54b43e4b426c0492722fc5583851acb738e664193a1c862b168c82eb6b66d9f4"
+ },
+ "fixture-funnel-bofu-single/CREATOR_STYLE/FEED_4X5/seed+1": {
+  "length": 5680,
+  "sha256": "dd39a56fd840a24c66ec774ff40ef733f24725c101aeda07419a363efc580341"
+ },
+ "fixture-funnel-bofu-single/CREATOR_STYLE/FEED_4X5/seed+2": {
+  "length": 5678,
+  "sha256": "969b8192daa25d525aa7a9656814e7b6635988c1f8d1d32794e227facb7250f2"
+ },
+ "fixture-funnel-bofu-single/CREATOR_STYLE/STORY_9X16/seed+0": {
+  "length": 5767,
+  "sha256": "cac10a974bef6772d89bea92e2f5e57c2bd27038d9f3ac794666343a9fb1400c"
+ },
+ "fixture-funnel-bofu-single/CREATOR_STYLE/STORY_9X16/seed+1": {
+  "length": 5797,
+  "sha256": "b82c45585a8f8f775975a477bacdb83319fdd3e9f14ff991d78a0958231c4c0f"
+ },
+ "fixture-funnel-bofu-single/CREATOR_STYLE/STORY_9X16/seed+2": {
+  "length": 5795,
+  "sha256": "165c84b5f3e22624edf0686f31e6e98ee0e3408816aef9f5df621575e2596b3c"
+ },
+ "fixture-funnel-bofu-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+0": {
+  "length": 5733,
+  "sha256": "a87e03e196239c4534a0983b84e273bb7d67410b795d17bcaf286587ecc79d52"
+ },
+ "fixture-funnel-bofu-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+1": {
+  "length": 5763,
+  "sha256": "d920c9324df0c55f063c4c556c448f929a8b9b1cb49a7b0b9114f41daeba4d26"
+ },
+ "fixture-funnel-bofu-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+2": {
+  "length": 5761,
+  "sha256": "91e0b7b1fa3f8ef2232d9dc92bc0b93c6c4b7fa1e564a27131fc87260c57c1e5"
+ },
+ "fixture-funnel-bofu-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+0": {
+  "length": 5850,
+  "sha256": "48d19f426673580224f62d00b7be1c76cd2c713fbeb61de9b7d23acdd9c0fc50"
+ },
+ "fixture-funnel-bofu-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+1": {
+  "length": 5880,
+  "sha256": "1e598f807bcfb4e7617a8a938b42f812641336bf380245855cc2cfa1e223e80e"
+ },
+ "fixture-funnel-bofu-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+2": {
+  "length": 5878,
+  "sha256": "4bc315e7f53edaefb638cf1986e430bf9bbde8d2fdd6c806fc3204545626213e"
+ },
+ "fixture-funnel-bofu-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+0": {
+  "length": 5615,
+  "sha256": "8b5976db35d6af9541c674544f0847567ecc1b5049433498d6e4e0f256defcdb"
+ },
+ "fixture-funnel-bofu-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+1": {
+  "length": 5645,
+  "sha256": "b331adccab43abf382a40565767a7fe746f5281d8a1b95177a157f13c0b4ba5a"
+ },
+ "fixture-funnel-bofu-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+2": {
+  "length": 5643,
+  "sha256": "3b3752b7b1aa96c52dd9b7448e64ff240c615dec60790ab3d0eee698a7d456f6"
+ },
+ "fixture-funnel-bofu-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+0": {
+  "length": 5732,
+  "sha256": "a03a35d3d5adc890b2a3b34d556ca659514fa749f189118bfc1a22e584a4a3b1"
+ },
+ "fixture-funnel-bofu-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+1": {
+  "length": 5762,
+  "sha256": "3aee4349d6e800fb8b155d4781e28db9c5b12ef247fe80a7ff9aef8e34b3e91c"
+ },
+ "fixture-funnel-bofu-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+2": {
+  "length": 5760,
+  "sha256": "aed1e6c7fb6a3f18810b3f90131e677af3e64b154f83032703dccc1c3b7db6e3"
+ },
+ "fixture-funnel-bofu-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+0": {
+  "length": 5629,
+  "sha256": "948cc8c26d343f15216a223cdd9cdcd74d412ed6e5f443ed772b3281fc1b75a0"
+ },
+ "fixture-funnel-bofu-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+1": {
+  "length": 5659,
+  "sha256": "5ac4a70ac2688085d887b4d977de688a9cc43c91b1849947345f9978269babf2"
+ },
+ "fixture-funnel-bofu-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+2": {
+  "length": 5657,
+  "sha256": "0984949ae7dfbb99233e552cadd4e06e3e088096bdda98338f8fe720fc63dd88"
+ },
+ "fixture-funnel-bofu-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+0": {
+  "length": 5746,
+  "sha256": "20b8d95863f9b281e225228ae91e9e33155f6cbb3edb8cf0712301bde053ba1e"
+ },
+ "fixture-funnel-bofu-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+1": {
+  "length": 5776,
+  "sha256": "2fe499fadbd304bb06f5ebe0d81febe07447f9a4ba296b7d2ad29df6f6727a43"
+ },
+ "fixture-funnel-bofu-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+2": {
+  "length": 5774,
+  "sha256": "2c483ee408d018e099f0d1ef4953c7fa44377d1deb43f629d87ee22f66d505aa"
+ },
+ "fixture-funnel-bofu-single/ORGULHO_DISCRETO/FEED_4X5/seed+0": {
+  "length": 5626,
+  "sha256": "953a0801c43328b2677b9c3aa53c4e5b10946d3d15dd6f095f471454c74f6803"
+ },
+ "fixture-funnel-bofu-single/ORGULHO_DISCRETO/FEED_4X5/seed+1": {
+  "length": 5656,
+  "sha256": "335aef7c80061bfee94ab33f51bc87c72e2a8937149d03f7bd43f30439aa8980"
+ },
+ "fixture-funnel-bofu-single/ORGULHO_DISCRETO/FEED_4X5/seed+2": {
+  "length": 5654,
+  "sha256": "5adae76123cbd38f0cfc5bd71e062aff5864c99ecc145001e6ea2292e49f39a6"
+ },
+ "fixture-funnel-bofu-single/ORGULHO_DISCRETO/STORY_9X16/seed+0": {
+  "length": 5743,
+  "sha256": "ef67c8c02ea8332677305ba7b7a12e2f8c77280fbe538a391e0caddf17d3d2e1"
+ },
+ "fixture-funnel-bofu-single/ORGULHO_DISCRETO/STORY_9X16/seed+1": {
+  "length": 5773,
+  "sha256": "ecf21130aba67e7c7b648921f1d8f955265f13920652a0418f405b733ab67ebe"
+ },
+ "fixture-funnel-bofu-single/ORGULHO_DISCRETO/STORY_9X16/seed+2": {
+  "length": 5771,
+  "sha256": "a1338031f9c319fcd410895d628f2bd87d4641eb4592bc162eb49e900681e479"
+ },
+ "fixture-funnel-bofu-single/PERTENCIMENTO/FEED_4X5/seed+0": {
+  "length": 5690,
+  "sha256": "e8b03863c8191d20f0ee728c79db973e9c7d956ce1d59aa1827209caadfaa2f3"
+ },
+ "fixture-funnel-bofu-single/PERTENCIMENTO/FEED_4X5/seed+1": {
+  "length": 5720,
+  "sha256": "a1a564c926ea605fac8d07f357cc109b719492b1fb170c7283e3596f895e999e"
+ },
+ "fixture-funnel-bofu-single/PERTENCIMENTO/FEED_4X5/seed+2": {
+  "length": 5718,
+  "sha256": "37db3f18b5faf04270dba14fd70245e48b714d1b1813e7c278d1292e36077cd4"
+ },
+ "fixture-funnel-bofu-single/PERTENCIMENTO/STORY_9X16/seed+0": {
+  "length": 5807,
+  "sha256": "56c9fc6cba09044179f56b26e58620ebee763ab58b13c5ab4a689658371da89a"
+ },
+ "fixture-funnel-bofu-single/PERTENCIMENTO/STORY_9X16/seed+1": {
+  "length": 5837,
+  "sha256": "e6d41436d6e0a3297f775d2acf8a470525a23eb85554ab86417e32184d319d59"
+ },
+ "fixture-funnel-bofu-single/PERTENCIMENTO/STORY_9X16/seed+2": {
+  "length": 5835,
+  "sha256": "869e9b9bcc899afe6abf7f1c201b62d9a5067207813e76b421e8a31c19676a89"
+ },
+ "fixture-funnel-bofu-single/PREMIUM_ESTILO/FEED_4X5/seed+0": {
+  "length": 5511,
+  "sha256": "9bcaccd11634d72f28d4909313767ac85d5bcd376b519c30aa66b30e31996fd8"
+ },
+ "fixture-funnel-bofu-single/PREMIUM_ESTILO/FEED_4X5/seed+1": {
+  "length": 5541,
+  "sha256": "4f0d0fe7e4d6d9a55a75f4ac9ee73086c8b0e0422c097c30968035d5530361da"
+ },
+ "fixture-funnel-bofu-single/PREMIUM_ESTILO/FEED_4X5/seed+2": {
+  "length": 5539,
+  "sha256": "48149db37978b163cd33499e3b0dc82b931b21a693fb9fa04abca4db9678344c"
+ },
+ "fixture-funnel-bofu-single/PREMIUM_ESTILO/STORY_9X16/seed+0": {
+  "length": 5628,
+  "sha256": "6bc7765c63abe56add087d5286ef8c77f65177128aca7fba5cc1ddd805c8322a"
+ },
+ "fixture-funnel-bofu-single/PREMIUM_ESTILO/STORY_9X16/seed+1": {
+  "length": 5658,
+  "sha256": "3b0b2fdccfe5f90ffd9dda828c60ca7b035b6cb2391b01cead87c0f7adb5295b"
+ },
+ "fixture-funnel-bofu-single/PREMIUM_ESTILO/STORY_9X16/seed+2": {
+  "length": 5656,
+  "sha256": "598113de26b56fcb310525fbae6800019096af0595e157ceadfec6f5c2332613"
+ },
+ "fixture-funnel-bofu-single/PRESENTE_AFETO/FEED_4X5/seed+0": {
+  "length": 5609,
+  "sha256": "2805131f68138a76ee68346e5ef877d56ed4fcd76858e7d2928f166a1517b5b6"
+ },
+ "fixture-funnel-bofu-single/PRESENTE_AFETO/FEED_4X5/seed+1": {
+  "length": 5639,
+  "sha256": "48517f1a743c207286f691eeff75d830503d0ebe25085b2c2c59b715de5d7f25"
+ },
+ "fixture-funnel-bofu-single/PRESENTE_AFETO/FEED_4X5/seed+2": {
+  "length": 5637,
+  "sha256": "70aae1830689018d29f878de71ec14cf1846fde2abdb5e864dabd636607dc562"
+ },
+ "fixture-funnel-bofu-single/PRESENTE_AFETO/STORY_9X16/seed+0": {
+  "length": 5726,
+  "sha256": "326c09983dfefea93ee7e484e16c9fd48231d1207f8718099339edfaaeb97553"
+ },
+ "fixture-funnel-bofu-single/PRESENTE_AFETO/STORY_9X16/seed+1": {
+  "length": 5756,
+  "sha256": "eff9cb65666ff97c4000f61eb9a3108a23f19741afa8c0ec298ea86bca5b226e"
+ },
+ "fixture-funnel-bofu-single/PRESENTE_AFETO/STORY_9X16/seed+2": {
+  "length": 5754,
+  "sha256": "d28fd20d39198fa4f3049d3ee8fb17b3dd8789e3915c942d559d0fa5deeb5cf3"
+ },
+ "fixture-funnel-bofu-single/PRODUTO_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 5516,
+  "sha256": "357a2635b20766e459e238a3c7c804c1082406489acbbeb62b3ec2a8dab8a7f5"
+ },
+ "fixture-funnel-bofu-single/PRODUTO_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 5546,
+  "sha256": "3ab2d5a0a5dab77b049773da359b6b65447bd2a64c274d75c3a80457ba02614c"
+ },
+ "fixture-funnel-bofu-single/PRODUTO_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 5544,
+  "sha256": "40c9bfacfbf4cfd5bc48a16bf73e45dcebe063fbce8179178b7c9e218c5f9caf"
+ },
+ "fixture-funnel-bofu-single/PRODUTO_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 5633,
+  "sha256": "c47cfaa28411567921d974daff9d9449e3554cb3b501d3dc4514f34f8cfc03da"
+ },
+ "fixture-funnel-bofu-single/PRODUTO_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 5663,
+  "sha256": "4dd105169b233b40b010af33ac92f60d1e52ee0a01a5e31bcf679deee335939c"
+ },
+ "fixture-funnel-bofu-single/PRODUTO_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 5661,
+  "sha256": "ef331b3e242751b79607b51a67c7d137b9d91b5a63d3901a9393625ac4221eca"
+ },
+ "fixture-funnel-mofu-multi/CABIDE/FEED_4X5/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CABIDE/FEED_4X5/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CABIDE/FEED_4X5/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CABIDE/STORY_9X16/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CABIDE/STORY_9X16/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CABIDE/STORY_9X16/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CAIMENTO/FEED_4X5/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CAIMENTO/FEED_4X5/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CAIMENTO/FEED_4X5/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CAIMENTO/STORY_9X16/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CAIMENTO/STORY_9X16/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CAIMENTO/STORY_9X16/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_BOLSO/FEED_4X5/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_BOLSO/FEED_4X5/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_BOLSO/FEED_4X5/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_BOLSO/STORY_9X16/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_BOLSO/STORY_9X16/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_BOLSO/STORY_9X16/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_ESTAMPA/FEED_4X5/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_ESTAMPA/FEED_4X5/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_ESTAMPA/FEED_4X5/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_ESTAMPA/STORY_9X16/seed+0": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_ESTAMPA/STORY_9X16/seed+1": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CLOSE_ESTAMPA/STORY_9X16/seed+2": {
+  "error": "UNSUPPORTED_ANGLE"
+ },
+ "fixture-funnel-mofu-multi/CREATOR_STYLE/FEED_4X5/seed+0": {
+  "length": 4647,
+  "sha256": "71d82a2494ceb00cc0be9e3bdcbec6b67a00868cdeeadc84d9edf89da8cf357e"
+ },
+ "fixture-funnel-mofu-multi/CREATOR_STYLE/FEED_4X5/seed+1": {
+  "length": 4683,
+  "sha256": "1846fbec17f9d1ba15860cff20110812cb157878932d3cb7d462e2f1ff2443f0"
+ },
+ "fixture-funnel-mofu-multi/CREATOR_STYLE/FEED_4X5/seed+2": {
+  "length": 4630,
+  "sha256": "c7cd701c7c0b64e2783fdb6c80a2d68aedca75f1fcb589bd226cd22e0f856162"
+ },
+ "fixture-funnel-mofu-multi/CREATOR_STYLE/STORY_9X16/seed+0": {
+  "length": 4764,
+  "sha256": "10a2d324340cd20c3738127c0a8b8892e4de35413e66f4bf0e667df0d81e0037"
+ },
+ "fixture-funnel-mofu-multi/CREATOR_STYLE/STORY_9X16/seed+1": {
+  "length": 4800,
+  "sha256": "f489d186ed4aab20380f05c79d0873f486f58fc7ebc3930b718590c33ea51a2a"
+ },
+ "fixture-funnel-mofu-multi/CREATOR_STYLE/STORY_9X16/seed+2": {
+  "length": 4747,
+  "sha256": "85d92ed1257f553a0045786705ad46cf08b9b3c2d7b3f107bbf01c641403b35f"
+ },
+ "fixture-funnel-mofu-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+0": {
+  "length": 4750,
+  "sha256": "ba60da05cfc7fb49185472f54ec4beeb1f19873d9226c413329fb298c7c7cacb"
+ },
+ "fixture-funnel-mofu-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+1": {
+  "length": 4770,
+  "sha256": "18d11784faf4ae12880ab64803462e600c783eb555270a930940a53380498a35"
+ },
+ "fixture-funnel-mofu-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+2": {
+  "length": 4716,
+  "sha256": "31a23c4696b5dccbea548c7b606b0493df2a9c62734c8cb10c332b37a2d107ae"
+ },
+ "fixture-funnel-mofu-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+0": {
+  "length": 4867,
+  "sha256": "248daa1027565ea28b4d431173e3c473a7e7966e74bd1c4fcc749677aad4705f"
+ },
+ "fixture-funnel-mofu-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+1": {
+  "length": 4887,
+  "sha256": "feea073a46bfff1c487ad406ba261646dd7df7b116b1aca1952462aa9fb2cf80"
+ },
+ "fixture-funnel-mofu-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+2": {
+  "length": 4833,
+  "sha256": "f905d079e8008a621280ecabfe2feedb2a1b69f55a8060a7ad4057fc46aead59"
+ },
+ "fixture-funnel-mofu-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+0": {
+  "length": 4712,
+  "sha256": "83eb6afb984a53148737436467cfdbc6bd23e9e76dfb0235de83fd1a57fa1b79"
+ },
+ "fixture-funnel-mofu-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+1": {
+  "length": 4732,
+  "sha256": "0c1f949baafb60c54a87760a51c5a1249803147501d71ffa491dddc4aee2e373"
+ },
+ "fixture-funnel-mofu-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+2": {
+  "length": 4678,
+  "sha256": "7cf3e69321a26eacfbe05cc9d011a3ada93d9acf31dda8b0d5e7b1a062f5429d"
+ },
+ "fixture-funnel-mofu-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+0": {
+  "length": 4829,
+  "sha256": "4d797538b8253da0067591ffeaf0b6acb2ad30082e63c58c9b6901b321fe5af6"
+ },
+ "fixture-funnel-mofu-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+1": {
+  "length": 4849,
+  "sha256": "86106079edd7cc8535181c45a9e16a49ea70b16e1452ff454dc13b7f44bff946"
+ },
+ "fixture-funnel-mofu-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+2": {
+  "length": 4795,
+  "sha256": "7b0923cecb765662695ad246d3529d5f1a9030b4441c48c70950a9b22d98a504"
+ },
+ "fixture-funnel-mofu-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+0": {
+  "length": 4666,
+  "sha256": "ffb5270b94b8a43a3857f67e6861eadb360b6f0bc3db0c7a2cd147f28b273e9a"
+ },
+ "fixture-funnel-mofu-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+1": {
+  "length": 4686,
+  "sha256": "f30897308fc7c918b364bd9fb56384717db0dae3142a45c871a416ffd44054e5"
+ },
+ "fixture-funnel-mofu-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+2": {
+  "length": 4632,
+  "sha256": "01751ad5d00466057f023951cf8a5725492a3dd9ae5d8602667ecdc32a7e9783"
+ },
+ "fixture-funnel-mofu-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+0": {
+  "length": 4783,
+  "sha256": "194439d46afebf8bd6db94d804430f03c082618c0431f6357fc9bb25042134f1"
+ },
+ "fixture-funnel-mofu-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+1": {
+  "length": 4803,
+  "sha256": "4bd3eb15b588ad9e7e9ffbd62850a9943a597612c5d06296c58f25c780a2068f"
+ },
+ "fixture-funnel-mofu-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+2": {
+  "length": 4749,
+  "sha256": "99361ca9a8db6b41c5848fe4a3662415da2756b074e4f16339e15219edfc6c99"
+ },
+ "fixture-funnel-mofu-multi/ORGULHO_DISCRETO/FEED_4X5/seed+0": {
+  "length": 4652,
+  "sha256": "e106e217545be7e2c973ec224ef5ac54069a79abe82bcb1c32ef84d89bbad7ca"
+ },
+ "fixture-funnel-mofu-multi/ORGULHO_DISCRETO/FEED_4X5/seed+1": {
+  "length": 4688,
+  "sha256": "06b70f4f3c45b8f7237c5d210cbfce8420f812c0e55d7c56120fc6cb6aef0916"
+ },
+ "fixture-funnel-mofu-multi/ORGULHO_DISCRETO/FEED_4X5/seed+2": {
+  "length": 4635,
+  "sha256": "be5d26d53c2ac64b84e22cd525b2a4d387aaf06d14c6145a86433984af66e61f"
+ },
+ "fixture-funnel-mofu-multi/ORGULHO_DISCRETO/STORY_9X16/seed+0": {
+  "length": 4769,
+  "sha256": "f8cf77a4827905858a80b2bd45c0c59943fefe8b7c23842569fb1b2dae688d32"
+ },
+ "fixture-funnel-mofu-multi/ORGULHO_DISCRETO/STORY_9X16/seed+1": {
+  "length": 4805,
+  "sha256": "0bf33a0e932d2363ca9e7b0d83beec0e18fa3061bf79c2043515c44f3e4f491e"
+ },
+ "fixture-funnel-mofu-multi/ORGULHO_DISCRETO/STORY_9X16/seed+2": {
+  "length": 4752,
+  "sha256": "f74649ac030c2a7443e7c050389ff730fc177721dbe4f3d9207a036f6b7379ba"
+ },
+ "fixture-funnel-mofu-multi/PERTENCIMENTO/FEED_4X5/seed+0": {
+  "length": 4690,
+  "sha256": "71586a19aa061c6a4ce2e1edd51b6f60f4fa1bc297e1a57d2e8fb8a3d71fdd69"
+ },
+ "fixture-funnel-mofu-multi/PERTENCIMENTO/FEED_4X5/seed+1": {
+  "length": 4710,
+  "sha256": "77915346a48377bf97de644cec785e7f2217ee1f151d7b82269155af4cf689ab"
+ },
+ "fixture-funnel-mofu-multi/PERTENCIMENTO/FEED_4X5/seed+2": {
+  "length": 4656,
+  "sha256": "f4fe849245875bd8abdc6124f665812ba99def4ec83cb374f602a000c058fcaa"
+ },
+ "fixture-funnel-mofu-multi/PERTENCIMENTO/STORY_9X16/seed+0": {
+  "length": 4807,
+  "sha256": "35023ff35a508582b236b3cee860e0f17d4ea6d1db8c7ac799b583523b9c5f09"
+ },
+ "fixture-funnel-mofu-multi/PERTENCIMENTO/STORY_9X16/seed+1": {
+  "length": 4827,
+  "sha256": "ad6e54ad4e625b9eea5069974b3efc06f173e396729b045af39dfdf9bfef8226"
+ },
+ "fixture-funnel-mofu-multi/PERTENCIMENTO/STORY_9X16/seed+2": {
+  "length": 4773,
+  "sha256": "7cb3dd1367380004f6b3f65b276bd1752c355924793e4f8b396b83c454da3e16"
+ },
+ "fixture-funnel-mofu-multi/PREMIUM_ESTILO/FEED_4X5/seed+0": {
+  "length": 4261,
+  "sha256": "1ed4dba0c50df40184c132a7e29c0abc78dd7090ef785171c9ae4afd601e6513"
+ },
+ "fixture-funnel-mofu-multi/PREMIUM_ESTILO/FEED_4X5/seed+1": {
+  "length": 4245,
+  "sha256": "b385da93016b59b90768b7ca0adcbf237181a66e833343f7da352eae614b655e"
+ },
+ "fixture-funnel-mofu-multi/PREMIUM_ESTILO/FEED_4X5/seed+2": {
+  "length": 4244,
+  "sha256": "48a7e61a623d4659d624e293636dc546af27a86d4b88ef87d5c0a914c22ea2bb"
+ },
+ "fixture-funnel-mofu-multi/PREMIUM_ESTILO/STORY_9X16/seed+0": {
+  "length": 4378,
+  "sha256": "25c60a8fa837a19fd58af996e7547d5e2ca44273e20076859562793f1c220dd4"
+ },
+ "fixture-funnel-mofu-multi/PREMIUM_ESTILO/STORY_9X16/seed+1": {
+  "length": 4362,
+  "sha256": "8643cdf0b75b370db2078c75604d4f7196bca72e80f0d57df9384750d4caded0"
+ },
+ "fixture-funnel-mofu-multi/PREMIUM_ESTILO/STORY_9X16/seed+2": {
+  "length": 4361,
+  "sha256": "f9908e89bcdf73cf72123bac32b58857fd5384865bceb1b412d9fe85f18e0fe6"
+ },
+ "fixture-funnel-mofu-multi/PRESENTE_AFETO/FEED_4X5/seed+0": {
+  "length": 4537,
+  "sha256": "f6df2be0086c786b666e5881ac2c0d3585305ee097dd233f6d49dc77a5ef31db"
+ },
+ "fixture-funnel-mofu-multi/PRESENTE_AFETO/FEED_4X5/seed+1": {
+  "length": 4564,
+  "sha256": "d7025830a7a6369eb858ac6610e93f18166b25f92ab736c927caf46115a2080a"
+ },
+ "fixture-funnel-mofu-multi/PRESENTE_AFETO/FEED_4X5/seed+2": {
+  "length": 4520,
+  "sha256": "249ad9ddd7a8a1ff14e41aa17d92c3bc7a032b2219182b6bfacdedeb5f165c7c"
+ },
+ "fixture-funnel-mofu-multi/PRESENTE_AFETO/STORY_9X16/seed+0": {
+  "length": 4654,
+  "sha256": "61137caed3f7ae24ab5cd6b9ab73c2960b48ae52c5d03ed5414d24b03b7ff82e"
+ },
+ "fixture-funnel-mofu-multi/PRESENTE_AFETO/STORY_9X16/seed+1": {
+  "length": 4681,
+  "sha256": "a40120e2fc80e6732a466a7f3782ba9d16eee5c2099ade42126ee35e002db9a8"
+ },
+ "fixture-funnel-mofu-multi/PRESENTE_AFETO/STORY_9X16/seed+2": {
+  "length": 4637,
+  "sha256": "47269330f2df7f3cddc859a9877add9c4984fc41fffe89b94e33c65574677a2e"
+ },
+ "fixture-funnel-mofu-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 4362,
+  "sha256": "3a07f387fd2570b5aeba320b9fd60fa65a5368a5ab500e6205a69ed51a005ab9"
+ },
+ "fixture-funnel-mofu-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 4330,
+  "sha256": "614368b2e97b7539d62834002005e9b0d2134d866196f80a6c8fbf0f52388f6b"
+ },
+ "fixture-funnel-mofu-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 4328,
+  "sha256": "30370e1425e1475f43c2b2978f54f5f75fb5b37d830fec33788cd60e0883d7af"
+ },
+ "fixture-funnel-mofu-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 4479,
+  "sha256": "997a22ff2e688414b802bf93d9094ffc6ee695a99f381f4807ebfda53045b361"
+ },
+ "fixture-funnel-mofu-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 4447,
+  "sha256": "e23c01bf1dc8083978f37812bee3da31c073dad5b1d2024ba86f4d200c4a5307"
+ },
+ "fixture-funnel-mofu-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 4445,
+  "sha256": "c6574a0caa18d026fee2caf222e93bf4eb03b81c331ef5eacb1fc42b81a5ba41"
+ },
+ "fixture-funnel-tofu-single/CABIDE/FEED_4X5/seed+0": {
+  "length": 6558,
+  "sha256": "2a26d97b8c8d79151fcde3d37d31068505686e49f985b7720b57fabc1e67c69c"
+ },
+ "fixture-funnel-tofu-single/CABIDE/FEED_4X5/seed+1": {
+  "length": 6590,
+  "sha256": "85c7398905c8b144578c94ff9d3081b372ef729d804545a5a78aff29b4ed5714"
+ },
+ "fixture-funnel-tofu-single/CABIDE/FEED_4X5/seed+2": {
+  "length": 6550,
+  "sha256": "8b2fa37b277f986156e4a0008e429d07f10a0249fa276ee4d04e7eb924e0d0e8"
+ },
+ "fixture-funnel-tofu-single/CABIDE/STORY_9X16/seed+0": {
+  "length": 6675,
+  "sha256": "13df55d5b733333b4f919a0d3cb508805bd2407b7307b0222ee549c35a275ece"
+ },
+ "fixture-funnel-tofu-single/CABIDE/STORY_9X16/seed+1": {
+  "length": 6707,
+  "sha256": "e5d12b8d4d0395409778932d795287d82358005dc5e77371a5e394485f12765e"
+ },
+ "fixture-funnel-tofu-single/CABIDE/STORY_9X16/seed+2": {
+  "length": 6667,
+  "sha256": "c2bb8893d2f4166d41d36fa959f3d76a91cf133255ab1ff64ce703f8249ce59c"
+ },
+ "fixture-funnel-tofu-single/CAIMENTO/FEED_4X5/seed+0": {
+  "length": 4790,
+  "sha256": "08322bccec546987b6a2656e89dbae1ec2a458015ad18f334f0df2999352f3c5"
+ },
+ "fixture-funnel-tofu-single/CAIMENTO/FEED_4X5/seed+1": {
+  "length": 4866,
+  "sha256": "00d8df2c5f9ddd8edc0b3832376bb801bd9272c131b313e44e0ccb068691fab5"
+ },
+ "fixture-funnel-tofu-single/CAIMENTO/FEED_4X5/seed+2": {
+  "length": 4810,
+  "sha256": "b6ae4c5582de48da836546508df8fbaf768652ec024fd367061b41eb0dc68c6f"
+ },
+ "fixture-funnel-tofu-single/CAIMENTO/STORY_9X16/seed+0": {
+  "length": 4907,
+  "sha256": "8499ee6f8302b1c0bf0e534a8f26428cfbe978fd81c3f15629c7872aff68e873"
+ },
+ "fixture-funnel-tofu-single/CAIMENTO/STORY_9X16/seed+1": {
+  "length": 4983,
+  "sha256": "ab26df78fb980bf9bb2efc87e814723ad64ef5976c1c172d32e1514e97a4d747"
+ },
+ "fixture-funnel-tofu-single/CAIMENTO/STORY_9X16/seed+2": {
+  "length": 4927,
+  "sha256": "cb72f3cba044c75b8955db5fe62d73bf0a1da5de006066c22f737ec771605548"
+ },
+ "fixture-funnel-tofu-single/CLOSE_BOLSO/FEED_4X5/seed+0": {
+  "length": 4806,
+  "sha256": "35510305bb35e3a1a1364304e1cf5002c4d2a0eabd9d49190cb52b2381cfae6a"
+ },
+ "fixture-funnel-tofu-single/CLOSE_BOLSO/FEED_4X5/seed+1": {
+  "length": 4882,
+  "sha256": "2ec0b27a59eb152bd800c2b4383fb989a625693f6b9d3e7d96949b5a398772e8"
+ },
+ "fixture-funnel-tofu-single/CLOSE_BOLSO/FEED_4X5/seed+2": {
+  "length": 4826,
+  "sha256": "bafd9888130ad056070adbb4fbbea0c26365d719c507fe6a383d904d4e84eca4"
+ },
+ "fixture-funnel-tofu-single/CLOSE_BOLSO/STORY_9X16/seed+0": {
+  "length": 4923,
+  "sha256": "d06e075e9fccc2dbe9939d97fd71a36f9becc4cd16c13e1cad3a9f7156d2ee28"
+ },
+ "fixture-funnel-tofu-single/CLOSE_BOLSO/STORY_9X16/seed+1": {
+  "length": 4999,
+  "sha256": "3f6685d8d52f3b8cad9c3e2137a2fe22119c2b57c3eeeb4ba7d3db7693cf060a"
+ },
+ "fixture-funnel-tofu-single/CLOSE_BOLSO/STORY_9X16/seed+2": {
+  "length": 4943,
+  "sha256": "bbc53631f4c67f2994ec73dfde63d559ade718e99ac0dc58cea9ab06ebcd8d27"
+ },
+ "fixture-funnel-tofu-single/CLOSE_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 4794,
+  "sha256": "6267899762f82b1968c2df4883cf5575d1868eb54448c05c9fc48ec92c8cd63c"
+ },
+ "fixture-funnel-tofu-single/CLOSE_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 4870,
+  "sha256": "6ff1e70e5f889b4d17104fc47147d9e857152c14c115e388d19ed4b849fe4b44"
+ },
+ "fixture-funnel-tofu-single/CLOSE_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 4814,
+  "sha256": "d0219fbea2e0183762d772e29202ba3c4915e6ffee1ec1e990d31f81b7216e2d"
+ },
+ "fixture-funnel-tofu-single/CLOSE_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 4911,
+  "sha256": "698f1c82eda688b070178a7f52b03b672fb3d15ef2ee44b987748893d47d96f9"
+ },
+ "fixture-funnel-tofu-single/CLOSE_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 4987,
+  "sha256": "9d7e5077b5eac92da62d4dba8a4f5edfa4b52e3b49cf16aa3d1b3c39e0be9e7e"
+ },
+ "fixture-funnel-tofu-single/CLOSE_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 4931,
+  "sha256": "2e370f301cdd736c747e97cb2e19cd43c88cd4ed99a9cba65fb883578e062f70"
+ },
+ "fixture-funnel-tofu-single/CREATOR_STYLE/FEED_4X5/seed+0": {
+  "length": 4777,
+  "sha256": "9f38837574b2b0345a0cfae392472b9f927a3a44dda99ccbf717cee1391ac7df"
+ },
+ "fixture-funnel-tofu-single/CREATOR_STYLE/FEED_4X5/seed+1": {
+  "length": 4853,
+  "sha256": "497695c190517f6a8befe56e5f3c4341f98203581f595774fce295b8bbc4f156"
+ },
+ "fixture-funnel-tofu-single/CREATOR_STYLE/FEED_4X5/seed+2": {
+  "length": 4797,
+  "sha256": "3c26162b13aae1408e27c1d1624cb26d892e2856a40369238294ac957cb808f4"
+ },
+ "fixture-funnel-tofu-single/CREATOR_STYLE/STORY_9X16/seed+0": {
+  "length": 4894,
+  "sha256": "8a887f262466dfc0045119c698a923cc0431a8fb6c8d0742c111cfb398cb7a0b"
+ },
+ "fixture-funnel-tofu-single/CREATOR_STYLE/STORY_9X16/seed+1": {
+  "length": 4970,
+  "sha256": "08cbcacb74d30a063692a76b5e31c523818c819021521044acdeb979355f89e3"
+ },
+ "fixture-funnel-tofu-single/CREATOR_STYLE/STORY_9X16/seed+2": {
+  "length": 4914,
+  "sha256": "01400d23c383410354e638f317946c85f187d7352604c63fd90b757e0c5daebf"
+ },
+ "fixture-funnel-tofu-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+0": {
+  "length": 4860,
+  "sha256": "e4aea5694f80538debdf8957f3b0a041388fe044ad4ad3c75eb442297459bde4"
+ },
+ "fixture-funnel-tofu-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+1": {
+  "length": 4936,
+  "sha256": "d2c7eb860530014cf749604df3693d1d1d8c682803145b050d78f5c48a4eb247"
+ },
+ "fixture-funnel-tofu-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+2": {
+  "length": 4880,
+  "sha256": "d08bee0ac7a9d872febfdda406128543cfcbb5a022a637cdde8f4ccfe113bd5b"
+ },
+ "fixture-funnel-tofu-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+0": {
+  "length": 4977,
+  "sha256": "f1461d9a0efb79b5e6e10837c595f89612bc471fe2421f0049531cb4f8e6df5c"
+ },
+ "fixture-funnel-tofu-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+1": {
+  "length": 5053,
+  "sha256": "fea0660648e70d9ade1663abba4dd8b8d8f2fe1e4481a94782fd5c9051000320"
+ },
+ "fixture-funnel-tofu-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+2": {
+  "length": 4997,
+  "sha256": "73b7bb8240f40ab5aba82784227679fce6c571c0b5391836f0f093332d099918"
+ },
+ "fixture-funnel-tofu-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+0": {
+  "length": 4742,
+  "sha256": "00f615f60af6d3556cad535830db2bf800fdfe9adc00e18b916fe8ede3520227"
+ },
+ "fixture-funnel-tofu-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+1": {
+  "length": 4818,
+  "sha256": "230adf05cae384b9959ee5b0a1f6b02a82b5effef1bd57844b43bf126fd8a4a5"
+ },
+ "fixture-funnel-tofu-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+2": {
+  "length": 4762,
+  "sha256": "653ae9062635d5a8d6bc9e13247572ac5972da6d6db0345ceec7de65ee792805"
+ },
+ "fixture-funnel-tofu-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+0": {
+  "length": 4859,
+  "sha256": "5f649d9a3a883a9e2e2c001b5b5a805be73a1565e084cc68ab4bbfbff3e4b6dc"
+ },
+ "fixture-funnel-tofu-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+1": {
+  "length": 4935,
+  "sha256": "21cb5453d2bab07de95f914fc8fbfe44e16d886f26ab313b5a6d7d5c8fa4fbe2"
+ },
+ "fixture-funnel-tofu-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+2": {
+  "length": 4879,
+  "sha256": "8186f9e6e576c02e3ec7ee291210d64b5568f4a8cc759ab2ea2c8d18ef5914a2"
+ },
+ "fixture-funnel-tofu-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+0": {
+  "length": 4756,
+  "sha256": "837029812b2617f8673c628416dc83e4c70cdbdcf4a350dec650ff947c771733"
+ },
+ "fixture-funnel-tofu-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+1": {
+  "length": 4832,
+  "sha256": "235aa61cb246c81fc3482bd01b057397873b6cde3727f7213af8944165e8f0dd"
+ },
+ "fixture-funnel-tofu-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+2": {
+  "length": 4776,
+  "sha256": "d7f151eb9eb6f4ac6dd97d46816e1540007e7850d6e693f52b52e2cf76c019a7"
+ },
+ "fixture-funnel-tofu-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+0": {
+  "length": 4873,
+  "sha256": "19ccd9cc1b8321f6fbdbf24525d26f80aa956db879e8b1219bd09290f582f6c9"
+ },
+ "fixture-funnel-tofu-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+1": {
+  "length": 4949,
+  "sha256": "4a029f3ec055644f894492f74dce20d6942e3db2bd9559cb8cbb2c826e8fdb4d"
+ },
+ "fixture-funnel-tofu-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+2": {
+  "length": 4893,
+  "sha256": "87e246c31d418bc2194dae6fe48a51a6224b08e345f6c3c23ef0f31d679b6a17"
+ },
+ "fixture-funnel-tofu-single/ORGULHO_DISCRETO/FEED_4X5/seed+0": {
+  "length": 4753,
+  "sha256": "f61e196e3af890a889622110d48a0405b11f840bb252ce783c19efbdf807bcb2"
+ },
+ "fixture-funnel-tofu-single/ORGULHO_DISCRETO/FEED_4X5/seed+1": {
+  "length": 4829,
+  "sha256": "7d666e841ffd5524b026c6a987ea9b4b69fd8ac28342b33cf6a1e5ba78de7b1d"
+ },
+ "fixture-funnel-tofu-single/ORGULHO_DISCRETO/FEED_4X5/seed+2": {
+  "length": 4773,
+  "sha256": "b17a31e391ec3758104bb3c101927c4bcfd3f14a18243f12ad2194185c4a5078"
+ },
+ "fixture-funnel-tofu-single/ORGULHO_DISCRETO/STORY_9X16/seed+0": {
+  "length": 4870,
+  "sha256": "5db4ed81357e4a665220d35a0552008ae9a28379a64dc3d23b1efb994dad7dfb"
+ },
+ "fixture-funnel-tofu-single/ORGULHO_DISCRETO/STORY_9X16/seed+1": {
+  "length": 4946,
+  "sha256": "d2d40446e3381ae5fb8953b50475bd1fa7a455cd59aa417c6d00188268499fc2"
+ },
+ "fixture-funnel-tofu-single/ORGULHO_DISCRETO/STORY_9X16/seed+2": {
+  "length": 4890,
+  "sha256": "55a56d895c1e59d667c0107ed88522c9cd13f560066f113f9372cbee750c8d9a"
+ },
+ "fixture-funnel-tofu-single/PERTENCIMENTO/FEED_4X5/seed+0": {
+  "length": 4803,
+  "sha256": "50b18bb35e9a6d2dd5c4c9ab0cb6508f67d615b715aecd451b212cef3c202a86"
+ },
+ "fixture-funnel-tofu-single/PERTENCIMENTO/FEED_4X5/seed+1": {
+  "length": 4879,
+  "sha256": "febf3270015c5b0430fafef63aa77b40d267449d1b13f67c7802f3ab08e9069b"
+ },
+ "fixture-funnel-tofu-single/PERTENCIMENTO/FEED_4X5/seed+2": {
+  "length": 4823,
+  "sha256": "3cd2dbda46716067f8cf92e42542439cceb8cb80b6890c845aef352da2b8e2f8"
+ },
+ "fixture-funnel-tofu-single/PERTENCIMENTO/STORY_9X16/seed+0": {
+  "length": 4920,
+  "sha256": "25ec910c8fa779dfe3267331c6c7210366271c2fc1ee503e8169280c4a0e7b4c"
+ },
+ "fixture-funnel-tofu-single/PERTENCIMENTO/STORY_9X16/seed+1": {
+  "length": 4996,
+  "sha256": "5c8a0e2be7a2f49008ec37608dbec1a879bc02f0b34020df5905d6d41eba29b9"
+ },
+ "fixture-funnel-tofu-single/PERTENCIMENTO/STORY_9X16/seed+2": {
+  "length": 4940,
+  "sha256": "8d3ceb5fe354029bb198e1725e0614fbd236b2163ae15164ab99570e8ed653df"
+ },
+ "fixture-funnel-tofu-single/PREMIUM_ESTILO/FEED_4X5/seed+0": {
+  "length": 4607,
+  "sha256": "9975dd3486df1a4c6ef300474d4c5e34b138d6f2f3afd16d135aae553d6340a5"
+ },
+ "fixture-funnel-tofu-single/PREMIUM_ESTILO/FEED_4X5/seed+1": {
+  "length": 4639,
+  "sha256": "b4a7054de7511e7ac5e5f83e19d28a27626b1b8760dea83b937990c4dbb66205"
+ },
+ "fixture-funnel-tofu-single/PREMIUM_ESTILO/FEED_4X5/seed+2": {
+  "length": 4599,
+  "sha256": "3bf352eb707205d171e0259e27e97032f756052101fc724be1b7c004ec87951d"
+ },
+ "fixture-funnel-tofu-single/PREMIUM_ESTILO/STORY_9X16/seed+0": {
+  "length": 4724,
+  "sha256": "09ae2754be5148a61f9633713cbf4b81c1b0ad52113e3dd1c2bcb39e96bd7df3"
+ },
+ "fixture-funnel-tofu-single/PREMIUM_ESTILO/STORY_9X16/seed+1": {
+  "length": 4756,
+  "sha256": "bbd10ad94c867cc3fe8a2a38a31bd80da7d0af99709f8b762de3f96374d5ddbc"
+ },
+ "fixture-funnel-tofu-single/PREMIUM_ESTILO/STORY_9X16/seed+2": {
+  "length": 4716,
+  "sha256": "55e81b6b7f6ddd8bab262ff2707feb3a73d9a365c509c3e50324c2b489c1f46e"
+ },
+ "fixture-funnel-tofu-single/PRESENTE_AFETO/FEED_4X5/seed+0": {
+  "length": 4736,
+  "sha256": "edb4d52c64262e25b5119a5811740856cba9d2dd47ed689492edcfbe12365978"
+ },
+ "fixture-funnel-tofu-single/PRESENTE_AFETO/FEED_4X5/seed+1": {
+  "length": 4812,
+  "sha256": "d8427db571a363f36b64caebb4d1f146ee9dac41b373610f5ffb5239188fe72d"
+ },
+ "fixture-funnel-tofu-single/PRESENTE_AFETO/FEED_4X5/seed+2": {
+  "length": 4756,
+  "sha256": "08155600e4382cd15d90266b25ffa84b166cc36fa055948162abc5428b6845d2"
+ },
+ "fixture-funnel-tofu-single/PRESENTE_AFETO/STORY_9X16/seed+0": {
+  "length": 4853,
+  "sha256": "9588fc622491d5da4fcd94f8654e3973b23ea36d98245d7011cd2c1cf2aec4e2"
+ },
+ "fixture-funnel-tofu-single/PRESENTE_AFETO/STORY_9X16/seed+1": {
+  "length": 4929,
+  "sha256": "1c6d5f6678bbebca66bd03f538b6e2c4416ebe8ed605bc5118f9e8f8021a19df"
+ },
+ "fixture-funnel-tofu-single/PRESENTE_AFETO/STORY_9X16/seed+2": {
+  "length": 4873,
+  "sha256": "f4b4ad88315819fdb8fc7b8e3b5ee3c32b26fd6da41785d80c589b9d91299c4b"
+ },
+ "fixture-funnel-tofu-single/PRODUTO_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 4612,
+  "sha256": "0479e310aba7178d42631e180012345f4d39230d3d0dc2d184c3f37b77036f78"
+ },
+ "fixture-funnel-tofu-single/PRODUTO_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 4644,
+  "sha256": "cc020eba1034811e58150cc7c1000249322becc9ce89cd78bcb5cb1c97680e9e"
+ },
+ "fixture-funnel-tofu-single/PRODUTO_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 4604,
+  "sha256": "e5c617c766ee1723ec7d6964344bb2bdb7d47a4e230a5ccbc40e605f403b472f"
+ },
+ "fixture-funnel-tofu-single/PRODUTO_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 4729,
+  "sha256": "4a5390b6f8b30fec2bf9a399f6089719fdf3e8bf980f0d083a70f9364ef2c1e5"
+ },
+ "fixture-funnel-tofu-single/PRODUTO_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 4761,
+  "sha256": "36505cd497e4d43ca7d15afbde0048168dfae9234d81bb46968e496b98087ddc"
+ },
+ "fixture-funnel-tofu-single/PRODUTO_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 4721,
+  "sha256": "e7d2c9327b186df58b7ee64c0668d369372250fa436a74281cd7a665c8d36ff3"
+ },
+ "fixture-remarketing-multi/CABIDE/FEED_4X5/seed+0": {
+  "length": 4340,
+  "sha256": "e141d274a848c4b722b965617d17cf1d7352cb75b116f2a8c181185dd6acb926"
+ },
+ "fixture-remarketing-multi/CABIDE/FEED_4X5/seed+1": {
+  "length": 4311,
+  "sha256": "d414634b67e970f59e5cdc53a1282ee1f8fd5a1172115ac6e24b6add833a1e94"
+ },
+ "fixture-remarketing-multi/CABIDE/FEED_4X5/seed+2": {
+  "length": 4340,
+  "sha256": "e141d274a848c4b722b965617d17cf1d7352cb75b116f2a8c181185dd6acb926"
+ },
+ "fixture-remarketing-multi/CABIDE/STORY_9X16/seed+0": {
+  "length": 4457,
+  "sha256": "df4fc9b95a9292c3f1754cebc592c73bd09c7c4c644014512e5dfd8d9a55c4b0"
+ },
+ "fixture-remarketing-multi/CABIDE/STORY_9X16/seed+1": {
+  "length": 4428,
+  "sha256": "6b88e986910c2e56d7a122eea49bae25df4e8995e85b4435d6c97741a43936af"
+ },
+ "fixture-remarketing-multi/CABIDE/STORY_9X16/seed+2": {
+  "length": 4457,
+  "sha256": "df4fc9b95a9292c3f1754cebc592c73bd09c7c4c644014512e5dfd8d9a55c4b0"
+ },
+ "fixture-remarketing-multi/CAIMENTO/FEED_4X5/seed+0": {
+  "length": 4267,
+  "sha256": "b4078267fe41913b88a919e48108316a4240dbb809ac7563c76bdcb53241323a"
+ },
+ "fixture-remarketing-multi/CAIMENTO/FEED_4X5/seed+1": {
+  "length": 4238,
+  "sha256": "dee636068e44f92043494b10578a17cb39954154758d7c179cdf9346315c9f02"
+ },
+ "fixture-remarketing-multi/CAIMENTO/FEED_4X5/seed+2": {
+  "length": 4267,
+  "sha256": "b4078267fe41913b88a919e48108316a4240dbb809ac7563c76bdcb53241323a"
+ },
+ "fixture-remarketing-multi/CAIMENTO/STORY_9X16/seed+0": {
+  "length": 4384,
+  "sha256": "8b8b859dab8d7a235e47a740218a10c5bdbbcae6164548db0b294e5399bc983f"
+ },
+ "fixture-remarketing-multi/CAIMENTO/STORY_9X16/seed+1": {
+  "length": 4355,
+  "sha256": "b24b25901c3470a7c2d75816850357f3dde0b1a052159478c08ad58cb75a0902"
+ },
+ "fixture-remarketing-multi/CAIMENTO/STORY_9X16/seed+2": {
+  "length": 4384,
+  "sha256": "8b8b859dab8d7a235e47a740218a10c5bdbbcae6164548db0b294e5399bc983f"
+ },
+ "fixture-remarketing-multi/CLOSE_BOLSO/FEED_4X5/seed+0": {
+  "length": 4282,
+  "sha256": "91bc5b53ab7c6fd3111de1f6d6141c1e7b743f4a7e8f899cf712acb28172649d"
+ },
+ "fixture-remarketing-multi/CLOSE_BOLSO/FEED_4X5/seed+1": {
+  "length": 4253,
+  "sha256": "9a2a4f5c836ca09776ce6eb40f6fe4c9bdf17e60737ecf5fdc0e47c32df529a8"
+ },
+ "fixture-remarketing-multi/CLOSE_BOLSO/FEED_4X5/seed+2": {
+  "length": 4282,
+  "sha256": "91bc5b53ab7c6fd3111de1f6d6141c1e7b743f4a7e8f899cf712acb28172649d"
+ },
+ "fixture-remarketing-multi/CLOSE_BOLSO/STORY_9X16/seed+0": {
+  "length": 4399,
+  "sha256": "464e2628eb9ea0c074668599162177be1294e5aabf42f6610b871a883cc7eed5"
+ },
+ "fixture-remarketing-multi/CLOSE_BOLSO/STORY_9X16/seed+1": {
+  "length": 4370,
+  "sha256": "9f56f03773563809605b7c5662bc9682684f758bab547bffbaea452eda5d574b"
+ },
+ "fixture-remarketing-multi/CLOSE_BOLSO/STORY_9X16/seed+2": {
+  "length": 4399,
+  "sha256": "464e2628eb9ea0c074668599162177be1294e5aabf42f6610b871a883cc7eed5"
+ },
+ "fixture-remarketing-multi/CLOSE_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 4287,
+  "sha256": "14a87f785701e2cc579db327cad5efb729d36266cee9830c44021b9005dd3738"
+ },
+ "fixture-remarketing-multi/CLOSE_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 4258,
+  "sha256": "7cf57dbea154f6a9573a7c3fe77ca97714918fd3ea84bd849fd229d7c00cd4af"
+ },
+ "fixture-remarketing-multi/CLOSE_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 4287,
+  "sha256": "14a87f785701e2cc579db327cad5efb729d36266cee9830c44021b9005dd3738"
+ },
+ "fixture-remarketing-multi/CLOSE_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 4404,
+  "sha256": "dcf068d3d8d8e89e46cead3de5e13a5ccda762ab90a36f5bc0e775b854f14303"
+ },
+ "fixture-remarketing-multi/CLOSE_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 4375,
+  "sha256": "201e3065138f88839b246fd0ad312a899ce6d8414dd1771b033604ecb377418f"
+ },
+ "fixture-remarketing-multi/CLOSE_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 4404,
+  "sha256": "dcf068d3d8d8e89e46cead3de5e13a5ccda762ab90a36f5bc0e775b854f14303"
+ },
+ "fixture-remarketing-multi/CREATOR_STYLE/FEED_4X5/seed+0": {
+  "length": 4341,
+  "sha256": "9e994e9725e6acef0ac237210ebeec467f8da7676bcca56b26eeb221f52c864f"
+ },
+ "fixture-remarketing-multi/CREATOR_STYLE/FEED_4X5/seed+1": {
+  "length": 4312,
+  "sha256": "1a4691df6b00d003f31888a5cae7374e98a2ce364582611a228e3d4d5220fdb4"
+ },
+ "fixture-remarketing-multi/CREATOR_STYLE/FEED_4X5/seed+2": {
+  "length": 4341,
+  "sha256": "9e994e9725e6acef0ac237210ebeec467f8da7676bcca56b26eeb221f52c864f"
+ },
+ "fixture-remarketing-multi/CREATOR_STYLE/STORY_9X16/seed+0": {
+  "length": 4458,
+  "sha256": "ef6396079cde8fb7e346e92e7731c0fb1dd55a988c47c95b45bd380f78fb79d4"
+ },
+ "fixture-remarketing-multi/CREATOR_STYLE/STORY_9X16/seed+1": {
+  "length": 4429,
+  "sha256": "22fac094c4fe00469d4274fd1664428e52a83e498a21d1fb14b3b0c7821bdf32"
+ },
+ "fixture-remarketing-multi/CREATOR_STYLE/STORY_9X16/seed+2": {
+  "length": 4458,
+  "sha256": "ef6396079cde8fb7e346e92e7731c0fb1dd55a988c47c95b45bd380f78fb79d4"
+ },
+ "fixture-remarketing-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+0": {
+  "length": 4448,
+  "sha256": "dcd036b743775b192c13d8860e9291058072ddcb39120df8b1d42701f3d29260"
+ },
+ "fixture-remarketing-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+1": {
+  "length": 4419,
+  "sha256": "a1d45c8ee2e1f1d1f6f26a4f156ae599b8d500f279cd2415a3f30f8da16f45dd"
+ },
+ "fixture-remarketing-multi/IDENTIDADE_ORIGEM/FEED_4X5/seed+2": {
+  "length": 4448,
+  "sha256": "dcd036b743775b192c13d8860e9291058072ddcb39120df8b1d42701f3d29260"
+ },
+ "fixture-remarketing-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+0": {
+  "length": 4565,
+  "sha256": "10b5ebfbce055fbfd8c803a038a080eac1347d764dbaf088d1c764f6a751e81a"
+ },
+ "fixture-remarketing-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+1": {
+  "length": 4536,
+  "sha256": "f0cee2485ec2032aa9c77a552a91e2ddde8d89504150632ef76329b91c0b987b"
+ },
+ "fixture-remarketing-multi/IDENTIDADE_ORIGEM/STORY_9X16/seed+2": {
+  "length": 4565,
+  "sha256": "10b5ebfbce055fbfd8c803a038a080eac1347d764dbaf088d1c764f6a751e81a"
+ },
+ "fixture-remarketing-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+0": {
+  "length": 4410,
+  "sha256": "3e411add666ab388ce8dfa406db3f4b1afa437b0aecfba24c9a24792e9e641cf"
+ },
+ "fixture-remarketing-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+1": {
+  "length": 4381,
+  "sha256": "bc8528552b29722b145880a914978a57ab85612b77c681ff49d439aeb2d1cca5"
+ },
+ "fixture-remarketing-multi/LIFESTYLE_COTIDIANO/FEED_4X5/seed+2": {
+  "length": 4410,
+  "sha256": "3e411add666ab388ce8dfa406db3f4b1afa437b0aecfba24c9a24792e9e641cf"
+ },
+ "fixture-remarketing-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+0": {
+  "length": 4527,
+  "sha256": "4a12a78d9c563abf49eab30939cb0e088b120ef74b45b36b22380a73485b57f8"
+ },
+ "fixture-remarketing-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+1": {
+  "length": 4498,
+  "sha256": "d47a0113995c36953606e2b2ec04898a9b23d755d99164144241c683d92560e3"
+ },
+ "fixture-remarketing-multi/LIFESTYLE_COTIDIANO/STORY_9X16/seed+2": {
+  "length": 4527,
+  "sha256": "4a12a78d9c563abf49eab30939cb0e088b120ef74b45b36b22380a73485b57f8"
+ },
+ "fixture-remarketing-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+0": {
+  "length": 4364,
+  "sha256": "b31f2113effa5eb09df6baf3e632e7faafae77144d7467fbc37b9d28c94bfb3d"
+ },
+ "fixture-remarketing-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+1": {
+  "length": 4335,
+  "sha256": "f21e5364684aad9746a5711fa4e62ece4e170534a389f360b193b51d7c41fa90"
+ },
+ "fixture-remarketing-multi/NOSTALGIA_ORIGEM/FEED_4X5/seed+2": {
+  "length": 4364,
+  "sha256": "b31f2113effa5eb09df6baf3e632e7faafae77144d7467fbc37b9d28c94bfb3d"
+ },
+ "fixture-remarketing-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+0": {
+  "length": 4481,
+  "sha256": "d84ff2a067e2ff0174786c84b4e89a84a45d21e082e0774ac4c640262bb74348"
+ },
+ "fixture-remarketing-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+1": {
+  "length": 4452,
+  "sha256": "2103f91c9d869a1dd5462da9190ed16587df444a9921c428fe56c00f8cbc89dc"
+ },
+ "fixture-remarketing-multi/NOSTALGIA_ORIGEM/STORY_9X16/seed+2": {
+  "length": 4481,
+  "sha256": "d84ff2a067e2ff0174786c84b4e89a84a45d21e082e0774ac4c640262bb74348"
+ },
+ "fixture-remarketing-multi/ORGULHO_DISCRETO/FEED_4X5/seed+0": {
+  "length": 4285,
+  "sha256": "d116bea5a29fdbe738c4fdc309ff1af1925f4a670781fe33404a016bea96e090"
+ },
+ "fixture-remarketing-multi/ORGULHO_DISCRETO/FEED_4X5/seed+1": {
+  "length": 4256,
+  "sha256": "6d900dc3fc4c3c919e729257b4a4b00308b9de40ed9f9dd542a1b50f0a048e82"
+ },
+ "fixture-remarketing-multi/ORGULHO_DISCRETO/FEED_4X5/seed+2": {
+  "length": 4285,
+  "sha256": "d116bea5a29fdbe738c4fdc309ff1af1925f4a670781fe33404a016bea96e090"
+ },
+ "fixture-remarketing-multi/ORGULHO_DISCRETO/STORY_9X16/seed+0": {
+  "length": 4402,
+  "sha256": "830bee3526287950d6a9ddbb7663de02fff5c04e9ca99025ba8a698df0680abc"
+ },
+ "fixture-remarketing-multi/ORGULHO_DISCRETO/STORY_9X16/seed+1": {
+  "length": 4373,
+  "sha256": "fc1c2467f62958f305d216a90a1674f7b406faf759a393ad716a3cc90a7d5578"
+ },
+ "fixture-remarketing-multi/ORGULHO_DISCRETO/STORY_9X16/seed+2": {
+  "length": 4402,
+  "sha256": "830bee3526287950d6a9ddbb7663de02fff5c04e9ca99025ba8a698df0680abc"
+ },
+ "fixture-remarketing-multi/PERTENCIMENTO/FEED_4X5/seed+0": {
+  "length": 4388,
+  "sha256": "6dd33d27c02deb61e6a54d96c0ea33e255d0a95f5ba255ebe5ab87838146126c"
+ },
+ "fixture-remarketing-multi/PERTENCIMENTO/FEED_4X5/seed+1": {
+  "length": 4359,
+  "sha256": "89347a1cfcbf5d97e9a2845da82641f024fe648fada398cc548721bb57b3ac31"
+ },
+ "fixture-remarketing-multi/PERTENCIMENTO/FEED_4X5/seed+2": {
+  "length": 4388,
+  "sha256": "6dd33d27c02deb61e6a54d96c0ea33e255d0a95f5ba255ebe5ab87838146126c"
+ },
+ "fixture-remarketing-multi/PERTENCIMENTO/STORY_9X16/seed+0": {
+  "length": 4505,
+  "sha256": "05e79af2ed73a48076a4500a2cead564f5d28932b44fcf641b96b5b8aa96ce44"
+ },
+ "fixture-remarketing-multi/PERTENCIMENTO/STORY_9X16/seed+1": {
+  "length": 4476,
+  "sha256": "846d08d0c8e09ac2df15b7b2d8d10189db7e52cc9f07afc712b3be53c49e4c4c"
+ },
+ "fixture-remarketing-multi/PERTENCIMENTO/STORY_9X16/seed+2": {
+  "length": 4505,
+  "sha256": "05e79af2ed73a48076a4500a2cead564f5d28932b44fcf641b96b5b8aa96ce44"
+ },
+ "fixture-remarketing-multi/PREMIUM_ESTILO/FEED_4X5/seed+0": {
+  "length": 4244,
+  "sha256": "4a8c5391aba0e6a2b5f0ee4f5db57f186e11d8f877e1a46db47bb4c58a37b7ff"
+ },
+ "fixture-remarketing-multi/PREMIUM_ESTILO/FEED_4X5/seed+1": {
+  "length": 4215,
+  "sha256": "d73f1cdf238eeefe5100332896087b4310487c6674ebce057a874a92530a1a40"
+ },
+ "fixture-remarketing-multi/PREMIUM_ESTILO/FEED_4X5/seed+2": {
+  "length": 4244,
+  "sha256": "4a8c5391aba0e6a2b5f0ee4f5db57f186e11d8f877e1a46db47bb4c58a37b7ff"
+ },
+ "fixture-remarketing-multi/PREMIUM_ESTILO/STORY_9X16/seed+0": {
+  "length": 4361,
+  "sha256": "dd635fa1b90a2214afefb255565354d5163784c8606623ce09b87dcba827cc9a"
+ },
+ "fixture-remarketing-multi/PREMIUM_ESTILO/STORY_9X16/seed+1": {
+  "length": 4332,
+  "sha256": "7d3792210cfb388a01ede6838573d916d109bf7431ee71c554c5ebd6c6351f5d"
+ },
+ "fixture-remarketing-multi/PREMIUM_ESTILO/STORY_9X16/seed+2": {
+  "length": 4361,
+  "sha256": "dd635fa1b90a2214afefb255565354d5163784c8606623ce09b87dcba827cc9a"
+ },
+ "fixture-remarketing-multi/PRESENTE_AFETO/FEED_4X5/seed+0": {
+  "length": 4255,
+  "sha256": "a16b1305ee3305942bb7d0ce1c04d4124e027a0ed8ab657809f90907eab89c82"
+ },
+ "fixture-remarketing-multi/PRESENTE_AFETO/FEED_4X5/seed+1": {
+  "length": 4226,
+  "sha256": "03a80a417a5091756a6d003f51a7c0c05966a0ac5c34042f0e6ca389ef5cbfd0"
+ },
+ "fixture-remarketing-multi/PRESENTE_AFETO/FEED_4X5/seed+2": {
+  "length": 4255,
+  "sha256": "a16b1305ee3305942bb7d0ce1c04d4124e027a0ed8ab657809f90907eab89c82"
+ },
+ "fixture-remarketing-multi/PRESENTE_AFETO/STORY_9X16/seed+0": {
+  "length": 4372,
+  "sha256": "50aea8b3a03b648e8bbc09b60a02915f42afc9439ad51f972844daa698dc2be3"
+ },
+ "fixture-remarketing-multi/PRESENTE_AFETO/STORY_9X16/seed+1": {
+  "length": 4343,
+  "sha256": "46821e567bd8c0a0dbe495b3805d716f516a267f865a5e27882b2b1dfce6ecdb"
+ },
+ "fixture-remarketing-multi/PRESENTE_AFETO/STORY_9X16/seed+2": {
+  "length": 4372,
+  "sha256": "50aea8b3a03b648e8bbc09b60a02915f42afc9439ad51f972844daa698dc2be3"
+ },
+ "fixture-remarketing-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 4349,
+  "sha256": "e00a71a292d25606da181f26eedd9d11515d20b90d33582c7b720ac6c3afced5"
+ },
+ "fixture-remarketing-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 4320,
+  "sha256": "6442216de43a5f48ed49dfbca77b755a14efb1a27fb750b17333c90d9b5cd16f"
+ },
+ "fixture-remarketing-multi/PRODUTO_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 4349,
+  "sha256": "e00a71a292d25606da181f26eedd9d11515d20b90d33582c7b720ac6c3afced5"
+ },
+ "fixture-remarketing-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 4466,
+  "sha256": "029de470ab4d018c5e86f5331990489036b397c069d3c7b210bd402bcbf526a5"
+ },
+ "fixture-remarketing-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 4437,
+  "sha256": "0efe23fea1cc01bfaf628b568b0c2f11f94dc781cf5aa013d7716512684cdd73"
+ },
+ "fixture-remarketing-multi/PRODUTO_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 4466,
+  "sha256": "029de470ab4d018c5e86f5331990489036b397c069d3c7b210bd402bcbf526a5"
+ },
+ "fixture-remarketing-single/CABIDE/FEED_4X5/seed+0": {
+  "length": 7501,
+  "sha256": "8fb553735da148531f0a140391501bab92f3b880a4b2a334c097134cbff90d39"
+ },
+ "fixture-remarketing-single/CABIDE/FEED_4X5/seed+1": {
+  "length": 7531,
+  "sha256": "7bae25d8306583d5a20d23631a53d1e26cfb7822279f8922cd41b4fa6e9691c5"
+ },
+ "fixture-remarketing-single/CABIDE/FEED_4X5/seed+2": {
+  "length": 7539,
+  "sha256": "3cce0cafed9919b8c0c3f5c0bb7ec571439333ead640a80b15771c339de89d06"
+ },
+ "fixture-remarketing-single/CABIDE/STORY_9X16/seed+0": {
+  "length": 7618,
+  "sha256": "0c39181d20dcb372e598f7c33a21aabf107d1c3372f7b5700b1e207c25a27cc4"
+ },
+ "fixture-remarketing-single/CABIDE/STORY_9X16/seed+1": {
+  "length": 7648,
+  "sha256": "4e39304a0dc66971576024def22350a213de425ccf269b52f5be41a3ba087788"
+ },
+ "fixture-remarketing-single/CABIDE/STORY_9X16/seed+2": {
+  "length": 7656,
+  "sha256": "b0898b3943cb76d29beb91a578324d1f2204eecaa298cb75a8aca18eba373bd8"
+ },
+ "fixture-remarketing-single/CAIMENTO/FEED_4X5/seed+0": {
+  "length": 5693,
+  "sha256": "8e6b269a3c417f701aa97389b11f828102e9ae94a877625c0f25c202da7bc004"
+ },
+ "fixture-remarketing-single/CAIMENTO/FEED_4X5/seed+1": {
+  "length": 5767,
+  "sha256": "6a21c28044172efe7413a86da07ee2e60b3bf1051e98e2ccfe8eb37f41ca5df7"
+ },
+ "fixture-remarketing-single/CAIMENTO/FEED_4X5/seed+2": {
+  "length": 5775,
+  "sha256": "c171abc6132a501d50272ecc2176cc7ca8bf9f69e8d4834fe90fbe09e01932bc"
+ },
+ "fixture-remarketing-single/CAIMENTO/STORY_9X16/seed+0": {
+  "length": 5810,
+  "sha256": "7be7e6d9b813b921fef960a8653d785fead8476450e3fea6d54b965672f99a16"
+ },
+ "fixture-remarketing-single/CAIMENTO/STORY_9X16/seed+1": {
+  "length": 5884,
+  "sha256": "78e841258660f7afeebd47453592367a3721b56f0e750787550b517acc478f83"
+ },
+ "fixture-remarketing-single/CAIMENTO/STORY_9X16/seed+2": {
+  "length": 5892,
+  "sha256": "d286114387e53beb3d5cf5e9e9e5c0f8a94e5e79a4b305ad387e58c7e9bed6b6"
+ },
+ "fixture-remarketing-single/CLOSE_BOLSO/FEED_4X5/seed+0": {
+  "length": 5707,
+  "sha256": "c7dcb536d3063117510f0b59a98857371c4b02ef0fe6091a1bb3887dbbb59fa5"
+ },
+ "fixture-remarketing-single/CLOSE_BOLSO/FEED_4X5/seed+1": {
+  "length": 5781,
+  "sha256": "43f2f0f12b255cf8e6e7a3ae37657240f07a7d524c834ae323418808efb92620"
+ },
+ "fixture-remarketing-single/CLOSE_BOLSO/FEED_4X5/seed+2": {
+  "length": 5789,
+  "sha256": "542e12e476d37a5e907c837cf22c3212758f4492e4159b9635dea635ba2e39b1"
+ },
+ "fixture-remarketing-single/CLOSE_BOLSO/STORY_9X16/seed+0": {
+  "length": 5824,
+  "sha256": "4dc0803366e1acd4ea641e00beefdc3f8e624eaad246a2f12917c9a064304b22"
+ },
+ "fixture-remarketing-single/CLOSE_BOLSO/STORY_9X16/seed+1": {
+  "length": 5898,
+  "sha256": "d593e6e74c1fe31ce9491bb5b43a61acf842f1f4341891a04b7ebbb32247bdcf"
+ },
+ "fixture-remarketing-single/CLOSE_BOLSO/STORY_9X16/seed+2": {
+  "length": 5906,
+  "sha256": "de0ea12653b79972b8ffc2bf67cc2c087c14671d38163a28ac3747692a8f5995"
+ },
+ "fixture-remarketing-single/CLOSE_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 5695,
+  "sha256": "7b936bc9c6652b118f3278ab3113c8d48af46c851e6216fa60789971ecbce4d9"
+ },
+ "fixture-remarketing-single/CLOSE_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 5769,
+  "sha256": "4970ebf1ff0b552e4a02402b7b8aa497757fd36d04ecc2a3592539d709fc0984"
+ },
+ "fixture-remarketing-single/CLOSE_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 5777,
+  "sha256": "64014bfd1dae4611732fa59ebd343fa6f3e0783e514f67f1fb6cc1a918a12af6"
+ },
+ "fixture-remarketing-single/CLOSE_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 5812,
+  "sha256": "d1ff40c79f901b76aa6e278e281d236aca1f3db1ccbd1b4537af7842b42f84db"
+ },
+ "fixture-remarketing-single/CLOSE_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 5886,
+  "sha256": "9cd47503fb87cd73d105ea80832987271f73f44779890991b72b8e03086affba"
+ },
+ "fixture-remarketing-single/CLOSE_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 5894,
+  "sha256": "55e0afbbc48e0470dfaf47184233f929f0c5ffea1867a449cc397fbd7524b610"
+ },
+ "fixture-remarketing-single/CREATOR_STYLE/FEED_4X5/seed+0": {
+  "length": 5717,
+  "sha256": "af87d2668e75037d9208d3039874702dc7c906c56641bfb6ae2cdec979fe8ac1"
+ },
+ "fixture-remarketing-single/CREATOR_STYLE/FEED_4X5/seed+1": {
+  "length": 5791,
+  "sha256": "98583a8907f4ff4953fa166aea1df6762cbaf7f353a7b172b3378c98aa0476bc"
+ },
+ "fixture-remarketing-single/CREATOR_STYLE/FEED_4X5/seed+2": {
+  "length": 5799,
+  "sha256": "252503202ff99fc951d0b1618969b2513ca92d9e3576d6b8d6ef7483065d2347"
+ },
+ "fixture-remarketing-single/CREATOR_STYLE/STORY_9X16/seed+0": {
+  "length": 5834,
+  "sha256": "f6da0775e065f4e42ceb10154c9922cac8d3b3e9c9e82edef2e6f35d4a330c02"
+ },
+ "fixture-remarketing-single/CREATOR_STYLE/STORY_9X16/seed+1": {
+  "length": 5908,
+  "sha256": "22e43a616cab656dfdba4932c9b6533b5be59e0b890107f3e46f4c5786055e76"
+ },
+ "fixture-remarketing-single/CREATOR_STYLE/STORY_9X16/seed+2": {
+  "length": 5916,
+  "sha256": "4b01d9565806ff709889d8e7d7db71b4f3170d399de7413bab1a2a9159fbc153"
+ },
+ "fixture-remarketing-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+0": {
+  "length": 5800,
+  "sha256": "ffe760549edd3686b63d6bad117450fe82fb04eb328b67ede4cfff5ae217c412"
+ },
+ "fixture-remarketing-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+1": {
+  "length": 5874,
+  "sha256": "c9db74602e0c22ea13d829c8273ddd494f05f9934ded88c34d6fb9329c75e131"
+ },
+ "fixture-remarketing-single/IDENTIDADE_ORIGEM/FEED_4X5/seed+2": {
+  "length": 5882,
+  "sha256": "c4439c29b84a712df169884dfa6ac89e9cbeaa1929d3910196d0a3e9ecf1ce16"
+ },
+ "fixture-remarketing-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+0": {
+  "length": 5917,
+  "sha256": "124d51553b0d76bee1b05e66d9212106b97699ff5aa24dfa1a4278fdaeb0598b"
+ },
+ "fixture-remarketing-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+1": {
+  "length": 5991,
+  "sha256": "42da8840083704acdef9660dcdc678a738196852b94e55ef283498726e9c4dc4"
+ },
+ "fixture-remarketing-single/IDENTIDADE_ORIGEM/STORY_9X16/seed+2": {
+  "length": 5999,
+  "sha256": "124f6d088944efa9e6f1ea47ac9987ab8b1647b85b574524dea9aa98fe919ca6"
+ },
+ "fixture-remarketing-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+0": {
+  "length": 5682,
+  "sha256": "a1b4a1482109453ad5cad2131c17082862b9ef384d2c6382c65464d71f1db392"
+ },
+ "fixture-remarketing-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+1": {
+  "length": 5756,
+  "sha256": "a06df6452a895868a6776d929006e4df1fc9a5056afe53c785a8bb8f2d97e56c"
+ },
+ "fixture-remarketing-single/LIFESTYLE_COTIDIANO/FEED_4X5/seed+2": {
+  "length": 5764,
+  "sha256": "4e630e8b2dffbe67a34d6f6bd4122cf9333a927fc4b8c8bbc93c46a4fabe39cc"
+ },
+ "fixture-remarketing-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+0": {
+  "length": 5799,
+  "sha256": "e3eb07ab76b84785d54449691b36be84e5ae0418cdbd71deb7025a6c6ef387fc"
+ },
+ "fixture-remarketing-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+1": {
+  "length": 5873,
+  "sha256": "6c9799fb1c17077f99a1d95de5a55b503f72c66e7ebf027a36146e37869cfbe5"
+ },
+ "fixture-remarketing-single/LIFESTYLE_COTIDIANO/STORY_9X16/seed+2": {
+  "length": 5881,
+  "sha256": "bede2c522e2906fa118c5f869729a9ee251688c736569412e1be9926a3a555c7"
+ },
+ "fixture-remarketing-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+0": {
+  "length": 5696,
+  "sha256": "7c91431c045a283368465a19c8321ae4148a784b5bbf949edcb062f0549d4079"
+ },
+ "fixture-remarketing-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+1": {
+  "length": 5770,
+  "sha256": "dc081c2eaf8ac758ab5029204af43ebfd467f455df5049a4ebdb8a2d1c9a1423"
+ },
+ "fixture-remarketing-single/NOSTALGIA_ORIGEM/FEED_4X5/seed+2": {
+  "length": 5778,
+  "sha256": "6a19fa6996e455ea6d7bebe4170eb35097218de20bafc71aee439095c5419092"
+ },
+ "fixture-remarketing-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+0": {
+  "length": 5813,
+  "sha256": "ef87b435e6a1d958391c3b92f5fc4a91fb8b37f265f72d82fc9d03474591d281"
+ },
+ "fixture-remarketing-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+1": {
+  "length": 5887,
+  "sha256": "08ece1a60bfd782fac7e58995f8c4336b11f5fbc67f52eceb752e4314a90db14"
+ },
+ "fixture-remarketing-single/NOSTALGIA_ORIGEM/STORY_9X16/seed+2": {
+  "length": 5895,
+  "sha256": "57ca67b842e443b5a7bbc8fe015afbaaf86c2441682ae7c82cc0273a536cd5bc"
+ },
+ "fixture-remarketing-single/ORGULHO_DISCRETO/FEED_4X5/seed+0": {
+  "length": 5656,
+  "sha256": "09514a45780600feed36590c02148b2d06e0c45bb9b28659418482984c59c215"
+ },
+ "fixture-remarketing-single/ORGULHO_DISCRETO/FEED_4X5/seed+1": {
+  "length": 5767,
+  "sha256": "152d3d5ef5a93dcb806b08c1ef5340b3545a0558f6570479716aa6d32b2584e0"
+ },
+ "fixture-remarketing-single/ORGULHO_DISCRETO/FEED_4X5/seed+2": {
+  "length": 5610,
+  "sha256": "5b695a099e99b8a918841b1dfdddae65327283788f33f08ec3d1ed2e05dde3c2"
+ },
+ "fixture-remarketing-single/ORGULHO_DISCRETO/STORY_9X16/seed+0": {
+  "length": 5773,
+  "sha256": "23d19506d6dc53e0635756110126ff801639cde3a0d696634baf739a233ed67a"
+ },
+ "fixture-remarketing-single/ORGULHO_DISCRETO/STORY_9X16/seed+1": {
+  "length": 5884,
+  "sha256": "9d6f814f7bd5fe355316fe7b34952a650cafc81a316feea493e959e4b4793e79"
+ },
+ "fixture-remarketing-single/ORGULHO_DISCRETO/STORY_9X16/seed+2": {
+  "length": 5727,
+  "sha256": "215e1eae3af50623bc2e533e3fabf04ff69e8a0f1878337af8b287cf52ebf5bb"
+ },
+ "fixture-remarketing-single/PERTENCIMENTO/FEED_4X5/seed+0": {
+  "length": 5730,
+  "sha256": "26babf5a644cd32a0d47eea40f8654ca8d810655e8868734e7c797ca35fb20b3"
+ },
+ "fixture-remarketing-single/PERTENCIMENTO/FEED_4X5/seed+1": {
+  "length": 5662,
+  "sha256": "b5defe3cb2348838d95aa49168652bbaea14e4377840d14d5413409ca329b8bd"
+ },
+ "fixture-remarketing-single/PERTENCIMENTO/FEED_4X5/seed+2": {
+  "length": 5814,
+  "sha256": "e0a649c9fa16e965851652000db8af5ba21bc744a7b94f6c57b144495be88424"
+ },
+ "fixture-remarketing-single/PERTENCIMENTO/STORY_9X16/seed+0": {
+  "length": 5847,
+  "sha256": "b28409a89df57e929f9a2ce1eaba7091fc5aa727799e250b3e42758a6899c81d"
+ },
+ "fixture-remarketing-single/PERTENCIMENTO/STORY_9X16/seed+1": {
+  "length": 5779,
+  "sha256": "80142871b8eddbd462da4fcd4b19e44e4bf31339bb5fb515f944cdfe34a91d78"
+ },
+ "fixture-remarketing-single/PERTENCIMENTO/STORY_9X16/seed+2": {
+  "length": 5931,
+  "sha256": "2ce1ff34be0fa987c0b40b2feb43f695898a0e8289f3f0442a862a1d02c262ab"
+ },
+ "fixture-remarketing-single/PREMIUM_ESTILO/FEED_4X5/seed+0": {
+  "length": 5623,
+  "sha256": "6acb729fb0f9cf0113bd618506dd6ff96193390e42a701a2f2594dcef2b33a75"
+ },
+ "fixture-remarketing-single/PREMIUM_ESTILO/FEED_4X5/seed+1": {
+  "length": 5735,
+  "sha256": "af7ccfd537f78bb4a951c41526bcd293e74c179d2978229a7500fe59b2bb87fc"
+ },
+ "fixture-remarketing-single/PREMIUM_ESTILO/FEED_4X5/seed+2": {
+  "length": 5588,
+  "sha256": "58f0c4c9b2883fad93f5038c8a9a20d30bf5ed3c509abddeae5c9900c19ce8db"
+ },
+ "fixture-remarketing-single/PREMIUM_ESTILO/STORY_9X16/seed+0": {
+  "length": 5740,
+  "sha256": "37fc5105ec0ae595911902b7af78fb3eb5c3235ea418e3abccdd4872f071a322"
+ },
+ "fixture-remarketing-single/PREMIUM_ESTILO/STORY_9X16/seed+1": {
+  "length": 5852,
+  "sha256": "4f2140cc7a55638e134ad028a6174faa3f156a0ab8db791df785136e4d0becfa"
+ },
+ "fixture-remarketing-single/PREMIUM_ESTILO/STORY_9X16/seed+2": {
+  "length": 5705,
+  "sha256": "8aa9bf723d804f1bbdeafd6c01fe166195d2b6771ca2d22657e77e965d813b1f"
+ },
+ "fixture-remarketing-single/PRESENTE_AFETO/FEED_4X5/seed+0": {
+  "length": 5637,
+  "sha256": "7cbaf7e6a1ec0f7fb1d898fd20f00c4e539caac30fe8fe291cb3b647bc696dfc"
+ },
+ "fixture-remarketing-single/PRESENTE_AFETO/FEED_4X5/seed+1": {
+  "length": 5569,
+  "sha256": "9ed6fd7253007204e392ed1844bed76565e0b479ce18923187558a6f11b2468c"
+ },
+ "fixture-remarketing-single/PRESENTE_AFETO/FEED_4X5/seed+2": {
+  "length": 5721,
+  "sha256": "cac4144e7055235c6caad8ce415a2a064ea83fd22198c397542ebdf826f7657a"
+ },
+ "fixture-remarketing-single/PRESENTE_AFETO/STORY_9X16/seed+0": {
+  "length": 5754,
+  "sha256": "8333cf28c186424f10d1b3df676fc866e7d1e76b5062e24a3fc50a64e8c5c00c"
+ },
+ "fixture-remarketing-single/PRESENTE_AFETO/STORY_9X16/seed+1": {
+  "length": 5686,
+  "sha256": "cb58f5f0d6c14978a4debb233c17bbb396dfcc373013843850637cf499845b25"
+ },
+ "fixture-remarketing-single/PRESENTE_AFETO/STORY_9X16/seed+2": {
+  "length": 5838,
+  "sha256": "5fdced0100ff64c3a866c6b86f629df2059b0b69577f08fbe9cf02201bbf3609"
+ },
+ "fixture-remarketing-single/PRODUTO_ESTAMPA/FEED_4X5/seed+0": {
+  "length": 5626,
+  "sha256": "c442125f20a023dab03037118f95bd686342b9852857dffb0497af56892a1385"
+ },
+ "fixture-remarketing-single/PRODUTO_ESTAMPA/FEED_4X5/seed+1": {
+  "length": 5585,
+  "sha256": "ffa22e411d150d257c785fc046069a110d0f2e2e6d9f798c0ce221c4dd6cbc97"
+ },
+ "fixture-remarketing-single/PRODUTO_ESTAMPA/FEED_4X5/seed+2": {
+  "length": 5698,
+  "sha256": "0423fedbe94fcb79b5d474c8eef769051322b8010a8117ab852ba050055fc51b"
+ },
+ "fixture-remarketing-single/PRODUTO_ESTAMPA/STORY_9X16/seed+0": {
+  "length": 5743,
+  "sha256": "ad3c86676ef260e492a6c8f92401eb16020a911bb3f192f746590e34939ea8b6"
+ },
+ "fixture-remarketing-single/PRODUTO_ESTAMPA/STORY_9X16/seed+1": {
+  "length": 5702,
+  "sha256": "0bfcf1da4061aa80fd14731d1c8b02a8f3fa13cf4d8b4c3f8dbcf0da15529ad3"
+ },
+ "fixture-remarketing-single/PRODUTO_ESTAMPA/STORY_9X16/seed+2": {
+  "length": 5815,
+  "sha256": "d27cb02f5f09f96169d5ad61dd525bf3ce19ea0837f8d2d56430c22c10923225"
+ }
+}

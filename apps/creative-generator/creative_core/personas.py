@@ -44,3 +44,9 @@ def describe(persona: dict) -> str:
         if persona.get(key):
             parts.append(persona[key])
     return "; ".join(parts)
+
+
+def describe_identity(persona: dict) -> str:
+    """Who the person is (label, appearance, style, notes) — `describe` without `behavior`. Prompt v2 states the
+    behavior separately, as conditional on the pose the angle asks for."""
+    return "; ".join(persona[key] for key in ("label", "appearance", "style", "notes") if persona.get(key))

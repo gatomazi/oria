@@ -1,0 +1,479 @@
+{
+ "name": "fixture-funnel-mofu-multi-pv2",
+ "request": {
+  "creative_id": "66666666-6666-4666-8666-666666666666",
+  "strategy": "FUNNEL_VISUAL",
+  "product_mode": "multi_product",
+  "products": [
+   {
+    "id": "caneca-azul",
+    "name": "Caneca Azul",
+    "type": "caneca de cerâmica",
+    "referenceImages": [
+     "loja-ceramica/caneca-azul.png"
+    ]
+   },
+   {
+    "id": "caneca-terracota",
+    "name": "Caneca Terracota",
+    "type": "caneca de cerâmica",
+    "referenceImages": [
+     "loja-ceramica/caneca-terracota.png",
+     "loja-ceramica/caneca-terracota-lado.png"
+    ]
+   },
+   {
+    "id": "caneca-creme",
+    "name": "Caneca Creme",
+    "type": "caneca de cerâmica",
+    "referenceImages": [
+     "loja-ceramica/caneca-creme.png"
+    ]
+   }
+  ],
+  "brand_kit": {
+   "id": "ceramica_sol",
+   "name": "Cerâmica Sol",
+   "tone": [
+    "caloroso"
+   ],
+   "visualStyle": [
+    "artesanal",
+    "luz de manhã"
+   ],
+   "schemaVersion": 1,
+   "version": 1
+  },
+  "niche_kit_id": "generic_commerce",
+  "angle_id": "PREMIUM_ESTILO",
+  "placement_id": "FEED_4X5",
+  "funnel_stage": "MOFU",
+  "funnel": {
+   "chips": [
+    "Azul",
+    "Terracota",
+    "Creme"
+   ],
+   "search_bar_text": "caneca de cerâmica"
+  },
+  "context": {
+   "mode": "niche"
+  },
+  "seed": 4,
+  "plan_schema_version": 2,
+  "prompt_version": 2
+ },
+ "plan": {
+  "plan_id": "plan_f585a57fb97b10044c64c89d",
+  "creative_id": "66666666-6666-4666-8666-666666666666",
+  "schema_version": 2,
+  "strategy": "FUNNEL_VISUAL",
+  "internal_strategy_id": "FUNIL_VISUAL",
+  "product_mode": "multi_product",
+  "products": [
+   {
+    "id": "caneca-azul",
+    "name": "Caneca Azul",
+    "type": "caneca de cerâmica",
+    "referenceImages": [
+     "loja-ceramica/caneca-azul.png"
+    ]
+   },
+   {
+    "id": "caneca-terracota",
+    "name": "Caneca Terracota",
+    "type": "caneca de cerâmica",
+    "referenceImages": [
+     "loja-ceramica/caneca-terracota.png",
+     "loja-ceramica/caneca-terracota-lado.png"
+    ]
+   },
+   {
+    "id": "caneca-creme",
+    "name": "Caneca Creme",
+    "type": "caneca de cerâmica",
+    "referenceImages": [
+     "loja-ceramica/caneca-creme.png"
+    ]
+   }
+  ],
+  "angle": {
+   "id": "PREMIUM_ESTILO",
+   "label": "Premium / Estilo",
+   "description": "Produto em cenário editorial sofisticado, sem pessoa.",
+   "uses_person": false,
+   "apparel_only": false,
+   "multi_product_limit": 6
+  },
+  "placement": {
+   "id": "FEED_4X5",
+   "label": "Feed (4:5 — 1080×1350)",
+   "width": 1080,
+   "height": 1350,
+   "api_size": "1088x1360"
+  },
+  "persona": null,
+  "context": {
+   "context_id": "niche:generic_commerce",
+   "context_type": "niche",
+   "provider": "niche",
+   "scene": "bancada ou mesa de madeira clara com luz natural lateral",
+   "supporting_element": "textura real do material do produto",
+   "avoid": [
+    "produto distorcido ou com proporção irreal",
+    "logotipos de terceiros visíveis",
+    "texto inventado no produto ou no cenário",
+    "fundo branco chapado sem sombra",
+    "mão genérica segurando produto flutuando",
+    "excesso de props"
+   ],
+   "status": "approved",
+   "profile_version": 1
+  },
+  "brand_kit": {
+   "id": "ceramica_sol",
+   "version": 1
+  },
+  "niche_kit": {
+   "id": "generic_commerce",
+   "version": 1
+  },
+  "funnel_stage": "MOFU",
+  "remarketing_intent": null,
+  "layout": null,
+  "overlay": {
+   "allowed": true,
+   "headline": "Várias opções disponíveis",
+   "subheadline": "Escolha a sua favorita",
+   "cta": "Ver opções →",
+   "badges": [],
+   "benefits": [],
+   "search_bar_text": "caneca de cerâmica",
+   "chips": [
+    "Azul",
+    "Terracota",
+    "Creme"
+   ],
+   "text_density": "balanced",
+   "cta_emphasis": "medium",
+   "clean": false
+  },
+  "copy": {
+   "generate": false,
+   "funnel_stages": [
+    "MOFU"
+   ]
+  },
+  "references": [
+   {
+    "ref": "loja-ceramica/caneca-azul.png",
+    "product_id": "caneca-azul",
+    "role": "product_art",
+    "order": 1
+   },
+   {
+    "ref": "loja-ceramica/caneca-terracota.png",
+    "product_id": "caneca-terracota",
+    "role": "product_art",
+    "order": 2
+   },
+   {
+    "ref": "loja-ceramica/caneca-terracota-lado.png",
+    "product_id": "caneca-terracota",
+    "role": "product_art",
+    "order": 3
+   },
+   {
+    "ref": "loja-ceramica/caneca-creme.png",
+    "product_id": "caneca-creme",
+    "role": "product_art",
+    "order": 4
+   }
+  ],
+  "prompt": {
+   "text": "REGRAS OBRIGATÓRIAS (nunca ignore):\n- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.\n- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.\n- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.\n- Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).\n- Fotografia realista, alta qualidade, formato vertical.\n\nTEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.\n\nPRODUTOS (autoridade absoluta), 3 produtos DIFERENTES nesta ordem:\n  · Produto 1 (imagem 1): \"Caneca Azul\" (caneca de cerâmica)\n  · Produto 2 (imagens 2, 3): \"Caneca Terracota\" (caneca de cerâmica)\n  · Produto 3 (imagem 4): \"Caneca Creme\" (caneca de cerâmica)\n  · Cada produto aparece exatamente uma vez; nunca troque, funda ou duplique produtos.\n\nÂNGULO PREMIUM (VÁRIOS PRODUTOS): 3 produtos em composição editorial sofisticada — \"Caneca Azul\" (caneca de cerâmica); \"Caneca Terracota\" (caneca de cerâmica); \"Caneca Creme\" (caneca de cerâmica). Sem pessoa, luz trabalhada, todos legíveis.\n\nETAPA DO FUNIL NA ARTE — MOFU (consideração): mostrar opções e contexto de uso; headline + subheadline curta + CTA discreto; chips e barra de busca somente quando listados no bloco de texto.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"Várias opções disponíveis\"\n  · SUBHEADLINE: \"Escolha a sua favorita\"\n  · CTA: \"Ver opções →\"\n  · Densidade de texto: balanced — headline, subheadline curta e CTA; ainda editorial.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nBARRA DE BUSCA estilizada (campo arredondado com ícone de lupa) contendo o texto literal: \"caneca de cerâmica\"\nCHIPS (pílulas pequenas lado a lado, texto literal): \"Azul\" | \"Terracota\" | \"Creme\"\n\nCTA — ênfase medium: botão discreto mas visível: contorno fino (outline) ou pílula de preenchimento sóbrio, cantos arredondados, texto em caixa alta espaçada + seta.\n  · COR POR CONTRASTE com a região do fundo onde o botão pousa: fundo claro -> preto, grafite, dourado escuro ou a cor primária forte da marca; fundo escuro -> creme, dourado claro, branco ou tom claro de alta legibilidade. NUNCA vermelho nem coral.\n  · Posição: com espaço livre ao redor; nunca sobre a estampa, sobre rosto, sobre área visualmente complexa ou colado nas bordas.\n\nMARCA (Cerâmica Sol):\n  · Linguagem visual: artesanal, luz de manhã.\n\nNICHO (Comércio genérico):\n  · Materiais e sinais de uso real: textura real do material do produto, embalagem discreta, superfície de apoio neutra.\n  · Público: quer entender rapidamente o que é o produto e para que serve; confia em imagem nítida e realista do produto; responde a benefício concreto mais do que a promessa vaga.\n\nATMOSFERA (luz, paleta e materiais — não leve o set para este lugar): inspirada em \"bancada ou mesa de madeira clara com luz natural lateral\". Detalhe de apoio: textura real do material do produto. Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.\n\nEVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): produto distorcido ou com proporção irreal; logotipos de terceiros visíveis; texto inventado no produto ou no cenário; fundo branco chapado sem sombra; mão genérica segurando produto flutuando; excesso de props.\n\nFORMATO: Feed 4:5 vertical (1080×1350).",
+   "sections": [
+    {
+     "name": "fidelity_rules",
+     "length": 685,
+     "source": "product",
+     "value": "5"
+    },
+    {
+     "name": "text_rules",
+     "length": 518,
+     "source": "user",
+     "value": "funnel_visual"
+    },
+    {
+     "name": "reference_roles",
+     "length": 346,
+     "source": "product",
+     "value": "refs:4"
+    },
+    {
+     "name": "scene_action",
+     "length": 240,
+     "source": "angle",
+     "value": "PREMIUM_ESTILO"
+    },
+    {
+     "name": "strategy_communication",
+     "length": 1458,
+     "source": "user",
+     "value": "funnel_visual"
+    },
+    {
+     "name": "brand",
+     "length": 68,
+     "source": "brand",
+     "value": "Cerâmica Sol"
+    },
+    {
+     "name": "niche",
+     "length": 328,
+     "source": "niche",
+     "value": "Comércio genérico"
+    },
+    {
+     "name": "context",
+     "length": 276,
+     "source": "user",
+     "value": "niche:generic_commerce"
+    },
+    {
+     "name": "avoid",
+     "length": 285,
+     "source": "brand",
+     "value": "6"
+    },
+    {
+     "name": "output_format",
+     "length": 39,
+     "source": "user",
+     "value": "FEED_4X5"
+    }
+   ],
+   "sha256": "76ff4324598dd6634468531782c87cb635b93c316f5f61a105d0cea73f90fcc7",
+   "prompt_version": 1
+  },
+  "model": {
+   "task": "image_generation",
+   "model": "gpt-image-2",
+   "quality": "medium",
+   "size": "1088x1360"
+  },
+  "mode": "creative",
+  "objective": "funnel_visual",
+  "subjects": [],
+  "scene": {
+   "gaze": {
+    "mode": "none",
+    "requested": "auto",
+    "source": "angle",
+    "reason": "no_people_in_frame"
+   },
+   "picks": {},
+   "prompt_version": 1,
+   "interaction": null
+  },
+  "composition": {
+   "people_count": 0,
+   "pose_risk": "low",
+   "risk_reasons": []
+  },
+  "minor_safety": {
+   "applies": false,
+   "minor_subject_ids": [],
+   "global": {
+    "policy": "global_minor_safety_policy",
+    "version": 1,
+    "rules": [
+     "age_appropriate_clothing",
+     "nothing_revealing",
+     "not_sexualized",
+     "no_adult_aesthetic",
+     "age_appropriate_poses",
+     "normal_fit_no_body_focus",
+     "commercial_family_context"
+    ],
+    "adult_child_rule": null
+   },
+   "brand": null
+  },
+  "semantics": {
+   "products": [
+    {
+     "product_id": "caneca-azul",
+     "semantic_context": null
+    },
+    {
+     "product_id": "caneca-terracota",
+     "semantic_context": null
+    },
+    {
+     "product_id": "caneca-creme",
+     "semantic_context": null
+    }
+   ],
+   "supporting": null,
+   "warnings": []
+  },
+  "resolved_inputs": {
+   "brand": {
+    "name": "Cerâmica Sol",
+    "visualStyle": [
+     "artesanal",
+     "luz de manhã"
+    ]
+   },
+   "niche": {
+    "name": "Comércio genérico",
+    "materials": [
+     "textura real do material do produto",
+     "embalagem discreta",
+     "superfície de apoio neutra"
+    ],
+    "audienceBehaviors": [
+     "quer entender rapidamente o que é o produto e para que serve",
+     "confia em imagem nítida e realista do produto",
+     "responde a benefício concreto mais do que a promessa vaga"
+    ]
+   },
+   "strategy": {
+    "text_rule": "TEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.",
+    "communication": "ETAPA DO FUNIL NA ARTE — MOFU (consideração): mostrar opções e contexto de uso; headline + subheadline curta + CTA discreto; chips e barra de busca somente quando listados no bloco de texto.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"Várias opções disponíveis\"\n  · SUBHEADLINE: \"Escolha a sua favorita\"\n  · CTA: \"Ver opções →\"\n  · Densidade de texto: balanced — headline, subheadline curta e CTA; ainda editorial.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nBARRA DE BUSCA estilizada (campo arredondado com ícone de lupa) contendo o texto literal: \"caneca de cerâmica\"\nCHIPS (pílulas pequenas lado a lado, texto literal): \"Azul\" | \"Terracota\" | \"Creme\"\n\nCTA — ênfase medium: botão discreto mas visível: contorno fino (outline) ou pílula de preenchimento sóbrio, cantos arredondados, texto em caixa alta espaçada + seta.\n  · COR POR CONTRASTE com a região do fundo onde o botão pousa: fundo claro -> preto, grafite, dourado escuro ou a cor primária forte da marca; fundo escuro -> creme, dourado claro, branco ou tom claro de alta legibilidade. NUNCA vermelho nem coral.\n  · Posição: com espaço livre ao redor; nunca sobre a estampa, sobre rosto, sobre área visualmente complexa ou colado nas bordas."
+   }
+  },
+  "provenance": {
+   "angle": "user",
+   "brand_kit": "user",
+   "compiler": "planner_default",
+   "composition": "planner_default",
+   "context": "user",
+   "minor_safety.brand": "planner_default",
+   "minor_safety.global": "safety_policy",
+   "mode": "planner_default",
+   "model": "planner_default",
+   "niche_kit": "user",
+   "objective": "user",
+   "persona": "planner_default",
+   "placement": "user",
+   "products": "user",
+   "quality": "planner_default",
+   "references": "product",
+   "resolved_inputs": "brand",
+   "scene.gaze": "angle",
+   "scene.picks": "planner_default",
+   "scene.prompt_version": "planner_default",
+   "semantics": "planner_default",
+   "strategy": "user",
+   "subjects": "planner_default"
+  },
+  "seed": 4,
+  "compiler": {
+   "version": 1,
+   "sections": [
+    {
+     "section": "fidelity_rules",
+     "source": "product",
+     "value": "5",
+     "length": 685
+    },
+    {
+     "section": "text_rules",
+     "source": "user",
+     "value": "funnel_visual",
+     "length": 518
+    },
+    {
+     "section": "reference_roles",
+     "source": "product",
+     "value": "refs:4",
+     "length": 346
+    },
+    {
+     "section": "scene_action",
+     "source": "angle",
+     "value": "PREMIUM_ESTILO",
+     "length": 240
+    },
+    {
+     "section": "strategy_communication",
+     "source": "user",
+     "value": "funnel_visual",
+     "length": 1458
+    },
+    {
+     "section": "brand",
+     "source": "brand",
+     "value": "Cerâmica Sol",
+     "length": 68
+    },
+    {
+     "section": "niche",
+     "source": "niche",
+     "value": "Comércio genérico",
+     "length": 328
+    },
+    {
+     "section": "context",
+     "source": "user",
+     "value": "niche:generic_commerce",
+     "length": 276
+    },
+    {
+     "section": "avoid",
+     "source": "brand",
+     "value": "6",
+     "length": 285
+    },
+    {
+     "section": "output_format",
+     "source": "user",
+     "value": "FEED_4X5",
+     "length": 39
+    }
+   ]
+  },
+  "versions": {
+   "core_version": "1.1.0",
+   "schema_version": 1,
+   "prompt_version": 1,
+   "brand_kit_schema_version": 1,
+   "niche_kit_schema_version": 1,
+   "context_profile_schema_version": 1,
+   "clean_angles_version": 1,
+   "remarketing_version": 1,
+   "funnel_visual_version": 1,
+   "strategy_version": 1,
+   "compiler_version": 1,
+   "brand_kit_version": 1,
+   "niche_kit_version": 1,
+   "context_profile_version": 1
+  },
+  "validations": [
+   {
+    "rule": "product_count_within_limits",
+    "passed": true
+   },
+   {
+    "rule": "angle_available_for_brand_and_niche",
+    "passed": true
+   },
+   {
+    "rule": "context_profile_approved",
+    "passed": true
+   },
+   {
+    "rule": "references_are_product_art_only",
+    "passed": true
+   },
+   {
+    "rule": "funnel_stage_in_image",
+    "passed": true
+   }
+  ],
+  "warnings": []
+ }
+}

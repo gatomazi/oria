@@ -9,8 +9,9 @@ const assert = require('node:assert/strict');
 
 const {
   PRECOS_PADRAO, CONFIANCAS, mesclarPrecos, precoDe, custoMensagens, custoGeracao,
-  piorConfianca, totalizarCustos, validarPreco,
+  piorConfianca, totalizarCustos, validarPreco, custoEnrichmentPiorCaso, custoEnrichmentReal,
 } = require('../lib/custos/precos');
+const { centavosDeUsd } = require('../lib/creative-core/enrichmentPilotBudget');
 
 // ── Tabela padrão ───────────────────────────────────────────────────────────────────────────
 
@@ -188,4 +189,53 @@ test('recusa moeda fora do formato de 3 letras', () => {
 test('preço válido sai normalizado com moeda em maiúsculas', () => {
   const r = validarPreco({ chave: 'whatsapp.marketing', valor: '0.34', moeda: 'brl' });
   assert.deepEqual(r.preco, { chave: 'whatsapp.marketing', valor: 0.34, moeda: 'BRL', confianca: 'confirmado' });
+});
+
+// ── Fase F.2.B.1 §4 — reconciliação do ledger de Product Enrichment ────────────────────────────
+// O relatório da F.2.B citava, em pontos diferentes, "US$ 0,0006 por chamada" e "US$ 0,00006 × 3"
+// (um zero de diferença) para a MESMA reserva — e tratava o "custo real" (2,5% de US$ 0,05) como se
+// fosse a mesma coisa que "quanto do teto realmente aplicado (em centavos) foi comprometido" (na
+// verdade 60%). Os testes abaixo fixam os TRÊS números como fatos numéricos diferentes, para que uma
+// futura mudança de preço/arredondamento não deixe a documentação divergir de novo em silêncio.
+
+test('custo de PIOR CASO (reserva conservadora pré-chamada, antes de arredondar a centavos) é US$ 0,0006/chamada', () => {
+  // (1200 tokens de entrada no pior caso × US$0,15/1M) + (700 tokens de saída × US$0,60/1M)
+  const r = custoEnrichmentPiorCaso(null);
+  assert.equal(r.usd, 0.0006);
+});
+
+test('custo REAL medido (usage) bate exatamente com os 3 resultados reais do piloto F.2.B', () => {
+  // creative-generator-fase-f2b-pilot-results.json — valores reais, nunca uma nova chamada.
+  assert.equal(custoEnrichmentReal({ input_tokens: 3371, output_tokens: 97, cached_input_tokens: 0 }, null).usd, 0.00056385);
+  assert.equal(custoEnrichmentReal({ input_tokens: 534, output_tokens: 93, cached_input_tokens: 0 }, null).usd, 0.0001359);
+  assert.equal(custoEnrichmentReal({ input_tokens: 3358, output_tokens: 108, cached_input_tokens: 0 }, null).usd, 0.0005685);
+});
+
+test('reserva pré-chamada em CENTAVOS (o que o ledger realmente compromete) é 1 centavo/tentativa, não 0,06', () => {
+  const piorCaso = custoEnrichmentPiorCaso(null);
+  assert.equal(centavosDeUsd(piorCaso.usd), 1, 'US$ 0,0006 vira 1 centavo pelo piso de arredondamento — nunca 0');
+});
+
+test('teto de US$ 0,05 do piloto, na MESMA unidade (centavos) que a reserva, é 5 centavos', () => {
+  assert.equal(centavosDeUsd(0.05), 5);
+});
+
+test('três chamadas reais comprometem 60% do teto EM CENTAVOS — um número diferente dos 2,5% de custo real sobre o teto em USD', () => {
+  // Este teste existe para que as duas percentagens NUNCA sejam confundidas de novo: "quanto foi
+  // gasto de verdade" (USD, precisão total) e "quanto do limite que trava novas chamadas foi
+  // consumido" (centavos inteiros, a unidade que o Postgres realmente compara) respondem perguntas
+  // diferentes e podem divergir bastante quando o custo real é sub-centavo, como aqui.
+  const piorCasoCentavos = centavosDeUsd(custoEnrichmentPiorCaso(null).usd);
+  const tetoCentavos = centavosDeUsd(0.05);
+  const centavosComprometidos = piorCasoCentavos * 3;
+  const percentualCentavos = (centavosComprometidos / tetoCentavos) * 100;
+
+  const custoRealTotalUsd = 0.00056385 + 0.0001359 + 0.0005685;
+  const percentualUsdReal = (custoRealTotalUsd / 0.05) * 100;
+
+  assert.equal(centavosComprometidos, 3);
+  assert.equal(percentualCentavos, 60);
+  assert.ok(Math.abs(custoRealTotalUsd - 0.00126825) < 1e-9);
+  assert.ok(Math.abs(percentualUsdReal - 2.5365) < 1e-2);
+  assert.notEqual(percentualCentavos, Math.round(percentualUsdReal * 10) / 10, 'as duas percentagens são fatos diferentes — nunca a mesma métrica com nomes trocados');
 });

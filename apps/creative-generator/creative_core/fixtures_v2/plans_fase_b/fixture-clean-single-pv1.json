@@ -1,0 +1,496 @@
+{
+ "name": "fixture-clean-single-pv1",
+ "request": {
+  "creative_id": "11111111-1111-4111-8111-111111111111",
+  "strategy": "CLEAN_ANGLES",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "prod-blumenau",
+    "brandId": "use_origens",
+    "name": "Camiseta Blumenau",
+    "type": "camiseta",
+    "description": "estampa de mapa da cidade no peito",
+    "referenceImages": [
+     "tenant-demo/products/prod-blumenau/front.png"
+    ],
+    "metadata": {
+     "city": "Blumenau",
+     "state": "SC"
+    }
+   }
+  ],
+  "brand_kit_id": "use_origens",
+  "angle_id": "LIFESTYLE_COTIDIANO",
+  "placement_id": "FEED_4X5",
+  "persona_mode": "automatic",
+  "context": {
+   "mode": "geographic",
+   "subject": {
+    "name": "Blumenau",
+    "metadata": {
+     "city": "Blumenau",
+     "state": "SC"
+    }
+   },
+   "context_id": "vale_europeu"
+  },
+  "copy": {
+   "generate": true,
+   "funnel_stages": [
+    "TOFU",
+    "MOFU",
+    "BOFU"
+   ]
+  },
+  "quality": "medium",
+  "seed": 3,
+  "plan_schema_version": 2,
+  "prompt_version": 1
+ },
+ "plan": {
+  "plan_id": "plan_a708fa39a9d9cd346a2d0331",
+  "creative_id": "11111111-1111-4111-8111-111111111111",
+  "schema_version": 2,
+  "strategy": "CLEAN_ANGLES",
+  "internal_strategy_id": "ANGULOS_LIMPOS",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "prod-blumenau",
+    "brandId": "use_origens",
+    "name": "Camiseta Blumenau",
+    "type": "camiseta",
+    "description": "estampa de mapa da cidade no peito",
+    "referenceImages": [
+     "tenant-demo/products/prod-blumenau/front.png"
+    ],
+    "metadata": {
+     "city": "Blumenau",
+     "state": "SC"
+    }
+   }
+  ],
+  "angle": {
+   "id": "LIFESTYLE_COTIDIANO",
+   "label": "Lifestyle cotidiano",
+   "description": "Pessoa em ação no dia a dia com o produto — nunca parada olhando para o nada.",
+   "uses_person": true,
+   "apparel_only": false,
+   "multi_product_limit": 4
+  },
+  "placement": {
+   "id": "FEED_4X5",
+   "label": "Feed (4:5 — 1080×1350)",
+   "width": 1080,
+   "height": 1350,
+   "api_size": "1088x1360"
+  },
+  "persona": {
+   "id": "fashion_adult_f",
+   "label": "Mulher 30 anos, estilo casual urbano",
+   "age_range": "28-35",
+   "appearance": "cabelo preso, pele morena, traços naturais",
+   "style": "casual urbano, jeans e tênis",
+   "behavior": "gestos naturais, em movimento",
+   "source": "automatic"
+  },
+  "context": {
+   "context_id": "geo:SC:vale_europeu",
+   "context_type": "geographic",
+   "provider": "geographic",
+   "scene": "café ou ambiente contemporâneo de cidade de médio porte",
+   "supporting_element": "madeira natural",
+   "avoid": [
+    "transformar qualquer cidade do Vale em cenário de festa alemã",
+    "usar com cuidado: enxaimel muito evidente",
+    "usar com cuidado: trajes típicos",
+    "usar com cuidado: elementos de Oktoberfest",
+    "caricatura regional",
+    "excesso de símbolos",
+    "souvenir turístico",
+    "excesso de texto",
+    "mapas ou silhuetas geográficas como ornamento",
+    "campanha turística de estado",
+    "peça deformada ou com proporção irreal",
+    "tecido liso como vetor, sem trama",
+    "produto parecendo adesivo colado na foto"
+   ],
+   "status": "approved",
+   "profile_version": 1
+  },
+  "brand_kit": {
+   "id": "use_origens",
+   "version": 1
+  },
+  "niche_kit": {
+   "id": "fashion",
+   "version": 1
+  },
+  "funnel_stage": null,
+  "remarketing_intent": null,
+  "layout": null,
+  "overlay": {
+   "allowed": false,
+   "headline": null,
+   "subheadline": null,
+   "cta": null,
+   "badges": [],
+   "benefits": [],
+   "search_bar_text": null,
+   "chips": [],
+   "text_density": null,
+   "cta_emphasis": null,
+   "clean": true
+  },
+  "copy": {
+   "generate": true,
+   "funnel_stages": [
+    "TOFU",
+    "MOFU",
+    "BOFU"
+   ]
+  },
+  "references": [
+   {
+    "ref": "tenant-demo/products/prod-blumenau/front.png",
+    "product_id": "prod-blumenau",
+    "role": "product_art",
+    "order": 1
+   }
+  ],
+  "prompt": {
+   "text": "REGRAS OBRIGATÓRIAS (nunca ignore):\n- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.\n- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.\n- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.\n- Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).\n- Fotografia realista, alta qualidade, formato vertical.\n- Preserve o TIPO DE PEÇA original: camiseta de MANGA CURTA, gola redonda, tecido de algodão comum (não premium). NUNCA transforme em manga longa, moletom, camisa de botão ou qualquer outra peça — mesmo que o cenário sugira frio, a peça continua sendo camiseta de manga curta (a pessoa pode usar um casaco/jaqueta POR CIMA se o clima pedir, mas a camiseta em si nunca muda de manga).\n- A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.\n- Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.\n\nMODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.\n\nPRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = \"Camiseta Blumenau\" (camiseta) — estampa de mapa da cidade no peito.\n\nCOMPOSIÇÃO DE PESSOAS (contrato): exatamente 1 pessoa em quadro.\n  · Pessoa 1 (principal): Mulher 30 anos, estilo casual urbano — veste \"Camiseta Blumenau\" (camiseta).\n\nPERSONA: Mulher 30 anos, estilo casual urbano; cabelo preso, pele morena, traços naturais; casual urbano, jeans e tênis; gestos naturais, em movimento. Aparência natural, sem rosto padrão de banco de imagem.\n\nOLHAR: olhar espontâneo para fora da câmera, como se algo fora de quadro chamasse a atenção; ninguém olha diretamente para a lente.\n\nÂNGULO LIFESTYLE: Mulher 30 anos, estilo casual urbano em movimento, fazendo algo cotidiano com \"Camiseta Blumenau\" (camiseta) (café ou ambiente contemporâneo de cidade de médio porte). Momento real e espontâneo, luz natural, produto nítido e em uso verdadeiro.\n\nMARCA (Use Origens):\n  · Posicionamento: regional contemporâneo; premium acessível; não souvenir; camisetas premium de identidade regional para quem tem orgulho de onde veio.\n  · Linguagem visual: editorial, clean, natural, lifestyle, premium.\n  · Paleta da marca (guia de cor da CENA, nunca do produto): #4d543d; #d6ba8d; #1a1e14; #f4efe6.\n  · Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.\n  · Cuia de chimarrão só no Sul (RS/SC/PR).\n\nNICHO (Moda / Vestuário):\n  · Materiais e sinais de uso real: algodão, trama de tecido visível, costuras e acabamento, etiqueta discreta.\n  · Público: compra pelo caimento e pelo estilo, não só pela estampa; quer ver a peça vestida em corpo real; compara tecido, acabamento e tamanho antes de decidir.\n\nCONTEXTO DA CENA: café ou ambiente contemporâneo de cidade de médio porte. Elemento de apoio, discreto: madeira natural. Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.\n\nEVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): transformar qualquer cidade do Vale em cenário de festa alemã; usar com cuidado: enxaimel muito evidente; usar com cuidado: trajes típicos; usar com cuidado: elementos de Oktoberfest; caricatura regional; excesso de símbolos; souvenir turístico; excesso de texto; mapas ou silhuetas geográficas como ornamento; campanha turística de estado; peça deformada ou com proporção irreal; tecido liso como vetor, sem trama; produto parecendo adesivo colado na foto.\n\nFORMATO: Feed 4:5 vertical (1080×1350).",
+   "sections": [
+    {
+     "name": "fidelity_rules",
+     "length": 1369,
+     "source": "product",
+     "value": "8"
+    },
+    {
+     "name": "text_rules",
+     "length": 509,
+     "source": "user",
+     "value": "clean_creative"
+    },
+    {
+     "name": "reference_roles",
+     "length": 137,
+     "source": "product",
+     "value": "refs:1"
+    },
+    {
+     "name": "people_composition_contract",
+     "length": 376,
+     "source": "niche",
+     "value": "1"
+    },
+    {
+     "name": "gaze",
+     "length": 131,
+     "source": "angle",
+     "value": "off_camera"
+    },
+    {
+     "name": "scene_action",
+     "length": 261,
+     "source": "angle",
+     "value": "LIFESTYLE_COTIDIANO"
+    },
+    {
+     "name": "brand",
+     "length": 499,
+     "source": "brand",
+     "value": "Use Origens"
+    },
+    {
+     "name": "niche",
+     "length": 301,
+     "source": "niche",
+     "value": "Moda / Vestuário"
+    },
+    {
+     "name": "context",
+     "length": 199,
+     "source": "user",
+     "value": "geo:SC:vale_europeu"
+    },
+    {
+     "name": "avoid",
+     "length": 531,
+     "source": "brand",
+     "value": "13"
+    },
+    {
+     "name": "output_format",
+     "length": 39,
+     "source": "user",
+     "value": "FEED_4X5"
+    }
+   ],
+   "sha256": "681624e9128a8dc661bd008647d575be6757bad175bb36a1338231d8cae09c6f",
+   "prompt_version": 1
+  },
+  "model": {
+   "task": "image_generation",
+   "model": "gpt-image-2",
+   "quality": "medium",
+   "size": "1088x1360"
+  },
+  "mode": "creative",
+  "objective": "clean_creative",
+  "subjects": [
+   {
+    "id": "s1",
+    "role": "primary",
+    "label": "Mulher 30 anos, estilo casual urbano",
+    "persona": {
+     "id": "fashion_adult_f",
+     "label": "Mulher 30 anos, estilo casual urbano",
+     "age_range": "28-35",
+     "appearance": "cabelo preso, pele morena, traços naturais",
+     "style": "casual urbano, jeans e tênis",
+     "behavior": "gestos naturais, em movimento",
+     "source": "automatic"
+    },
+    "age_band": "adult",
+    "is_minor": false,
+    "minor_source": null,
+    "product_use": "wears",
+    "product_id": "prod-blumenau",
+    "role_hint": null,
+    "relation_to_primary": null,
+    "prominence": "hero",
+    "source": "niche"
+   }
+  ],
+  "scene": {
+   "gaze": {
+    "mode": "off_camera",
+    "requested": "auto",
+    "source": "angle",
+    "reason": "angle_default:LIFESTYLE_COTIDIANO:single"
+   },
+   "picks": {},
+   "prompt_version": 1,
+   "interaction": null
+  },
+  "composition": {
+   "people_count": 1,
+   "pose_risk": "low",
+   "risk_reasons": []
+  },
+  "minor_safety": {
+   "applies": false,
+   "minor_subject_ids": [],
+   "global": {
+    "policy": "global_minor_safety_policy",
+    "version": 1,
+    "rules": [
+     "age_appropriate_clothing",
+     "nothing_revealing",
+     "not_sexualized",
+     "no_adult_aesthetic",
+     "age_appropriate_poses",
+     "normal_fit_no_body_focus",
+     "commercial_family_context"
+    ],
+    "adult_child_rule": null
+   },
+   "brand": null
+  },
+  "semantics": {
+   "products": [
+    {
+     "product_id": "prod-blumenau",
+     "semantic_context": null
+    }
+   ],
+   "supporting": null,
+   "warnings": []
+  },
+  "resolved_inputs": {
+   "brand": {
+    "name": "Use Origens",
+    "positioning": [
+     "regional contemporâneo",
+     "premium acessível",
+     "não souvenir",
+     "camisetas premium de identidade regional para quem tem orgulho de onde veio"
+    ],
+    "visualStyle": [
+     "editorial",
+     "clean",
+     "natural",
+     "lifestyle",
+     "premium"
+    ],
+    "colors": [
+     "#4d543d",
+     "#d6ba8d",
+     "#1a1e14",
+     "#f4efe6"
+    ],
+    "manualNotes": [
+     "Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.",
+     "Cuia de chimarrão só no Sul (RS/SC/PR)."
+    ]
+   },
+   "niche": {
+    "name": "Moda / Vestuário",
+    "materials": [
+     "algodão",
+     "trama de tecido visível",
+     "costuras e acabamento",
+     "etiqueta discreta"
+    ],
+    "audienceBehaviors": [
+     "compra pelo caimento e pelo estilo, não só pela estampa",
+     "quer ver a peça vestida em corpo real",
+     "compara tecido, acabamento e tamanho antes de decidir"
+    ]
+   },
+   "strategy": {
+    "text_rule": "MODO ÂNGULOS LIMPOS (regra absoluta, prioridade máxima): imagem SEM qualquer texto gráfico sobreposto — nada de headline, subheadline, CTA, botão, badge, selo, preço, oferta, desconto, cupom, benefício, ícone de frete, frase promocional ou texto simulando postagem/depoimento/avaliação. O ÚNICO texto permitido na imagem é o que já existe no próprio produto das referências. Não invente nem complemente texto. A imagem representa só um ângulo criativo e deve servir igualmente para copy de TOFU, MOFU ou BOFU.",
+    "communication": ""
+   }
+  },
+  "provenance": {
+   "angle": "user",
+   "brand_kit": "user",
+   "compiler": "planner_default",
+   "composition": "planner_default",
+   "context": "user",
+   "minor_safety.brand": "planner_default",
+   "minor_safety.global": "safety_policy",
+   "mode": "planner_default",
+   "model": "planner_default",
+   "niche_kit": "brand",
+   "objective": "user",
+   "persona": "niche",
+   "placement": "user",
+   "products": "user",
+   "quality": "user",
+   "references": "product",
+   "resolved_inputs": "brand",
+   "scene.gaze": "angle",
+   "scene.picks": "planner_default",
+   "scene.prompt_version": "planner_default",
+   "semantics": "planner_default",
+   "strategy": "user",
+   "subjects": "niche"
+  },
+  "seed": 3,
+  "compiler": {
+   "version": 1,
+   "sections": [
+    {
+     "section": "fidelity_rules",
+     "source": "product",
+     "value": "8",
+     "length": 1369
+    },
+    {
+     "section": "text_rules",
+     "source": "user",
+     "value": "clean_creative",
+     "length": 509
+    },
+    {
+     "section": "reference_roles",
+     "source": "product",
+     "value": "refs:1",
+     "length": 137
+    },
+    {
+     "section": "people_composition_contract",
+     "source": "niche",
+     "value": "1",
+     "length": 376
+    },
+    {
+     "section": "gaze",
+     "source": "angle",
+     "value": "off_camera",
+     "length": 131
+    },
+    {
+     "section": "scene_action",
+     "source": "angle",
+     "value": "LIFESTYLE_COTIDIANO",
+     "length": 261
+    },
+    {
+     "section": "brand",
+     "source": "brand",
+     "value": "Use Origens",
+     "length": 499
+    },
+    {
+     "section": "niche",
+     "source": "niche",
+     "value": "Moda / Vestuário",
+     "length": 301
+    },
+    {
+     "section": "context",
+     "source": "user",
+     "value": "geo:SC:vale_europeu",
+     "length": 199
+    },
+    {
+     "section": "avoid",
+     "source": "brand",
+     "value": "13",
+     "length": 531
+    },
+    {
+     "section": "output_format",
+     "source": "user",
+     "value": "FEED_4X5",
+     "length": 39
+    }
+   ]
+  },
+  "versions": {
+   "core_version": "1.1.0",
+   "schema_version": 1,
+   "prompt_version": 1,
+   "brand_kit_schema_version": 1,
+   "niche_kit_schema_version": 1,
+   "context_profile_schema_version": 1,
+   "clean_angles_version": 1,
+   "remarketing_version": 1,
+   "funnel_visual_version": 1,
+   "strategy_version": 1,
+   "compiler_version": 1,
+   "brand_kit_version": 1,
+   "niche_kit_version": 1,
+   "context_profile_version": 1
+  },
+  "validations": [
+   {
+    "rule": "product_count_within_limits",
+    "passed": true
+   },
+   {
+    "rule": "angle_available_for_brand_and_niche",
+    "passed": true
+   },
+   {
+    "rule": "context_profile_approved",
+    "passed": true
+   },
+   {
+    "rule": "references_are_product_art_only",
+    "passed": true
+   },
+   {
+    "rule": "clean_angles_has_no_overlay",
+    "passed": true
+   }
+  ],
+  "warnings": []
+ }
+}

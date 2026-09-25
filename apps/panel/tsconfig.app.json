@@ -12,6 +12,11 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+    // Fase F.2.B.1 — permite importar `enrichmentReviewFields.mjs` (lógica pura, sem JSX,
+    // compartilhada com um teste `node:test` que não pode carregar TypeScript diretamente — ver o
+    // comentário no próprio arquivo). Não liga `checkJs`: arquivos .js/.mjs continuam sem
+    // type-checking, só ficam importáveis.
+    "allowJs": true,
 
     "strict": true,
     "noUnusedLocals": true,

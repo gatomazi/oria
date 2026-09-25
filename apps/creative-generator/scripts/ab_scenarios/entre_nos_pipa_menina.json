@@ -1,0 +1,117 @@
+{
+  "_doc": "Real Entre Nós scenario for the anatomy A/B: infant tee 'Brincar com meu pai — Pipa Menina'. The reference image is NOT in the repo (--reference <file>); everything else that feeds a prompt is here, so the Oria arms and the Streamlit arms describe the SAME product, persona and scene. Subjects V2 does not exist yet: the child/adult pair is expressed with what the current core supports (custom persona = the child, brand-kit suggestedPersonas = the adult that prompt v2 casts as Pessoa B).",
+  "product": {
+    "id": "pipa-menina",
+    "name": "Brincar com Meu Pai — Pipa Menina",
+    "type": "camiseta infantil",
+    "description": "camiseta infantil branca de manga curta, estampa vermelha 'BRINCAR COM MEU PAI' com pai e filha empinando pipa e a frase 'deixa a alegria voar longe.'"
+  },
+  "scene": "sala de estar acolhedora com sofá, manta e luz natural lateral",
+  "supporting_element": "manta de tricô jogada no encosto",
+  "brand_kit": {
+    "id": "entre_nos_ab",
+    "name": "Entre Nós",
+    "schemaVersion": 1,
+    "version": 1,
+    "positioning": [
+      "camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa"
+    ],
+    "visualStyle": [
+      "editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo",
+      "luz natural quente e suave, hora dourada ou luz de janela",
+      "materiais tácteis e domésticos: tecidos, madeira, linho, papel"
+    ],
+    "colors": [
+      "creme e bege quente",
+      "bordô/vinho profundo",
+      "marrom terroso",
+      "navy",
+      "off-white"
+    ],
+    "manualNotes": [
+      "Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.",
+      "Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.",
+      "Crianças em cena sempre à vontade e em interação real com o adulto."
+    ],
+    "avoid": [
+      "estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans)",
+      "clima de propaganda de margarina",
+      "cenário de imobiliária sem sinal de uso"
+    ],
+    "suggestedPersonas": [
+      {
+        "label": "menina 6 anos",
+        "source": "automatic"
+      },
+      {
+        "label": "mulher 35 anos, mãe da menina",
+        "source": "automatic"
+      }
+    ]
+  },
+  "niche_kit_id": "fashion",
+  "context_profile": {
+    "contextId": "entre_nos_sala",
+    "contextType": "custom",
+    "subject": {
+      "name": "Sala de estar acolhedora"
+    },
+    "summary": "Rotina dentro de casa",
+    "sceneContexts": [
+      "sala de estar acolhedora com sofá, manta e luz natural lateral"
+    ],
+    "domainElements": [
+      "manta de tricô jogada no encosto"
+    ],
+    "avoid": [
+      "qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado"
+    ],
+    "status": "approved",
+    "schemaVersion": 1,
+    "promptVersion": 1,
+    "profileVersion": 1
+  },
+  "persona": {
+    "label": "menina 6 anos"
+  },
+  "quality": "medium",
+  "placement": "FEED_4X5",
+  "angles": [
+    "CAIMENTO",
+    "PRESENTE_AFETO"
+  ],
+  "seeds": {
+    "CAIMENTO": [
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108
+    ],
+    "PRESENTE_AFETO": [
+      100,
+      102,
+      103,
+      104,
+      105,
+      109,
+      112,
+      116
+    ]
+  },
+  "streamlit": {
+    "loja": "entre_nos",
+    "tipo_peca_label": "Camiseta Infantil",
+    "vinculo_id": "mae_filho",
+    "contexto_override": "casa_cotidiano",
+    "tema_estampa": "pai e filha empinando pipa, com a frase 'Brincar com meu pai'",
+    "personas": {
+      "CAIMENTO": "menina 6 anos",
+      "PRESENTE_AFETO": "mulher 35 anos, mãe, e menina 6 anos"
+    }
+  },
+  "_seeds_note": "PRESENTE_AFETO seeds are the ones for which prompt v2 renders the 'Pessoa A VESTE / Pessoa B neutra' scenario (the one this experiment asks for); CAIMENTO has no pool, so its seeds only label the images."
+}

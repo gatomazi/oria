@@ -14,10 +14,10 @@ import copy
 import hashlib
 import io
 import json
+import mimetypes
+import time
 import uuid
-from pathlib import Path
 
-from .domain.cabide import REGRA_CENTRALIZACAO_CABIDE
 from .domain.remarketing import (
     CLEAN_AUTO,
     CLEAN_NUNCA,
@@ -35,19 +35,34 @@ from .domain.remarketing import (
 )
 
 from . import model_router as mr
+from . import planner_v2, prompt_v2
+from .compiler import compile_prompt, prompt_info
+from .angle_catalog import canonical_legacy_angle_id, family_presets, recommend_angle, resolve_angle_meta
 from .angles import CORE_ANGLES, angle_descriptor, angle_is_available
-from .assets import asset_from_provider_b64
+from .blocks import (
+    COMMUNICATION,
+    _angle_block,
+    _avoid_block,
+    _brand_block,
+    _context_block,
+    _core_rules,
+    _niche_block,
+    _persona_block,
+    _product_block,
+    _product_label,
+)
+from .assets import ReferenceNormalizationError, asset_from_provider_b64, normalize_reference_png
 from .context_intelligence import GeographicContextProvider, deterministic_pick, resolve_context
 from .contracts import ensure_valid, validate
 from .errors import GenerationError, classify_provider_exception
 from .history import utc_now
 from .kits import kit_ref, resolve_kits
-from .personas import describe as describe_persona
+from .personas import describe_identity
 from .personas import persona_pool, resolve_persona
 from .placements import placement_descriptor
-from .products import garment_for_type, validate_products
-from .prompt_builder import PromptBuilder, bullet_block
-from .references import reference_roles
+from .products import validate_products
+from .prompt_builder import PromptBuilder
+from .references import reference_roles, sniff_mime
 from .rules import CLEAN_ANGLES_FORBIDDEN_OVERLAY
 from .strategies import (
     MULTI_PRODUCT_RULES,
@@ -56,11 +71,7 @@ from .strategies import (
     product_limits,
     strategy_version,
 )
-from .versions import PROMPT_VERSION, SCHEMA_VERSION, version_manifest
-
-_TEMPLATES = Path(__file__).parent / "templates"
-with open(_TEMPLATES / "communication.json", encoding="utf-8") as _f:
-    COMMUNICATION: dict = json.load(_f)
+from .versions import COMPILER_VERSION, PLAN_SCHEMA_V2, SCHEMA_VERSION, version_manifest
 
 MAX_REFERENCE_IMAGES = 10
 _CLEAN_MODE_MAP = {"auto": CLEAN_AUTO, "always": CLEAN_SEMPRE, "never": CLEAN_NUNCA}
@@ -70,17 +81,17 @@ _CLEAN_MODE_MAP = {"auto": CLEAN_AUTO, "always": CLEAN_SEMPRE, "never": CLEAN_NU
 def _seed(request: dict) -> int:
     if isinstance(request.get("seed"), int):
         return request["seed"]
-    digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    # prompt_version is left out on purpose: v1 and v2 of the same request must pick the same scene, persona and
+    # pool entries, so an A/B between versions changes the prompt and nothing else. Requests without the key hash
+    # exactly as before.
+    unversioned = {k: v for k, v in request.items() if k != "prompt_version"}
+    digest = hashlib.sha256(json.dumps(unversioned, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     return int(digest[:8], 16)
 
 
 def _plan_id(request: dict) -> str:
     digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     return f"plan_{digest[:24]}"
-
-
-def _product_label(product: dict) -> str:
-    return f"\"{product['name']}\" ({product['type']})"
 
 
 def _people(n: int, pool: list, seed: int, first: dict | None) -> list[dict]:
@@ -91,112 +102,6 @@ def _people(n: int, pool: list, seed: int, first: dict | None) -> list[dict]:
         people.append(rotation[(seed + i) % len(rotation)])
         i += 1
     return people[:n]
-
-
-def _product_block(products: list, roles: list) -> str:
-    by_product: dict[str, list[int]] = {}
-    for role in roles:
-        by_product.setdefault(role["product_id"], []).append(role["order"])
-
-    def images(pid: str) -> str:
-        orders = by_product[pid]
-        return f"imagem {orders[0]}" if len(orders) == 1 else "imagens " + ", ".join(map(str, orders))
-
-    if len(products) == 1:
-        p = products[0]
-        desc = f" — {p['description']}" if p.get("description") else ""
-        extra = (
-            "\n  · As imagens de referência mostram o MESMO produto por ângulos diferentes: gere uma única unidade."
-            if len(by_product[p["id"]]) > 1 else ""
-        )
-        return f"PRODUTO (autoridade absoluta sobre qualquer outra regra): {images(p['id'])} = {_product_label(p)}{desc}.{extra}"
-    lines = [
-        f"  · Produto {i} ({images(p['id'])}): {_product_label(p)}" + (f" — {p['description']}" if p.get("description") else "")
-        for i, p in enumerate(products, 1)
-    ]
-    return (
-        f"PRODUTOS (autoridade absoluta), {len(products)} produtos DIFERENTES nesta ordem:\n" + "\n".join(lines)
-        + "\n  · Cada produto aparece exatamente uma vez; nunca troque, funda ou duplique produtos."
-    )
-
-
-def _brand_block(brand: dict) -> str:
-    parts = [f"MARCA ({brand['name']}):"]
-    if brand.get("positioning"):
-        parts.append("  · Posicionamento: " + "; ".join(brand["positioning"]) + ".")
-    if brand.get("visualStyle"):
-        parts.append("  · Linguagem visual: " + ", ".join(brand["visualStyle"]) + ".")
-    if brand.get("colors"):
-        parts.append("  · Paleta da marca (guia de cor da CENA, nunca do produto): " + "; ".join(brand["colors"]) + ".")
-    if brand.get("manualNotes"):
-        parts.extend(f"  · {note}" for note in brand["manualNotes"])
-    return "\n".join(parts) if len(parts) > 1 else ""
-
-
-def _niche_block(niche: dict) -> str:
-    items = []
-    if niche.get("materials"):
-        items.append("Materiais e sinais de uso real: " + ", ".join(niche["materials"]) + ".")
-    if niche.get("audienceBehaviors"):
-        items.append("Público: " + "; ".join(niche["audienceBehaviors"][:3]) + ".")
-    return bullet_block(f"NICHO ({niche['name']}):", items)
-
-
-def _context_block(context: dict, uses_person: bool) -> str:
-    element = context.get("supporting_element")
-    if uses_person:
-        text = f"CONTEXTO DA CENA: {context['scene']}."
-        if element:
-            text += f" Elemento de apoio, discreto: {element}."
-    else:
-        text = f"ATMOSFERA (luz, paleta e materiais — não leve o set para este lugar): inspirada em \"{context['scene']}\"."
-        if element:
-            text += f" Detalhe de apoio: {element}."
-    return text + " Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio."
-
-
-def _angle_block(angle_id: str, products: list, persona: dict | None, people: list, scene: str, apparel: bool) -> str:
-    spec = CORE_ANGLES[angle_id]
-    multi = len(products) > 1
-    template = spec["scene_multi"] if multi else spec["scene"]
-    text = template.format(
-        produto=_product_label(products[0]),
-        produtos="; ".join(_product_label(p) for p in products),
-        n=len(products),
-        cenario=scene,
-        persona=persona["label"] if persona else "uma pessoa",
-        pessoas=f"{len(people)} pessoas diferentes ("
-        + "; ".join(p["label"] for p in people) + ")" if people else f"{len(products)} pessoas diferentes",
-    )
-    if angle_id == "CABIDE" and apparel:
-        text += REGRA_CENTRALIZACAO_CABIDE
-    return text
-
-
-def _persona_block(persona: dict | None, people: list) -> str:
-    if len(people) > 1:
-        return bullet_block("PESSOAS (cada uma com 1 produto, na ordem dos produtos):",
-                            [f"Pessoa {i}: {describe_persona(p)}" for i, p in enumerate(people, 1)])
-    if persona:
-        return f"PERSONA: {describe_persona(persona)}. Aparência natural, sem rosto padrão de banco de imagem."
-    return ""
-
-
-def _avoid_block(avoid: list) -> str:
-    return ("EVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): " + "; ".join(avoid) + ".") if avoid else ""
-
-
-def _core_rules(products: list, stage: str | None, strategy: str) -> tuple[str, bool]:
-    rules = list(COMMUNICATION["core_rules"])
-    garments = [garment_for_type(p["type"]) for p in products]
-    apparel = any(garments)
-    for garment in dict.fromkeys(g["regra_preservacao"] for g in garments if g):
-        rules.append(garment)
-    if apparel:
-        rules.extend(COMMUNICATION["apparel_rules"])
-    if strategy == "FUNNEL_VISUAL" and stage == "TOFU":
-        rules.append(COMMUNICATION["tofu_rule"])
-    return "REGRAS OBRIGATÓRIAS (nunca ignore):\n" + "\n".join(f"- {r}" for r in rules), apparel
 
 
 # ------------------------------------------------------------------ remarketing
@@ -325,13 +230,99 @@ def _funnel_parts(request: dict, products: list):
 
 
 # ------------------------------------------------------------------ plan
+def _resolve_angle_id(request: dict, products: list, product_mode: str, brand: dict, niche: dict) -> tuple[str, str, list[str]]:
+    """(angle_id, provenance source, reason). `angle_id: "auto"` asks the planner to recommend one (Fase D);
+    any of the 13 legacy ids is used as named, exactly like before this phase. `angle_family_hint` (also only
+    meaningful with "auto") steers straight to a family — how an explicit family/preset picker reaches the core
+    without needing its own legacy id: the human already chose a family, so the source is "user", not
+    "planner_default". `custom_angle` (Fase D.1, also "auto"-only) is the FULL resolved row the panel read from
+    `creative_angles` — it supersedes angle_family_hint and additionally enforces `allowed_product_modes` as a
+    hard compatibility check (an interaction/people_mode mismatch is only a warning, built downstream in
+    planner_v2.build, because Subjects/Interaction — not the angle — own who is in the scene and what they do)."""
+    requested = request.get("angle_id")
+    custom = request.get("custom_angle")
+    if custom:
+        if requested != "auto":
+            raise GenerationError("INVALID_INPUT", {"errors": ["custom_angle: requires angle_id \"auto\""]})
+        allowed_modes = custom.get("allowed_product_modes")
+        if allowed_modes and product_mode not in allowed_modes:
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "custom_angle_id": custom["id"],
+                                                         "reason": f"product_mode {product_mode} not allowed for this custom angle"})
+        legacy_id = canonical_legacy_angle_id(custom["family"], custom.get("preset"))
+        if legacy_id is None:
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": custom["family"],
+                                                         "reason": "family has no generation route yet"})
+        return legacy_id, "user", [f"custom_angle:{custom['id']}"]
+    if requested != "auto":
+        return requested, "user", []
+    hint = request.get("angle_family_hint")
+    if hint and hint.get("family"):
+        family = hint["family"]
+        preset = hint.get("preset")
+        legacy_id = canonical_legacy_angle_id(family, preset)
+        if legacy_id is None:
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": family,
+                                                         "reason": "family has no generation route yet"})
+        # Achado real (primeiro uso): a UI só oferece o CARTÃO da família, nunca um preset específico —
+        # `preset` aqui é sempre None hoje. Uma escolha explícita de PRESET (chamador futuro/custom angle
+        # replay) continua honrada exatamente como pedida, sem substituição silenciosa. Só a família (sem
+        # preset) procura outro preset REAL dentro da MESMA família antes de recusar — nunca cruza para
+        # outra família: isso trairia a escolha do lojista, que é o próprio ponto do family_hint.
+        if preset is None and not angle_is_available(legacy_id, brand, niche):
+            tried = [legacy_id]
+            achado = None
+            for hnt, lid in family_presets(family):
+                if lid == legacy_id:
+                    continue
+                if angle_is_available(lid, brand, niche):
+                    achado = (hnt, lid)
+                    break
+                tried.append(lid)
+            if achado:
+                hnt, legacy_id = achado
+                return legacy_id, "user", [f"angle_family_hint:{family}", f"preset_fallback:{legacy_id}:tried={','.join(tried)}"]
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": legacy_id, "brand_kit": (brand or {}).get("id"),
+                                                         "niche_kit": (niche or {}).get("id"), "family": family,
+                                                         "reason": "no_angle_available_for_brand_or_niche", "tried": tried})
+        return legacy_id, "user", [f"angle_family_hint:{family}"]
+    # brand/niche entram aqui (achado real, primeiro uso da conta interna) para que a recomendação
+    # automática nunca escolha um ângulo que ela própria sabe que `angle_is_available` vai recusar
+    # mais abaixo — ver a cadeia de alternativas em `_FALLBACKS`, angle_catalog.py.
+    recommendation = recommend_angle({
+        "subjects": request.get("subjects"), "interaction": request.get("interaction"),
+        "persona_mode": request.get("persona_mode"), "products": products,
+        "intent_hint": request.get("angle_intent_hint"),
+    }, brand=brand, niche=niche)
+    if recommendation["angle_id"] is None:
+        # Duas causas bem diferentes, nunca confundidas: a família não tem NENHUMA rota de geração
+        # (reservada, ex. action_movement — "reason" fica só a leitura do pedido) vs. toda a cadeia de
+        # alternativas era rota real mas indisponível PARA ESTA marca/nicho (reason termina em
+        # "no_available_angle_for_brand:tried=...") — a UI usa isso pra explicar, nunca um 422 genérico.
+        if any(r.startswith("no_available_angle_for_brand") for r in recommendation["reason"]):
+            raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": recommendation["family"],
+                                                         "reason": "no_angle_available_for_brand_or_niche",
+                                                         "tried": recommendation["reason"]})
+        raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": "auto", "family": recommendation["family"],
+                                                     "reason": "family has no generation route yet"})
+    return recommendation["angle_id"], "planner_default", recommendation["reason"]
+
+
 def plan_creative(
     request: dict,
     *,
     router: mr.ModelRouter | None = None,
     geographic: GeographicContextProvider | None = None,
+    default_prompt_version: int = 1,
+    default_plan_schema_version: int = 1,
 ) -> dict:
-    """Validates a CreativeRequest and returns a CreativePlan. Raises GenerationError."""
+    """Validates a CreativeRequest and returns a CreativePlan. Raises GenerationError.
+
+    `default_prompt_version` applies when the request carries no `prompt_version` (the service passes its
+    CREATIVE_PROMPT_VERSION). Version 1 is the default and stays byte-identical to what shipped before v2.
+
+    `plan_schema_version` (request, else `default_plan_schema_version`) selects the plan: 1 = the v1 plan built with the
+    v1 PromptBuilder, untouched; 2 = a CreativePlan v2 (gaze, subjects, minor safety, semantics, provenance) whose prompt
+    is produced by the v2 compiler from the plan alone."""
     ensure_valid("CreativeRequest", request)
     request = copy.deepcopy(request)
     router = router or mr.ModelRouter()
@@ -351,10 +342,26 @@ def plan_creative(
     if len(roles) > MAX_REFERENCE_IMAGES:
         raise GenerationError("INVALID_REFERENCE", {"reason": "too_many_reference_images", "max": MAX_REFERENCE_IMAGES})
 
-    angle_id = request["angle_id"]
+    custom_angle = request.get("custom_angle")
+    angle_id, angle_source, angle_reason = _resolve_angle_id(request, products, product_mode, brand, niche)
     if not angle_is_available(angle_id, brand, niche):
         raise GenerationError("UNSUPPORTED_ANGLE", {"angle_id": angle_id, "brand_kit": brand["id"], "niche_kit": niche["id"]})
     angle = angle_descriptor(angle_id, brand, niche)
+    angle_meta = resolve_angle_meta(angle_id)
+    if custom_angle:
+        # The custom angle's OWN identity (Fase D.1 §3) — not the legacy entry it routes to. `angle_id` above
+        # still names the legacy id, because that alone is what the compiler/prompt actually need.
+        angle_recommendation = {
+            "angle_id": angle_id, "family": custom_angle["family"], "preset": custom_angle.get("preset"),
+            "objective_hints": angle_meta["objective_hints"], "scope": custom_angle["scope"], "version": custom_angle["version"],
+            "reason": angle_reason, "source": angle_source, "custom_angle": custom_angle,
+        }
+    else:
+        angle_recommendation = {
+            "angle_id": angle_id, "family": angle_meta["family"], "preset": angle_meta["preset"],
+            "objective_hints": angle_meta["objective_hints"], "scope": angle_meta["scope"], "version": angle_meta["version"],
+            "reason": angle_reason, "source": angle_source, "custom_angle": None,
+        } if angle_meta["family"] else None
     if product_mode == "multi_product" and len(products) > angle["multi_product_limit"]:
         warnings.append(f"above_recommended_products_for_angle:{angle['multi_product_limit']}")
 
@@ -386,7 +393,13 @@ def plan_creative(
         stage, intent, layout = engine["stage"], None, None
         people_needed = len(products) if angle["uses_person"] and len(products) > 1 else int(angle["uses_person"])
 
+    prompt_version = prompt_v2.resolve_prompt_version(
+        request.get("prompt_version"), default_prompt_version, angle_id, people_needed, strategy)
+    if prompt_version == 2:
+        people_needed = prompt_v2.people_needed(angle_id, len(products), people_needed)
     core_rules, apparel = _core_rules(products, stage, strategy)
+    if prompt_version == 2:
+        core_rules = prompt_v2.narrow_model_rule(core_rules, angle_id, len(products))
     hints = request.get("history_hints") or {}
     context, _profile = resolve_context(
         request.get("context"), brand_kit=brand, niche_kit=niche, products=products, angle=angle,
@@ -403,19 +416,59 @@ def plan_creative(
     )
     people = _people(people_needed, persona_pool(brand, niche), seed, persona) if people_needed > 1 else []
 
-    builder = PromptBuilder(ordered=True, separator="\n\n")
-    builder.add("core_rules", core_rules)
-    builder.add("strategy_rules", engine["text_rule"])
-    builder.add("brand_kit", _brand_block(brand))
-    builder.add("niche_kit", _niche_block(niche))
-    builder.add("context_profile", _context_block(context, uses_person))
-    builder.add("product", _product_block(products, roles))
-    builder.add("angle", _angle_block(angle_id, products, persona, people, context["scene"], apparel))
-    builder.add("persona", _persona_block(persona, people))
-    builder.add("placement", COMMUNICATION["placements"][request["placement_id"]])
-    builder.add("strategy_communication", engine["communication"])
-    builder.add("avoid", _avoid_block(context["avoid"]))
-    prompt = builder.info(PROMPT_VERSION)
+    plan_schema = request.get("plan_schema_version", default_plan_schema_version)
+    if plan_schema != PLAN_SCHEMA_V2:
+        # Who is in the scene and what they do only exists in a v2 plan. A v1 plan cannot honor these, and dropping
+        # them would silently change the creative (or its minor-safety input): refuse instead.
+        needing = [k for k in ("subjects", "interaction", "scene_picks") if request.get(k)]
+        if needing:
+            raise GenerationError("INVALID_INPUT", {"errors": [f"{k}: requires plan_schema_version 2" for k in needing]})
+    if request.get("scene_picks") and prompt_version != 2:
+        raise GenerationError("INVALID_INPUT", {"errors": ["scene_picks: requires prompt_version 2 (picks belong to the v2 scene pools)"]})
+    if plan_schema != PLAN_SCHEMA_V2 and request.get("gaze_mode") not in (None, "auto"):
+        warnings.append("gaze_mode_ignored_needs_plan_schema_2")  # a v1 plan has no gaze; say so instead of dropping it silently
+    v2_extra: dict = {}
+    plan_persona = persona
+    if plan_schema == PLAN_SCHEMA_V2:
+        planned = planner_v2.build(
+            request=request, angle_id=angle_id, strategy=strategy, products=products, brand=brand, niche=niche,
+            persona=persona, people=people, people_needed=people_needed, prompt_version=prompt_version, seed=seed,
+            apparel=apparel, pool=persona_pool(brand, niche), engine=engine, custom_angle=custom_angle)
+        warnings.extend(planned["warnings"])
+        plan_persona = planned["persona"]
+        view = {
+            "schema_version": PLAN_SCHEMA_V2, "strategy": strategy, "funnel_stage": None if strategy == "CLEAN_ANGLES" else stage,
+            "products": products, "references": roles, "angle": angle, "angle_recommendation": angle_recommendation, "context": context,
+            "placement": placement_descriptor(request["placement_id"]), "persona": plan_persona, **planned["fields"],
+        }
+        view["provenance"], view["provenance_sources"] = planner_v2.build_provenance(
+            request=request, plan=view, brand=brand, niche=niche, semantics_source=planned["semantics_source"],
+            angle_source=angle_source)
+        compiled = compile_prompt(view)
+        prompt = prompt_info(compiled)
+        v2_extra = {**planned["fields"], "provenance": view["provenance"], "provenance_sources": view["provenance_sources"], "seed": seed,
+                    "compiler": {"version": COMPILER_VERSION, "sections": compiled["sections"]}}
+    else:
+        builder = PromptBuilder(ordered=True, separator="\n\n")
+        builder.add("core_rules", core_rules)
+        builder.add("strategy_rules", engine["text_rule"])
+        builder.add("brand_kit", _brand_block(brand))
+        builder.add("niche_kit", _niche_block(niche))
+        builder.add("context_profile", _context_block(context, uses_person))
+        builder.add("product", _product_block(products, roles))
+        if prompt_version == 2:
+            builder.add("angle", prompt_v2.angle_block(
+                angle_id, product=_product_label(products[0]), products="; ".join(_product_label(p) for p in products),
+                count=len(products), scene=context["scene"], apparel=apparel, seed=seed, persona=persona, people=people,
+            ))
+            builder.add("persona", prompt_v2.persona_block(angle_id, len(products), persona, people, describe_identity))
+        else:
+            builder.add("angle", _angle_block(angle_id, products, persona, people, context["scene"], apparel))
+            builder.add("persona", _persona_block(persona, people))
+        builder.add("placement", COMMUNICATION["placements"][request["placement_id"]])
+        builder.add("strategy_communication", engine["communication"])
+        builder.add("avoid", _avoid_block(context["avoid"]))
+        prompt = builder.info(prompt_version)
 
     overlay = engine["overlay"]
     validations = [
@@ -447,14 +500,15 @@ def plan_creative(
     plan = {
         "plan_id": _plan_id(request),
         "creative_id": request.get("creative_id") or str(uuid.uuid4()),
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": PLAN_SCHEMA_V2 if v2_extra else SCHEMA_VERSION,
         "strategy": strategy,
         "internal_strategy_id": internal_id(strategy),
         "product_mode": product_mode,
         "products": products,
         "angle": angle,
+        "angle_recommendation": angle_recommendation,
         "placement": placement_descriptor(request["placement_id"]),
-        "persona": persona,
+        "persona": plan_persona,
         "context": context,
         "brand_kit": kit_ref(brand),
         "niche_kit": kit_ref(niche),
@@ -472,7 +526,9 @@ def plan_creative(
             "quality": request.get("quality", "medium"),
             "size": placement_descriptor(request["placement_id"])["api_size"],
         },
-        "versions": {**version_manifest(), "strategy_version": strategy_version(strategy),
+        **v2_extra,
+        "versions": {**version_manifest(), "prompt_version": prompt_version, "strategy_version": strategy_version(strategy),
+                     **({"compiler_version": COMPILER_VERSION} if v2_extra else {}),
                      "brand_kit_version": brand["version"], "niche_kit_version": niche["version"],
                      "context_profile_version": context["profile_version"]},
         "validations": validations,
@@ -531,6 +587,7 @@ def _result(
     error: GenerationError | None,
     now: str | None,
     usage: dict | None = None,
+    trace: dict | None = None,
 ) -> dict:
     return {
         "creative_id": plan.get("creative_id", ""),
@@ -557,11 +614,69 @@ def _result(
             "prompt_sha256": (plan.get("prompt") or {}).get("sha256"),
             # Consumo real cobrado pelo provedor. None quando ele não reportou — ver usage_from_response.
             "usage": usage,
+            # What actually happened in the provider call (see generation_trace). None only when the
+            # caller passed no trace; generate_creative always does.
+            "trace": trace,
         },
         "versions": plan.get("versions", {}),
         "error": error.to_dict() if error else None,
         "created_at": now or utc_now(),
     }
+
+
+TRACE_VERSION = 1
+
+
+def _new_trace(plan: dict, router: mr.ModelRouter, attempt: int, normalize_references: bool) -> dict:
+    """Skeleton of the generation trace. Purely observational and never raises: it is built before
+    the plan is validated, so it must survive a malformed plan."""
+    plan = plan if isinstance(plan, dict) else {}
+    model = plan.get("model") if isinstance(plan.get("model"), dict) else {}
+    prompt = plan.get("prompt") if isinstance(plan.get("prompt"), dict) else {}
+    text = prompt.get("text") if isinstance(prompt.get("text"), str) else ""
+    return {
+        "trace_version": TRACE_VERSION,
+        "attempt": attempt,
+        "model_requested": router.model_for(mr.IMAGE_GENERATION),
+        "model_served": None,
+        "models_tried": [],
+        "params": {"size": model.get("size"), "quality": model.get("quality")},
+        "prompt": {"sha256": prompt.get("sha256"), "version": prompt.get("prompt_version"), "length": len(text)},
+        "references": {"count": 0, "normalized": normalize_references, "items": []},
+        "provider_request_id": None,
+        "provider_ms": None,
+        "duration_ms": None,
+        "outcome": None,
+        "error_code": None,
+    }
+
+
+def _reference_trace(order: int, original: bytes, sent: io.BytesIO, normalized: dict | None) -> dict:
+    """One reference as it went out: what the bytes really are, and what they were announced as.
+    The two differ when the original is JPEG/WebP but is sent under a `.png` name (the legacy path);
+    with normalization they agree."""
+    sent_bytes = sent.getvalue()
+    item = {
+        "order": order,
+        "original_mime": sniff_mime(original),
+        "sent_name": sent.name,
+        "sent_mime": mimetypes.guess_type(sent.name)[0],
+        "sent_actual_mime": sniff_mime(sent_bytes),
+        "original_bytes": len(original),
+        "sent_bytes": len(sent_bytes),
+        "normalized": normalized is not None,
+    }
+    if normalized:
+        item.update({k: normalized[k] for k in ("width", "height", "mode_in", "mode_out", "exif_orientation")})
+    return item
+
+
+def _finish_trace(trace: dict, started: float, err: GenerationError | None) -> dict:
+    trace["duration_ms"] = int((time.monotonic() - started) * 1000)
+    trace["outcome"] = "failed" if err else "completed"
+    trace["error_code"] = err.code if err else None
+    trace["references"]["count"] = len(trace["references"]["items"])
+    return trace
 
 
 def generate_creative(
@@ -572,16 +687,21 @@ def generate_creative(
     router: mr.ModelRouter | None = None,
     attempt: int = 1,
     now: str | None = None,
+    normalize_references: bool = False,
 ) -> dict:
     """Runs one image generation for a plan. `client` must expose
     `images.edit(model, image, prompt, size, quality)` (OpenAI SDK shape) and is
     created by the caller with the tenant's credential. `references` maps each
-    plan reference ref to its image bytes. Never raises: failures come back as a
+    plan reference ref to its image bytes. With `normalize_references` each reference is decoded, EXIF-
+    oriented and re-encoded as a real PNG (no resize) before it is sent; off by default, which keeps the
+    original bytes (announced as `.png`) exactly as before. Never raises: failures come back as a
     `failed` CreativeResult with a safe GenerationError."""
     router = router or mr.ModelRouter()
     # Fora do try: uma chamada que já foi cobrada precisa sobreviver ao caminho de erro, senão o
     # painel subestima a fatura justamente nas gerações que falharam depois de gastar.
     usage = None
+    started = time.monotonic()
+    trace = _new_trace(plan, router, attempt, normalize_references)
     try:
         errors = validate("CreativePlan", plan)
         if errors:
@@ -591,9 +711,19 @@ def generate_creative(
             data = references.get(role["ref"])
             if not data:
                 raise GenerationError("INVALID_REFERENCE", {"ref_order": role["order"], "reason": "missing_bytes"})
-            buf = io.BytesIO(data)
-            buf.name = f"reference_{role['order']}.png"
+            sent_name = f"reference_{role['order']}.png"
+            info = None
+            if normalize_references:
+                try:
+                    buf, info = normalize_reference_png(data, sent_name)
+                except ReferenceNormalizationError as exc:
+                    # Fail closed: a silent fallback to the original bytes would contaminate the normalized arm.
+                    raise GenerationError("INVALID_REFERENCE", {"ref_order": role["order"], "reason": exc.reason}) from None
+            else:
+                buf = io.BytesIO(data)
+                buf.name = sent_name
             images.append(buf)
+            trace["references"]["items"].append(_reference_trace(role["order"], data, buf, info))
 
         def call(model: str):
             return client.images.edit(
@@ -601,12 +731,19 @@ def generate_creative(
                 size=plan["model"]["size"], quality=plan["model"]["quality"],
             )
 
+        provider_started = time.monotonic()
         try:
-            response = router.run(mr.IMAGE_GENERATION, call)
+            response, served = router.run_traced(mr.IMAGE_GENERATION, call, trace["models_tried"])
         except GenerationError:
             raise
         except Exception as exc:  # noqa: BLE001 — provider errors are classified, never echoed
             raise classify_provider_exception(exc) from None
+        finally:
+            trace["provider_ms"] = int((time.monotonic() - provider_started) * 1000)
+        trace["model_served"] = served
+        request_id = getattr(response, "_request_id", None)
+        if isinstance(request_id, str) and 0 < len(request_id) <= 120:
+            trace["provider_request_id"] = request_id
         # Lido ANTES de processar o asset: a chamada já foi cobrada neste ponto, e falha no
         # processamento não deve apagar o registro de um gasto que existiu.
         usage = usage_from_response(response)
@@ -615,9 +752,9 @@ def generate_creative(
             asset = asset_from_provider_b64(b64, plan["placement"]["width"], plan["placement"]["height"])
         except Exception:  # noqa: BLE001
             raise GenerationError("ASSET_PROCESSING_FAILED") from None
-        return _result(plan, attempt, asset, None, now, usage)
+        return _result(plan, attempt, asset, None, now, usage, _finish_trace(trace, started, None))
     except GenerationError as err:
-        return _result(plan if isinstance(plan, dict) else {}, attempt, None, err, now, usage)
+        return _result(plan if isinstance(plan, dict) else {}, attempt, None, err, now, usage, _finish_trace(trace, started, err))
 
 
 # ------------------------------------------------------------------ copy

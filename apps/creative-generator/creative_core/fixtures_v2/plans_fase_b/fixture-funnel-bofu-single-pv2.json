@@ -1,0 +1,513 @@
+{
+ "name": "fixture-funnel-bofu-single-pv2",
+ "request": {
+  "creative_id": "77777777-7777-4777-8777-777777777777",
+  "strategy": "FUNNEL_VISUAL",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "prod-floripa",
+    "name": "Camiseta Florianópolis",
+    "type": "camiseta premium",
+    "referenceImages": [
+     "tenant-demo/products/prod-floripa/front.png"
+    ],
+    "metadata": {
+     "city": "Florianópolis",
+     "state": "SC"
+    }
+   }
+  ],
+  "brand_kit_id": "use_origens",
+  "niche_kit_id": "fashion",
+  "angle_id": "CAIMENTO",
+  "placement_id": "STORY_9X16",
+  "funnel_stage": "BOFU",
+  "persona_mode": "custom",
+  "persona": {
+   "label": "Homem 40 anos, barba grisalha",
+   "age_range": "38-45",
+   "style": "casual elegante"
+  },
+  "funnel": {
+   "headline": "A sua cidade no peito",
+   "cta": "Comprar a minha →",
+   "benefits": [
+    "Algodão peruano",
+    "Envio para todo o Brasil",
+    "Troca fácil"
+   ],
+   "badges": [
+    "Frete grátis acima de R$ 199"
+   ]
+  },
+  "context": {
+   "mode": "geographic",
+   "subject": {
+    "name": "Florianópolis",
+    "metadata": {
+     "city": "Florianópolis",
+     "state": "SC"
+    }
+   },
+   "context_id": "grande_florianopolis_ilha"
+  },
+  "quality": "high",
+  "seed": 9,
+  "plan_schema_version": 2,
+  "prompt_version": 2
+ },
+ "plan": {
+  "plan_id": "plan_90de2ccccb7b71b2a479bb83",
+  "creative_id": "77777777-7777-4777-8777-777777777777",
+  "schema_version": 2,
+  "strategy": "FUNNEL_VISUAL",
+  "internal_strategy_id": "FUNIL_VISUAL",
+  "product_mode": "single_product",
+  "products": [
+   {
+    "id": "prod-floripa",
+    "name": "Camiseta Florianópolis",
+    "type": "camiseta premium",
+    "referenceImages": [
+     "tenant-demo/products/prod-floripa/front.png"
+    ],
+    "metadata": {
+     "city": "Florianópolis",
+     "state": "SC"
+    }
+   }
+  ],
+  "angle": {
+   "id": "CAIMENTO",
+   "label": "Caimento",
+   "description": "Registro técnico de vestibilidade: silhueta, largura, comprimento.",
+   "uses_person": true,
+   "apparel_only": true,
+   "multi_product_limit": 4
+  },
+  "placement": {
+   "id": "STORY_9X16",
+   "label": "Stories (9:16 — 1080×1920)",
+   "width": 1080,
+   "height": 1920,
+   "api_size": "1024x1824"
+  },
+  "persona": {
+   "label": "Homem 40 anos, barba grisalha",
+   "age_range": "38-45",
+   "style": "casual elegante",
+   "source": "custom"
+  },
+  "context": {
+   "context_id": "geo:SC:grande_florianopolis_ilha",
+   "context_type": "geographic",
+   "provider": "geographic",
+   "scene": "orla, baía ou mar com contexto urbano discreto",
+   "supporting_element": "renda ou fibras naturais apenas como detalhe",
+   "avoid": [
+    "misturar com Oktoberfest, enxaimel ou estética serrana",
+    "usar com cuidado: barco açoriano",
+    "usar com cuidado: rede de pesca",
+    "usar com cuidado: tainha como elemento gráfico ou culinário",
+    "caricatura regional",
+    "excesso de símbolos",
+    "souvenir turístico",
+    "excesso de texto",
+    "mapas ou silhuetas geográficas como ornamento",
+    "campanha turística de estado",
+    "peça deformada ou com proporção irreal",
+    "tecido liso como vetor, sem trama",
+    "produto parecendo adesivo colado na foto"
+   ],
+   "status": "approved",
+   "profile_version": 1
+  },
+  "brand_kit": {
+   "id": "use_origens",
+   "version": 1
+  },
+  "niche_kit": {
+   "id": "fashion",
+   "version": 1
+  },
+  "funnel_stage": "BOFU",
+  "remarketing_intent": null,
+  "layout": null,
+  "overlay": {
+   "allowed": true,
+   "headline": "A sua cidade no peito",
+   "subheadline": "Escolha e finalize no site",
+   "cta": "Comprar a minha →",
+   "badges": [
+    "Frete grátis acima de R$ 199"
+   ],
+   "benefits": [
+    "Algodão peruano",
+    "Envio para todo o Brasil",
+    "Troca fácil"
+   ],
+   "search_bar_text": null,
+   "chips": [],
+   "text_density": "commercial",
+   "cta_emphasis": "strong",
+   "clean": false
+  },
+  "copy": {
+   "generate": false,
+   "funnel_stages": [
+    "BOFU"
+   ]
+  },
+  "references": [
+   {
+    "ref": "tenant-demo/products/prod-floripa/front.png",
+    "product_id": "prod-floripa",
+    "role": "product_art",
+    "order": 1
+   }
+  ],
+  "prompt": {
+   "text": "REGRAS OBRIGATÓRIAS (nunca ignore):\n- Preserve 100% o(s) produto(s) das imagens de referência — forma, cores, materiais, detalhes, estampas e textos originais idênticos; nunca invente, troque, duplique ou funda produtos.\n- O produto deve parecer fotografado de verdade na cena: mesma luz, sombra, temperatura de cor e perspectiva do ambiente, textura real do material — nunca recortado ou colado como adesivo.\n- Sem logotipos de terceiros, marca d'água, arroba de rede social ou endereço de site.\n- Sem urgência falsa (\"Só hoje\", \"Estoque limitado\") e sem prova social fabricada (depoimento, nota, estrelas, número de clientes).\n- Fotografia realista, alta qualidade, formato vertical.\n- Preserve o TIPO DE PEÇA original: camiseta de MANGA CURTA, gola redonda, tecido de algodão peruano premium. NUNCA transforme em manga longa, moletom, camisa de botão ou qualquer outra peça — mesmo que o cenário sugira frio, a peça continua sendo camiseta de manga curta (a pessoa pode usar um casaco/jaqueta POR CIMA se o clima pedir, mas a camiseta em si nunca muda de manga).\n- A estampa deve parecer IMPRESSA DE VERDADE no tecido: segue dobras e movimento, recebe a mesma luz e sombra da cena e mostra leve textura da trama por baixo da tinta — nunca lisa como vetor digital.\n- Peças dobradas ou penduradas têm VOLUME real de tecido — nunca aparência achatada de recorte 2D.\n\nTEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.\n\nPRODUTO (autoridade absoluta sobre qualquer outra regra): imagem 1 = \"Camiseta Florianópolis\" (camiseta premium).\n\nCOMPOSIÇÃO DE PESSOAS (contrato): exatamente 1 pessoa em quadro.\n  · Pessoa 1 (principal): Homem 40 anos, barba grisalha — veste \"Camiseta Florianópolis\" (camiseta premium).\n\nPERSONA (refina quem é a pessoa; em qualquer conflito, pose, ação e enquadramento definidos no ângulo SEMPRE vencem): Homem 40 anos, barba grisalha; casual elegante. Aparência natural, sem rosto padrão de banco de imagem.\n\nOLHAR: a pessoa olha diretamente para a câmera, com expressão natural.\n\nÂNGULO CAIMENTO (registro quase técnico de vestibilidade — 'como esta peça fica vestida', não uma foto de moda genérica): Homem 40 anos, barba grisalha em pé, corpo inteiro ou da cabeça até pelo menos a metade das coxas, posição frontal ou 3/4 muito leve, braços em posição natural e relaxada ao lado do corpo (NUNCA cruzados), vestindo \"Camiseta Florianópolis\" (camiseta premium) completamente visível — barra da peça claramente visível e NÃO enfiada dentro da calça, sem jaqueta, mochila ou bolsa cobrindo a peça. Fundo simples e neutro inspirado em orla, baía ou mar com contexto urbano discreto, sem competir com a informação de caimento. PRIORIDADE VISUAL ESTRITA nesta ordem: 1) silhueta da peça no corpo, 2) largura, 3) comprimento, 4) comprimento de manga, 5) gola, 6) queda do tecido, 7) estampa. A pessoa está parada em pose natural — NÃO mostrar a pessoa mexendo, ajeitando, puxando ou segurando qualquer parte da peça, e sem objetos nas mãos. SEM óculos escuros, sem pose editorial, sem cenário dramático, sem acessórios chamativos, sem composição cinematográfica. Preservar rigorosamente o tipo de peça (manga, gola, comprimento) conforme especificado.\n\nETAPA DO FUNIL NA ARTE — BOFU (decisão): clareza de ação; headline + subheadline + CTA forte; benefícios e badges somente quando listados no bloco de texto.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"A sua cidade no peito\"\n  · SUBHEADLINE: \"Escolha e finalize no site\"\n  · CTA: \"Comprar a minha →\"\n  · BENEFÍCIOS (2–3 itens curtos, linha discreta com ícone de traço fino, abaixo do CTA ou entre subheadline e CTA): \"Algodão peruano\" | \"Envio para todo o Brasil\" | \"Troca fácil\"\n  · Densidade de texto: commercial — headline, subheadline, CTA e benefícios — claro e direto, mas NUNCA uma landing page dentro da imagem.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nBADGES (selos pequenos, texto literal, no máximo 3, alinhados e discretos, nunca sobre o produto): \"Frete grátis acima de R$ 199\"\n\nCTA — ênfase strong: botão SÓLIDO, alto contraste, pílula de cantos arredondados, texto em caixa alta + seta, com área de respiro ao redor de pelo menos 1× a altura do botão — percebido em menos de 1 segundo.\n  · COR POR CONTRASTE com a região do fundo onde o botão pousa: fundo claro -> preto, grafite, dourado escuro ou a cor primária forte da marca; fundo escuro -> creme, dourado claro, branco ou tom claro de alta legibilidade. NUNCA vermelho nem coral.\n  · Posição: com espaço livre ao redor; nunca sobre a estampa, sobre rosto, sobre área visualmente complexa ou colado nas bordas.\n\nMARCA (Use Origens):\n  · Posicionamento: regional contemporâneo; premium acessível; não souvenir; camisetas premium de identidade regional para quem tem orgulho de onde veio.\n  · Linguagem visual: editorial, clean, natural, lifestyle, premium.\n  · Paleta da marca (guia de cor da CENA, nunca do produto): #4d543d; #d6ba8d; #1a1e14; #f4efe6.\n  · Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.\n  · Cuia de chimarrão só no Sul (RS/SC/PR).\n\nNICHO (Moda / Vestuário):\n  · Materiais e sinais de uso real: algodão, trama de tecido visível, costuras e acabamento, etiqueta discreta.\n  · Público: compra pelo caimento e pelo estilo, não só pela estampa; quer ver a peça vestida em corpo real; compara tecido, acabamento e tamanho antes de decidir.\n\nCONTEXTO DA CENA: orla, baía ou mar com contexto urbano discreto. Elemento de apoio, discreto: renda ou fibras naturais apenas como detalhe. Contexto coerente e contemporâneo, sem caricatura nem cenário turístico óbvio.\n\nEVITAR (não incluir na cena, mesmo que outra regra sugira algo parecido): misturar com Oktoberfest, enxaimel ou estética serrana; usar com cuidado: barco açoriano; usar com cuidado: rede de pesca; usar com cuidado: tainha como elemento gráfico ou culinário; caricatura regional; excesso de símbolos; souvenir turístico; excesso de texto; mapas ou silhuetas geográficas como ornamento; campanha turística de estado; peça deformada ou com proporção irreal; tecido liso como vetor, sem trama; produto parecendo adesivo colado na foto.\n\nFORMATO: Stories 9:16 vertical (1080×1920). ÁREA SEGURA: os 14% superiores e os 20% inferiores do quadro ficam livres de texto, CTA e elementos importantes.",
+   "sections": [
+    {
+     "name": "fidelity_rules",
+     "length": 1365,
+     "source": "product",
+     "value": "8"
+    },
+    {
+     "name": "text_rules",
+     "length": 518,
+     "source": "user",
+     "value": "funnel_visual"
+    },
+    {
+     "name": "reference_roles",
+     "length": 113,
+     "source": "product",
+     "value": "refs:1"
+    },
+    {
+     "name": "people_composition_contract",
+     "length": 396,
+     "source": "user",
+     "value": "1"
+    },
+    {
+     "name": "gaze",
+     "length": 70,
+     "source": "angle",
+     "value": "camera"
+    },
+    {
+     "name": "scene_action",
+     "length": 1165,
+     "source": "angle",
+     "value": "CAIMENTO"
+    },
+    {
+     "name": "strategy_communication",
+     "length": 1640,
+     "source": "user",
+     "value": "funnel_visual"
+    },
+    {
+     "name": "brand",
+     "length": 499,
+     "source": "brand",
+     "value": "Use Origens"
+    },
+    {
+     "name": "niche",
+     "length": 301,
+     "source": "niche",
+     "value": "Moda / Vestuário"
+    },
+    {
+     "name": "context",
+     "length": 219,
+     "source": "user",
+     "value": "geo:SC:grande_florianopolis_ilha"
+    },
+    {
+     "name": "avoid",
+     "length": 531,
+     "source": "brand",
+     "value": "13"
+    },
+    {
+     "name": "output_format",
+     "length": 156,
+     "source": "user",
+     "value": "STORY_9X16"
+    }
+   ],
+   "sha256": "33a50c24aa7c1149028bf6794aa6f4c231abb7664965ee405ed421bb17b77a7f",
+   "prompt_version": 2
+  },
+  "model": {
+   "task": "image_generation",
+   "model": "gpt-image-2",
+   "quality": "high",
+   "size": "1024x1824"
+  },
+  "mode": "creative",
+  "objective": "funnel_visual",
+  "subjects": [
+   {
+    "id": "s1",
+    "role": "primary",
+    "label": "Homem 40 anos, barba grisalha",
+    "persona": {
+     "label": "Homem 40 anos, barba grisalha",
+     "age_range": "38-45",
+     "style": "casual elegante",
+     "source": "custom"
+    },
+    "age_band": "adult",
+    "is_minor": false,
+    "minor_source": null,
+    "product_use": "wears",
+    "product_id": "prod-floripa",
+    "role_hint": null,
+    "relation_to_primary": null,
+    "prominence": "hero",
+    "source": "user"
+   }
+  ],
+  "scene": {
+   "gaze": {
+    "mode": "camera",
+    "requested": "auto",
+    "source": "angle",
+    "reason": "angle_default:CAIMENTO:single"
+   },
+   "picks": {},
+   "prompt_version": 2,
+   "interaction": null
+  },
+  "composition": {
+   "people_count": 1,
+   "pose_risk": "low",
+   "risk_reasons": []
+  },
+  "minor_safety": {
+   "applies": false,
+   "minor_subject_ids": [],
+   "global": {
+    "policy": "global_minor_safety_policy",
+    "version": 1,
+    "rules": [
+     "age_appropriate_clothing",
+     "nothing_revealing",
+     "not_sexualized",
+     "no_adult_aesthetic",
+     "age_appropriate_poses",
+     "normal_fit_no_body_focus",
+     "commercial_family_context"
+    ],
+    "adult_child_rule": null
+   },
+   "brand": null
+  },
+  "semantics": {
+   "products": [
+    {
+     "product_id": "prod-floripa",
+     "semantic_context": null
+    }
+   ],
+   "supporting": null,
+   "warnings": []
+  },
+  "resolved_inputs": {
+   "brand": {
+    "name": "Use Origens",
+    "positioning": [
+     "regional contemporâneo",
+     "premium acessível",
+     "não souvenir",
+     "camisetas premium de identidade regional para quem tem orgulho de onde veio"
+    ],
+    "visualStyle": [
+     "editorial",
+     "clean",
+     "natural",
+     "lifestyle",
+     "premium"
+    ],
+    "colors": [
+     "#4d543d",
+     "#d6ba8d",
+     "#1a1e14",
+     "#f4efe6"
+    ],
+    "manualNotes": [
+     "Regionalidade vem do produto, da cidade, da estampa e do contexto — não de uma coleção automática de símbolos.",
+     "Cuia de chimarrão só no Sul (RS/SC/PR)."
+    ]
+   },
+   "niche": {
+    "name": "Moda / Vestuário",
+    "materials": [
+     "algodão",
+     "trama de tecido visível",
+     "costuras e acabamento",
+     "etiqueta discreta"
+    ],
+    "audienceBehaviors": [
+     "compra pelo caimento e pelo estilo, não só pela estampa",
+     "quer ver a peça vestida em corpo real",
+     "compara tecido, acabamento e tamanho antes de decidir"
+    ]
+   },
+   "strategy": {
+    "text_rule": "TEXTO DO CRIATIVO (regra absoluta, prioridade máxima): o ÚNICO texto permitido na imagem é (a) o que já existe nos produtos das referências e (b) as frases do bloco 'TEXTO NO CRIATIVO', reproduzidas EXATAMENTE, com todos os acentos — não traduza, não reescreva, não complemente e não repita a mesma frase em dois lugares. Nada de texto decorativo ilegível, letras inventadas, logotipo desenhado, marca d'água, site, arroba, preço, desconto ou cupom que não esteja no bloco. Nenhum texto sobre rosto ou sobre o produto.",
+    "communication": "ETAPA DO FUNIL NA ARTE — BOFU (decisão): clareza de ação; headline + subheadline + CTA forte; benefícios e badges somente quando listados no bloco de texto.\n\nTEXTO NO CRIATIVO (reproduza exatamente, com acentos; nada além disso):\n  · HEADLINE: \"A sua cidade no peito\"\n  · SUBHEADLINE: \"Escolha e finalize no site\"\n  · CTA: \"Comprar a minha →\"\n  · BENEFÍCIOS (2–3 itens curtos, linha discreta com ícone de traço fino, abaixo do CTA ou entre subheadline e CTA): \"Algodão peruano\" | \"Envio para todo o Brasil\" | \"Troca fácil\"\n  · Densidade de texto: commercial — headline, subheadline, CTA e benefícios — claro e direto, mas NUNCA uma landing page dentro da imagem.\n  · Tipografia editorial premium (serifada de alto contraste ou sans geométrica limpa), no máximo 2 famílias; a headline pode ter 1 palavra de destaque em cor de acento. O texto vive numa zona de respiro do fundo — nunca sobre rosto, nunca sobre a estampa.\n\nBADGES (selos pequenos, texto literal, no máximo 3, alinhados e discretos, nunca sobre o produto): \"Frete grátis acima de R$ 199\"\n\nCTA — ênfase strong: botão SÓLIDO, alto contraste, pílula de cantos arredondados, texto em caixa alta + seta, com área de respiro ao redor de pelo menos 1× a altura do botão — percebido em menos de 1 segundo.\n  · COR POR CONTRASTE com a região do fundo onde o botão pousa: fundo claro -> preto, grafite, dourado escuro ou a cor primária forte da marca; fundo escuro -> creme, dourado claro, branco ou tom claro de alta legibilidade. NUNCA vermelho nem coral.\n  · Posição: com espaço livre ao redor; nunca sobre a estampa, sobre rosto, sobre área visualmente complexa ou colado nas bordas."
+   }
+  },
+  "provenance": {
+   "angle": "user",
+   "brand_kit": "user",
+   "compiler": "planner_default",
+   "composition": "planner_default",
+   "context": "user",
+   "minor_safety.brand": "planner_default",
+   "minor_safety.global": "safety_policy",
+   "mode": "planner_default",
+   "model": "planner_default",
+   "niche_kit": "user",
+   "objective": "user",
+   "persona": "user",
+   "placement": "user",
+   "products": "user",
+   "quality": "user",
+   "references": "product",
+   "resolved_inputs": "brand",
+   "scene.gaze": "angle",
+   "scene.picks": "planner_default",
+   "scene.prompt_version": "planner_default",
+   "semantics": "planner_default",
+   "strategy": "user",
+   "subjects": "user"
+  },
+  "seed": 9,
+  "compiler": {
+   "version": 1,
+   "sections": [
+    {
+     "section": "fidelity_rules",
+     "source": "product",
+     "value": "8",
+     "length": 1365
+    },
+    {
+     "section": "text_rules",
+     "source": "user",
+     "value": "funnel_visual",
+     "length": 518
+    },
+    {
+     "section": "reference_roles",
+     "source": "product",
+     "value": "refs:1",
+     "length": 113
+    },
+    {
+     "section": "people_composition_contract",
+     "source": "user",
+     "value": "1",
+     "length": 396
+    },
+    {
+     "section": "gaze",
+     "source": "angle",
+     "value": "camera",
+     "length": 70
+    },
+    {
+     "section": "scene_action",
+     "source": "angle",
+     "value": "CAIMENTO",
+     "length": 1165
+    },
+    {
+     "section": "strategy_communication",
+     "source": "user",
+     "value": "funnel_visual",
+     "length": 1640
+    },
+    {
+     "section": "brand",
+     "source": "brand",
+     "value": "Use Origens",
+     "length": 499
+    },
+    {
+     "section": "niche",
+     "source": "niche",
+     "value": "Moda / Vestuário",
+     "length": 301
+    },
+    {
+     "section": "context",
+     "source": "user",
+     "value": "geo:SC:grande_florianopolis_ilha",
+     "length": 219
+    },
+    {
+     "section": "avoid",
+     "source": "brand",
+     "value": "13",
+     "length": 531
+    },
+    {
+     "section": "output_format",
+     "source": "user",
+     "value": "STORY_9X16",
+     "length": 156
+    }
+   ]
+  },
+  "versions": {
+   "core_version": "1.1.0",
+   "schema_version": 1,
+   "prompt_version": 2,
+   "brand_kit_schema_version": 1,
+   "niche_kit_schema_version": 1,
+   "context_profile_schema_version": 1,
+   "clean_angles_version": 1,
+   "remarketing_version": 1,
+   "funnel_visual_version": 1,
+   "strategy_version": 1,
+   "compiler_version": 1,
+   "brand_kit_version": 1,
+   "niche_kit_version": 1,
+   "context_profile_version": 1
+  },
+  "validations": [
+   {
+    "rule": "product_count_within_limits",
+    "passed": true
+   },
+   {
+    "rule": "angle_available_for_brand_and_niche",
+    "passed": true
+   },
+   {
+    "rule": "context_profile_approved",
+    "passed": true
+   },
+   {
+    "rule": "references_are_product_art_only",
+    "passed": true
+   },
+   {
+    "rule": "funnel_stage_in_image",
+    "passed": true
+   }
+  ],
+  "warnings": []
+ }
+}

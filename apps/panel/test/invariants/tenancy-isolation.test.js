@@ -84,6 +84,25 @@ async function valoresPara(tabela, chave) {
   if (tabela === 'organization_members') v.user_id = pessoas[chave];
   // Fase 7: passo de onboarding precisa de id e requisito do vocabulário (CHECK).
   if (tabela === 'onboarding_steps') Object.assign(v, { step_id: 'owner', requirement: 'required' });
+  // Fase C: o veredito aponta para a geração e o job da MESMA Organization (FKs compostas) e para a pessoa.
+  if (tabela === 'creative_feedback') {
+    Object.assign(v, {
+      creative_id: linhas[chave].get('creative_generations').creative_id, job_id: linhas[chave].get('creative_jobs').id,
+      user_id: pessoas[chave], verdict: 'liked', snapshot: {},
+    });
+    delete v.tenant_id;
+  }
+  // Fase D: ângulo customizado de escopo Organization — slug único por (organization_id) (índice parcial, store_id NULL).
+  if (tabela === 'creative_angles') {
+    Object.assign(v, { scope: 'organization', slug: `teste-${chave.toLowerCase()}`, name: 'Ângulo de teste', family: 'connection', people_mode: 'optional' });
+  }
+  // Fase F.1: a proposta aponta para o produto da MESMA Organization (FK composta) e `provider` é um
+  // enum fechado — o gerador genérico (valorPara) não serve pra nenhum dos dois. `proposed`/
+  // `product_snapshot_hash`/`product_updated_at` já saem certos do gerador genérico (jsonb → '{}' passa
+  // no CHECK; texto/timestamp sem CHECK nenhum).
+  if (tabela === 'creative_enrichment_proposals') {
+    Object.assign(v, { product_id: linhas[chave].get('creative_products').id, provider: 'fake' });
+  }
   // Fase D: store_id é NOT NULL nas três tabelas do catálogo canônico — a Store REAL da
   // Organization, nunca um UUID aleatório (que quebraria a FK composta para `stores`).
   if (['commerce_products', 'commerce_product_variants', 'commerce_catalog_sync_logs', 'product_external_identities'].includes(tabela)) {

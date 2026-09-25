@@ -192,7 +192,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt -r requirements-test.txt
       - name: run_tests.py
         run: python run_tests.py
 
@@ -260,7 +260,7 @@ jobs:
           python-version: '3.12'
       - run: npm ci --ignore-scripts
         working-directory: apps/panel
-      - run: pip install -r apps/creative-generator/requirements.txt
+      - run: pip install -r apps/creative-generator/requirements.txt -r apps/creative-generator/requirements-test.txt
       # A semântica do gate é preservada inteira, e quem a traduz é o gate-summary.mjs:
       #   exit 1 → CODE bloqueado (regressão ou check não verificado) → job VERMELHO
       #   exit 2 → CODE PASS, rollout bloqueado por OPS/dogfood       → job verde, estado em destaque

@@ -24,6 +24,16 @@ ANGLE_IDS = (
     "NOSTALGIA_ORIGEM", "CABIDE", "PRODUTO_ESTAMPA", "CAIMENTO", "CLOSE_ESTAMPA",
     "CLOSE_BOLSO", "PREMIUM_ESTILO", "CREATOR_STYLE", "PRESENTE_AFETO",
 )
+# Fase D — Angles V2. `"auto"` lets the planner recommend a family/preset instead of the caller naming one
+# of the 13 legacy ids (angle_catalog.recommend_angle); the legacy ids keep working exactly as before.
+ANGLE_ID_OR_AUTO = ANGLE_IDS + ("auto",)
+# The 7 top-level families (angle_catalog.FAMILIES; kept as its own tuple here so this low-level module
+# does not import the higher-level angle_catalog — a test asserts the two stay in sync).
+ANGLE_FAMILIES = (
+    "lifestyle", "connection", "editorial_portrait", "action_movement", "product_focus",
+    "product_no_person", "creator_social",
+)
+ANGLE_SCOPES = ("system", "organization", "store")
 PUBLIC_STRATEGIES = ("CLEAN_ANGLES", "REMARKETING", "FUNNEL_VISUAL")
 INTERNAL_STRATEGIES = (
     "FUNNEL_VISUAL", "STATE_COLLECTION", "REMARKETING", "CLEAN_ANGLES", "MULTI_PRODUCT_INTERNAL", "ORGANIC",
@@ -48,6 +58,33 @@ PERSONA_SOURCES = ("automatic", "custom")
 RESULT_STATUS = ("completed", "failed")
 REFERENCE_ROLES = ("product_art", "layout_only")
 MAX_PRODUCTS = 6
+
+# --- Fase B (CreativePlan v2). All additive: a v1 plan/request stays valid and unchanged.
+PLAN_SCHEMA_VERSIONS = (1, 2)
+# The gaze the caller may ask for. `auto` is a REQUEST value only: the planner resolves it to a concrete mode
+# (GAZE_RESOLVED) before the prompt is compiled — it never means "let the image model decide".
+GAZE_MODES = ("camera", "interaction", "off_camera", "product", "auto")
+GAZE_RESOLVED = ("camera", "interaction", "off_camera", "product", "none")
+# Where the value of a plan field came from (see plan_sources.py for the field -> origin map).
+VALUE_ORIGINS = ("user", "product", "product_enrichment", "brand", "niche", "persona", "angle", "planner_default", "safety_policy")
+# Aggregate marker for a composed section whose parts come from different origins (never a leaf origin).
+MIXED_ORIGIN = "mixed"
+# Fase C: finer bands. `child` (no range) stays valid: it is what Fase B plans stored and what word-only evidence yields.
+AGE_BANDS = ("baby", "child", "child_3_5", "child_6_9", "child_10_12", "teen", "adult", "senior", "unknown")
+MINOR_BANDS = ("baby", "child", "child_3_5", "child_6_9", "child_10_12", "teen")
+# How a supporting person relates to the PRIMARY subject ("mother" = this subject is the primary's mother).
+RELATION_TYPES = ("mother", "father", "daughter", "son", "sibling", "partner", "friend", "grandparent", "custom")
+MAX_SUBJECTS = 4
+COMPOSITION_SOURCES = ("explicit", "recommended", "legacy")
+SCENE_MODES = ("template", "frame")
+LEGS_COVERAGES = ("full", "knee", "default")
+POSE_RISKS = ("low", "medium", "high")
+PRODUCT_USES = ("wears", "uses", "none")
+SUBJECT_ROLES = ("primary", "supporting")
+SUBJECT_PROMINENCE = ("hero", "secondary", "background")
+PLAN_MODES = ("creative",)
+OBJECTIVES = ("clean_creative", "remarketing", "funnel_visual")
+FEEDBACK_VERDICTS = ("liked", "disliked")
 
 
 @dataclass(frozen=True)
@@ -116,6 +153,17 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "behavior": S(max_length=1000),
         "notes": S(max_length=1000),
         "source": S(enum=PERSONA_SOURCES),
+        "age_band": S(enum=AGE_BANDS),  # structured age; preferred over guessing from the label (Fase C)
+    },
+    # The brand's wardrobe preference for minors. It can only ADD restrictions to the global minor policy:
+    # `allow_revealing_clothing` is accepted for the shape but has no effect (the global layer forbids it).
+    "MinorWardrobePolicy": {
+        "enabled": B(),
+        "legs_coverage": S(enum=LEGS_COVERAGES),
+        "allow_short_shorts": B(),
+        "allow_short_skirts": B(),
+        "allow_revealing_clothing": B(),
+        "style": S(max_length=60),
     },
     "BrandKit": {
         "id": ID,
@@ -138,6 +186,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "defaultNicheKitId": S(max_length=120),
         "defaultContextProvider": S(enum=CONTEXT_PROVIDERS),
         "suggestedPersonas": A(R("Persona"), max_items=50),
+        "minorWardrobePolicy": R("MinorWardrobePolicy"),
         "schemaVersion": I(required=True, minimum=1),
         "version": I(required=True, minimum=1),
     },
@@ -183,6 +232,62 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "promptVersion": I(required=True, minimum=1),
         "profileVersion": I(required=True, minimum=1),
     },
+    # What the print/product MEANS for the scene (Fase B leaves the space typed; nothing fills it automatically yet —
+    # the GPT enrichment that proposes it is a later phase and never saves without approval).
+    "ProductSemanticContext": {
+        "wearer_roles": A(S(min_length=1, max_length=40), max_items=10),
+        "relationship_themes": A(S(min_length=1, max_length=40), max_items=10),
+        "recommended_supporting_roles": A(S(min_length=1, max_length=40), max_items=10),
+        "incompatible_auto_supporting_roles": A(S(min_length=1, max_length=40), max_items=10),
+        "scene_intents": A(S(min_length=1, max_length=40), max_items=10),
+        "visible_text": A(S(min_length=1, max_length=200), max_items=10),
+        # Aggregate, kept for backward compatibility with every object written before Fase F.2.A (manual-only
+        # products, and any F.1 approval — both only ever had ONE source for the whole object). Still read as
+        # the fallback whenever `field_sources` doesn't cover a given field.
+        "source": S(enum=("manual", "enrichment")),
+        "confidence": N(minimum=0, maximum=1),
+        # Fase F.2.A — per-field provenance. Additive and optional: absent on every object written before this
+        # phase, and NEVER filled in retroactively for one (no inference from silence — see
+        # composition.py::field_origin). {field_name: "manual"|"enrichment"} / {field_name: 0..1}, keyed only by
+        # the 6 array fields above. The enum-of-values / range check for these two isn't expressible by the
+        # generic `M()` (map) field spec (string -> string only) — validated by enrichment.py instead, the same
+        # place that already owns the domain rule for which fields are mergeable at all.
+        "field_sources": O(nullable=True),
+        "field_confidence": O(nullable=True),
+    },
+    # Fase F.1 — Product Enrichment. A PROPOSAL, never applied automatically: `proposed` reuses
+    # ProductSemanticContext as-is (the merge into the product writes exactly that shape, with
+    # source: "enrichment" — composition.py already reads that origin correctly, unchanged since
+    # Fase B/C). `field_notes` is intentionally free-form (short justification/evidence per field,
+    # human-readable) rather than a second strict schema per field — the structural guarantee is
+    # `proposed`'s own validation (enums, lengths, no invented free text pretending to be a field);
+    # `field_notes` is display-only, never read back into any decision.
+    "EnrichmentProposal": {
+        "id": ID,
+        "product_id": ID,
+        "schema_version": I(required=True, minimum=1),
+        "proposed": R("ProductSemanticContext", required=True),
+        # Angle recommendation is a SUGGESTION alongside the semantic proposal, not part of the
+        # product record itself — it never gets merged into anything; the panel may show it, and a
+        # real generation still goes through recommend_angle() on its own, from the approved
+        # semantic_context (or not at all, if the person never asked for a suggestion here).
+        "recommended_angle_families": A(S(enum=ANGLE_FAMILIES), max_items=3),
+        "recommended_interactions": A(S(min_length=1, max_length=40), max_items=6),
+        "field_notes": O(),
+        "provider": S(required=True, enum=("fake", "openai")),
+        # Hash of the product fields the proposal was made FROM (name/type/description/metadata) —
+        # the caller's freshness check before merging: if the product changed since, the hash won't
+        # match and approval must be refused (§4, "exigir revalidação/revisão, sem aprovação silenciosa").
+        "product_snapshot_hash": S(required=True, max_length=128),
+        "created_at": S(required=True),
+        # Fase F.2.A — cost/observability (§4 of the brief). Additive, nullable: absent for every
+        # "fake" proposal (F.1's provider never had a cost) and for any object from before this
+        # phase. Deliberately narrow — model requested/served, prompt/schema version, TOKEN usage
+        # (never raw text), a cost estimate, attempts and latency. Never the raw provider response,
+        # never image bytes, never a credential — see enrichment.py's OpenAI provider for what
+        # actually populates this.
+        "provider_meta": O(nullable=True),
+    },
     "CreativeProduct": {
         "id": ID,
         "brandId": S(max_length=120),
@@ -191,14 +296,60 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "description": S(max_length=2000),
         "referenceImages": A(S(min_length=1, max_length=500), required=True, min_items=1, max_items=4),
         "metadata": O(),
+        "semantic_context": R("ProductSemanticContext"),
     },
     "Angle": {
-        "id": S(required=True, enum=ANGLE_IDS),
+        "id": S(required=True, enum=ANGLE_IDS),  # never "auto": the plan always names the legacy id it resolved to
         "label": S(required=True),
         "description": S(),
         "uses_person": B(required=True),
         "apparel_only": B(required=True),
         "multi_product_limit": I(required=True, minimum=1),
+    },
+    # Fase D: the family/preset this angle_id resolves to, and how it got there. Additive — a v1 plan and an
+    # older v2 plan simply have no `angle_recommendation`; the compiler/prompt never read this.
+    "AngleRecommendation": {
+        "angle_id": S(required=True),  # always a legacy id — what actually drove the compiler
+        "family": S(required=True, enum=ANGLE_FAMILIES),
+        "preset": S(nullable=True),
+        "objective_hints": A(S()),
+        "scope": S(required=True, enum=ANGLE_SCOPES),
+        "version": I(required=True, minimum=1),
+        "reason": A(S()),
+        "source": S(required=True, enum=VALUE_ORIGINS),
+        # Fase D.1: the full custom angle used, if any — verbatim what the request carried, so recompiling this
+        # plan later never needs to read creative_angles again (self-sufficient, §3 of the direction).
+        "custom_angle": R("CustomAngle", nullable=True),
+    },
+    # Organization/store custom angle (Fase D §5/§12) — the shape the panel's `creative_angles` table and its
+    # CRUD exchange; minimal by design (no 20-field form). `definition` carries the richer, still-evolving
+    # planner/prompt hints (§5 "internamente pode ter campos mais ricos") as a free JSONB the core never
+    # requires — only `family`/`people_mode`/`preset` are read by recommend_angle/resolve_angle_meta today.
+    "CustomAngle": {
+        "id": S(required=True),
+        "scope": S(required=True, enum=("organization", "store")),
+        "organization_id": S(required=True),
+        "store_id": S(nullable=True),
+        "slug": S(required=True, min_length=1, max_length=60),
+        "name": S(required=True, min_length=1, max_length=120),
+        "description": S(nullable=True, max_length=2000),
+        "family": S(required=True, enum=ANGLE_FAMILIES),
+        "people_mode": S(required=True, enum=("none", "optional", "required")),
+        "preset": S(nullable=True, max_length=60),
+        # Fase D.1: what actually makes two custom angles of the same family compile to different prompts —
+        # read by the compiler's `custom_angle_direction` section (composition.py has no say in framing/light/
+        # camera direction, only in who is in frame and what they do). Free short text per field, on purpose:
+        # structured FIELDS, not one big free prompt — each one becomes its own labeled line.
+        "definition": O(),  # {framing?, photographic_direction?, lighting?, composition?, visual_notes?: [str]}
+        # Compatibility the planner now actually enforces (not just informative) — see angle_catalog.py.
+        "allowed_interactions": A(S(), nullable=True),  # null = no restriction; a mismatch with the resolved interaction is a warning, never a block
+        "allowed_product_modes": A(S(enum=PRODUCT_MODES), nullable=True),  # null = no restriction; a mismatch is refused (UNSUPPORTED_ANGLE)
+        "default_gaze": S(nullable=True, enum=GAZE_RESOLVED),  # the angle-tier default in resolve_gaze, when set — still below interaction/user
+        "active": B(required=True),
+        "version": I(required=True, minimum=1),
+        "created_by": S(nullable=True),
+        "created_at": S(required=True),
+        "updated_at": S(required=True),
     },
     "Placement": {
         "id": S(required=True, enum=PUBLIC_PLACEMENTS),
@@ -246,6 +397,19 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "recent_scenes": A(S(max_length=500), max_items=50),
         "recent_personas": A(S(max_length=200), max_items=50),
     },
+    # One person of the scene as the caller states it (Fase C). Optional: without `subjects` the planner recommends a
+    # composition (from the product's semantics) or falls back to the persona alone. Nothing here is required.
+    "RequestSubject": {
+        "id": S(min_length=1, max_length=20),
+        "role": S(enum=SUBJECT_ROLES),
+        "persona": R("Persona", required=True),
+        "age_band": S(enum=AGE_BANDS),
+        "relation_to_primary": S(enum=RELATION_TYPES),
+        "relation_label": S(max_length=60),  # the free text of a `custom` relation
+        # absent = the planner assigns; null = explicitly wears nothing; an id = wears/uses that product
+        "wears_product_id": S(nullable=True, max_length=120),
+        "prominence": S(enum=SUBJECT_PROMINENCE),
+    },
     "CreativeRequest": {
         "creative_id": S(max_length=120),
         "strategy": S(required=True, enum=PUBLIC_STRATEGIES),
@@ -255,7 +419,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "brand_kit_id": S(max_length=120),
         "niche_kit": R("NicheKit"),
         "niche_kit_id": S(max_length=120),
-        "angle_id": S(required=True, enum=ANGLE_IDS),
+        "angle_id": S(required=True, enum=ANGLE_ID_OR_AUTO),
         "placement_id": S(required=True, enum=PUBLIC_PLACEMENTS),
         "persona_mode": S(enum=PERSONA_MODES),
         "persona": R("Persona"),
@@ -267,6 +431,24 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "quality": S(enum=QUALITIES),
         "seed": I(minimum=0),
         "history_hints": R("HistoryHints"),
+        "prompt_version": I(minimum=1, maximum=2),
+        # Fase B: 2 builds a CreativePlan v2 and compiles it with the v2 compiler; default 1 = the v1 builder.
+        "plan_schema_version": I(minimum=1, maximum=2),
+        "gaze_mode": S(enum=GAZE_MODES),
+        # Fase C: explicit composition. `interaction` is an id of templates/interactions.json (validated by the planner,
+        # so the catalog can grow without a schema change); `scene_picks` replays the exact pool entries of an earlier plan.
+        "subjects": A(R("RequestSubject"), max_items=MAX_SUBJECTS),
+        "interaction": S(min_length=1, max_length=40),
+        "scene_picks": O(),
+        # Fase D: only meaningful with angle_id "auto" — steers recommend_angle straight to this family
+        # (skipping the heuristic) instead of naming one of the 13 legacy ids. How a custom organization/store
+        # angle (resolved by the panel from `creative_angles`) or a family/preset picker reaches the core.
+        "angle_family_hint": O(nullable=True),  # {family (required, one of ANGLE_FAMILIES), preset?}
+        # Fase D.1: the FULL resolved row the panel read from creative_angles at the moment of generation — the
+        # core never queries the database. Only meaningful with angle_id "auto"; supersedes angle_family_hint
+        # when both are given (a custom angle already names its own family/preset).
+        "custom_angle": R("CustomAngle", nullable=True),
+        "angle_intent_hint": S(max_length=40),  # seam for a future GPT-authored brief (Fase D §5) — today a plain literal like "creator", never inferred
     },
     "KitRef": {
         "id": S(required=True),
@@ -304,6 +486,9 @@ CONTRACTS: dict[str, dict[str, F]] = {
     "PromptSection": {
         "name": S(required=True),
         "length": I(required=True),
+        # v2 compiler only: which part of the plan fed the section and its resolved value (inspectable).
+        "source": S(),
+        "value": S(),
     },
     "PromptInfo": {
         "text": S(required=True),
@@ -321,6 +506,72 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "rule": S(required=True),
         "passed": B(required=True),
     },
+    "PlanSubject": {
+        "id": S(required=True, min_length=1, max_length=20),
+        "role": S(required=True, enum=SUBJECT_ROLES),
+        "label": S(required=True, min_length=1, max_length=300),
+        "persona": O(nullable=True),
+        "age_band": S(required=True, enum=AGE_BANDS),
+        "is_minor": B(required=True),
+        "minor_source": S(nullable=True),
+        "age_source": S(nullable=True),  # where the age band was read from (any age, not only minors)
+        "product_use": S(required=True, enum=PRODUCT_USES),
+        "product_id": S(nullable=True),
+        "role_hint": S(nullable=True),
+        "relation_to_primary": S(nullable=True, enum=RELATION_TYPES),  # to the primary; null for the primary itself
+        "relation_label": S(nullable=True),
+        "prominence": S(required=True, enum=SUBJECT_PROMINENCE),
+        "source": S(required=True, enum=VALUE_ORIGINS),
+    },
+    "GazeResolution": {
+        "mode": S(required=True, enum=GAZE_RESOLVED),
+        "requested": S(required=True, enum=GAZE_MODES),
+        "source": S(required=True, enum=VALUE_ORIGINS),
+        "reason": S(required=True),
+    },
+    "PlanScene": {
+        "gaze": R("GazeResolution", required=True),
+        "picks": O(required=True),  # pool -> {"index", "text"}: the choices the image model used to make on its own
+        "prompt_version": I(required=True),  # wording version of the scene text (1 generic, 2 person scenes)
+        "interaction": S(nullable=True),  # id in templates/interactions.json; null when there is none
+        "interaction_source": S(nullable=True, enum=VALUE_ORIGINS),
+        "interaction_detail": O(nullable=True),  # the catalog entry as resolved, so the plan recompiles on its own
+        "scene_mode": S(enum=SCENE_MODES),  # template = the angle's own person scene; frame = angle frame + subjects + interaction
+        "composition_source": S(enum=COMPOSITION_SOURCES),  # who decided the cast: the request, the planner from the product, or the legacy persona
+    },
+    "PlanComposition": {
+        "people_count": I(required=True, minimum=0),
+        "pose_risk": S(required=True, enum=POSE_RISKS),
+        "risk_reasons": A(S(), required=True),
+    },
+    "MinorSafety": {
+        "applies": B(required=True),
+        "minor_subject_ids": A(S(), required=True),
+        "global": O(required=True),  # {policy, version, rules[], adult_child_rule|null}
+        "brand": O(nullable=True),  # {policy, source, requested, effective, ignored[]} — null when the brand set none
+        "basis": O(),  # {"explicit": [subject ids whose age was declared], "heuristic": [ids inferred from text/product]}
+    },
+    "PlanSemantics": {
+        "products": A(O(), required=True),  # [{product_id, semantic_context|null}]
+        "supporting": O(nullable=True),  # {role, source, matched_role|null} when a supporting person was cast
+        "warnings": A(O(), required=True),  # [{code, theme, supporting_role, product_id}] — informative, never blocking
+    },
+    "ResolvedInputs": {
+        "brand": O(required=True),
+        "niche": O(required=True),
+        "strategy": O(required=True),  # {text_rule, communication}
+    },
+    "CompilerSection": {
+        "section": S(required=True),
+        "source": S(required=True),  # an origin, or `mixed` when `sources` lists the parts
+        "sources": A(S()),  # only for a `mixed` section: the distinct origins behind it
+        "value": S(required=True),
+        "length": I(required=True, minimum=0),
+    },
+    "CompilerInfo": {
+        "version": I(required=True, minimum=1),
+        "sections": A(R("CompilerSection"), required=True),
+    },
     "CreativePlan": {
         "plan_id": S(required=True),
         "creative_id": S(required=True),
@@ -330,6 +581,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "product_mode": S(required=True, enum=PRODUCT_MODES),
         "products": A(R("CreativeProduct"), required=True, min_items=1),
         "angle": R("Angle", required=True),
+        "angle_recommendation": R("AngleRecommendation", nullable=True),
         "placement": R("Placement", required=True),
         "persona": R("Persona", nullable=True),
         "context": R("ResolvedContext", required=True),
@@ -346,6 +598,100 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "versions": O(required=True),
         "validations": A(R("ValidationCheck"), required=True),
         "warnings": A(S(), required=True),
+        # --- schema_version 2 only (all optional, so a v1 plan is unchanged) ---
+        "mode": S(enum=PLAN_MODES),
+        "objective": S(enum=OBJECTIVES),
+        "subjects": A(R("PlanSubject")),
+        "scene": R("PlanScene"),
+        "composition": R("PlanComposition"),
+        "minor_safety": R("MinorSafety"),
+        "semantics": R("PlanSemantics"),
+        "provenance": M(),  # plan field -> origin (VALUE_ORIGINS, or `mixed` for a composed section)
+        "provenance_sources": O(),  # aggregate field -> the distinct origins behind it, e.g. {"subjects": ["persona", "product"]}
+        "resolved_inputs": R("ResolvedInputs"),
+        "compiler": R("CompilerInfo"),
+        "seed": I(nullable=True, minimum=0),  # the seed the plan was built with: same request + seed = same plan
+    },
+    "CompiledPrompt": {
+        "text": S(required=True),
+        "sections": A(R("CompilerSection"), required=True),
+        "sha256": S(required=True),
+        "compiler_version": I(required=True, minimum=1),
+        "prompt_version": I(required=True),
+    },
+    # Input of the generator rebuilt from a persisted plan ("Copiar Dados"). Not a CreativeRequest: it mirrors what
+    # the user chose (ids and options), never execution ids.
+    "GenerationDraft": {
+        "mode": S(required=True, enum=PLAN_MODES),
+        "objective": S(required=True, enum=OBJECTIVES),
+        "strategy": S(required=True, enum=PUBLIC_STRATEGIES),
+        "product_mode": S(required=True, enum=PRODUCT_MODES),
+        "product_ids": A(S(), required=True),
+        "angle_id": S(required=True),
+        # Fase D.1: "de novo"/"Copiar dados" reproduce the SAME custom angle, not just the legacy id it routed to.
+        "custom_angle": R("CustomAngle", nullable=True),
+        "placement_id": S(required=True),
+        "quality": S(required=True, enum=QUALITIES),
+        "brand_kit": R("KitRef", required=True),
+        "niche_kit": R("KitRef", required=True),
+        "persona_mode": S(required=True, enum=PERSONA_MODES),
+        "persona": O(nullable=True),
+        "subjects": A(R("RequestSubject"), required=True),  # explicit cast only; a legacy/persona-only cast is []
+        "interaction": S(nullable=True),
+        "scene_picks": O(nullable=True),  # {pool name: index}; replay them with the same seed to get the same scene
+        "context": O(required=True),  # {mode, context_id, provider, scene}
+        "funnel_stage": S(nullable=True),
+        "remarketing": O(nullable=True),
+        "funnel": O(nullable=True),
+        "copy": R("CopyOptions", required=True),
+        "gaze_mode": S(required=True, enum=GAZE_MODES),
+        "plan_schema_version": I(required=True, minimum=1),
+        "prompt_version": I(required=True, minimum=1),
+        "seed": I(nullable=True),
+        "plan_warnings": A(S()),
+        # patches over the fields above: {"again": {seed, scene_picks, gaze_mode}, "variation": {...}}
+        "actions": O(required=True),
+        "carried": A(S(), required=True),  # names of the fields brought over, for the "what came along" summary
+        "source": O(required=True),  # {creative_id, plan_id, plan_schema_version, compiler_version}
+    },
+    # What is worth remembering about a creative when the user marks liked/disliked. The panel adds who/where/when
+    # (organization_id, store_id, job_id, user_id, verdict, timestamp) — those are not plan facts.
+    "FeedbackSnapshot": {
+        "creative_id": S(required=True),
+        "plan_id": S(required=True),
+        "plan_schema_version": I(required=True, minimum=1),
+        "compiler_version": I(nullable=True),
+        "prompt_version": I(required=True),
+        "prompt_sha256": S(required=True),
+        "mode": S(required=True, enum=PLAN_MODES),
+        "objective": S(required=True, enum=OBJECTIVES),
+        "strategy": S(required=True),
+        "angle": S(required=True),
+        "angle_family": S(nullable=True, enum=ANGLE_FAMILIES),
+        "angle_preset": S(nullable=True),
+        "angle_scope": S(nullable=True, enum=ANGLE_SCOPES),
+        "angle_version": I(nullable=True, minimum=1),
+        # Fase D.1: the custom angle's OWN identity, not just the legacy id it routed to — "connection" +
+        # version 3 says which family/version; this says WHICH one, by id/slug/name.
+        "angle_custom_id": S(nullable=True),
+        "angle_custom_slug": S(nullable=True),
+        "angle_custom_name": S(nullable=True),
+        "product_ids": A(S(), required=True),
+        "subjects": A(O(), required=True),  # [{role, label, age_band, is_minor, product_use, role_hint}]
+        "people_count": I(required=True, minimum=0),
+        "interaction": S(nullable=True),
+        "composition_source": S(nullable=True),
+        "composition_key": S(nullable=True),  # `p2|child_6_9+father|playing`: who is in the scene doing what, one indexable string
+        "pose_risk": S(nullable=True),
+        "warnings": A(S()),
+        "context": O(required=True),  # {context_id, context_type, provider, scene}
+        "placement": S(required=True),
+        "quality": S(nullable=True),
+        "gaze_mode": S(nullable=True),
+        "minor_safety_applied": B(required=True),
+        "flags": O(required=True),  # {normalize_references, ...} read from the result trace when there is one
+        "model": O(required=True),  # {requested, served}
+        "asset_sha256": S(nullable=True),
     },
     "GenerationError": {
         "code": S(required=True),
@@ -409,8 +755,10 @@ CONTRACTS: dict[str, dict[str, F]] = {
 
 # Contracts whose schema file is exported (sub-objects are embedded via $defs).
 EXPORTED_CONTRACTS = (
-    "BrandKit", "NicheKit", "ContextProfile", "CreativeProduct", "Persona", "Angle", "Placement",
-    "CreativeRequest", "CreativePlan", "CreativeResult", "GenerationError", "GenerationRecord", "CopyVariant",
+    "BrandKit", "NicheKit", "ContextProfile", "CreativeProduct", "Persona", "Angle", "AngleRecommendation",
+    "CustomAngle", "Placement", "CreativeRequest", "CreativePlan", "CreativeResult", "GenerationError",
+    "GenerationRecord", "CopyVariant", "CompiledPrompt", "GenerationDraft", "FeedbackSnapshot",
+    "EnrichmentProposal",
 )
 
 _PY_TYPES = {

@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Callout, ErrorState, PageHeader, PageStack, Skeleton, StatusBadge, TabList } from '../../components/ds';
 import {
   getCatalog,
+  getCopiaDados,
   getCriativosStatus,
   type Catalog,
+  type CopiaDados,
   type CriativosStatus,
 } from '../../api/criativos';
 import { GerarTab } from './GerarTab';
+import { GerarTabV2 } from './GerarTabV2';
 import { HistoricoTab, LotesTab } from './LotesTab';
 import { PerfisTab, PersonasTab, ProdutosTab } from './CadastrosTabs';
 
@@ -25,6 +28,8 @@ export function CriativosPage() {
   const [erro, setErro] = useState('');
   const [aba, setAba] = useState<Aba>('gerar');
   const [jobSelecionado, setJobSelecionado] = useState<string | null>(null);
+  // Dados copiados de um criativo pronto; o Gerar preenche o formulário com eles.
+  const [copia, setCopia] = useState<CopiaDados | null>(null);
   const navigate = useNavigate();
 
   const carregar = useCallback(() => {
@@ -40,6 +45,13 @@ export function CriativosPage() {
   }, []);
 
   useEffect(carregar, [carregar]);
+
+  // O erro sobe para quem clicou (o botão mostra a mensagem); só abre o gerador quando o rascunho chegou.
+  const copiarDados = useCallback(async (creativeId: string) => {
+    const dados = await getCopiaDados(creativeId);
+    setCopia(dados);
+    setAba('gerar');
+  }, []);
 
   if (erro && !status) return <PageStack><ErrorState description={erro} onRetry={carregar} /></PageStack>;
   if (!status) return <PageStack><Skeleton rows={1} height="56px" width="40%" /><Skeleton variant="table" rows={4} /></PageStack>;
@@ -82,10 +94,12 @@ export function CriativosPage() {
         <>
           <TabList label="Seções do gerador" value={aba} onChange={setAba} items={abas} />
           {aba === 'gerar' && (catalog
-            ? <GerarTab status={status} catalog={catalog} onJobCriado={(id) => { setJobSelecionado(id); setAba('lotes'); }} />
+            ? (status.uiV2
+              ? <GerarTabV2 status={status} catalog={catalog} copia={copia} onCopiaLida={() => setCopia(null)} onJobCriado={(id) => { setJobSelecionado(id); setAba('lotes'); }} />
+              : <GerarTab status={status} catalog={catalog} copia={copia} onCopiaLida={() => setCopia(null)} onJobCriado={(id) => { setJobSelecionado(id); setAba('lotes'); }} />)
             : <Callout tone="info">Catálogo indisponível enquanto o serviço do gerador não responde.</Callout>)}
-          {aba === 'lotes' && <LotesTab selecionado={jobSelecionado} onSelecionar={setJobSelecionado} />}
-          {aba === 'historico' && <HistoricoTab />}
+          {aba === 'lotes' && <LotesTab selecionado={jobSelecionado} onSelecionar={setJobSelecionado} onCopiar={copiarDados} />}
+          {aba === 'historico' && <HistoricoTab onCopiar={copiarDados} />}
           {aba === 'produtos' && <ProdutosTab />}
           {aba === 'marca' && <PerfisTab tipo="marca" catalog={catalog} />}
           {aba === 'contextos' && <PerfisTab tipo="contexto" catalog={catalog} />}

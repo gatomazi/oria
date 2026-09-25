@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creative-core/v1/CompiledPrompt.schema.json",
+  "title": "CompiledPrompt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "text",
+    "sections",
+    "sha256",
+    "compiler_version",
+    "prompt_version"
+  ],
+  "properties": {
+    "text": {
+      "type": "string"
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CompilerSection"
+      }
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "compiler_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "prompt_version": {
+      "type": "integer"
+    }
+  },
+  "$defs": {
+    "CompilerSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section",
+        "source",
+        "value",
+        "length"
+      ],
+      "properties": {
+        "section": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "value": {
+          "type": "string"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

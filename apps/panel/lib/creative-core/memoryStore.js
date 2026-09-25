@@ -1,11 +1,19 @@
 'use strict';
 
+const crypto = require('crypto');
+
 // Store em memória com o mesmo contrato do pgStore. Usado pelos testes (test/creative-core.test.js) — nunca em produção:
 // o módulo exige Postgres (sem DATABASE_URL as rotas respondem 503).
 
 const { aggregateJobStatus } = require('./status');
+const { mergeSemanticContext } = require('./pgEnrichment');
 
 const PROFILE_KINDS = ['brand', 'niche', 'context', 'persona'];
+// Mesmas dimensões do pgStore (coluna do snapshot que cada uma agrupa).
+const FEEDBACK_DIMENSIONS = Object.freeze({
+  angle: (s) => s.angle, objective: (s) => s.objective, context: (s) => s.context && s.context.context_id,
+  interaction: (s) => s.interaction, composition: (s) => s.composition_key,
+});
 
 function clone(v) {
   return v === undefined ? undefined : JSON.parse(JSON.stringify(v));
@@ -18,6 +26,9 @@ function createMemoryStore() {
   const jobs = new Map();
   const items = new Map();
   const assets = new Map();
+  const feedback = new Map();
+  const angles = new Map();
+  const enrichmentProposals = new Map();
   const now = () => new Date().toISOString();
 
   function own(map, tenantId, id) {
@@ -81,6 +92,70 @@ function createMemoryStore() {
       if (!row) return false;
       row.archivedAt = now();
       return true;
+    },
+
+    // Product Enrichment (Fase F.1) — mesmo contrato do pgStore/pgEnrichment.js.
+    async listProposals(tenantId, productId) {
+      return [...enrichmentProposals.values()]
+        .filter((p) => p.organizationId === tenantId && p.productId === productId)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).map(clone);
+    },
+    async getPendingProposal(tenantId, productId) {
+      const row = [...enrichmentProposals.values()].find((p) => p.organizationId === tenantId && p.productId === productId && p.status === 'pending');
+      return clone(row) || null;
+    },
+    async getProposal(tenantId, id) {
+      const row = enrichmentProposals.get(id);
+      return row && row.organizationId === tenantId ? clone(row) : null;
+    },
+    async createProposal(tenantId, { productId, provider, proposed, recommendedAngleFamilies, recommendedInteractions,
+      fieldNotes, productSnapshotHash, productUpdatedAt, createdBy, providerMeta }) {
+      const id = crypto.randomUUID();
+      const row = {
+        id, organizationId: tenantId, productId, storeId: null, status: 'pending', schemaVersion: 1, provider,
+        proposed: clone(proposed), recommendedAngleFamilies: clone(recommendedAngleFamilies || []),
+        recommendedInteractions: clone(recommendedInteractions || []), fieldNotes: clone(fieldNotes || {}),
+        productSnapshotHash, productUpdatedAt, acceptedFields: null, beforeSemanticContext: null, appliedSemanticContext: null,
+        providerMeta: providerMeta ? clone(providerMeta) : null,
+        createdBy: createdBy || null, reviewedBy: null, createdAt: now(), reviewedAt: null, updatedAt: now(),
+      };
+      enrichmentProposals.set(id, row);
+      return clone(row);
+    },
+    async decideEnrichmentProposal(tenantId, proposalId, { decision, acceptedFields = [], reviewedBy }) {
+      const prop = enrichmentProposals.get(proposalId);
+      if (!prop || prop.organizationId !== tenantId || prop.status !== 'pending') return { error: 'not_found' };
+
+      if (decision === 'rejected') {
+        prop.status = 'rejected';
+        prop.reviewedBy = reviewedBy || null;
+        prop.reviewedAt = now();
+        prop.updatedAt = now();
+        return { proposal: clone(prop) };
+      }
+
+      const produto = own(products, tenantId, prop.productId);
+      if (!produto) return { error: 'product_not_found' };
+      if (produto.updatedAt !== prop.productUpdatedAt) return { error: 'product_changed', product: clone(produto) };
+
+      const antes = (produto.metadata && produto.metadata.semantic_context) || null;
+      let mesclado;
+      try {
+        mesclado = mergeSemanticContext(antes, prop.proposed, acceptedFields);
+      } catch (err) {
+        throw err;
+      }
+      produto.metadata = { ...(produto.metadata || {}), semantic_context: mesclado };
+      produto.updatedAt = now();
+
+      prop.status = decision;
+      prop.acceptedFields = clone(acceptedFields);
+      prop.beforeSemanticContext = antes ? clone(antes) : null;
+      prop.appliedSemanticContext = clone(mesclado);
+      prop.reviewedBy = reviewedBy || null;
+      prop.reviewedAt = now();
+      prop.updatedAt = now();
+      return { proposal: clone(prop), product: clone(produto), before: antes, after: mesclado };
     },
 
     async createJob(tenantId, job, jobItems) {
@@ -167,6 +242,91 @@ function createMemoryStore() {
     },
     async getAssetByCreative(tenantId, creativeId) {
       return clone([...assets.values()].find((a) => a.tenantId === tenantId && a.creativeId === creativeId)) || null;
+    },
+
+    async upsertFeedback(tenantId, { userId, storeId = null, creativeId, jobId, verdict, snapshot }) {
+      const key = `${tenantId}|${creativeId}|${userId}`;
+      const previous = feedback.get(key);
+      const row = {
+        id: previous ? previous.id : `${feedback.size + 1}`, tenantId, storeId, creativeId, jobId, userId, verdict,
+        snapshot: clone(snapshot), createdAt: previous ? previous.createdAt : now(), updatedAt: now(),
+      };
+      feedback.set(key, row);
+      return clone(row);
+    },
+    async deleteFeedback(tenantId, userId, creativeId) {
+      return feedback.delete(`${tenantId}|${creativeId}|${userId}`);
+    },
+    async getFeedback(tenantId, userId, creativeId) {
+      return clone(feedback.get(`${tenantId}|${creativeId}|${userId}`)) || null;
+    },
+    async feedbackByCreative(tenantId, userId, creativeIds) {
+      const out = new Map();
+      for (const id of creativeIds) {
+        const row = feedback.get(`${tenantId}|${id}|${userId}`);
+        if (row) out.set(id, { verdict: row.verdict, updatedAt: row.updatedAt });
+      }
+      return out;
+    },
+    async feedbackSummary(tenantId, { by, storeId = null }) {
+      if (by !== 'product' && !FEEDBACK_DIMENSIONS[by]) throw new Error('dimensão de feedback desconhecida');
+      const grupos = new Map();
+      for (const row of feedback.values()) {
+        if (row.tenantId !== tenantId || (storeId && row.storeId && row.storeId !== storeId)) continue;
+        const chaves = by === 'product' ? (row.snapshot.product_ids || []) : [FEEDBACK_DIMENSIONS[by](row.snapshot)].filter(Boolean);
+        for (const key of chaves) {
+          const g = grupos.get(key) || { key, liked: 0, disliked: 0, total: 0 };
+          g[row.verdict] += 1;
+          g.total += 1;
+          grupos.set(key, g);
+        }
+      }
+      return [...grupos.values()].sort((a, b) => b.total - a.total || (a.key < b.key ? -1 : 1));
+    },
+
+    // Ângulos customizados (Fase D) — mesmo contrato do pgStore.
+    async listAngles(tenantId, { storeId = null, includeInactive = false } = {}) {
+      return [...angles.values()]
+        .filter((a) => a.organizationId === tenantId && (includeInactive || a.active)
+          && (a.storeId === null || (storeId && a.storeId === storeId)))
+        .sort((a, b) => (a.name < b.name ? -1 : 1)).map(clone);
+    },
+    async getAngle(tenantId, id) {
+      const row = angles.get(id);
+      return row && row.organizationId === tenantId ? clone(row) : null;
+    },
+    async createAngle(tenantId, { storeId = null, slug, name, description, family, peopleMode, preset, definition,
+      allowedInteractions, allowedProductModes, defaultGaze, createdBy }) {
+      const scope = storeId ? 'store' : 'organization';
+      const clash = [...angles.values()].some((a) => a.organizationId === tenantId && a.storeId === storeId && a.slug === slug);
+      if (clash) throw Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
+      const id = crypto.randomUUID();
+      const row = {
+        id, organizationId: tenantId, storeId, scope, slug, name, description: description || null, family,
+        peopleMode, preset: preset || null, definition: definition || {},
+        allowedInteractions: allowedInteractions || null, allowedProductModes: allowedProductModes || null, defaultGaze: defaultGaze || null,
+        active: true, version: 1, createdBy: createdBy || null, createdAt: now(), updatedAt: now(),
+      };
+      angles.set(id, row);
+      return clone(row);
+    },
+    async updateAngle(tenantId, id, patch) {
+      const row = angles.get(id);
+      if (!row || row.organizationId !== tenantId) return null;
+      for (const key of ['name', 'description', 'family', 'peopleMode', 'preset', 'definition', 'allowedInteractions', 'allowedProductModes', 'defaultGaze', 'active']) {
+        if (patch[key] !== undefined) row[key] = patch[key];
+      }
+      row.version += 1;
+      row.updatedAt = now();
+      return clone(row);
+    },
+    async archiveAngle(tenantId, id) {
+      const row = angles.get(id);
+      if (!row || row.organizationId !== tenantId || !row.active) return false;
+      row.active = false;
+      row.version += 1;
+      row.updatedAt = now();
+      return true;
     },
 
     async listHistory(tenantId, limit = 50) {

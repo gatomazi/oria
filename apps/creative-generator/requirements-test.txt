@@ -1,0 +1,3 @@
+# Test-only dependency, never installed in the running service (see requirements.txt's own header).
+# test_enrichment.py / test_enrichment_openai.py are the only two suites that need it.
+pytest>=8.0.0,<9
