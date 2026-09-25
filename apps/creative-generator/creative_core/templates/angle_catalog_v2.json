@@ -1,0 +1,360 @@
+{
+  "_doc": "Fase D — Angles V2. `family` is the visual intention of the image (framing/photographic priority); it never says what the people are DOING (that is `interaction`, resolve_interaction in composition.py) or WHERE (that is `context`). `families` is the 6 populated top-level groups a screen shows, plus one reserved for later (`action_movement`: no system angle maps into it yet — nothing in the current 13 legacy angles is purely about bodily motion the way sport/dance would be; kept as a placeholder family so a future preset has somewhere to land without a catalog migration). `angles` is the SYSTEM catalog (scope=system, organization_id=null, store_id=null): every entry is additive metadata (family/preset/objective_hints/etc.) layered on top of the EXISTING 13 angle ids — it changes no prompt text and no compiler output. `legacy_aliases` maps every one of the 13 old ids to exactly one system angle id, carrying the flavor that fold lost as `objective_hints` (so a NOSTALGIA_ORIGEM plan is still legible as 'editorial_portrait, reflective', not just 'editorial_portrait'). `canonical_legacy_for` is the reverse route recommend_angle() uses: family (+ a hint, for the two families that fold two legacy angles) -> the ONE legacy angle_id that actually drives generation, so the compiler/prompt pipeline needs no change at all.",
+  "families": {
+    "lifestyle": {
+      "label": "Lifestyle cotidiano",
+      "description": "A pessoa vivendo a peça no dia a dia — em ação, num lugar real, nunca posada."
+    },
+    "connection": {
+      "label": "Conexão / vínculo",
+      "description": "Duas ou mais pessoas com a peça, ligadas por um momento genuíno — presentear, ler junto, estar junto."
+    },
+    "editorial_portrait": {
+      "label": "Retrato editorial",
+      "description": "Retrato com a peça em primeiro plano, cenário simples — confiante ou contemplativo."
+    },
+    "action_movement": {
+      "label": "Ação / movimento",
+      "description": "Reservada: nenhum ângulo atual mapeia aqui. Para quando houver um preset de movimento corporal (esporte, dança) que hoje não existe no catálogo.",
+      "reserved": true
+    },
+    "product_focus": {
+      "label": "Produto em foco",
+      "description": "A peça vestida, em plano técnico — caimento, estampa ou um detalhe pequeno."
+    },
+    "product_no_person": {
+      "label": "Produto sem pessoa",
+      "description": "Só a peça — pendurada, em flatlay ou em still editorial."
+    },
+    "creator_social": {
+      "label": "Creator / social",
+      "description": "Linguagem de rede social (selfie, foto de amigo) — nunca finge depoimento."
+    }
+  },
+  "angles": {
+    "system.lifestyle.default": {
+      "family": "lifestyle",
+      "name": "Lifestyle cotidiano",
+      "description": "Pessoa em ação no dia a dia com o produto — nunca parada olhando para o nada.",
+      "scope": "system",
+      "preset": null,
+      "objective_hints": [
+        "daily_life"
+      ],
+      "people_mode": "optional",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "off_camera",
+      "active": true,
+      "version": 1
+    },
+    "system.connection.default": {
+      "family": "connection",
+      "name": "Conexão / vínculo",
+      "description": "Pessoas com o produto ligadas por um momento genuíno — presentear, ler junto, brincar, estar junto.",
+      "scope": "system",
+      "preset": null,
+      "objective_hints": [
+        "belonging"
+      ],
+      "people_mode": "required",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": [
+        "gifting",
+        "reading_together",
+        "playing",
+        "hugging",
+        "cooking",
+        "doing_activity",
+        "talking",
+        "walking",
+        "looking_at_each_other",
+        "candid"
+      ],
+      "default_gaze": "interaction",
+      "active": true,
+      "version": 1
+    },
+    "system.editorial_portrait.default": {
+      "family": "editorial_portrait",
+      "name": "Retrato editorial",
+      "description": "Retrato de postura segura ou contemplativa, cenário simples e desfocado — o foco é a pessoa com o produto.",
+      "scope": "system",
+      "preset": null,
+      "objective_hints": [
+        "confident"
+      ],
+      "people_mode": "optional",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "camera",
+      "active": true,
+      "version": 1
+    },
+    "system.product_focus.fit_full_body": {
+      "family": "product_focus",
+      "name": "Caimento",
+      "description": "Registro técnico de vestibilidade: silhueta, largura, comprimento, corpo inteiro.",
+      "scope": "system",
+      "preset": "fit_full_body",
+      "objective_hints": [
+        "technical_fit"
+      ],
+      "people_mode": "required",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "camera",
+      "active": true,
+      "version": 1
+    },
+    "system.product_focus.print_closeup": {
+      "family": "product_focus",
+      "name": "Close no detalhe",
+      "description": "Pessoa usando o produto em plano fechado, com o detalhe principal grande e legível.",
+      "scope": "system",
+      "preset": "print_closeup",
+      "objective_hints": [
+        "print_detail"
+      ],
+      "people_mode": "required",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "camera",
+      "active": true,
+      "version": 1
+    },
+    "system.product_focus.detail_closeup": {
+      "family": "product_focus",
+      "name": "Close no detalhe pequeno",
+      "description": "Plano próximo com foco num detalhe pequeno do produto (bolso, peito, etiqueta).",
+      "scope": "system",
+      "preset": "detail_closeup",
+      "objective_hints": [
+        "small_detail"
+      ],
+      "people_mode": "required",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "camera",
+      "active": true,
+      "version": 1
+    },
+    "system.product_no_person.hanging": {
+      "family": "product_no_person",
+      "name": "Cabide",
+      "description": "Peça pendurada, sem pessoa — foco total no produto.",
+      "scope": "system",
+      "preset": "hanging",
+      "objective_hints": [],
+      "people_mode": "none",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "none",
+      "active": true,
+      "version": 1
+    },
+    "system.product_no_person.flatlay": {
+      "family": "product_no_person",
+      "name": "Flatlay",
+      "description": "Produto fotografado de cima, sem pessoa — melhor leitura de detalhe e material.",
+      "scope": "system",
+      "preset": "flatlay",
+      "objective_hints": [],
+      "people_mode": "none",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "none",
+      "active": true,
+      "version": 1
+    },
+    "system.product_no_person.editorial_still": {
+      "family": "product_no_person",
+      "name": "Premium / Estilo",
+      "description": "Produto em cenário editorial sofisticado, sem pessoa.",
+      "scope": "system",
+      "preset": "editorial_still",
+      "objective_hints": [],
+      "people_mode": "none",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "none",
+      "active": true,
+      "version": 1
+    },
+    "system.creator_social.default": {
+      "family": "creator_social",
+      "name": "Creator-style",
+      "description": "Linguagem de rede social (selfie, foto de amigo) — nunca finge depoimento.",
+      "scope": "system",
+      "preset": null,
+      "objective_hints": [
+        "social_native"
+      ],
+      "people_mode": "required",
+      "allowed_product_modes": [
+        "single_product",
+        "multi_product"
+      ],
+      "allowed_interactions": null,
+      "default_gaze": "camera",
+      "active": true,
+      "version": 1
+    }
+  },
+  "legacy_aliases": {
+    "LIFESTYLE_COTIDIANO": {
+      "angle_id": "system.lifestyle.default",
+      "objective_hints": [
+        "daily_life"
+      ]
+    },
+    "IDENTIDADE_ORIGEM": {
+      "angle_id": "system.lifestyle.default",
+      "objective_hints": [
+        "brand_identity",
+        "belonging_place"
+      ]
+    },
+    "PERTENCIMENTO": {
+      "angle_id": "system.connection.default",
+      "objective_hints": [
+        "belonging"
+      ]
+    },
+    "PRESENTE_AFETO": {
+      "angle_id": "system.connection.default",
+      "objective_hints": [
+        "gifting"
+      ]
+    },
+    "ORGULHO_DISCRETO": {
+      "angle_id": "system.editorial_portrait.default",
+      "objective_hints": [
+        "confident"
+      ]
+    },
+    "NOSTALGIA_ORIGEM": {
+      "angle_id": "system.editorial_portrait.default",
+      "objective_hints": [
+        "reflective",
+        "nostalgia"
+      ]
+    },
+    "CAIMENTO": {
+      "angle_id": "system.product_focus.fit_full_body",
+      "objective_hints": [
+        "technical_fit"
+      ]
+    },
+    "CLOSE_ESTAMPA": {
+      "angle_id": "system.product_focus.print_closeup",
+      "objective_hints": [
+        "print_detail"
+      ]
+    },
+    "CLOSE_BOLSO": {
+      "angle_id": "system.product_focus.detail_closeup",
+      "objective_hints": [
+        "small_detail"
+      ]
+    },
+    "CABIDE": {
+      "angle_id": "system.product_no_person.hanging",
+      "objective_hints": []
+    },
+    "PRODUTO_ESTAMPA": {
+      "angle_id": "system.product_no_person.flatlay",
+      "objective_hints": []
+    },
+    "PREMIUM_ESTILO": {
+      "angle_id": "system.product_no_person.editorial_still",
+      "objective_hints": []
+    },
+    "CREATOR_STYLE": {
+      "angle_id": "system.creator_social.default",
+      "objective_hints": [
+        "social_native"
+      ]
+    }
+  },
+  "canonical_legacy_for": {
+    "_doc": "family -> legacy angle_id, the one recommend_angle() routes to so the untouched v1/v2 prompt pipeline runs unchanged. A family with more than one legacy source (lifestyle, connection, editorial_portrait) picks by objective_hint; the fallback (no hint, or hint not listed) is the first/base legacy angle. `by_hint` keys accept BOTH vocabularies recommend_angle/angle_family_hint may pass: an objective_hint (e.g. 'print_detail') and, for families with a real preset, the preset name itself (e.g. 'print_closeup') — both point at the same legacy id.",
+    "lifestyle": {
+      "default": "LIFESTYLE_COTIDIANO",
+      "by_hint": {
+        "brand_identity": "IDENTIDADE_ORIGEM",
+        "belonging_place": "IDENTIDADE_ORIGEM"
+      }
+    },
+    "connection": {
+      "default": "PERTENCIMENTO",
+      "by_hint": {
+        "gifting": "PRESENTE_AFETO"
+      }
+    },
+    "editorial_portrait": {
+      "default": "ORGULHO_DISCRETO",
+      "by_hint": {
+        "reflective": "NOSTALGIA_ORIGEM",
+        "nostalgia": "NOSTALGIA_ORIGEM"
+      }
+    },
+    "product_focus": {
+      "default": "CAIMENTO",
+      "by_hint": {
+        "print_detail": "CLOSE_ESTAMPA",
+        "print_closeup": "CLOSE_ESTAMPA",
+        "small_detail": "CLOSE_BOLSO",
+        "detail_closeup": "CLOSE_BOLSO",
+        "technical_fit": "CAIMENTO",
+        "fit_full_body": "CAIMENTO"
+      }
+    },
+    "product_no_person": {
+      "default": "PRODUTO_ESTAMPA",
+      "by_hint": {
+        "hanging": "CABIDE",
+        "editorial_still": "PREMIUM_ESTILO",
+        "flatlay": "PRODUTO_ESTAMPA"
+      }
+    },
+    "creator_social": {
+      "default": "CREATOR_STYLE",
+      "by_hint": {}
+    }
+  },
+  "discontinued_as_top_level": {
+    "_doc": "Still fully functional as aliases (angle_id keeps working, byte-identical prompt) and still reachable via family+hint. Not offered as their own top-level card in a V2 screen: IDENTIDADE_ORIGEM folds into lifestyle (its 'integrated with a place' idea is what Context/semantic_context already express); PRESENTE_AFETO folds into connection (its whole distinguishing idea is the `gifting` interaction, which now exists as real data — showing a separate card would duplicate what the interaction picker already offers, breaking the Fase D rule 'angle must not duplicate interaction').",
+    "ids": [
+      "IDENTIDADE_ORIGEM",
+      "PRESENTE_AFETO"
+    ]
+  }
+}

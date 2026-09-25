@@ -62,6 +62,20 @@ function validarSort(query) {
   return { field, direction };
 }
 
+// Rodada L §2.3/§3 · providerOrderId do Commerce — mesma disciplina de "opaco pro cliente, nunca
+// interpretado aqui" já usada pra `cursor` (validarPaginacao): só forma, nunca conteúdo. Charset
+// permissivo o bastante pro id de qualquer CommerceConnector (numérico como a Ink, ou alfanumérico
+// de outro provider) sem abrir espaço pra payload gigante em log/erro.
+const PROVIDER_ORDER_ID_RE = /^[A-Za-z0-9_-]{1,100}$/;
+
+function validarProviderOrderId(query) {
+  const valor = query.providerOrderId;
+  if (typeof valor !== 'string' || !PROVIDER_ORDER_ID_RE.test(valor)) {
+    throw new EntradaInvalidaError('providerOrderId inválido');
+  }
+  return valor;
+}
+
 function validarFilters(query) {
   const filters = {};
   // `provider` é passthrough pro repositório de catálogo (Fase D já filtra por ele de verdade —
@@ -73,6 +87,16 @@ function validarFilters(query) {
     filters.provider = provider;
   }
   return filters;
+}
+
+// Gate C ("Jornada de Valor") · `limit` de /journey/opportunities — mesma disciplina de
+// validarPaginacao acima (inteiro, faixa fechada), teto BEM menor: "Prioridades de hoje" é curto de
+// propósito (nunca uma tabela técnica disfarçada de lista curta).
+function validarLimiteOportunidades(query) {
+  if (query.limit === undefined) return undefined;
+  const limit = Number(query.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new EntradaInvalidaError('limit deve ser um inteiro entre 1 e 20');
+  return limit;
 }
 
 function erroValidacao(res, err) {
@@ -99,20 +123,36 @@ function mapearErro(err, res) {
 }
 
 /**
- * @param {{productPerformanceService, reconciliationService, registry, analyticsProvider: string, commerceProvider: string}} deps
+ * @param {{productPerformanceService, reconciliationService, journeyAnalyticsService, opportunityDiagnosticsService?, registry, analyticsProvider: string, commerceProvider: string, syncCommerceCatalog?: Function, getCommerceCatalogSyncStatus?: Function}} deps
+ *   `syncCommerceCatalog`/`getCommerceCatalogSyncStatus`: Rodada M — opcionais de propósito (fica
+ *   compatível com quem monta o router sem essas duas, ex.: um teste antigo); sem elas, as rotas de
+ *   sincronização do catálogo simplesmente não são registradas.
+ *   `opportunityDiagnosticsService`: Gate C ("Jornada de Valor") — mesmo padrão opcional; sem ele,
+ *   GET /journey/opportunities não é registrada.
  * @returns {import('express').Router}
  */
-function createProductAnalyticsRouter({ productPerformanceService, reconciliationService, registry, analyticsProvider, commerceProvider }) {
+function createProductAnalyticsRouter({
+  productPerformanceService, reconciliationService, journeyAnalyticsService, opportunityDiagnosticsService, registry, analyticsProvider, commerceProvider,
+  syncCommerceCatalog, getCommerceCatalogSyncStatus,
+}) {
   if (!productPerformanceService || typeof productPerformanceService.getProductPerformance !== 'function' || typeof productPerformanceService.getProductPerformanceSummary !== 'function') {
     throw new Error('createProductAnalyticsRouter exige productPerformanceService');
   }
   if (!reconciliationService || typeof reconciliationService.reconcileProductPerformance !== 'function') {
     throw new Error('createProductAnalyticsRouter exige reconciliationService');
   }
+  if (!journeyAnalyticsService || typeof journeyAnalyticsService.getJourneyAnalytics !== 'function' || typeof journeyAnalyticsService.checkOrderTransactionLink !== 'function') {
+    throw new Error('createProductAnalyticsRouter exige journeyAnalyticsService (getJourneyAnalytics + checkOrderTransactionLink)');
+  }
   if (!registry || typeof registry.resolve !== 'function') throw new Error('createProductAnalyticsRouter exige registry');
   if (!analyticsProvider || !commerceProvider) throw new Error('createProductAnalyticsRouter exige analyticsProvider e commerceProvider');
 
   const router = express.Router();
+
+  // Rodada M · proteção só de PROCESSO (nunca substitui o lease real em Postgres — que sobrevive a
+  // restart/múltiplas instâncias; isto aqui só evita disparar duas vezes por um clique duplo antes
+  // do primeiro fire-and-forget nem ter terminado de chamar `syncCommerceCatalog`).
+  const catalogSyncEmAndamento = new Set();
 
   // Estado da conexão GA4 — read-only, nenhum request de dados (só metadata/compatibility, sem
   // runReport), pra UI decidir o que renderizar ANTES de pedir período/relatório.
@@ -208,6 +248,119 @@ function createProductAnalyticsRouter({ productPerformanceService, reconciliatio
       return mapearErro(err, res);
     }
   });
+
+  // Rodada K · Journey Analytics — funil/aquisição/Meta Ads/Commerce agregados (tier1), correlação
+  // transactionId↔pedido quando a propriedade GA4 sustentar (tier2), e o estado (sempre `unavailable`
+  // nesta rodada) de uma futura jornada individual (tier3) — nunca 500 por uma camada indisponível,
+  // cada tier reporta o próprio `available`/`reason`.
+  router.get('/journey', async (req, res) => {
+    const { organizationId, storeId } = req.tenant;
+    try {
+      const { startDate, endDate } = validarPeriodo(req.query);
+      const r = await journeyAnalyticsService.getJourneyAnalytics({ organizationId, storeId, startDate, endDate });
+      return res.json(r);
+    } catch (err) {
+      return mapearErro(err, res);
+    }
+  });
+
+  // Rodada L §2.3 · verificação SOB DEMANDA de 1 pedido (nunca a carga inicial de /journey, que só
+  // amostra — ver journey-analytics-service.js). A UI chama isto quando o usuário seleciona um
+  // pedido específico na tabela de correlação: 1 chamada ao Commerce + 1 ao GA4, nunca mais.
+  router.get('/journey/transaction-link', async (req, res) => {
+    const { organizationId, storeId } = req.tenant;
+    try {
+      const { startDate, endDate } = validarPeriodo(req.query);
+      const providerOrderId = validarProviderOrderId(req.query);
+      const r = await journeyAnalyticsService.checkOrderTransactionLink({ organizationId, storeId, startDate, endDate, providerOrderId });
+      return res.json(r);
+    } catch (err) {
+      return mapearErro(err, res);
+    }
+  });
+
+  // Gate C ("Jornada de Valor") · "Prioridades de hoje" — lista curta e ORDENADA de diagnósticos com
+  // evidência, hipótese e CTA (ver opportunity-diagnostics.js). Reaproveita o MESMO ReportCache de
+  // productPerformanceService/reconciliationService — nenhuma chamada nova ao GA4/Ink por trás desta
+  // rota. Nunca 409/500 por uma fonte desconectada: `sources` reporta GA4/Commerce separadamente,
+  // `opportunities` fica vazio (nunca erro) quando nenhuma fonte sustenta um sinal.
+  if (opportunityDiagnosticsService) {
+    router.get('/journey/opportunities', async (req, res) => {
+      const { organizationId, storeId } = req.tenant;
+      try {
+        const { startDate, endDate } = validarPeriodo(req.query);
+        const limit = validarLimiteOportunidades(req.query);
+        const r = await opportunityDiagnosticsService.getOpportunities({ organizationId, storeId, startDate, endDate, limit });
+        return res.json(r);
+      } catch (err) {
+        return mapearErro(err, res);
+      }
+    });
+  }
+
+  // Rodada M · achado real: `commerce_products` (o catálogo canônico que Desempenho de Produtos e a
+  // Correlação de identidade dependem) nunca tinha um jeito de ser sincronizado em produção — só
+  // rodava em teste (ver lib/product-analytics/catalog-sync.js). Sem isto, QUALQUER Organization com
+  // GA4/Ink conectados e dado real nos dois nunca resolve identidade nenhuma — "0 produtos no
+  // catálogo" mesmo com milhares de itens observados. Dispara e responde na hora (a varredura é
+  // paginada, centenas/milhares de páginas, minutos — nunca síncrono numa resposta HTTP); quem
+  // acompanha é o polling de `/catalog-sync/status`. Mesmo padrão de fire-and-forget que
+  // `/api/admin/produtos/catalogo/sync` já usa pro cache separado de Produtos.
+  if (syncCommerceCatalog) {
+    router.post('/catalog-sync', async (req, res) => {
+      const { organizationId, storeId } = req.tenant;
+      if (catalogSyncEmAndamento.has(organizationId)) {
+        return res.json({ ok: true, status: 'already_running' });
+      }
+      catalogSyncEmAndamento.add(organizationId);
+      syncCommerceCatalog({ organizationId, storeId })
+        .catch((err) => console.error(`[PRODUCT_ANALYTICS] catalog-sync falhou: ${err.message}`))
+        .finally(() => catalogSyncEmAndamento.delete(organizationId));
+      return res.json({ ok: true, status: 'started' });
+    });
+  }
+
+  if (getCommerceCatalogSyncStatus) {
+    router.get('/catalog-sync/status', async (req, res) => {
+      const { organizationId, storeId } = req.tenant;
+      try {
+        const ultimoRun = await getCommerceCatalogSyncStatus({ organizationId, storeId });
+        // Gate A ("Jornada de Valor Operacional") · o Set em processo (catalogSyncEmAndamento) só
+        // enxerga o que ESTA rota disparou (clique manual) — o scheduler automático e o gatilho de
+        // conexão (server.js) chamam `syncCommerceCatalog` direto, sem passar por ele. `rodandoNoLog`
+        // é o sinal REAL (commerce_catalog_sync_logs, escrito pelo próprio runCatalogSync ANTES de
+        // qualquer trabalho — cross-process, verdadeiro não importa quem disparou nem quantas
+        // instâncias do servidor existam). `syncing` combina os dois: o Set cobre só a janela ínfima
+        // entre o fire-and-forget e o primeiro INSERT do log.
+        //
+        // `state`: a taxonomia do comando — never_synced/queued/running/completed/partial_failure/
+        // failed — nunca um status cru do banco sem rótulo pra UI decidir sozinha.
+        const emProcesso = catalogSyncEmAndamento.has(organizationId);
+        const rodandoNoLog = !!ultimoRun && ultimoRun.status === 'running';
+        const syncing = emProcesso || rodandoNoLog;
+        const state = !ultimoRun
+          ? (emProcesso ? 'queued' : 'never_synced')
+          : rodandoNoLog ? 'running'
+            : ultimoRun.status === 'success' ? 'completed' : ultimoRun.status; // 'partial_failure' | 'failed'
+        return res.json({
+          syncing, state,
+          lastRun: ultimoRun && {
+            status: ultimoRun.status,
+            startedAt: ultimoRun.started_at,
+            finishedAt: ultimoRun.finished_at,
+            pagesProcessed: ultimoRun.pages_processed,
+            productsSeen: ultimoRun.products_seen,
+            productsInserted: ultimoRun.products_inserted,
+            productsUpdated: ultimoRun.products_updated,
+            productsDeactivated: ultimoRun.products_deactivated,
+            errorCode: ultimoRun.error_code,
+          },
+        });
+      } catch (err) {
+        return mapearErro(err, res);
+      }
+    });
+  }
 
   return router;
 }

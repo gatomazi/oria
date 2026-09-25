@@ -159,3 +159,37 @@ export interface ReconciliationResponse {
 export function getReconciliation(periodo: { startDate: string; endDate: string }): Promise<ReconciliationResponse> {
   return api<ReconciliationResponse>(`/api/admin/product-analytics/reconciliation?${periodoParams(periodo).toString()}`);
 }
+
+// Rodada M · o catálogo canônico (commerce_products) — do qual TODA identidade de produto aqui
+// depende — precisa ser sincronizado antes de existir qualquer coisa pra "atribuir a produto".
+// Dispara e responde na hora; quem acompanha é getCatalogSyncStatus (polling).
+export function syncCommerceCatalog(): Promise<{ ok: true; status: 'started' | 'already_running' }> {
+  return api('/api/admin/product-analytics/catalog-sync', { method: 'POST' });
+}
+
+export interface CommerceCatalogSyncRun {
+  status: 'running' | 'success' | 'partial_failure' | 'failed';
+  startedAt: string;
+  finishedAt: string | null;
+  pagesProcessed: number;
+  productsSeen: number;
+  productsInserted: number;
+  productsUpdated: number;
+  productsDeactivated: number;
+  errorCode: string | null;
+}
+
+// Gate A ("Jornada de Valor Operacional") · taxonomia do comando — a UI decide o texto certo por
+// ESTE campo, nunca lendo `lastRun.status` cru (`state` já cobre never_synced/queued, que não têm
+// linha nenhuma em `lastRun`).
+export type CommerceCatalogSyncState = 'never_synced' | 'queued' | 'running' | 'completed' | 'partial_failure' | 'failed';
+
+export interface CommerceCatalogSyncStatus {
+  syncing: boolean;
+  state: CommerceCatalogSyncState;
+  lastRun: CommerceCatalogSyncRun | null;
+}
+
+export function getCommerceCatalogSyncStatus(): Promise<CommerceCatalogSyncStatus> {
+  return api<CommerceCatalogSyncStatus>('/api/admin/product-analytics/catalog-sync/status');
+}

@@ -124,35 +124,75 @@ const PRECOS_PADRAO = [
   },
 
   // ── OpenAI — geração de texto (copy do anúncio) ───────────────────────────────────────────
-  // A tabela da OpenAI lista variantes (Sol, Terra, Luna) e o gerador pede só "gpt-5.6". Sem saber
-  // qual variante atende, usamos a do meio e marcamos como estimativa — errar a variante muda o
-  // custo em 10x entre a mais cara e a mais barata.
+  // Correção Fase F.2.B (2026-09-23): "gpt-5.6" NÃO é uma variante ambígua — é um alias real e
+  // documentado que roteia para "gpt-5.6-sol" (developers.openai.com/api/docs/models/gpt-5.6-sol e
+  // .../guides/latest-model?model=gpt-5.6, ambas conferidas nesta data). A F.2.A tinha registrado
+  // errado que o id não existia e chutava a variante do meio (Terra) como estimativa — corrigido
+  // para os valores reais e publicados de gpt-5.6-sol.
   {
     chave: 'openai.gpt-5.6.entrada',
-    rotulo: 'gpt-5.6 — entrada',
-    valor: 2,
+    rotulo: 'gpt-5.6 (alias de gpt-5.6-sol) — entrada',
+    valor: 4,
     moeda: 'USD',
     unidade: 'milhao_tokens',
-    confianca: 'estimado',
-    fonte: 'Tabela da OpenAI, variante Terra (a variante efetiva não é conhecida pelo painel)',
+    confianca: 'publicado',
+    fonte: 'developers.openai.com/api/docs/models/gpt-5.6-sol',
   },
   {
     chave: 'openai.gpt-5.6.entrada_cache',
-    rotulo: 'gpt-5.6 — entrada em cache',
-    valor: 0.2,
+    rotulo: 'gpt-5.6 (alias de gpt-5.6-sol) — entrada em cache',
+    valor: 0.4,
     moeda: 'USD',
     unidade: 'milhao_tokens',
-    confianca: 'estimado',
-    fonte: 'Tabela da OpenAI, variante Terra',
+    confianca: 'publicado',
+    fonte: 'developers.openai.com/api/docs/models/gpt-5.6-sol',
   },
   {
     chave: 'openai.gpt-5.6.saida',
-    rotulo: 'gpt-5.6 — saída',
-    valor: 12,
+    rotulo: 'gpt-5.6 (alias de gpt-5.6-sol) — saída',
+    valor: 20,
     moeda: 'USD',
     unidade: 'milhao_tokens',
-    confianca: 'estimado',
-    fonte: 'Tabela da OpenAI, variante Terra',
+    confianca: 'publicado',
+    fonte: 'developers.openai.com/api/docs/models/gpt-5.6-sol',
+  },
+
+  // ── OpenAI — Product Enrichment (Fase F.2.B, piloto controlado) ──────────────────────────
+  // Modelo FIXADO explicitamente para esta tarefa (não é o default do roteador) — allowlist própria
+  // em creative_core/enrichment.py::_OPENAI_MODEL_ALLOWLIST, mesma fonte/data desta linha.
+  //
+  // Diferente do gpt-image-2 acima (que TEM preço separado para entrada de texto vs. imagem):
+  // gpt-4o-mini cobra os dois tipos de entrada pela MESMA tarifa por token — a imagem é convertida
+  // internamente para um número de tokens (conforme resolução/detail) e cobrada como qualquer outro
+  // token de entrada. Por isso uma única linha `entrada` cobre texto e as referências do produto,
+  // igual ao padrão já usado para gpt-5.6 (tarefa de copy) acima — não o padrão do gpt-image-2.
+  {
+    chave: 'openai.gpt-4o-mini.entrada',
+    rotulo: 'gpt-4o-mini — entrada (texto e imagem, mesma tarifa)',
+    valor: 0.15,
+    moeda: 'USD',
+    unidade: 'milhao_tokens',
+    confianca: 'publicado',
+    fonte: 'developers.openai.com/api/docs/models/gpt-4o-mini',
+    nota: 'As referências do produto (até 2, ver enrichment.py) entram por aqui — não há linha separada de imagem para este modelo.',
+  },
+  {
+    chave: 'openai.gpt-4o-mini.entrada_cache',
+    rotulo: 'gpt-4o-mini — entrada em cache',
+    valor: 0.075,
+    moeda: 'USD',
+    unidade: 'milhao_tokens',
+    confianca: 'publicado',
+    fonte: 'developers.openai.com/api/docs/models/gpt-4o-mini',
+  },
+  {
+    chave: 'openai.gpt-4o-mini.saida',
+    rotulo: 'gpt-4o-mini — saída (JSON estruturado da proposta)',
+    valor: 0.6,
+    moeda: 'USD',
+    unidade: 'milhao_tokens',
+    confianca: 'publicado',
+    fonte: 'developers.openai.com/api/docs/models/gpt-4o-mini',
   },
 ];
 
@@ -247,6 +287,49 @@ function custoGeracao(consumo, precos, { modeloPadrao = 'gpt-image-2' } = {}) {
   };
 }
 
+// ── Fase F.2.B — Product Enrichment real (gpt-4o-mini) ────────────────────────────────────────
+//
+// Diferente de custoGeracao (gpt-image-2, entrada_texto/entrada_imagem separados): gpt-4o-mini
+// cobra os dois tipos de entrada pela MESMA tarifa (ver comentário na tabela de preços acima), então
+// as duas funções abaixo usam sempre `openai.gpt-4o-mini.entrada`, nunca uma variante "_imagem".
+//
+// ENRICHMENT_MAX_TOKENS_SAIDA precisa ficar em sincronia com
+// `creative_core/enrichment.py::_MAX_OUTPUT_TOKENS` (mesmo valor, duas linguagens — pequena
+// duplicação deliberada, mesmo padrão já usado para MERGEABLE_FIELDS/mergeSemanticContext). Se um
+// mudar, o outro precisa mudar junto — não há um único lugar de origem entre Python e Node aqui.
+const ENRICHMENT_PIOR_CASO_TOKENS_ENTRADA = 1200; // texto curto do produto + até 2 referências em detail=low, com margem generosa
+const ENRICHMENT_MAX_TOKENS_SAIDA = 700; // == creative_core/enrichment.py::_MAX_OUTPUT_TOKENS
+
+// Estimativa de PIOR CASO, antes de qualquer chamada — a "reserva prévia conservadora baseada no
+// pior caso permitido" que o piloto (F.2.B §3) exige. `null` só se a tabela de preços não tiver as
+// linhas (nunca chamar sem conseguir estimar).
+function custoEnrichmentPiorCaso(precos) {
+  const entrada = precoDe(precos, 'openai.gpt-4o-mini.entrada');
+  const saida = precoDe(precos, 'openai.gpt-4o-mini.saida');
+  if (!entrada || !saida || !Number.isFinite(Number(entrada.valor)) || !Number.isFinite(Number(saida.valor))) return null;
+  const usd = (ENRICHMENT_PIOR_CASO_TOKENS_ENTRADA * Number(entrada.valor) + ENRICHMENT_MAX_TOKENS_SAIDA * Number(saida.valor))
+    / UNIDADES.milhao_tokens.divisor;
+  return { usd, confianca: piorConfianca([entrada.confianca, saida.confianca]) };
+}
+
+// Custo REAL, depois da chamada, a partir do `usage` que a OpenAI reportou (provider_meta.usage —
+// nunca antes de existir, nunca apresentado como medido quando não há chamada real).
+function custoEnrichmentReal(usage, precos) {
+  if (!usage) return null;
+  const entrada = precoDe(precos, 'openai.gpt-4o-mini.entrada');
+  const cache = precoDe(precos, 'openai.gpt-4o-mini.entrada_cache');
+  const saida = precoDe(precos, 'openai.gpt-4o-mini.saida');
+  if (!saida) return null;
+  const porMilhaoLocal = (tokens, preco) => (preco && Number.isFinite(Number(preco.valor))
+    ? (Number(tokens) || 0) * Number(preco.valor) / UNIDADES.milhao_tokens.divisor
+    : 0);
+  const cacheTokens = Number(usage.cached_input_tokens) || 0;
+  const entradaTotal = Number(usage.input_tokens) || 0;
+  const custoEntrada = porMilhaoLocal(Math.max(entradaTotal - cacheTokens, 0), entrada) + porMilhaoLocal(cacheTokens, cache);
+  const custoSaida = porMilhaoLocal(usage.output_tokens, saida);
+  return { usd: custoEntrada + custoSaida, confianca: piorConfianca([entrada && entrada.confianca, saida.confianca]) };
+}
+
 // A confiança de um total é a do seu pior componente: um total com uma linha estimada é uma
 // estimativa inteira, por mais linhas publicadas que tenha junto.
 function piorConfianca(lista) {
@@ -308,6 +391,8 @@ module.exports = {
   precoDe,
   custoMensagens,
   custoGeracao,
+  custoEnrichmentPiorCaso,
+  custoEnrichmentReal,
   piorConfianca,
   totalizarCustos,
   validarPreco,

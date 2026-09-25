@@ -10,8 +10,11 @@ const TIMEOUTS_MS = {
   contracts: 15_000,
   validate: 15_000,
   plans: 30_000,
+  drafts: 15_000,
+  feedbackSnapshots: 15_000,
   generations: 240_000,
   copies: 90_000,
+  enrichment: 15_000, // fake provider, puro — sem chamada externa, nunca deveria demorar
 };
 
 const CONTRACT_NAME_RE = /^[A-Za-z]{1,40}$/;
@@ -87,11 +90,30 @@ function createCoreClient({ baseUrl, token, fetchImpl = globalThis.fetch, timeou
       return call('POST', `/v1/validate/${contract}`, { payload }, 'validate');
     },
     plan: (request) => call('POST', '/v1/plans', { request }, 'plans').then((d) => d.plan),
+    // Puras (sem chave, sem provedor): a lógica de "Copiar dados" e de snapshot de feedback mora só no core.
+    draft: (plan) => call('POST', '/v1/draft', { plan }, 'drafts').then((d) => d.draft),
+    feedbackSnapshot: ({ plan, resultMetadata, assetSha256 }) => call('POST', '/v1/feedback-snapshot', {
+      plan,
+      ...(resultMetadata ? { result_metadata: resultMetadata } : {}),
+      ...(assetSha256 ? { asset_sha256: assetSha256 } : {}),
+    }, 'feedbackSnapshots').then((d) => d.snapshot),
     generate: ({ plan, references, apiKey, attempt = 1 }) =>
       call('POST', '/v1/generations', { plan, references, openai_api_key: apiKey, generation_attempt: attempt }, 'generations')
         .then((d) => d.result),
     copies: ({ request, apiKey }) =>
       call('POST', '/v1/copies', { request, openai_api_key: apiKey }, 'copies').then((d) => d.variants),
+    // Fase F.1 — Product Enrichment. `provider` default "fake" preserva o comportamento anterior
+    // (nenhuma chave, nenhum custo) para quem não passa nada. `references` (no máximo 2,
+    // `{ ref, data_base64 }` — mesmo formato de `generate` acima). Fase F.2.B: `apiKey`, quando
+    // presente, vai como `openai_api_key` — o MESMO mecanismo BYOK de `generate`/`copies` acima,
+    // nunca logada/ecoada; só é passada pelo chamador (routes/criativos.js) quando `provider` é
+    // "openai" E `rollout.js::enrichmentOpenAIFor` já autorizou. Sem `apiKey`, o core recusa
+    // "openai" de forma limpa — nunca uma chamada de verdade, nunca um fallback silencioso para
+    // "fake" (uma sugestão fake nunca pode se apresentar como visão real).
+    proposeEnrichment: ({ product, brand, niche, provider = 'fake', references = [], apiKey }) => call('POST', '/v1/enrichment/propose', {
+      product, ...(brand ? { brand } : {}), ...(niche ? { niche } : {}), provider,
+      ...(references.length ? { references } : {}), ...(apiKey ? { openai_api_key: apiKey } : {}),
+    }, 'enrichment').then((d) => d.proposal),
   };
 }
 

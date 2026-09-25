@@ -14,6 +14,16 @@ export interface Persona {
   behavior?: string;
   notes?: string;
   source?: "automatic" | "custom";
+  age_band?: "baby" | "child" | "child_3_5" | "child_6_9" | "child_10_12" | "teen" | "adult" | "senior" | "unknown";
+}
+
+export interface MinorWardrobePolicy {
+  enabled?: boolean;
+  legs_coverage?: "full" | "knee" | "default";
+  allow_short_shorts?: boolean;
+  allow_short_skirts?: boolean;
+  allow_revealing_clothing?: boolean;
+  style?: string;
 }
 
 export interface BrandKit {
@@ -37,6 +47,7 @@ export interface BrandKit {
   defaultNicheKitId?: string;
   defaultContextProvider?: "geographic" | "niche" | "custom";
   suggestedPersonas?: Array<Persona>;
+  minorWardrobePolicy?: MinorWardrobePolicy;
   schemaVersion: number;
   version: number;
 }
@@ -86,6 +97,33 @@ export interface ContextProfile {
   profileVersion: number;
 }
 
+export interface ProductSemanticContext {
+  wearer_roles?: Array<string>;
+  relationship_themes?: Array<string>;
+  recommended_supporting_roles?: Array<string>;
+  incompatible_auto_supporting_roles?: Array<string>;
+  scene_intents?: Array<string>;
+  visible_text?: Array<string>;
+  source?: "manual" | "enrichment";
+  confidence?: number;
+  field_sources?: Record<string, unknown> | null;
+  field_confidence?: Record<string, unknown> | null;
+}
+
+export interface EnrichmentProposal {
+  id: string;
+  product_id: string;
+  schema_version: number;
+  proposed: ProductSemanticContext;
+  recommended_angle_families?: Array<"lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social">;
+  recommended_interactions?: Array<string>;
+  field_notes?: Record<string, unknown>;
+  provider: "fake" | "openai";
+  product_snapshot_hash: string;
+  created_at: string;
+  provider_meta?: Record<string, unknown> | null;
+}
+
 export interface CreativeProduct {
   id: string;
   brandId?: string;
@@ -94,6 +132,7 @@ export interface CreativeProduct {
   description?: string;
   referenceImages: Array<string>;
   metadata?: Record<string, unknown>;
+  semantic_context?: ProductSemanticContext;
 }
 
 export interface Angle {
@@ -103,6 +142,40 @@ export interface Angle {
   uses_person: boolean;
   apparel_only: boolean;
   multi_product_limit: number;
+}
+
+export interface AngleRecommendation {
+  angle_id: string;
+  family: "lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social";
+  preset?: string | null;
+  objective_hints?: Array<string>;
+  scope: "system" | "organization" | "store";
+  version: number;
+  reason?: Array<string>;
+  source: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy";
+  custom_angle?: CustomAngle | null;
+}
+
+export interface CustomAngle {
+  id: string;
+  scope: "organization" | "store";
+  organization_id: string;
+  store_id?: string | null;
+  slug: string;
+  name: string;
+  description?: string | null;
+  family: "lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social";
+  people_mode: "none" | "optional" | "required";
+  preset?: string | null;
+  definition?: Record<string, unknown>;
+  allowed_interactions?: Array<string> | null;
+  allowed_product_modes?: Array<"single_product" | "multi_product"> | null;
+  default_gaze?: "camera" | "interaction" | "off_camera" | "product" | "none" | null;
+  active: boolean;
+  version: number;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Placement {
@@ -157,6 +230,17 @@ export interface HistoryHints {
   recent_personas?: Array<string>;
 }
 
+export interface RequestSubject {
+  id?: string;
+  role?: "primary" | "supporting";
+  persona: Persona;
+  age_band?: "baby" | "child" | "child_3_5" | "child_6_9" | "child_10_12" | "teen" | "adult" | "senior" | "unknown";
+  relation_to_primary?: "mother" | "father" | "daughter" | "son" | "sibling" | "partner" | "friend" | "grandparent" | "custom";
+  relation_label?: string;
+  wears_product_id?: string | null;
+  prominence?: "hero" | "secondary" | "background";
+}
+
 export interface CreativeRequest {
   creative_id?: string;
   strategy: "CLEAN_ANGLES" | "REMARKETING" | "FUNNEL_VISUAL";
@@ -166,7 +250,7 @@ export interface CreativeRequest {
   brand_kit_id?: string;
   niche_kit?: NicheKit;
   niche_kit_id?: string;
-  angle_id: "IDENTIDADE_ORIGEM" | "LIFESTYLE_COTIDIANO" | "ORGULHO_DISCRETO" | "PERTENCIMENTO" | "NOSTALGIA_ORIGEM" | "CABIDE" | "PRODUTO_ESTAMPA" | "CAIMENTO" | "CLOSE_ESTAMPA" | "CLOSE_BOLSO" | "PREMIUM_ESTILO" | "CREATOR_STYLE" | "PRESENTE_AFETO";
+  angle_id: "IDENTIDADE_ORIGEM" | "LIFESTYLE_COTIDIANO" | "ORGULHO_DISCRETO" | "PERTENCIMENTO" | "NOSTALGIA_ORIGEM" | "CABIDE" | "PRODUTO_ESTAMPA" | "CAIMENTO" | "CLOSE_ESTAMPA" | "CLOSE_BOLSO" | "PREMIUM_ESTILO" | "CREATOR_STYLE" | "PRESENTE_AFETO" | "auto";
   placement_id: "FEED_4X5" | "STORY_9X16";
   persona_mode?: "automatic" | "custom" | "none";
   persona?: Persona;
@@ -178,6 +262,15 @@ export interface CreativeRequest {
   quality?: "low" | "medium" | "high";
   seed?: number;
   history_hints?: HistoryHints;
+  prompt_version?: number;
+  plan_schema_version?: number;
+  gaze_mode?: "camera" | "interaction" | "off_camera" | "product" | "auto";
+  subjects?: Array<RequestSubject>;
+  interaction?: string;
+  scene_picks?: Record<string, unknown>;
+  angle_family_hint?: Record<string, unknown> | null;
+  custom_angle?: CustomAngle | null;
+  angle_intent_hint?: string;
 }
 
 export interface KitRef {
@@ -220,6 +313,8 @@ export interface ReferenceRole {
 export interface PromptSection {
   name: string;
   length: number;
+  source?: string;
+  value?: string;
 }
 
 export interface PromptInfo {
@@ -241,6 +336,81 @@ export interface ValidationCheck {
   passed: boolean;
 }
 
+export interface PlanSubject {
+  id: string;
+  role: "primary" | "supporting";
+  label: string;
+  persona?: Record<string, unknown> | null;
+  age_band: "baby" | "child" | "child_3_5" | "child_6_9" | "child_10_12" | "teen" | "adult" | "senior" | "unknown";
+  is_minor: boolean;
+  minor_source?: string | null;
+  age_source?: string | null;
+  product_use: "wears" | "uses" | "none";
+  product_id?: string | null;
+  role_hint?: string | null;
+  relation_to_primary?: "mother" | "father" | "daughter" | "son" | "sibling" | "partner" | "friend" | "grandparent" | "custom" | null;
+  relation_label?: string | null;
+  prominence: "hero" | "secondary" | "background";
+  source: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy";
+}
+
+export interface GazeResolution {
+  mode: "camera" | "interaction" | "off_camera" | "product" | "none";
+  requested: "camera" | "interaction" | "off_camera" | "product" | "auto";
+  source: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy";
+  reason: string;
+}
+
+export interface PlanScene {
+  gaze: GazeResolution;
+  picks: Record<string, unknown>;
+  prompt_version: number;
+  interaction?: string | null;
+  interaction_source?: "user" | "product" | "product_enrichment" | "brand" | "niche" | "persona" | "angle" | "planner_default" | "safety_policy" | null;
+  interaction_detail?: Record<string, unknown> | null;
+  scene_mode?: "template" | "frame";
+  composition_source?: "explicit" | "recommended" | "legacy";
+}
+
+export interface PlanComposition {
+  people_count: number;
+  pose_risk: "low" | "medium" | "high";
+  risk_reasons: Array<string>;
+}
+
+export interface MinorSafety {
+  applies: boolean;
+  minor_subject_ids: Array<string>;
+  global: Record<string, unknown>;
+  brand?: Record<string, unknown> | null;
+  basis?: Record<string, unknown>;
+}
+
+export interface PlanSemantics {
+  products: Array<Record<string, unknown>>;
+  supporting?: Record<string, unknown> | null;
+  warnings: Array<Record<string, unknown>>;
+}
+
+export interface ResolvedInputs {
+  brand: Record<string, unknown>;
+  niche: Record<string, unknown>;
+  strategy: Record<string, unknown>;
+}
+
+export interface CompilerSection {
+  section: string;
+  source: string;
+  sources?: Array<string>;
+  value: string;
+  length: number;
+}
+
+export interface CompilerInfo {
+  version: number;
+  sections: Array<CompilerSection>;
+}
+
 export interface CreativePlan {
   plan_id: string;
   creative_id: string;
@@ -250,6 +420,7 @@ export interface CreativePlan {
   product_mode: "single_product" | "multi_product";
   products: Array<CreativeProduct>;
   angle: Angle;
+  angle_recommendation?: AngleRecommendation | null;
   placement: Placement;
   persona?: Persona | null;
   context: ResolvedContext;
@@ -266,6 +437,94 @@ export interface CreativePlan {
   versions: Record<string, unknown>;
   validations: Array<ValidationCheck>;
   warnings: Array<string>;
+  mode?: "creative";
+  objective?: "clean_creative" | "remarketing" | "funnel_visual";
+  subjects?: Array<PlanSubject>;
+  scene?: PlanScene;
+  composition?: PlanComposition;
+  minor_safety?: MinorSafety;
+  semantics?: PlanSemantics;
+  provenance?: Record<string, string>;
+  provenance_sources?: Record<string, unknown>;
+  resolved_inputs?: ResolvedInputs;
+  compiler?: CompilerInfo;
+  seed?: number | null;
+}
+
+export interface CompiledPrompt {
+  text: string;
+  sections: Array<CompilerSection>;
+  sha256: string;
+  compiler_version: number;
+  prompt_version: number;
+}
+
+export interface GenerationDraft {
+  mode: "creative";
+  objective: "clean_creative" | "remarketing" | "funnel_visual";
+  strategy: "CLEAN_ANGLES" | "REMARKETING" | "FUNNEL_VISUAL";
+  product_mode: "single_product" | "multi_product";
+  product_ids: Array<string>;
+  angle_id: string;
+  custom_angle?: CustomAngle | null;
+  placement_id: string;
+  quality: "low" | "medium" | "high";
+  brand_kit: KitRef;
+  niche_kit: KitRef;
+  persona_mode: "automatic" | "custom" | "none";
+  persona?: Record<string, unknown> | null;
+  subjects: Array<RequestSubject>;
+  interaction?: string | null;
+  scene_picks?: Record<string, unknown> | null;
+  context: Record<string, unknown>;
+  funnel_stage?: string | null;
+  remarketing?: Record<string, unknown> | null;
+  funnel?: Record<string, unknown> | null;
+  copy: CopyOptions;
+  gaze_mode: "camera" | "interaction" | "off_camera" | "product" | "auto";
+  plan_schema_version: number;
+  prompt_version: number;
+  seed?: number | null;
+  plan_warnings?: Array<string>;
+  actions: Record<string, unknown>;
+  carried: Array<string>;
+  source: Record<string, unknown>;
+}
+
+export interface FeedbackSnapshot {
+  creative_id: string;
+  plan_id: string;
+  plan_schema_version: number;
+  compiler_version?: number | null;
+  prompt_version: number;
+  prompt_sha256: string;
+  mode: "creative";
+  objective: "clean_creative" | "remarketing" | "funnel_visual";
+  strategy: string;
+  angle: string;
+  angle_family?: "lifestyle" | "connection" | "editorial_portrait" | "action_movement" | "product_focus" | "product_no_person" | "creator_social" | null;
+  angle_preset?: string | null;
+  angle_scope?: "system" | "organization" | "store" | null;
+  angle_version?: number | null;
+  angle_custom_id?: string | null;
+  angle_custom_slug?: string | null;
+  angle_custom_name?: string | null;
+  product_ids: Array<string>;
+  subjects: Array<Record<string, unknown>>;
+  people_count: number;
+  interaction?: string | null;
+  composition_source?: string | null;
+  composition_key?: string | null;
+  pose_risk?: string | null;
+  warnings?: Array<string>;
+  context: Record<string, unknown>;
+  placement: string;
+  quality?: string | null;
+  gaze_mode?: string | null;
+  minor_safety_applied: boolean;
+  flags: Record<string, unknown>;
+  model: Record<string, unknown>;
+  asset_sha256?: string | null;
 }
 
 export interface GenerationError {

@@ -41,6 +41,15 @@ function metricasZeradas() {
   return { itemsViewed: 0, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0, itemRevenue: 0 };
 }
 
+// Rodada "corrigir o gargalo real" · extraído de montarLinha pra ser reaproveitado por
+// opportunity-diagnostics.js direto sobre o Map de `prepareStoreAnalytics` (metrics cru, sem
+// `product`) — mesma fórmula, nunca uma segunda definição de itemRatios em outro arquivo.
+function calcularItemRatios(metrics) {
+  const itemRatios = {};
+  for (const [nome, calc] of Object.entries(CAMPOS_RATIO)) itemRatios[nome] = calc(metrics);
+  return itemRatios;
+}
+
 // Soma "conhecendo nulos": se AMBOS os lados já são number, soma normal. Se o valor da linha é
 // null (métrica indisponível na propriedade — Fase E nunca inventa 0 aqui), a métrica agregada
 // deste produto fica marcada indisponível (null) mesmo que outra linha tenha trazido número —
@@ -109,17 +118,98 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     return reportCache.obter({ organizationId, storeId, analyticsProvider, startDate, endDate, escopoCache }, () => resolvido.connector.getProductPerformance({ startDate, endDate }));
   }
 
+  // Rodada "corrigir o gargalo real" (Gate 1) · o TRABALHO POR PERÍODO que `getProductPerformance`
+  // fazia DE NOVO a cada página (1 chamada de analytics — já cacheada — mas também 1
+  // `resolveAndPersist` e 1 passagem de agregação sobre o relatório INTEIRO, por página) agora é
+  // computado UMA VEZ aqui e reaproveitado por quem precisa do conjunto elegível INTEIRO da Store —
+  // `paginarDesempenhoCompleto`/reconciliation.js, nunca 425/850 vezes por request. `getProductPerformance`
+  // (abaixo) também passou a usar isto por dentro — mesma chamada de rede, mesma chamada ao banco,
+  // só sem duplicar a lógica.
+  //
+  //   O(itemIds observados no período) — nunca O(páginas × itemIds).
+  //
+  // Retorna o Map cru (nunca serializado pro HTTP diretamente — quem serializa decide o formato,
+  // ex.: getProductPerformance monta `items` por página, opportunity-diagnostics.js consome o Map
+  // direto sem nunca tocar o catálogo inteiro).
+  async function prepareStoreAnalytics({ organizationId, storeId, analyticsProvider, startDate, endDate }) {
+    validarEntrada({ organizationId, storeId, analyticsProvider, startDate, endDate });
+    const namespace = `${analyticsProvider}.item_id`;
+    const linhasAnalytics = await obterRelatorio({ organizationId, storeId, analyticsProvider, startDate, endDate });
+
+    if (!linhasAnalytics.length) {
+      return {
+        namespace, linhasAnalytics, idsObservados: [], resolucao: { resolved: [], conflicts: [], unresolved: [] },
+        metricasPorProduto: new Map(), metricasIndisponiveis: [],
+        coverage: { observedAnalyticsIds: 0, matchedAnalyticsIds: 0, unmatchedAnalyticsIds: 0, conflictedAnalyticsIds: 0, coverageRate: null, status: 'insufficient_data' },
+      };
+    }
+
+    // Resolve (e persiste as novas regras determinísticas) os ids observados — UMA VEZ pro
+    // conjunto INTEIRO, nunca por página/por consumidor.
+    const idsObservados = [...new Set(linhasAnalytics.map((l) => l.externalProductId))];
+    const resolucao = await resolveAndPersist({ pool }, { organizationId, storeId, namespace, externalIds: idsObservados });
+    const produtoPorExternalId = new Map(resolucao.resolved.map((r) => [r.externalId, r.commerceProductId]));
+
+    // Métrica indisponível na propriedade inteira: se NENHUMA linha observada trouxe valor para
+    // ela, é a propriedade que não suporta — não o produto individual (Fase E já nunca inventa 0
+    // aqui). Calculado ANTES da agregação (só lê `linhasAnalytics`, nunca o Map por produto) pra
+    // `linhaZerada` já criar toda entrada nova (seja pela agregação abaixo, seja por um zeramento
+    // de página feito depois por `getProductPerformance`) já com os campos indisponíveis nulos —
+    // nunca "0 travestido de sem suporte", em nenhum dos dois caminhos.
+    const metricasIndisponiveis = METRICAS.filter((nome) => linhasAnalytics.every((l) => l[nome] === null));
+    const metricasZeradasComIndisponiveis = () => {
+      const m = metricasZeradas();
+      for (const nome of metricasIndisponiveis) m[nome] = null;
+      return m;
+    };
+
+    // Agrega por commerce_product_id — nunca por external id solto (§6.5: soma os que apontam pro
+    // MESMO produto; sem informação para deduplicar entre ids diferentes, então soma e sinaliza).
+    // UMA passagem sobre `linhasAnalytics`, nunca uma por página.
+    const metricasPorProduto = new Map(); // commerceProductId -> { metrics, externalIds: Set }
+    const linhaZerada = (id) => {
+      if (!metricasPorProduto.has(id)) metricasPorProduto.set(id, { metrics: metricasZeradasComIndisponiveis(), externalIds: new Set() });
+      return metricasPorProduto.get(id);
+    };
+    for (const linha of linhasAnalytics) {
+      const commerceProductId = produtoPorExternalId.get(linha.externalProductId);
+      if (!commerceProductId) continue; // id observado sem produto canônico — não é problema do PRODUTO, é do id (coverage cobre isso)
+      const acc = linhaZerada(commerceProductId);
+      acc.externalIds.add(linha.externalProductId);
+      for (const nome of METRICAS) {
+        if (metricasIndisponiveis.includes(nome)) continue; // já null — nunca soma em cima de indisponível
+        acc.metrics[nome] = somarMetrica(acc.metrics[nome], linha[nome]);
+      }
+    }
+
+    return {
+      namespace, linhasAnalytics, idsObservados, resolucao, metricasPorProduto, metricasIndisponiveis, linhaZerada,
+      coverage: {
+        observedAnalyticsIds: idsObservados.length,
+        matchedAnalyticsIds: resolucao.resolved.length,
+        unmatchedAnalyticsIds: resolucao.unresolved.length,
+        conflictedAnalyticsIds: resolucao.conflicts.length,
+        coverageRate: idsObservados.length > 0 ? resolucao.resolved.length / idsObservados.length : null,
+        status: idsObservados.length > 0 ? 'ok' : 'insufficient_data',
+      },
+    };
+  }
+
   async function getProductPerformance(entrada) {
     validarEntrada(entrada);
     const { organizationId, storeId, analyticsProvider, startDate, endDate, filters = {}, sort = null, pagination = {} } = entrada;
     const namespace = `${analyticsProvider}.item_id`;
 
-    // 1 (poucas, já paginadas dentro do connector) chamada de analytics para o período inteiro —
-    // com ou sem cache, sempre uma chamada de DADOS por invocação do service (o cache, quando
-    // usado, fica no ReportCache abaixo — nunca aqui um "if já busquei antes" ad hoc).
-    const linhasAnalytics = await obterRelatorio({ organizationId, storeId, analyticsProvider, startDate, endDate });
+    // Gate 1 · o trabalho por PERÍODO (relatório + resolução + agregação) é sempre computado UMA
+    // VEZ aqui — se `entrada.aggregation` já veio pronto (reconciliation.js pagina o catálogo
+    // MUITAS vezes pro mesmo período; passar a MESMA agregação evita recomputar a cada página —
+    // ver reconciliation.js#agregarAnalyticsCompleto), reaproveita; sem ele, computa na hora (o
+    // caminho de sempre, usado pela rota HTTP — nenhuma mudança de contrato pra quem já chama sem
+    // esse campo).
+    const agregacao = entrada.aggregation || await prepareStoreAnalytics({ organizationId, storeId, analyticsProvider, startDate, endDate });
+    const { idsObservados, resolucao, metricasPorProduto, coverage } = agregacao;
 
-    if (!linhasAnalytics.length) {
+    if (!idsObservados.length) {
       // Sem NENHUMA linha no período: não dá pra distinguir "zero de verdade" de "sem cobertura" —
       // representado no nível da resposta, não inventado por produto (§6.8/§5.8).
       const pagina = await catalogRepository.listPage({
@@ -130,35 +220,9 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
         items: pagina.items.map((p) => linhaSemAnalytics(p, 'insufficient_data')),
         nextCursor: pagina.nextCursor,
         totalCount: pagina.totalCount,
-        coverage: { observedAnalyticsIds: 0, matchedAnalyticsIds: 0, unmatchedAnalyticsIds: 0, coverageRate: null, status: 'insufficient_data' },
+        coverage,
       };
     }
-
-    // Resolve (e persiste as novas regras determinísticas) os ids observados contra o catálogo.
-    const idsObservados = [...new Set(linhasAnalytics.map((l) => l.externalProductId))];
-    const resolucao = await resolveAndPersist({ pool }, { organizationId, storeId, namespace, externalIds: idsObservados });
-    const produtoPorExternalId = new Map(resolucao.resolved.map((r) => [r.externalId, r.commerceProductId]));
-
-    // Agrega por commerce_product_id — nunca por external id solto (§6.5: soma os que apontam pro
-    // MESMO produto; sem informação para deduplicar entre ids diferentes, então soma e sinaliza).
-    const metricasPorProduto = new Map(); // commerceProductId -> { metrics, externalIds: Set }
-    const linhaZerada = (id) => {
-      if (!metricasPorProduto.has(id)) metricasPorProduto.set(id, { metrics: metricasZeradas(), externalIds: new Set() });
-      return metricasPorProduto.get(id);
-    };
-    for (const linha of linhasAnalytics) {
-      const commerceProductId = produtoPorExternalId.get(linha.externalProductId);
-      if (!commerceProductId) continue; // id observado sem produto canônico — não é problema do PRODUTO, é do id (coverage cobre isso)
-      const acc = linhaZerada(commerceProductId);
-      acc.externalIds.add(linha.externalProductId);
-      for (const nome of METRICAS) acc.metrics[nome] = somarMetrica(acc.metrics[nome], linha[nome]);
-    }
-
-    // Métrica indisponível na propriedade inteira: se NENHUMA linha observada trouxe valor para
-    // ela, é a propriedade que não suporta — não o produto individual (Fase E já nunca inventa 0
-    // aqui). Nula em TODO produto do map, matched-zero incluído (nunca "0 travestido de sem suporte").
-    const metricasIndisponiveis = METRICAS.filter((nome) => linhasAnalytics.every((l) => l[nome] === null));
-    const aplicarIndisponiveis = () => { for (const rec of metricasPorProduto.values()) for (const nome of metricasIndisponiveis) rec.metrics[nome] = null; };
 
     // ── Escolha da página: catálogo (DB pagina, caminho comum de navegação — barato mesmo com um
     // catálogo grande) ou métrica/ratio (conjunto elegível DA STORE inteira, ordenado e paginado em
@@ -170,8 +234,7 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     let totalCount;
     if (ordenarPorMetrica) {
       const idsElegiveis = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, provider: filters.provider });
-      for (const id of idsElegiveis) linhaZerada(id);
-      aplicarIndisponiveis();
+      for (const id of idsElegiveis) agregacao.linhaZerada(id);
       const todos = await catalogRepository.getByIds({ organizationId, storeId, ids: [...metricasPorProduto.keys()] });
       const valorDeOrdenacao = (produto) => valorDoCampo(metricasPorProduto.get(produto.id), sort.field);
       todos.sort((a, b) => compararComNullPorUltimo(valorDeOrdenacao(a), valorDeOrdenacao(b), sort.direction));
@@ -192,23 +255,12 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
       // Identity conhecida só para ESTA página (nunca a Store inteira neste ramo — é o caminho
       // comum de navegação por catálogo, tem que ficar barato mesmo com um catálogo grande).
       const idsDaPagina = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, apenasIds: produtosDaPagina.map((p) => p.id) });
-      for (const id of idsDaPagina) linhaZerada(id);
-      aplicarIndisponiveis();
+      for (const id of idsDaPagina) agregacao.linhaZerada(id);
     }
 
     const items = produtosDaPagina.map((produto) => montarLinha(produto, metricasPorProduto.get(produto.id)));
 
-    return {
-      items, nextCursor, totalCount,
-      coverage: {
-        observedAnalyticsIds: idsObservados.length,
-        matchedAnalyticsIds: resolucao.resolved.length,
-        unmatchedAnalyticsIds: resolucao.unresolved.length,
-        conflictedAnalyticsIds: resolucao.conflicts.length,
-        coverageRate: idsObservados.length > 0 ? resolucao.resolved.length / idsObservados.length : null,
-        status: idsObservados.length > 0 ? 'ok' : 'insufficient_data',
-      },
-    };
+    return { items, nextCursor, totalCount, coverage };
   }
 
   // Rodada H (detalhe do produto, GET /products/:productId) · MESMO relatório (mesma chave de
@@ -318,7 +370,25 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     };
   }
 
-  return Object.freeze({ getProductPerformance, getProductPerformanceById, getProductPerformanceSummary });
+  // Rodada "corrigir o gargalo real" (Gate 1.6) · opportunity-diagnostics.js precisa saber, pra um
+  // conjunto PEQUENO e já conhecido de commerceProductIds (produtos com venda Commerce no período,
+  // tipicamente centenas — nunca o catálogo inteiro), quais JÁ têm identity GA4 resolvida
+  // (histórico, não só este período) — cobre "produto identificado sem atividade GA4 neste período,
+  // mas com venda Commerce" sem varrer o catálogo (§ comando: "sem excluir produtos elegíveis com
+  // zero atividade ou vendas Commerce não representadas no GA4"). Nunca exige `pool`/`registry` de
+  // fora deste service — mantém a fronteira já existente (opportunity-diagnostics.js só fala com
+  // productPerformanceService/reconciliationService, nunca toca pool/registry direto).
+  async function idsComIdentidadeParaProdutos({ organizationId, storeId, analyticsProvider, ids }) {
+    if (!ids || !ids.length) return new Set();
+    const namespace = `${analyticsProvider}.item_id`;
+    const resolvidos = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, apenasIds: ids });
+    return new Set(resolvidos);
+  }
+
+  return Object.freeze({
+    getProductPerformance, getProductPerformanceById, getProductPerformanceSummary,
+    prepareStoreAnalytics, idsComIdentidadeParaProdutos,
+  });
 }
 
 function linhaSemAnalytics(produto, diagnostico) {
@@ -348,13 +418,10 @@ function montarLinha(produto, acumulado) {
   if (acumulado.externalIds.size > 1) diagnostics.push('multiple_analytics_identities');
   if (METRICAS.some((nome) => metrics[nome] === null)) diagnostics.push('metric_unavailable');
 
-  const itemRatios = {};
-  for (const [nome, calc] of Object.entries(CAMPOS_RATIO)) itemRatios[nome] = calc(metrics);
-
   return Object.freeze({
     product: produto,
     metrics: Object.freeze(metrics),
-    itemRatios: Object.freeze(itemRatios),
+    itemRatios: Object.freeze(calcularItemRatios(metrics)),
     identity: Object.freeze({ matchedAnalyticsIds, status: 'matched' }),
     diagnostics: Object.freeze(diagnostics),
   });
@@ -384,9 +451,12 @@ function compararComNullPorUltimo(a, b, direcao) {
 // INSTÂNCIA do service (nunca uma variável de módulo/global — cada `createProductPerformanceService`
 // tem o seu, criado aqui só se o chamador não injetar um próprio para compartilhar entre requests
 // no `cmd/`). Pior caso de cache frio é idêntico a não ter cache nenhum; nunca inventa dado.
-// `agora` (opcional) injeta o relógio: testes de TTL usam um relógio controlável em vez de `sleep` (com a máquina carregada, uma
-// espera real de dezenas de ms mede a carga, não o TTL). Padrão: `Date.now`.
-function createReportCache({ ttlMs = 15 * 60 * 1000, agora: relogio = Date.now } = {}) {
+// `relogio`: injetável (Rodada M §2) — por padrão `Date.now`, mas um teste de TTL pode passar um
+// relógio controlado por ele mesmo (avança em milissegundos exatos, sem `setTimeout` real) pra
+// nunca depender de quanto tempo uma chamada de banco de verdade levou. Sem isso, um TTL curto
+// (ex.: 50ms) num teste corre risco real de expirar ENTRE duas chamadas que deveriam ser cache-hit,
+// só porque a máquina estava ocupada — não é tolerância pra esconder corrida, é remover a corrida.
+function createReportCache({ ttlMs = 15 * 60 * 1000, relogio = Date.now } = {}) {
   const cache = new Map(); // chave -> { linhas, expiraEm }
   // `escopoCache` (opcional, ver ga4/connector.js `getCacheScope`) entra na chave: property/conta
   // trocada dentro do TTL nunca reaproveita o relatório da anterior, mesmo com
@@ -409,4 +479,4 @@ function createReportCache({ ttlMs = 15 * 60 * 1000, agora: relogio = Date.now }
   return Object.freeze({ obter, limpar });
 }
 
-module.exports = { createProductPerformanceService, createReportCache, METRICAS };
+module.exports = { createProductPerformanceService, createReportCache, METRICAS, calcularItemRatios, metricasZeradas };

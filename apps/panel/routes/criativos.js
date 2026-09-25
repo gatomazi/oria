@@ -23,6 +23,12 @@ const { createPgStore } = require('../lib/creative-core/pgStore');
 const { normalizeJobInput, buildRequests, planSummary, planPrompt, InputError } = require('../lib/creative-core/requests');
 const { createWorker } = require('../lib/creative-core/worker');
 const { progress } = require('../lib/creative-core/status');
+const { promptVersionFor, planSchemaVersionFor, uiV2For, enrichmentFor, enrichmentOpenAIFor } = require('../lib/creative-core/rollout');
+const { mapDraftToForm } = require('../lib/creative-core/draft');
+const { FAMILIES: ANGLE_FAMILIES, PEOPLE_MODES: ANGLE_PEOPLE_MODES } = require('../lib/creative-core/pgAngles');
+const enrichmentQuota = require('../lib/creative-core/enrichmentQuota');
+const enrichmentPilotBudget = require('../lib/creative-core/enrichmentPilotBudget');
+const precos = require('../lib/custos/precos');
 
 const PROFILE_CONTRACT = { brand: 'BrandKit', niche: 'NicheKit', context: 'ContextProfile', persona: 'Persona' };
 const PROFILE_PATH = { brand: 'brand-kits', niche: 'niche-kits', context: 'context-profiles', persona: 'personas' };
@@ -30,6 +36,26 @@ const CONTEXT_STATUS = ['draft', 'approved', 'rejected'];
 // Prévia planeja cada combinação ângulo × formato para mostrar o prompt; limita para não travar a tela.
 const PREVIEW_PROMPTS_MAX = 12;
 const PREVIEW_CONCORRENCIA = 4;
+const FEEDBACK_VERDICTS = ['liked', 'disliked'];
+const FEEDBACK_DIMENSIONS = ['angle', 'objective', 'context', 'interaction', 'composition', 'product'];
+const ANGLE_SLUG_RE = /^[a-z0-9][a-z0-9_-]{1,59}$/;
+const ANGLE_INTERACTION_RE = /^[a-z_]{2,40}$/;
+const ANGLE_PRODUCT_MODES = ['single_product', 'multi_product'];
+const ANGLE_GAZE_MODES = ['camera', 'interaction', 'off_camera', 'product'];
+const ANGLE_DEFINITION_TEXT_FIELDS = ['framing', 'photographic_direction', 'lighting', 'composition'];
+
+// Fase F.2.B.1 §4 — a OpenAI já cobrou com sucesso (o attempt do piloto já está `succeeded` com o
+// custo REAL gravado — ver o `catch` em torno de `store.createProposal` abaixo) quando a gravação
+// local falha. Uma classe distinta em vez de deixar isto cair no 500 genérico: o operador precisa
+// ver, sem adivinhar, que dinheiro foi gasto e nada foi salvo — nunca uma mensagem genérica que
+// pareça "tente de novo" sem qualificação.
+class EnrichmentProposalPersistError extends Error {
+  constructor(attemptId) {
+    super('a análise real foi cobrada com sucesso, mas a proposta não pôde ser salva — não tente novamente sem revisão; contate o suporte com este identificador de tentativa');
+    this.name = 'EnrichmentProposalPersistError';
+    this.attemptId = attemptId;
+  }
+}
 
 function responderErro(res, err, logger) {
   if (err instanceof CoreUnavailableError) {
@@ -41,11 +67,22 @@ function responderErro(res, err, logger) {
   if (err instanceof InputError || (err && err.httpStatus && err.httpStatus < 500)) {
     return res.status(err.httpStatus).json({ error: err.message });
   }
+  if (err instanceof EnrichmentProposalPersistError) {
+    logger.error(`[CRIATIVOS] enrichment: cobrança real sem proposta salva, attempt=${err.attemptId}`);
+    return res.status(500).json({ error: err.message, code: 'ENRICHMENT_PROPOSAL_PERSIST_FAILED', attemptId: err.attemptId });
+  }
   logger.error(`[CRIATIVOS] erro na rota: ${err && err.name}`);
   return res.status(500).json({ error: 'erro interno no gerador de criativos' });
 }
 
-function resumoItem(item) {
+function ultimoTrace(item) {
+  const porTentativa = item.generationTrace;
+  if (!porTentativa || typeof porTentativa !== 'object') return null;
+  return porTentativa[String(item.generationAttempt)] || null;
+}
+
+// `feedback` = o veredito da PESSOA da sessão sobre este criativo ({ verdict, updatedAt }) ou null. Nunca o de outra pessoa.
+function resumoItem(item, feedback = null) {
   return {
     creativeId: item.creativeId,
     itemIndex: item.itemIndex,
@@ -64,22 +101,27 @@ function resumoItem(item) {
     brandKitVersion: item.brandKitVersion,
     nicheKitVersion: item.nicheKitVersion,
     promptVersion: item.promptVersion,
+    planSchemaVersion: item.planSchemaVersion,
+    compilerVersion: item.compilerVersion,
     summary: item.planSummary,
     error: item.error,
+    // Trace da tentativa mais recente (sem prompt e sem chave): modelo pedido x servido, referências, duração.
+    trace: ultimoTrace(item),
     assetUrl: item.assetId ? `/api/admin/criativos/assets/${item.creativeId}` : null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
+    feedback,
   };
 }
 
-function resumoJob(job) {
+function resumoJob(job, feedbacks = new Map()) {
   const base = {
     id: job.id, engine: job.engine, productMode: job.productMode, status: job.status, total: job.total,
     createdAt: job.createdAt, updatedAt: job.updatedAt, finishedAt: job.finishedAt, cancelledAt: job.cancelledAt,
   };
   if (job.items) {
     base.progress = progress(job.items);
-    base.items = job.items.map(resumoItem);
+    base.items = job.items.map((item) => resumoItem(item, feedbacks.get(item.creativeId) || null));
   }
   return base;
 }
@@ -93,6 +135,11 @@ function criarRouterCriativos(deps) {
   if (typeof deps.tenantAtual !== 'function') throw new Error('criativos: tenantAtual obrigatório');
   const store = deps.store || (deps.pgPool ? createPgStore(deps.pgPool) : null);
   const core = deps.core || createCoreClient({ baseUrl: env.CREATIVE_CORE_URL, token: env.CREATIVE_CORE_SERVICE_TOKEN });
+  // Fase F.2.B — só para a reserva atômica de concorrência/orçamento do piloto real (enrichmentPilotBudget):
+  // precisa de Postgres de VERDADE (a garantia atômica não existe em memoryStore) — `null` quando não há
+  // pgPool, e a rota de propose trata isso como bloqueio estrutural para provider="openai" (nunca um "quase
+  // atômico" em memória para dinheiro de verdade).
+  const q = deps.pgPool ? (sql, params) => deps.pgPool.query(sql, params) : null;
   // OPS-22: leitura dupla só com configuração explícita; a storage confere a Organization e confina o caminho.
   const leituraLegada = deps.leituraLegada || null;
   const observadorLegado = criarObservadorLeituraLegada({ logger });
@@ -136,6 +183,19 @@ function criarRouterCriativos(deps) {
   });
 
   // Guardas: Postgres obrigatório e módulo habilitado (status e catálogo ficam acessíveis pra UI explicar o estado).
+  // Pessoa e Store da request. A pessoa vem da sessão (requireAdmin → req.auth), nunca do corpo. A Store é a do contexto
+  // quando há uma resolvida; sem ela o feedback nasce compartilhado (store_id nulo).
+  const usuarioDe = (req) => (req.auth && typeof req.auth.userId === 'string' ? req.auth.userId : null);
+  const storeAtual = () => {
+    try { return (typeof deps.storeAtual === 'function' && deps.storeAtual()) || null; } catch { return null; }
+  };
+  const feedbacksDe = async (req, itens) => {
+    const userId = usuarioDe(req);
+    if (!userId || typeof store.feedbackByCreative !== 'function') return new Map();
+    return store.feedbackByCreative(req.creativeTenant, userId, itens.map((i) => i.creativeId));
+  };
+  const exigirPessoa = (req, res, next) => (usuarioDe(req) ? next() : res.status(403).json({ error: 'pessoa não identificada na sessão' }));
+
   const exigirStore = (req, res, next) => (store ? next() : res.status(503).json({ error: 'o gerador de criativos exige Postgres (DATABASE_URL)' }));
   const exigirModulo = async (req, res, next) => {
     const flags = await flagsAtuais();
@@ -163,6 +223,14 @@ function criarRouterCriativos(deps) {
       postgres: Boolean(store),
       core: coreStatus,
       openaiKey: store ? await req.creativeByok.status() : { configured: false, last4: null, updatedAt: null },
+      // Fase E — rollout operacional por Organization (nunca comercial), como prompt_version/plan_schema_version
+      // acima: CREATIVE_UI_V2_ORGS decide quem vê a tela nova. "Personalizar cena"/ângulo personalizado nela
+      // também dependem de planSchemaVersion === 2 para esta Organization — a UI V2 sinaliza os dois para a tela
+      // saber o que oferecer sem adivinhar.
+      uiV2: uiV2For(env, req.creativeTenant),
+      planV2: planSchemaVersionFor(env, req.creativeTenant) === 2,
+      // Fase F.1 — Product Enrichment (propostas de semantic_context, revisão humana obrigatória).
+      enrichment: enrichmentFor(env, req.creativeTenant),
     });
   }));
 
@@ -177,6 +245,127 @@ function criarRouterCriativos(deps) {
       catalog: contratos.catalog,
       versions: contratos.versions,
     });
+  }));
+
+  // ── Angles V2 (Fase D): ângulos customizados de Organization/Store ───────────────────────────────────────────
+  // System fica no catálogo do core (GET /catalog → catalog.angleFamilies); aqui só a metade tenant-owned.
+  function angleForm(body, { parcial = false } = {}) {
+    const campos = ['scope', 'slug', 'name', 'description', 'family', 'peopleMode', 'preset', 'definition',
+      'allowedInteractions', 'allowedProductModes', 'defaultGaze'];
+    for (const key of Object.keys(body || {})) if (!campos.includes(key)) throw new InputError(`campo desconhecido: ${key}`);
+    const out = {};
+    if (!parcial || body.slug !== undefined) {
+      if (!ANGLE_SLUG_RE.test(body.slug || '')) throw new InputError('slug: minúsculas, números, - ou _, 2 a 60 caracteres');
+      out.slug = body.slug;
+    }
+    if (!parcial || body.name !== undefined) {
+      if (!body.name || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 120) throw new InputError('name: obrigatório (até 120 caracteres)');
+      out.name = body.name.trim();
+    }
+    if (body.description !== undefined) {
+      if (body.description !== null && (typeof body.description !== 'string' || body.description.length > 2000)) throw new InputError('description: até 2000 caracteres');
+      out.description = body.description;
+    }
+    if (!parcial || body.family !== undefined) {
+      if (!ANGLE_FAMILIES.includes(body.family)) throw new InputError(`family: use ${ANGLE_FAMILIES.join(', ')}`);
+      out.family = body.family;
+    }
+    if (!parcial || body.peopleMode !== undefined) {
+      if (!ANGLE_PEOPLE_MODES.includes(body.peopleMode)) throw new InputError(`peopleMode: use ${ANGLE_PEOPLE_MODES.join(', ')}`);
+      out.peopleMode = body.peopleMode;
+    }
+    if (body.preset !== undefined) {
+      if (body.preset !== null && (typeof body.preset !== 'string' || body.preset.length > 60)) throw new InputError('preset: até 60 caracteres');
+      out.preset = body.preset;
+    }
+    if (body.definition !== undefined) {
+      if (typeof body.definition !== 'object' || body.definition === null || Array.isArray(body.definition)) throw new InputError('definition: objeto');
+      // Estruturado de propósito (§2 da Fase D.1): campos conhecidos, cada um curto — nunca um prompt livre disfarçado de objeto.
+      for (const key of Object.keys(body.definition)) {
+        if (![...ANGLE_DEFINITION_TEXT_FIELDS, 'visual_notes'].includes(key)) throw new InputError(`definition: campo desconhecido: ${key}`);
+      }
+      for (const campo of ANGLE_DEFINITION_TEXT_FIELDS) {
+        const v = body.definition[campo];
+        if (v !== undefined && (typeof v !== 'string' || v.length > 200)) throw new InputError(`definition.${campo}: até 200 caracteres`);
+      }
+      if (body.definition.visual_notes !== undefined) {
+        const notas = body.definition.visual_notes;
+        if (!Array.isArray(notas) || notas.length > 6 || notas.some((n) => typeof n !== 'string' || n.length > 140)) {
+          throw new InputError('definition.visual_notes: até 6 notas, cada uma até 140 caracteres');
+        }
+      }
+      out.definition = body.definition;
+    }
+    if (body.allowedInteractions !== undefined) {
+      if (body.allowedInteractions !== null) {
+        if (!Array.isArray(body.allowedInteractions) || !body.allowedInteractions.every((i) => ANGLE_INTERACTION_RE.test(i))) {
+          throw new InputError('allowedInteractions: lista de ids de interação');
+        }
+      }
+      out.allowedInteractions = body.allowedInteractions;
+    }
+    if (body.allowedProductModes !== undefined) {
+      if (body.allowedProductModes !== null) {
+        if (!Array.isArray(body.allowedProductModes) || !body.allowedProductModes.every((m) => ANGLE_PRODUCT_MODES.includes(m))) {
+          throw new InputError(`allowedProductModes: use ${ANGLE_PRODUCT_MODES.join(', ')}`);
+        }
+      }
+      out.allowedProductModes = body.allowedProductModes;
+    }
+    if (body.defaultGaze !== undefined) {
+      if (body.defaultGaze !== null && !ANGLE_GAZE_MODES.includes(body.defaultGaze)) throw new InputError(`defaultGaze: use ${ANGLE_GAZE_MODES.join(', ')}`);
+      out.defaultGaze = body.defaultGaze;
+    }
+    return out;
+  }
+
+  router.get('/angles', exigirStore, exigirModulo, rota(async (req, res) => {
+    const contratos = await core.contracts();
+    const storeId = storeAtual();
+    const todas = await store.listAngles(req.creativeTenant, { storeId });
+    res.json({
+      system: contratos.catalog.angle_families || [],
+      organization: todas.filter((a) => a.scope === 'organization'),
+      store: storeId ? todas.filter((a) => a.scope === 'store' && a.storeId === storeId) : [],
+    });
+  }));
+
+  router.post('/angles', exigirStore, exigirModulo, rota(async (req, res) => {
+    const corpo = req.body || {};
+    if (!['organization', 'store'].includes(corpo.scope)) throw new InputError('scope: use organization ou store');
+    const dados = angleForm(corpo);
+    let storeId = null;
+    if (corpo.scope === 'store') {
+      storeId = storeAtual();
+      if (!storeId) throw new InputError('scope store: nenhuma Store resolvida no contexto');
+    }
+    try {
+      const criado = await store.createAngle(req.creativeTenant, { ...dados, storeId, createdBy: usuarioDe(req) });
+      res.status(201).json(criado);
+    } catch (err) {
+      if (err && (err.code === '23505' || /unique constraint/i.test(err.message || ''))) {
+        throw new InputError(`slug já usado neste escopo: ${dados.slug}`);
+      }
+      throw err;
+    }
+  }));
+
+  router.put('/angles/:id', exigirStore, exigirModulo, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
+    const existente = await store.getAngle(req.creativeTenant, req.params.id);
+    if (!existente) return res.status(404).json({ error: 'ângulo não encontrado' });
+    const corpo = { ...(req.body || {}) };
+    delete corpo.scope; // escopo não muda depois de criado — outro ângulo, se for o caso
+    const dados = angleForm(corpo, { parcial: true });
+    const atualizado = await store.updateAngle(req.creativeTenant, req.params.id, dados);
+    res.json(atualizado);
+  }));
+
+  router.delete('/angles/:id', exigirStore, exigirModulo, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
+    const apagado = await store.archiveAngle(req.creativeTenant, req.params.id);
+    if (!apagado) return res.status(404).json({ error: 'ângulo não encontrado ou já inativo' });
+    res.json({ id: req.params.id, active: false });
   }));
 
   // ── BYOK ────────────────────────────────────────────────────────────────
@@ -285,6 +474,177 @@ function criarRouterCriativos(deps) {
     res.status(ok ? 200 : 404).json(ok ? { ok: true } : { error: 'produto não encontrado' });
   }));
 
+  // ── Product Enrichment (Fase F.1 + F.2.A + F.2.B): propostas de semantic_context, revisão humana obrigatória ──
+  // Atrás de CREATIVE_ENRICHMENT_ORGS (rollout.js) — fora da lista, estas rotas respondem 403 como se não
+  // existissem. A proposta NUNCA muda o produto sozinha — só a decisão explícita (rota /decide) grava, e só nos
+  // campos que a pessoa aceitou.
+  //
+  // Qual provider pedir é decisão do BACKEND (enrichmentOpenAIFor, flag DISTINTA da acima), nunca do navegador —
+  // não é um novo passo no fluxo do lojista.
+  //
+  // Fase F.2.B — piloto controlado, real: a chave OpenAI vem do MESMO BYOK por Organization que
+  // gera/copies já usa (req.creativeByok.resolve — nunca do navegador, nunca persistida aqui);
+  // antes de QUALQUER chamada: cota diária (enrichmentQuota, operacional), disponibilidade de
+  // Postgres real (sem ele, o orçamento não pode ser garantido de forma atômica — bloqueio
+  // estrutural, nunca uma chamada "na confiança"), e a reserva atômica de concorrência/orçamento do
+  // piloto inteiro (enrichmentPilotBudget — no máximo PILOT_MAX_CHAMADAS chamadas, no máximo
+  // PILOT_MAX_USD, contando inclusive falhas). Nenhum retry nem fallback pago em nenhum ponto deste
+  // fluxo — uma falha finaliza a reserva como 'failed' e propaga o erro normalmente.
+  const exigirEnrichment = (req, res, next) => (enrichmentFor(env, req.creativeTenant)
+    ? next() : res.status(403).json({ error: 'product enrichment não está habilitado nesta conta' }));
+  const ACCEPTED_FIELD_NAMES = Object.freeze([
+    'wearer_roles', 'relationship_themes', 'recommended_supporting_roles',
+    'incompatible_auto_supporting_roles', 'scene_intents', 'visible_text',
+  ]);
+  const MAX_ENRICHMENT_REFERENCES = 2; // mesmo teto do core (enrichment._MAX_REFERENCES) — duas referências, precedente do bug da Fase C
+  const PILOT_MAX_CHAMADAS = 3;
+  const PILOT_MAX_USD = 0.05;
+  const PILOT_RESERVA_TTL_SEGUNDOS = 180; // folga generosa sobre o timeout do client OpenAI (30s) + latência de rede
+
+  router.post('/products/:id/enrichment/propose', exigirStore, exigirModulo, exigirEnrichment, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
+    const produto = await store.getProduct(req.creativeTenant, req.params.id);
+    if (!produto) return res.status(404).json({ error: 'produto não encontrado' });
+    // Já existe uma pendente: devolve ELA, não cria outra — a mesma regra que evita gasto em dobro quando o
+    // provider é real: uma execução idêntica (mesmo produto, ainda sem decisão) nunca dispara duas cobranças.
+    const pendente = await store.getPendingProposal(req.creativeTenant, produto.id);
+    if (pendente) return res.json(pendente);
+
+    const usarOpenAI = enrichmentOpenAIFor(env, req.creativeTenant);
+    let provider = 'fake';
+    let references = [];
+    let apiKey;
+    let reserva = null;
+
+    if (usarOpenAI) {
+      // Cota diária por Organization ANTES de qualquer coisa que poderia custar (operacional, em memória).
+      const cota = enrichmentQuota.verificar(req.creativeTenant, env);
+      if (!cota.ok) {
+        return res.status(429).json({ error: 'limite diário de análises reais de enriquecimento atingido para esta Organization', ...cota });
+      }
+      // Sem Postgres real, a reserva atômica do orçamento do piloto não existe — bloqueio estrutural
+      // (F.2.B: "se não for possível impor um limite de custo conservador... não executar chamadas reais").
+      if (!q) {
+        return res.status(503).json({ error: 'orçamento do piloto de enriquecimento real não pode ser garantido neste ambiente (sem Postgres) — chamada bloqueada' });
+      }
+      apiKey = await req.creativeByok.resolve();
+      if (!apiKey) return res.status(409).json({ error: 'cadastre a OpenAI API Key em Integrações antes de pedir uma análise real' });
+
+      // Referências resolvidas ANTES de reservar orçamento — de propósito: ler do armazenamento
+      // (ARMAZENAMENTO já autorizado do próprio produto, tenant-scoped por store.getProduct acima —
+      // nunca uma URL do navegador, sem superfície de SSRF, mesmo padrão de GET /products/:id/references/:n)
+      // não custa nada; se falhar (arquivo corrompido/ausente), a reserva nunca chega a ser criada, em
+      // vez de ficar presa em 'reserved' até o TTL por uma falha que nada tem a ver com a OpenAI.
+      references = (produto.references || []).slice(0, MAX_ENRICHMENT_REFERENCES).map((r) => ({
+        ref: r.ref, data_base64: req.creativeStorage.readProductReference(r.ref).toString('base64'),
+      }));
+
+      const piorCaso = precos.custoEnrichmentPiorCaso(precos.PRECOS_PADRAO);
+      if (!piorCaso) {
+        return res.status(503).json({ error: 'custo do modelo do piloto não está na tabela de preços — chamada bloqueada' });
+      }
+      reserva = await enrichmentPilotBudget.reservar(q, {
+        organizationId: req.creativeTenant, productId: produto.id, custoEstimadoUsd: piorCaso.usd,
+        limiteChamadas: PILOT_MAX_CHAMADAS, limiteUsd: PILOT_MAX_USD, ttlSegundos: PILOT_RESERVA_TTL_SEGUNDOS,
+      });
+      if (!reserva.ok) {
+        if (reserva.motivo === 'em_andamento') {
+          return res.status(409).json({ error: 'já existe uma análise real em andamento para este produto' });
+        }
+        return res.status(429).json({ error: 'orçamento do piloto de enriquecimento real esgotado (chamadas ou valor)', motivo: reserva.motivo });
+      }
+
+      provider = 'openai';
+    }
+
+    let proposalCore;
+    try {
+      proposalCore = await core.proposeEnrichment({
+        product: { id: produto.id, name: produto.name, type: produto.type, description: produto.description || null, metadata: produto.metadata || {} },
+        provider, references, ...(apiKey ? { apiKey } : {}),
+      });
+    } catch (erro) {
+      // Falha, timeout ou erro do core: a reserva conta contra o orçamento do piloto de qualquer
+      // forma ("conte inclusive tentativas malsucedidas") — nunca um retry automático a partir daqui.
+      if (reserva) {
+        await enrichmentPilotBudget.finalizar(q, reserva.attemptId, {
+          status: 'failed', errorCode: (erro && erro.code) || (erro && erro.name) || 'erro_desconhecido',
+        });
+      }
+      throw erro;
+    }
+
+    if (usarOpenAI) enrichmentQuota.registrar(req.creativeTenant);
+    // Fase F.2.B.1 §4 — a chamada OpenAI (se houve) já aconteceu e já foi cobrada neste ponto; o que
+    // falta é só a gravação LOCAL, não paga. `store.createProposal` roda ANTES de marcar o attempt
+    // como `succeeded` — se ela falhar, o attempt é finalizado como `failed` mas ainda assim carrega
+    // o CUSTO REAL e um `errorCode` distinto (o schema já suporta custo real num attempt `failed` —
+    // ver migration 0038): o estado fica auditável mesmo quando a proposta não existe, sem fingir
+    // que a tentativa nunca aconteceu. O teto agregado de 3 chamadas/US$ 0,05 (que já conta toda
+    // tentativa, sucesso ou falha) permanece o limite duro contra retentativas acidentais — ver
+    // docs/features/creative-generator-fase-f2b1.md §4 para o que isto cobre e o que não cobre.
+    const custoReal = reserva
+      ? precos.custoEnrichmentReal(proposalCore.provider_meta && proposalCore.provider_meta.usage, precos.PRECOS_PADRAO)
+      : null;
+    const modeloServido = (proposalCore.provider_meta && proposalCore.provider_meta.model_served) || null;
+
+    let salva;
+    try {
+      salva = await store.createProposal(req.creativeTenant, {
+        productId: produto.id, provider: proposalCore.provider, proposed: proposalCore.proposed,
+        recommendedAngleFamilies: proposalCore.recommended_angle_families, recommendedInteractions: proposalCore.recommended_interactions,
+        fieldNotes: proposalCore.field_notes, productSnapshotHash: proposalCore.product_snapshot_hash,
+        productUpdatedAt: produto.updatedAt, createdBy: usuarioDe(req), providerMeta: proposalCore.provider_meta || null,
+      });
+    } catch (erroPersistencia) {
+      if (reserva) {
+        await enrichmentPilotBudget.finalizar(q, reserva.attemptId, {
+          status: 'failed', model: modeloServido, custoRealUsd: custoReal ? custoReal.usd : null,
+          errorCode: 'proposal_persist_failed',
+        });
+      }
+      throw new EnrichmentProposalPersistError(reserva ? reserva.attemptId : null);
+    }
+
+    if (reserva) {
+      await enrichmentPilotBudget.finalizar(q, reserva.attemptId, {
+        status: 'succeeded', model: modeloServido, custoRealUsd: custoReal ? custoReal.usd : null,
+      });
+    }
+    res.status(201).json(salva);
+  }));
+
+  router.get('/products/:id/enrichment', exigirStore, exigirModulo, exigirEnrichment, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
+    const produto = await store.getProduct(req.creativeTenant, req.params.id);
+    if (!produto) return res.status(404).json({ error: 'produto não encontrado' });
+    res.json({ items: await store.listProposals(req.creativeTenant, produto.id) });
+  }));
+
+  router.post('/products/:id/enrichment/:proposalId/decide', exigirStore, exigirModulo, exigirEnrichment, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.id) || !UUID_RE.test(req.params.proposalId)) throw new InputError('id inválido');
+    const corpo = req.body || {};
+    if (!['approved', 'adjusted', 'rejected'].includes(corpo.decision)) throw new InputError('decision: use approved, adjusted ou rejected');
+    const acceptedFields = corpo.decision === 'rejected' ? [] : corpo.acceptedFields;
+    if (corpo.decision !== 'rejected') {
+      if (!Array.isArray(acceptedFields) || acceptedFields.some((f) => !ACCEPTED_FIELD_NAMES.includes(f))) {
+        throw new InputError(`acceptedFields: lista com valores de ${ACCEPTED_FIELD_NAMES.join(', ')}`);
+      }
+    }
+    const proposta = await store.getProposal(req.creativeTenant, req.params.proposalId);
+    if (!proposta || proposta.productId !== req.params.id) return res.status(404).json({ error: 'proposta não encontrada' });
+    if (proposta.status !== 'pending') return res.status(409).json({ error: 'esta proposta já foi decidida', status: proposta.status });
+    const resultado = await store.decideEnrichmentProposal(req.creativeTenant, req.params.proposalId, {
+      decision: corpo.decision, acceptedFields: acceptedFields || [], reviewedBy: usuarioDe(req),
+    });
+    if (resultado.error === 'not_found') return res.status(409).json({ error: 'esta proposta já foi decidida' });
+    if (resultado.error === 'product_not_found') return res.status(404).json({ error: 'produto não encontrado' });
+    if (resultado.error === 'product_changed') {
+      return res.status(409).json({ error: 'o produto mudou desde que a proposta foi feita — peça uma proposta nova antes de aprovar', product: resultado.product });
+    }
+    res.json(resultado);
+  }));
+
   // ── Prévia e lotes ───────────────────────────────────────────────────────
   async function prepararLote(req) {
     const input = normalizeJobInput(req.body);
@@ -295,7 +655,7 @@ function criarRouterCriativos(deps) {
       throw e;
     }
     const hints = await store.recentHints(req.creativeTenant);
-    const items = await buildRequests(input, { store, tenantId: req.creativeTenant, hints });
+    const items = await buildRequests(input, { store, tenantId: req.creativeTenant, hints, promptVersion: promptVersionFor(env, req.creativeTenant), planSchemaVersion: planSchemaVersionFor(env, req.creativeTenant) });
     return { input, items };
   }
 
@@ -340,7 +700,7 @@ function criarRouterCriativos(deps) {
     if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
     const job = await store.getJob(req.creativeTenant, req.params.id);
     if (!job) return res.status(404).json({ error: 'lote não encontrado' });
-    res.json(resumoJob(job));
+    res.json(resumoJob(job, await feedbacksDe(req, job.items || [])));
   }));
   router.post('/jobs/:id/cancel', exigirStore, exigirModulo, rota(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) throw new InputError('id inválido');
@@ -358,7 +718,85 @@ function criarRouterCriativos(deps) {
 
   router.get('/history', exigirStore, exigirModulo, rota(async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-    res.json({ items: (await store.listHistory(req.creativeTenant, limit)).map((i) => ({ ...resumoItem(i), record: i.record })) });
+    const itens = await store.listHistory(req.creativeTenant, limit);
+    const feedbacks = await feedbacksDe(req, itens);
+    res.json({ items: itens.map((i) => ({ ...resumoItem(i, feedbacks.get(i.creativeId) || null), record: i.record })) });
+  }));
+
+  // ── Gostei / Não gostei ────────────────────────────────────────────────────────────────────────────────────────
+  // Um veredito por pessoa e criativo (trocar = upsert; limpar = DELETE). O snapshot vem do core, calculado do plano
+  // persistido: o Node só acrescenta quem, onde, qual lote e quando. Nada disto entra no planner.
+  async function itemComPlano(req, creativeId) {
+    if (!UUID_RE.test(creativeId)) throw new InputError('id inválido');
+    const item = await store.getItem(req.creativeTenant, creativeId);
+    if (!item) return { status: 404, error: 'criativo não encontrado' };
+    if (!item.plan) return { status: 409, error: 'este criativo ainda não tem plano' };
+    return { item };
+  }
+
+  router.put('/items/:creativeId/feedback', exigirStore, exigirModulo, exigirPessoa, rota(async (req, res) => {
+    const corpo = req.body;
+    if (!corpo || typeof corpo !== 'object' || Array.isArray(corpo) || Object.keys(corpo).some((k) => k !== 'verdict')) throw new InputError('corpo inválido');
+    if (!FEEDBACK_VERDICTS.includes(corpo.verdict)) throw new InputError('veredito inválido');
+    const achado = await itemComPlano(req, req.params.creativeId);
+    if (achado.error) return res.status(achado.status).json({ error: achado.error });
+    const { item } = achado;
+    if (item.status !== 'completed') return res.status(409).json({ error: 'só dá para avaliar um criativo já gerado' });
+    const asset = await store.getAssetByCreative(req.creativeTenant, item.creativeId);
+    const trace = ultimoTrace(item);
+    const snapshot = await core.feedbackSnapshot({
+      plan: item.plan, resultMetadata: trace ? { trace } : undefined, assetSha256: asset ? asset.sha256 : undefined,
+    });
+    const salvo = await store.upsertFeedback(req.creativeTenant, {
+      userId: usuarioDe(req), storeId: storeAtual(), creativeId: item.creativeId, jobId: item.jobId, verdict: corpo.verdict, snapshot,
+    });
+    res.json({ creativeId: item.creativeId, verdict: salvo.verdict, updatedAt: salvo.updatedAt });
+  }));
+
+  router.delete('/items/:creativeId/feedback', exigirStore, exigirModulo, exigirPessoa, rota(async (req, res) => {
+    if (!UUID_RE.test(req.params.creativeId)) throw new InputError('id inválido');
+    await store.deleteFeedback(req.creativeTenant, usuarioDe(req), req.params.creativeId); // idempotente: limpar o que não existe é ok
+    res.json({ creativeId: req.params.creativeId, verdict: null });
+  }));
+
+  // Aprovação por dimensão, só leitura. Contagem por ângulo, objetivo, contexto, interação, composição ou produto — a base
+  // para consultas futuras. Não é ranking e nada aqui é lido pelo planner.
+  router.get('/feedback/summary', exigirStore, exigirModulo, rota(async (req, res) => {
+    const by = String(req.query.by || '');
+    if (!FEEDBACK_DIMENSIONS.includes(by)) throw new InputError(`by: use ${FEEDBACK_DIMENSIONS.join(', ')}`);
+    const escopo = req.query.scope === undefined ? 'store' : String(req.query.scope);
+    if (!['store', 'organization'].includes(escopo)) throw new InputError('scope: use store ou organization');
+    const storeId = escopo === 'store' ? storeAtual() : null;
+    res.json({ by, scope: storeId ? 'store' : 'organization', items: await store.feedbackSummary(req.creativeTenant, { by, storeId }) });
+  }));
+
+  // ── Copiar dados ───────────────────────────────────────────────────────────────────────────────────────────────
+  router.get('/items/:creativeId/draft', exigirStore, exigirModulo, rota(async (req, res) => {
+    const achado = await itemComPlano(req, req.params.creativeId);
+    if (achado.error) return res.status(achado.status).json({ error: achado.error });
+    const { item } = achado;
+    const draft = await core.draft(item.plan);
+    const job = await store.getJob(req.creativeTenant, item.jobId);
+    const mapeado = await mapDraftToForm(draft, { store, tenantId: req.creativeTenant, jobInput: job && job.input && job.input.context ? { context: job.input.context } : null });
+    // A cena com pessoas/interação e os sorteios só valem nos planos/prompts v2. Se a conta não os tem, avise em vez de
+    // deixar o POST /jobs falhar depois: o `draft` inteiro continua na resposta, nada é perdido.
+    const { form, actions, unavailable, warnings } = mapeado;
+    if ((form.subjects || form.interaction) && planSchemaVersionFor(env, req.creativeTenant) !== 2) {
+      unavailable.push({ field: 'subjects', id: null, reason: 'plan_v2_not_enabled' });
+      delete form.subjects;
+      delete form.interaction;
+    }
+    if (form.custom_angle_preview && planSchemaVersionFor(env, req.creativeTenant) !== 2) {
+      unavailable.push({ field: 'custom_angle', id: form.custom_angle_preview.id, reason: 'plan_v2_not_enabled' });
+      delete form.custom_angle_preview;
+      delete form.custom_angle_replay_of;
+      form.angle_ids = [draft.angle_id];
+    }
+    if ((actions.again.scene_picks) && (promptVersionFor(env, req.creativeTenant) !== 2 || planSchemaVersionFor(env, req.creativeTenant) !== 2)) {
+      unavailable.push({ field: 'scene_picks', id: null, reason: 'prompt_v2_not_enabled' });
+      delete actions.again.scene_picks;
+    }
+    res.json({ creativeId: item.creativeId, jobId: item.jobId, ...mapeado, warnings, draft });
   }));
 
   router.get('/assets/:creativeId', exigirStore, exigirModulo, rota(async (req, res) => {

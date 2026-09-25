@@ -139,7 +139,15 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       '1790001600000_commerce-catalog',
       '1790001700000_product-external-identities',
       '1790001800000_entitlement-product-performance',
-      '1790001900000_segments-rfm',
+      '1790001900000_creative-trace',
+      '1790002000000_creative-plan-v2',
+      '1790002100000_creative-feedback',
+      '1790002200000_creative-angles',
+      '1790002300000_creative-angles-compat',
+      '1790002400000_creative-enrichment',
+      '1790002500000_creative-enrichment-provider-meta',
+      '1790002600000_creative-enrichment-pilot-budget',
+      '1790002700000_segments-rfm', // Clientes/RFM (renumerada na integração com a main: depois das migrations do Gerador de Criativos)
     ]);
   } finally {
     await pool.end();

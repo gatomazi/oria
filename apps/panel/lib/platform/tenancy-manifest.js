@@ -296,6 +296,14 @@ const TABELAS_PLATAFORMA = Object.freeze([
   // Fase 7 · estado de onboarding (lib/platform/onboarding.js). Filho depois do pai.
   Object.freeze({ tabela: 'onboarding_sessions', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'onboarding_steps', colunaTenant: 'organization_id' }),
+  // Fase C · veredito Gostei / Não gostei por pessoa e criativo (migration 0033). Filho de creative_generations e
+  // creative_jobs (tabelas tenant-owned, que vêm antes na ordem de criação); `store_id` nulo = compartilhado.
+  Object.freeze({ tabela: 'creative_feedback', colunaTenant: 'organization_id' }),
+  // Fase D · ângulos customizados de Organization/Store (migration 0034); system fica versionado no core.
+  Object.freeze({ tabela: 'creative_angles', colunaTenant: 'organization_id' }),
+  // Fase F.1 · propostas de Product Enrichment (migration 0036). Filho de creative_products (tenant-owned,
+  // vem antes na ordem de criação); nunca aplica sozinha — aprovar é o que grava em creative_products.
+  Object.freeze({ tabela: 'creative_enrichment_proposals', colunaTenant: 'organization_id' }),
   // Fase D · catálogo canônico de Commerce (lib/connectors/*, lib/product-analytics/catalog-sync.js).
   // Nasce com organization_id/store_id explícitos — nunca teve `loja`. Ordem importa: variants e o
   // log de sync são filhos de commerce_products só pela FK composta, não pela regra 'pai' (essa é
@@ -343,6 +351,10 @@ const TABELAS_GLOBAIS = Object.freeze([
   Object.freeze({
     tabela: 'onboarding_idempotencia',
     motivo: 'chave de idempotência (pessoa, chave) → Organization criada (Fase 7); só função SECURITY DEFINER, com a Organization do contexto',
+  }),
+  Object.freeze({
+    tabela: 'creative_enrichment_pilot_attempts',
+    motivo: 'reserva de concorrência/orçamento do piloto controlado F.2.B (Product Enrichment real): o teto (3 chamadas, US$ 0,05) é do PILOTO INTEIRO, não por Organization — só funções SECURITY DEFINER (creative_enrichment_pilot_reservar/_finalizar); temporário para esta rodada, não infraestrutura permanente',
   }),
 
   // ── Control Plane (Oria Admin · apps/platform-admin) ───────────────────────────────────────
@@ -392,6 +404,7 @@ const TABELAS_GLOBAIS_DA_APLICACAO = Object.freeze(['users', 'sessions', 'oauth_
 // Globais que a role da aplicação NÃO pode ler nem escrever diretamente.
 const TABELAS_GLOBAIS_PRIVADAS = Object.freeze([
   'tenancy_mapeamentos', 'external_resource_claims', 'job_leases', 'onboarding_invites', 'onboarding_idempotencia',
+  'creative_enrichment_pilot_attempts',
   'platform_admins', 'platform_admin_sessions', 'plans', 'plan_features',
   'organization_subscriptions', 'organization_entitlement_overrides', 'organization_owner_invites',
   'platform_organization_creations', 'platform_audit_logs',

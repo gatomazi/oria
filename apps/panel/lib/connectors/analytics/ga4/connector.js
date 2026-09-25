@@ -16,8 +16,13 @@
 
 const { createGa4Client } = require('./client');
 const { refreshAccessToken } = require('./token-port');
-const { reportRequestBody, compatibilidadeRequestBody, METRICAS_PRODUTO, DIMENSION_ITEM_ID } = require('./queries');
-const { mapReportRows } = require('./mapper');
+const {
+  reportRequestBody, compatibilidadeRequestBody, METRICAS_PRODUTO, DIMENSION_ITEM_ID,
+  DIMENSOES_ACQUISITION, METRICAS_ACQUISITION, DIMENSION_TRANSACTION_ID, METRICAS_TRANSACTION,
+  acquisitionRequestBody, acquisitionCompatibilityRequestBody,
+  transactionCompatibilityRequestBody, transactionLookupRequestBody,
+} = require('./queries');
+const { mapReportRows, mapAcquisitionRows, mapTransactionLookup } = require('./mapper');
 const { ConnectorError, CODIGOS } = require('../../errors');
 const secretGuard = require('../../../platform/secret-guard');
 
@@ -110,6 +115,137 @@ function createGa4AnalyticsConnector({ context, resolveIntegration, secretPort, 
     return capacidadesCom(cliente, propriedade);
   }
 
+  // Rodada K (Journey Analytics) · MESMO padrão de `capacidadesCom`, para dimensões/métricas de
+  // escopo SESSÃO (aquisição por canal/campanha) — checado separado do escopo ITEM porque são
+  // consultas diferentes na Data API (§ queries.js), nunca combinadas na mesma checagem.
+  async function capacidadesAcquisitionCom(cliente, propriedade) {
+    let metadata;
+    let compat;
+    try {
+      metadata = await cliente.getMetadata(propriedade.propertyId);
+      compat = await cliente.checkCompatibility(propriedade.propertyId, acquisitionCompatibilityRequestBody());
+    } catch (err) {
+      normalizarErro(err);
+    }
+    const dimsMetadata = new Set((metadata.dimensions || []).map((d) => d.apiName));
+    const metricsMetadata = new Set((metadata.metrics || []).map((m) => m.apiName));
+    const dimCompat = new Map((compat.dimensionCompatibilities || []).map((d) => [d.dimensionMetadata && d.dimensionMetadata.apiName, d.compatibility]));
+    const metricCompat = new Map((compat.metricCompatibilities || []).map((m) => [m.metricMetadata && m.metricMetadata.apiName, m.compatibility]));
+
+    const dimensions = {};
+    for (const nome of DIMENSOES_ACQUISITION) dimensions[nome] = dimsMetadata.has(nome) && dimCompat.get(nome) === 'COMPATIBLE';
+    const metrics = {};
+    for (const nome of METRICAS_ACQUISITION) metrics[nome] = metricsMetadata.has(nome) && metricCompat.get(nome) === 'COMPATIBLE';
+    const apt = Object.values(dimensions).every(Boolean) && Object.values(metrics).every(Boolean);
+    return Object.freeze({
+      dimensions: Object.freeze({ ...dimensions }), metrics: Object.freeze({ ...metrics }), apt,
+      reason: apt ? null : 'ACQUISITION_DIMENSIONS_OR_METRICS_UNAVAILABLE',
+    });
+  }
+
+  /**
+   * Diagnóstico ANTES de pedir aquisição por canal/campanha — mesma razão de `getProductMetricCapabilities`,
+   * agora pro escopo sessão. Rodada K §1: "não presuma compatibilidade sem evidência" — quem chama
+   * `getAcquisitionPerformance` sem checar aqui primeiro simplesmente recebe o erro do connector
+   * (ele mesmo checa antes de montar a query), mas o diagnóstico existe pra quem precisa decidir ANTES.
+   */
+  async function getAcquisitionCapabilities() {
+    const { cliente, propriedade } = await resolverContexto();
+    return capacidadesAcquisitionCom(cliente, propriedade);
+  }
+
+  /**
+   * Relatório de aquisição (source/medium/campaign × sessions/purchases/revenue) para o período
+   * inteiro — mesmo padrão de paginação de `getProductPerformance` (1 chamada, ou poucas paginadas,
+   * nunca 1 por linha). Lança quando a propriedade não é apta — nunca devolve linha inventada.
+   */
+  async function getAcquisitionPerformance({ startDate, endDate } = {}) {
+    if (!startDate || !endDate) throw new TypeError('getAcquisitionPerformance exige startDate e endDate');
+    if (String(startDate) > String(endDate)) throw new TypeError('startDate deve ser <= endDate');
+
+    const { cliente, propriedade } = await resolverContexto();
+    const capacidades = await capacidadesAcquisitionCom(cliente, propriedade);
+    if (!capacidades.apt) {
+      throw new ConnectorError(`propriedade GA4 não está apta para aquisição por canal/campanha: ${capacidades.reason}`, `GA4_${capacidades.reason}`);
+    }
+
+    const linhas = [];
+    let offset = 0;
+    let rowCount = Infinity;
+    while (offset < rowCount) {
+      const body = acquisitionRequestBody({ startDate, endDate, offset });
+      let data;
+      try {
+        data = await cliente.runReport(propriedade.propertyId, body);
+      } catch (err) {
+        normalizarErro(err);
+      }
+      rowCount = Number.isFinite(Number(data.rowCount)) ? Number(data.rowCount) : (data.rows || []).length;
+      linhas.push(...mapAcquisitionRows(data.rows));
+      const recebidas = (data.rows || []).length;
+      if (!recebidas) break; // sem linhas: não repete infinito mesmo se rowCount mentir
+      offset += recebidas;
+    }
+    return linhas;
+  }
+
+  // Rodada K · MESMO padrão de `capacidadesCom`, para a dimensão `transactionId` (verificação pontual
+  // de pedido↔transação — nunca um relatório amplo por ela, ver queries.js).
+  async function capacidadesTransactionCom(cliente, propriedade) {
+    let metadata;
+    let compat;
+    try {
+      metadata = await cliente.getMetadata(propriedade.propertyId);
+      compat = await cliente.checkCompatibility(propriedade.propertyId, transactionCompatibilityRequestBody());
+    } catch (err) {
+      normalizarErro(err);
+    }
+    const dimsMetadata = new Set((metadata.dimensions || []).map((d) => d.apiName));
+    const metricsMetadata = new Set((metadata.metrics || []).map((m) => m.apiName));
+    const dimCompat = new Map((compat.dimensionCompatibilities || []).map((d) => [d.dimensionMetadata && d.dimensionMetadata.apiName, d.compatibility]));
+    const metricCompat = new Map((compat.metricCompatibilities || []).map((m) => [m.metricMetadata && m.metricMetadata.apiName, m.compatibility]));
+
+    const transactionIdAvailable = dimsMetadata.has(DIMENSION_TRANSACTION_ID) && dimCompat.get(DIMENSION_TRANSACTION_ID) === 'COMPATIBLE';
+    const metrics = {};
+    for (const nome of METRICAS_TRANSACTION) metrics[nome] = metricsMetadata.has(nome) && metricCompat.get(nome) === 'COMPATIBLE';
+    const apt = transactionIdAvailable && Object.values(metrics).every(Boolean);
+    return Object.freeze({
+      transactionIdAvailable, metrics: Object.freeze({ ...metrics }), apt,
+      reason: apt ? null : (!transactionIdAvailable ? 'TRANSACTION_ID_UNAVAILABLE' : 'TRANSACTION_METRICS_UNAVAILABLE'),
+    });
+  }
+
+  /**
+   * Diagnóstico ANTES de tentar ligar um pedido do Commerce a uma transação GA4 (Rodada K §1: "não
+   * presuma compatibilidade sem evidência", §6: "verifique... usando identificadores efetivamente
+   * iguais"). Quem consome (journey-analytics-service.js) chama isto UMA VEZ por período — nunca por
+   * pedido — e só tenta `findTransaction` por pedido quando `apt: true`.
+   */
+  async function getTransactionCapabilities() {
+    const { cliente, propriedade } = await resolverContexto();
+    return capacidadesTransactionCom(cliente, propriedade);
+  }
+
+  /**
+   * Lookup PONTUAL de 1 transactionId (nunca uma varredura do período — mesma regra de "nunca 1
+   * chamada por produto" do report de item, aqui invertida: nunca 1 relatório amplo pra achar 1 id).
+   * `found: false` é resultado válido e esperado — GA4 nunca prova negativo mais barato que isto.
+   */
+  async function findTransaction({ startDate, endDate, transactionId } = {}) {
+    if (!startDate || !endDate) throw new TypeError('findTransaction exige startDate e endDate');
+    if (!transactionId) throw new TypeError('findTransaction exige transactionId');
+
+    const { cliente, propriedade } = await resolverContexto();
+    const body = transactionLookupRequestBody({ startDate, endDate, transactionId });
+    let data;
+    try {
+      data = await cliente.runReport(propriedade.propertyId, body);
+    } catch (err) {
+      normalizarErro(err);
+    }
+    return mapTransactionLookup(data.rows);
+  }
+
   /**
    * Rodada H (cache HTTP) · discriminador barato (só leitura de `google_analytics_connections`,
    * nenhuma chamada à API do Google) pra quem cacheia `getProductPerformance` por fora nunca
@@ -164,7 +300,11 @@ function createGa4AnalyticsConnector({ context, resolveIntegration, secretPort, 
     return linhas;
   }
 
-  return Object.freeze({ getProductPerformance, getProductMetricCapabilities, getCacheScope });
+  return Object.freeze({
+    getProductPerformance, getProductMetricCapabilities, getCacheScope,
+    getAcquisitionCapabilities, getAcquisitionPerformance,
+    getTransactionCapabilities, findTransaction,
+  });
 }
 
 module.exports = { createGa4AnalyticsConnector, CAPABILITIES };

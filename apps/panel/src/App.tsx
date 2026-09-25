@@ -55,6 +55,7 @@ const OrigensMigrationPage = tela(() => import('./pages/internal/OrigensMigratio
 const UtmTrackerPage = tela(() => import('./pages/utm/UtmTrackerPage'), 'UtmTrackerPage');
 const AnalyticsGa4Page = tela(() => import('./pages/analytics/AnalyticsGa4Page'), 'AnalyticsGa4Page');
 const DesempenhoProdutosPage = tela(() => import('./pages/desempenho-produtos/DesempenhoProdutosPage'), 'DesempenhoProdutosPage');
+const JornadaCompraPage = tela(() => import('./pages/jornada-compra/JornadaCompraPage'), 'JornadaCompraPage');
 const MetaAdsPage = tela(() => import('./pages/meta/MetaAdsPage'), 'MetaAdsPage');
 const GoogleAdsPage = tela(() => import('./pages/google-ads/GoogleAdsPage'), 'GoogleAdsPage');
 const CriativosPage = tela(() => import('./pages/criativos/CriativosPage'), 'CriativosPage');
@@ -145,6 +146,7 @@ export function App() {
             <Route path="/admin/utm" element={<UtmTrackerPage />} />
             <Route path="/admin/analytics" element={<AnalyticsGa4Page />} />
             <Route path="/admin/desempenho-produtos" element={<DesempenhoProdutosPage />} />
+            <Route path="/admin/jornada-compra" element={<JornadaCompraPage />} />
             <Route path="/admin/meta-ads" element={<MetaAdsPage />} />
             <Route path="/admin/google-ads" element={<GoogleAdsPage />} />
             <Route path="/admin/criativos" element={<CriativosPage />} />

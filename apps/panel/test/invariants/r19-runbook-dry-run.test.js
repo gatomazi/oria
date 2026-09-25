@@ -349,7 +349,16 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
     ['1790000400000_platform-admin', '1790000500000_convite-aceite', '1790000600000_store-id-connector-ink',
       '1790000800000_entitlement-canonico', '1790000900000_composicao-do-internal', '1790001000000_midia-store-id',
       '1790001100000_catalogo-ink-store-id', '1790001200000_ga4-store-id', '1790001300000_oauth-state-whatsapp', '1790001400000_campanhas-store-id', '1790001500000_reparar-loja-uuid-em-pedidos',
-      '1790001600000_commerce-catalog', '1790001700000_product-external-identities', '1790001800000_entitlement-product-performance', '1790001900000_segments-rfm'],
+      '1790001600000_commerce-catalog', '1790001700000_product-external-identities', '1790001800000_entitlement-product-performance',
+      '1790001900000_creative-trace',
+      '1790002000000_creative-plan-v2',
+      '1790002100000_creative-feedback',
+      '1790002200000_creative-angles',
+      '1790002300000_creative-angles-compat',
+      '1790002400000_creative-enrichment',
+      '1790002500000_creative-enrichment-provider-meta',
+      '1790002600000_creative-enrichment-pilot-budget',
+      '1790002700000_segments-rfm'],
     'o pre-deploy da D\' aplicou um conjunto de migrations diferente do declarado'
   );
   semSegredo(pdD.saida, 'pre-deploy D\'');

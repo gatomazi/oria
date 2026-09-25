@@ -9386,6 +9386,11 @@ app.put('/api/admin/integrations/ink/credenciais', requireAdmin, (req, res, next
     return res.status(400).json({ error: 'URL do feed inválida (use a URL https da Reserva Ink)' });
   }
   try {
+    // Gate A ("Jornada de Valor Operacional") · status ANTES da escrita, pra distinguir "acabou de
+    // conectar/reconectar" (dispara o catálogo canônico na hora) de "só atualizou feedUrl/webhook
+    // numa integração já conectada" (não redispara um full sync de centenas de páginas à toa).
+    const statusAntes = (await exigirIntegracoes().metadata('ink')).status;
+
     // TUDO numa transação: segredos, status da integração e auditoria. Se a auditoria falhar, o
     // segredo não fica gravado — a resposta e o banco contam a mesma história.
     //
@@ -9410,6 +9415,21 @@ app.put('/api/admin/integrations/ink/credenciais', requireAdmin, (req, res, next
       });
       return tx.metadata('ink');
     });
+
+    // Gate A · catálogo canônico automático: a integração acabou de PASSAR a 'connected' (primeira
+    // conexão ou reconexão depois de desconectada/apagada) — dispara o full sync agora, sem esperar
+    // o próximo tick do scheduler (até 1h) nem o lojista descobrir o botão manual. Fire-and-forget:
+    // nunca atrasa esta resposta HTTP (a varredura é minutos). `apiToken !== undefined` restringe a
+    // real transição de credencial — só feedUrl/webhookSecret numa integração já conectada não
+    // dispara nada (o scheduler recorrente já cobre a recorrência normal).
+    if (PRODUCT_ANALYTICS && apiToken !== undefined && statusAntes !== 'connected' && m.status === 'connected') {
+      const organizationId = orgDoContexto();
+      const storeId = storeDoContexto();
+      PRODUCT_ANALYTICS.syncCommerceCatalog({ organizationId, storeId }).catch((err) => {
+        console.error(`[CATALOG_SYNC] disparo automático pós-conexão (${organizationId}) falhou: ${err.message}`);
+      });
+    }
+
     res.json({ status: m.status, segredos: m.segredos, webhook: webhookInkParaTela(m) });
   } catch (err) {
     responderErroIntegracao(res, err, 'gravar credenciais Ink');
@@ -13844,6 +13864,8 @@ try {
     lerEntitlements: () => planoEfetivo(PLANO_DA_ORGANIZACAO),
     // INV-22: tenant do Creative Core = Organization autenticada; o worker percorre as Organizations.
     tenantAtual: () => orgDoContexto(),
+    // Fase C: Store do contexto, quando há uma resolvida (o feedback do Gostei/Não gostei nasce com ela; sem, fica compartilhado).
+    storeAtual: () => { try { return storeDoContexto(); } catch { return null; } },
     paraCadaTenant: (fn) => JOBS.executarPorOrganizacao('criativos', (org) => fn(org.organizationId)),
   });
 } catch (err) {
@@ -17116,6 +17138,9 @@ const PRODUCT_ANALYTICS = pgPool
   ? createProductAnalyticsComposition({
     pool: pgPool, keyring: CHAVEIRO,
     googleClientId: process.env.GOOGLE_CLIENT_ID, googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    // Rodada M · mesma proteção de concorrência que JOBS já usa (linha ~183) — instância própria,
+    // segura de duplicar (o lease em si vive no Postgres, nunca em memória do processo).
+    leases: pgPoolReal ? require('./lib/platform/leases').createJobLeases({ poolReal: pgPoolReal }) : null,
   })
   : null;
 if (PRODUCT_ANALYTICS) {
@@ -17125,10 +17150,57 @@ if (PRODUCT_ANALYTICS) {
   app.use('/api/admin/product-analytics', requireAdmin, createProductAnalyticsRouter({
     productPerformanceService: PRODUCT_ANALYTICS.productPerformanceService,
     reconciliationService: PRODUCT_ANALYTICS.reconciliationService,
+    journeyAnalyticsService: PRODUCT_ANALYTICS.journeyAnalyticsService,
+    opportunityDiagnosticsService: PRODUCT_ANALYTICS.opportunityDiagnosticsService,
     registry: PRODUCT_ANALYTICS.registry,
     analyticsProvider: PRODUCT_ANALYTICS.analyticsProvider,
     commerceProvider: PRODUCT_ANALYTICS.commerceProvider,
+    syncCommerceCatalog: PRODUCT_ANALYTICS.syncCommerceCatalog,
+    getCommerceCatalogSyncStatus: PRODUCT_ANALYTICS.getCommerceCatalogSyncStatus,
   }));
+}
+
+// Gate A ("Jornada de Valor Operacional") · o catálogo canônico (commerce_products) deixa de
+// depender do lojista clicar "Sincronizar catálogo": mesmo padrão já usado pro cache legado
+// (`sincronizarCatalogoInkDaOrganizacao`/`catalogo-ink`/`catalogo-ink-boot`, ~linha 2742) — tick de
+// hora em hora com guard de "vencido" (`catalogSyncNecessario`, composition.js) e uma rodada extra 5
+// minutos após o boot pra cobrir instalações que já estavam conectadas antes desta rodada e nunca
+// tiveram catálogo canônico algum ("recovery", mesmo mecanismo: `catalogSyncNecessario` devolve
+// `true` tanto pra "nunca sincronizado" quanto pra "vencido" — não são dois caminhos).
+//
+// Nada de `if (provider === 'ink')` aqui dentro: quem decide QUAIS Organizations têm Commerce
+// conectado é `storesInkDoContexto()` (já existente, mesmo guard do job irmão) — o dia que outro
+// CommerceConnector existir, ganha o seu próprio job análogo, este aqui continua só sabendo de Ink
+// porque SÓ Ink está registrado nesta composição hoje (`COMMERCE_PROVIDER` em composition.js).
+//
+// Orçamento de chamadas: o job runner (`executarPorOrganizacao`) processa uma Organization POR VEZ,
+// sequencialmente, dentro do mesmo tick — nunca dispara N full syncs em paralelo (cada um é
+// centenas/milhares de páginas). Um catálogo grande atrasando uma Organization nunca trava as
+// outras: elas são atendidas no tick seguinte (rodízio, `emRodizio` em jobs.js). O boot NUNCA
+// dispara pra todas de uma vez por acaso: mesma proteção sequencial + o guard de "vencido" evita
+// resincronizar quem já está em dia a cada restart de deploy.
+async function sincronizarCatalogoCanonicoDaOrganizacao({ apenasVencidos = false } = {}) {
+  if (!PRODUCT_ANALYTICS) return;
+  const stores = await storesInkDoContexto();
+  if (!stores.length) return; // Commerce não conectado nesta Organization — nada a fazer
+  const organizationId = orgDoContexto();
+  const { storeId } = stores[0];
+  if (apenasVencidos) {
+    const precisa = await PRODUCT_ANALYTICS.catalogSyncNecessario({ organizationId, storeId });
+    if (!precisa) return;
+  }
+  try {
+    await PRODUCT_ANALYTICS.syncCommerceCatalog({ organizationId, storeId });
+  } catch (err) {
+    // Já fica registrado em commerce_catalog_sync_logs (status/error_code) pelo próprio
+    // runCatalogSync — aqui é só o log de processo, nunca um retry na hora (401/403/429 esperam o
+    // próximo tick, nunca um loop apertado).
+    console.error(`[CATALOG_SYNC_SCHEDULER] ${organizationId}: ${err.message}`);
+  }
+}
+if (PRODUCT_ANALYTICS) {
+  JOBS.agendar('catalogo-canonico', 60 * 60 * 1000, () => sincronizarCatalogoCanonicoDaOrganizacao({ apenasVencidos: true }));
+  JOBS.agendarUmaVez('catalogo-canonico-boot', 5 * 60 * 1000, () => sincronizarCatalogoCanonicoDaOrganizacao({ apenasVencidos: true }));
 }
 
 // Último middleware do app: todo erro que uma rota, um middleware ou uma promise rejeitada

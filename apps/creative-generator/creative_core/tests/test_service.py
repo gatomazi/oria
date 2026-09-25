@@ -4,9 +4,11 @@ from __future__ import annotations
 import base64
 import io
 import json
+from pathlib import Path
 
-from _support import AuthenticationError, FakeClient, FakeImages, load_fixture, png_bytes, run
+from _support import AuthenticationError, FakeClient, FakeImages, FakeResponses, load_fixture, png_bytes, run
 
+from creative_core import contracts
 from creative_core.model_router import ModelRouter
 from creative_core.service import CreativeCoreService
 
@@ -24,9 +26,9 @@ class Factory:
         return self.client
 
 
-def _app(factory=None):
+def _app(factory=None, router=None):
     factory = factory or Factory()
-    return CreativeCoreService(TOKEN, client_factory=factory, router=ModelRouter(env={})), factory
+    return CreativeCoreService(TOKEN, client_factory=factory, router=router or ModelRouter(env={})), factory
 
 
 def _call(app, method, path, body=None, token=TOKEN, content_type="application/json", raw=None):
@@ -83,6 +85,13 @@ def test_given_contracts_then_catalog_lets_panel_build_forms():
     catalog = _call(app, "GET", "/v1/contracts")[1]["catalog"]
     assert len(catalog["angles"]) == 13 and {"id", "label", "uses_person", "apparel_only"} <= set(catalog["angles"][0])
     assert [p["id"] for p in catalog["placements"]] == ["FEED_4X5", "STORY_9X16"]
+    assert {f["id"] for f in catalog["angle_families"]} == set(contracts.ANGLE_FAMILIES)
+    assert all(set(f) == {"id", "label", "description", "reserved"} for f in catalog["angle_families"]), "no internal fields (planner hints, prompt instructions) leak here"
+    assert catalog["angle_legacy_map"]["PRESENTE_AFETO"]["family"] == "connection"
+    assert catalog["angle_discontinued"] == ["IDENTIDADE_ORIGEM", "PRESENTE_AFETO"]
+    assert {i["id"] for i in catalog["interactions"]} >= {"playing", "reading_together", "group_photo"}
+    assert all({"label", "min_people", "max_people"} <= set(i) for i in catalog["interactions"])
+    assert {r["id"]: r["label"] for r in catalog["relations"]}["father"] == "pai" and "_doc" not in [r["id"] for r in catalog["relations"]]
     assert "cart" in catalog["remarketing_intents"] and catalog["funnel_stages"] == ["TOFU", "MOFU", "BOFU"]
     assert {k["id"] for k in catalog["builtin_kits"]["niche"]} == {"fashion", "generic_commerce"}
 
@@ -102,6 +111,31 @@ def test_given_plan_request_then_plan_returned():
     app, _ = _app()
     status, body, _ = _call(app, "POST", "/v1/plans", {"request": load_fixture("fixture-clean-multi")["input"]})
     assert status == 200 and body["plan"]["product_mode"] == "multi_product"
+
+
+def test_given_a_persisted_plan_then_draft_and_feedback_snapshot_endpoints_are_pure_and_share_the_core_logic():
+    from creative_core.drafts import feedback_snapshot, generation_draft_from_plan
+    app, factory = _app()
+    for name in ("fixture-clean-single", "fixture-c1-a-pai-e-filha"):
+        request = load_fixture(name)["input"] if not name.startswith("fixture-c1") else json.loads(
+            (Path(__file__).resolve().parents[1] / "fixtures_v2" / f"{name}.json").read_text(encoding="utf-8"))["input"]
+        status, body, _ = _call(app, "POST", "/v1/plans", {"request": request})
+        plan = body["plan"]
+        status, body, _ = _call(app, "POST", "/v1/draft", {"plan": plan})
+        assert status == 200 and body["draft"] == generation_draft_from_plan(plan) and set(body["draft"]["actions"]) == {"again", "variation"}
+        status, body, _ = _call(app, "POST", "/v1/feedback-snapshot", {"plan": plan})
+        assert status == 200 and body["snapshot"] == feedback_snapshot(plan)
+        meta = {"trace": {"model_requested": "gpt-image-2", "model_served": "gpt-image-2"}}
+        status, body, _ = _call(app, "POST", "/v1/feedback-snapshot", {"plan": plan, "result_metadata": meta, "asset_sha256": "ab" * 32})
+        assert status == 200 and body["snapshot"]["model"]["served"] == "gpt-image-2" and body["snapshot"]["asset_sha256"] == "ab" * 32
+    assert factory.keys == [], "no client is ever built for these routes"
+    for path, extra in (("/v1/draft", {}), ("/v1/feedback-snapshot", {})):
+        assert _call(app, "POST", path, {"plan": {"nope": 1}, **extra})[0] == 422
+        assert _call(app, "POST", path, {"plan": plan, "openai_api_key": KEY})[0] == 422, "no key belongs here"
+        assert _call(app, "POST", path, {"plan": plan}, token=None)[0] == 401
+        assert _call(app, "GET", path)[0] == 405
+    for bad in ({"asset_sha256": "xyz"}, {"result_metadata": []}):
+        assert _call(app, "POST", "/v1/feedback-snapshot", {"plan": plan, **bad})[0] == 422
 
 
 def test_given_unknown_top_level_field_or_invalid_request_then_422():
@@ -132,6 +166,18 @@ def test_given_generation_with_byok_then_key_used_once_and_never_echoed():
     assert status == 200 and body["result"]["status"] == "completed"
     assert factory.keys == [KEY]
     assert KEY not in json.dumps(body)
+
+
+def test_given_generation_then_result_carries_a_trace_without_prompt_or_key():
+    app, _ = _app()
+    plan = _call(app, "POST", "/v1/plans", {"request": load_fixture("fixture-clean-single")["input"]})[1]["plan"]
+    refs = [{"ref": r["ref"], "data_base64": base64.b64encode(png_bytes()).decode()} for r in plan["references"]]
+    _, body, _ = _call(app, "POST", "/v1/generations", {"plan": plan, "references": refs, "openai_api_key": KEY,
+                                                        "generation_attempt": 3})
+    trace = body["result"]["metadata"]["trace"]
+    assert trace["attempt"] == 3 and trace["model_served"] == "gpt-image-2"
+    assert trace["prompt"]["sha256"] == plan["prompt"]["sha256"]
+    assert plan["prompt"]["text"][:60] not in json.dumps(trace) and KEY not in json.dumps(trace)
 
 
 def test_given_provider_rejects_key_then_safe_failed_result_without_key():
@@ -167,6 +213,85 @@ def test_given_unexpected_internal_error_then_500_without_details():
     app._plans = boom  # noqa: SLF001 — test double
     status, body, _ = _call(app, "POST", "/v1/plans", {"request": {}})
     assert status == 500 and "passwd" not in json.dumps(body)
+
+
+# ------------------------------------------------------------------ Fase F.2.A: enrichment/propose (HTTP layer)
+_PRODUTO = {"id": "prod-1", "name": "Camiseta Pai e Filho", "type": "camiseta infantil", "description": "presente para brincar com o pai"}
+
+
+def test_given_no_provider_then_fake_is_used_over_http_exactly_as_before():
+    app, _ = _app()
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO})
+    assert status == 200 and body["proposal"]["provider"] == "fake"
+    assert body["proposal"]["provider_meta"] is None
+
+
+def test_given_an_unknown_provider_then_422_before_anything_else():
+    app, _ = _app()
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "midjourney"})
+    assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
+
+
+def test_given_provider_openai_over_http_then_it_refuses_cleanly_no_client_wired_this_round():
+    """The structural guarantee behind "zero real calls in Fase F.2.A": this route never constructs
+    an OpenAI client, so asking for provider=openai over the real HTTP surface always fails with a
+    clean, expected error — never a network attempt, never a silent fallback to "fake"."""
+    app, factory = _app()
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai"})
+    assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
+    assert factory.keys == [], "the BYOK client factory was never even touched for this route"
+
+
+def test_given_references_over_the_cap_then_422_before_validating_each_one():
+    app, _ = _app()
+    refs = [{"ref": "r", "data_base64": base64.b64encode(png_bytes()).decode()}] * 3
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "references": refs})
+    assert status == 422 and body["error"]["code"] == "INVALID_REFERENCE"
+
+
+def test_given_a_reference_that_is_not_a_real_image_then_422_same_as_generations():
+    app, _ = _app()
+    svg = [{"ref": "r", "data_base64": base64.b64encode(b"<svg/>").decode()}]
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "references": svg})
+    assert status == 422 and body["error"]["code"] == "INVALID_REFERENCE"
+
+
+def test_given_two_valid_references_then_they_pass_validation_and_only_fail_on_the_missing_client():
+    """Confirms the reference pipeline (decode, cap, shape) accepts exactly 2 real images — the
+    Fase C precedent bug's scenario — all the way through to the SAME "no client" refusal every
+    other openai request over HTTP gets; the failure is about the client, never about the images."""
+    app, _ = _app()
+    refs = [{"ref": "a", "data_base64": base64.b64encode(png_bytes()).decode()},
+            {"ref": "b", "data_base64": base64.b64encode(png_bytes(color=(10, 20, 30))).decode()}]
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai", "references": refs})
+    assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
+    assert "client" in " ".join(body["error"]["details"].get("errors", [])).lower()
+
+
+# ------------------------------------------------------------------ Fase F.2.B: BYOK wiring (client fake, zero rede real)
+def test_given_provider_openai_with_a_key_then_the_same_byok_client_factory_is_used_key_never_echoed():
+    saida = {
+        "wearer_roles": [], "relationship_themes": [], "recommended_supporting_roles": [],
+        "incompatible_auto_supporting_roles": [], "scene_intents": [], "visible_text": [],
+        "confidence": 0.4, "justification": "sem sinal forte no texto", "used_reference_image": False,
+    }
+    factory = Factory(FakeClient(responses=FakeResponses(output_text=json.dumps(saida))))
+    app, _ = _app(factory, router=ModelRouter(env={"OPENAI_TEXT_MODEL": "gpt-4o-mini"}))
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai", "openai_api_key": KEY})
+    assert status == 200, body
+    assert body["proposal"]["provider"] == "openai"
+    assert factory.keys == [KEY], "o MESMO client_factory BYOK de /v1/generations e /v1/copies foi usado"
+    assert KEY not in json.dumps(body), "a chave nunca é ecoada na resposta"
+
+
+def test_given_provider_openai_without_a_key_then_it_still_refuses_even_with_a_configured_factory():
+    """A garantia estrutural continua valendo mesmo agora que o serviço SABE construir um client: sem
+    `openai_api_key` no corpo, nenhum client é construído — nunca uma chamada por engano."""
+    factory = Factory()
+    app, _ = _app(factory)
+    status, body, _ = _call(app, "POST", "/v1/enrichment/propose", {"product": _PRODUTO, "provider": "openai"})
+    assert status == 422 and body["error"]["code"] == "INVALID_INPUT"
+    assert factory.keys == []
 
 
 if __name__ == "__main__":

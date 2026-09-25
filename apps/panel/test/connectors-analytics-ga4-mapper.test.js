@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 
 const {
   Ga4MetricParseError, parseInteiro, parseMonetario, ehItemIdValido, mapRow, mapReportRows,
+  mapAcquisitionRow, mapAcquisitionRows, mapTransactionLookup,
 } = require('../lib/connectors/analytics/ga4/mapper');
 const { METRICAS_PRODUTO } = require('../lib/connectors/analytics/ga4/queries');
 
@@ -132,4 +133,44 @@ test('E · mapReportRows de dataset vazio devolve lista vazia e zero descartes, 
 test('E · mapReportRows propaga erro de parsing de uma métrica corrompida (não engole)', () => {
   const rows = [{ dimensionValues: dim('1', 'a'), metricValues: met('abc', '1', '1', '1', '1') }];
   assert.throws(() => mapReportRows(rows, { metricasPedidas: METRICAS_PRODUTO, comItemName: true }), Ga4MetricParseError);
+});
+
+// ── K (Journey Analytics): aquisição e lookup de transação ────────────────────────────────────
+
+test('K · mapAcquisitionRow: source/medium/campaign + sessions/ecommercePurchases/totalRevenue, na ordem certa', () => {
+  const row = { dimensionValues: dim('instagram', 'paid_social', 'campanha-x'), metricValues: met('50', '5', '499.9') };
+  assert.deepEqual(mapAcquisitionRow(row), { source: 'instagram', medium: 'paid_social', campaign: 'campanha-x', sessions: 50, ecommercePurchases: 5, totalRevenue: 499.9 });
+});
+
+test('K · mapAcquisitionRow preserva "(not set)" como veio — nunca traduz pra null nem descarta a linha', () => {
+  const row = { dimensionValues: dim('(not set)', '(not set)', '(not set)'), metricValues: met('20', '0', '0') };
+  const mapeada = mapAcquisitionRow(row);
+  assert.equal(mapeada.source, '(not set)');
+  assert.equal(mapeada.medium, '(not set)');
+  assert.equal(mapeada.campaign, '(not set)');
+});
+
+test('K · mapAcquisitionRows mapeia todas as linhas, dataset vazio devolve lista vazia', () => {
+  assert.deepEqual(mapAcquisitionRows([]), []);
+  assert.deepEqual(mapAcquisitionRows(undefined), []);
+  const rows = [
+    { dimensionValues: dim('google', 'organic', '(not set)'), metricValues: met('10', '1', '99') },
+    { dimensionValues: dim('facebook', 'paid_social', 'bf'), metricValues: met('30', '3', '270') },
+  ];
+  assert.equal(mapAcquisitionRows(rows).length, 2);
+});
+
+test('K · mapAcquisitionRow propaga erro de parsing (mesma disciplina do mapRow de produto — nunca engole)', () => {
+  const row = { dimensionValues: dim('google', 'organic', 'x'), metricValues: met('abc', '1', '1') };
+  assert.throws(() => mapAcquisitionRow(row), Ga4MetricParseError);
+});
+
+test('K · mapTransactionLookup: rows vazio → found:false, transactions/revenue null (nunca erro, nunca zero inventado)', () => {
+  assert.deepEqual(mapTransactionLookup([]), { found: false, transactions: null, revenue: null });
+  assert.deepEqual(mapTransactionLookup(undefined), { found: false, transactions: null, revenue: null });
+});
+
+test('K · mapTransactionLookup: 1 linha → found:true com transactions/revenue parseados', () => {
+  const rows = [{ dimensionValues: dim('ink-42'), metricValues: met('1', '129.9') }];
+  assert.deepEqual(mapTransactionLookup(rows), { found: true, transactions: 1, revenue: 129.9 });
 });

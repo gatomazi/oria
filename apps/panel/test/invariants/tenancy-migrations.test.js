@@ -30,8 +30,11 @@ const FASE1 = 8;
 // (platform-admin), o aceite do convite (0020), o `store_id` do Connector Ink (0021), a
 // reclassificação de features (0022), o entitlement canônico (0023), o catálogo canônico de
 // Commerce da Fase D (0031), o Product Identity da Fase F (0032) e o entitlement de Product
-// Performance da rodada H (0033) e a origem/regra dos segmentos vindos de Clientes (0034) vêm depois; o rollback da Fase 1 desce todas.
-const DEPOIS_DA_FASE1 = 22;
+// Performance da rodada H (0033) vêm depois; o rollback da Fase 1 desce todas.
+const DEPOIS_DA_FASE1 = 30; // 21 (linha acima) +8 do Gerador de Criativos, renumeradas na integração para depois de
+// 0033: 0034 (trace), 0035 (versão do plano/compiler), 0036 (feedback), 0037 (angles customizados), 0038
+// (compat. de angles), 0039 (Product Enrichment), 0040 (provider_meta, Fase F.2.A) e 0041 (reserva de
+// concorrência/orçamento do piloto, Fase F.2.B) +1 de Clientes/RFM: 0042 (origem/regra dos segmentos vindos de Clientes)
 
 const lerJson = (arquivo) => JSON.parse(fs.readFileSync(arquivo, 'utf8'));
 

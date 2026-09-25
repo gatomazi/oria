@@ -26,6 +26,7 @@ import {
   archiveProfile,
   arquivoParaBase64,
   createProduct,
+  getCriativosStatus,
   listProducts,
   listProfiles,
   type Catalog,
@@ -34,6 +35,7 @@ import {
   type ProfileRow,
 } from '../../api/criativos';
 import { ContextoEditor } from './ContextoEditor';
+import { EnrichmentReviewModal } from './EnrichmentReview';
 import { KitEditor } from './KitEditor';
 import { PersonaEditor } from './PersonaEditor';
 import type { KitKind } from './kitTemplate';
@@ -53,12 +55,18 @@ export function ProdutosTab() {
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [arquivar, setArquivar] = useState<Product | null>(null);
+  // Fase F.1 — Product Enrichment: liberado por Organization (CREATIVE_ENRICHMENT_ORGS), sempre com
+  // provider "fake" nesta fase. A tela pergunta o status uma vez, aqui mesmo — sem prop nova em toda a
+  // árvore só por causa de um botão condicional.
+  const [enrichmentHabilitado, setEnrichmentHabilitado] = useState(false);
+  const [enriquecendo, setEnriquecendo] = useState<Product | null>(null);
 
   const carregar = useCallback(() => {
     setErroCarga('');
     listProducts().then((r) => setProdutos(r.items)).catch((e: Error) => setErroCarga(e.message));
   }, []);
   useEffect(carregar, [carregar]);
+  useEffect(() => { getCriativosStatus().then((s) => setEnrichmentHabilitado(s.enrichment)).catch(() => {}); }, []);
 
   async function adicionarImagem(file: File) {
     // Arrastar e soltar ignora o accept do seletor: confere o tipo aqui também.
@@ -89,7 +97,14 @@ export function ProdutosTab() {
     { key: 'type', label: 'Tipo', render: (p) => p.type, priority: 'low' },
     { key: 'refs', label: 'Referências', align: 'right', render: (p) => plural(p.references.length, 'imagem', 'imagens') },
     { key: 'createdAt', label: 'Cadastro', render: (p) => formatData(p.createdAt), priority: 'low' },
-    { key: 'acoes', label: 'Ações', hideLabel: true, render: (p) => <Button size="sm" variant="ghost" onClick={() => setArquivar(p)}>Arquivar</Button> },
+    {
+      key: 'acoes', label: 'Ações', hideLabel: true, render: (p) => (
+        <>
+          {enrichmentHabilitado && <Button size="sm" variant="ghost" onClick={() => setEnriquecendo(p)}>Enriquecer</Button>}
+          <Button size="sm" variant="ghost" onClick={() => setArquivar(p)}>Arquivar</Button>
+        </>
+      ),
+    },
   ];
 
   return (
@@ -126,6 +141,9 @@ export function ProdutosTab() {
         onClose={() => setArquivar(null)}
         onConfirm={() => { if (arquivar) archiveProduct(arquivar.id).then(carregar).catch(() => {}); setArquivar(null); }}
       />
+      {enriquecendo && (
+        <EnrichmentReviewModal product={enriquecendo} onClose={() => setEnriquecendo(null)} onDecided={carregar} />
+      )}
     </PageStack>
   );
 }

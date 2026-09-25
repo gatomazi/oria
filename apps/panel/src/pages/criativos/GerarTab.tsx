@@ -12,6 +12,7 @@ import {
   Input,
   RadioCardGroup,
   Select,
+  Disclosure,
   StatusBadge,
   Switch,
   Textarea,
@@ -22,7 +23,10 @@ import {
   listProducts,
   listProfiles,
   previewJob,
+  type AcaoCena,
   type Catalog,
+  type CenaPessoa,
+  type CopiaDados,
   type CriativosStatus,
   type Engine,
   type FunnelStage,
@@ -36,26 +40,33 @@ import {
 } from '../../api/criativos';
 import { plural } from '../../lib/format';
 import { PromptsPrevia } from './PromptsPrevia';
+import { ENGINE_LABEL, INTENT_LABEL } from './criativosMotores';
+// Fase G.1 — extraído para criativosMotorInput.mjs (compartilhado com GerarTabV2.tsx e testado por
+// node:test); nenhuma mudança de comportamento aqui, só a origem do import.
+import { CHAVES_FUNIL, CHAVES_REMARKETING, lista_de, linhas, restoDe, texto_de } from './criativosMotorInput.mjs';
 
-const ENGINE_LABEL: Record<Engine, { title: string; description: string }> = {
-  CLEAN_ANGLES: { title: 'Ângulos Limpos', description: 'Imagem pura: produto + contexto + ângulo. O funil fica na copy do anúncio.' },
-  REMARKETING: { title: 'Remarketing', description: 'Para quem já conhece a marca: mensagem pela intenção, com headline e CTA na arte.' },
-  FUNNEL_VISUAL: { title: 'Funil por Criativo', description: 'TOFU, MOFU ou BOFU na arte: headline, CTA, selos e benefícios por etapa.' },
+const CAMPO_INDISPONIVEL: Record<string, string> = {
+  product: 'Produto', brand: 'Marca', niche: 'Nicho', persona: 'Persona', context: 'Contexto', subjects: 'Pessoas e interação', scene_picks: 'Sorteios da cena',
+};
+const MOTIVO_INDISPONIVEL: Record<string, string> = {
+  missing_or_archived: 'não existe mais ou foi arquivado',
+  no_reference: 'está sem imagem de referência',
+  plan_v2_not_enabled: 'exige o plano v2, que ainda não está habilitado nesta conta',
+  prompt_v2_not_enabled: 'exige o prompt v2, que ainda não está habilitado nesta conta',
+  geographic_subject_unknown: 'a cidade do lote original não foi guardada',
 };
 
-const INTENT_LABEL: Record<RemarketingIntent, string> = {
-  site_visitor: 'Visitante do site',
-  product_view: 'Produto visto',
-  collection_discovery: 'Coleção',
-  cart: 'Carrinho',
-  checkout: 'Checkout',
-  social_proof: 'Prova social',
-  objection: 'Objeção',
-};
+// A tela nunca mostra idade: o texto livre da persona pode trazê-la ("menina 7 anos"), então ela sai do resumo.
+const semIdade = (t: string) => t.replace(/\s*(de\s+)?\d+(\s*(a|e|-)\s*\d+)?\s*anos?\b/gi, '').replace(/\s{2,}/g, ' ').trim();
+const capitalizar = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 
-const linhas = (t: string) => t.split('\n').map((l) => l.trim()).filter(Boolean);
-
-export function GerarTab({ status, catalog, onJobCriado }: { status: CriativosStatus; catalog: Catalog; onJobCriado: (jobId: string) => void }) {
+export function GerarTab({ status, catalog, copia, onCopiaLida, onJobCriado }: {
+  status: CriativosStatus;
+  catalog: Catalog;
+  copia?: CopiaDados | null;
+  onCopiaLida?: () => void;
+  onJobCriado: (jobId: string) => void;
+}) {
   const [engine, setEngine] = useState<Engine | null>(null);
   const [productMode, setProductMode] = useState<ProductMode>('single_product');
   const [produtos, setProdutos] = useState<Product[]>([]);
@@ -84,6 +95,11 @@ export function GerarTab({ status, catalog, onJobCriado }: { status: CriativosSt
   const [texto, setTexto] = useState({ headline: '', subheadline: '', cta: '', benefits: '', badges: '', chips: '', search: '', density: '', emphasis: '', cleanMode: '' });
   const [copyGerar, setCopyGerar] = useState(false);
 
+  // Dados copiados de um criativo: cena (pessoas + interação) e opções que a tela não edita seguem no pedido.
+  const [origem, setOrigem] = useState<CopiaDados | null>(null);
+  const [cena, setCena] = useState<{ subjects?: CenaPessoa[]; interaction?: string } | null>(null);
+  const [extras, setExtras] = useState<{ remarketing?: Record<string, unknown>; funnel?: Record<string, unknown> }>({});
+
   const [preview, setPreview] = useState<{ total: number; first: PlanSummary; prompts: PromptPrevia[]; promptsOmitidos: number } | null>(null);
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -100,6 +116,50 @@ export function GerarTab({ status, catalog, onJobCriado }: { status: CriativosSt
       })
       .catch((e: Error) => setCargaErro(e.message));
   }, []);
+
+  // Aplica os dados copiados uma vez e avisa a página para não reaplicar ao voltar para a aba.
+  useEffect(() => {
+    if (!copia) return;
+    aplicarCopia(copia);
+    if (onCopiaLida) onCopiaLida();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copia]);
+
+  function aplicarCopia(c: CopiaDados) {
+    const f = c.form;
+    setOrigem(c);
+    setEngine(f.engine ?? null);
+    setProductMode(f.product_mode ?? 'single_product');
+    setProductIds(f.product_ids ?? []);
+    setAngles(f.angle_ids ?? []);
+    setPlacements(f.placements ?? ['FEED_4X5']);
+    setQuantity(1);
+    setQuality(f.quality ?? 'medium');
+    setBrand(f.brand ? `${f.brand.source}:${f.brand.id}` : '');
+    setNiche(f.niche ? `${f.niche.source}:${f.niche.id}` : '');
+    setPersonaMode(f.persona?.mode ?? 'automatic');
+    setPersonaId(f.persona?.id ?? '');
+    setContextMode(f.context?.mode ?? 'automatic');
+    setContextProfileId(f.context?.profile_id ?? '');
+    setGeo({ context_id: f.context?.context_id ?? '', city: f.context?.subject?.metadata.city ?? '', state: f.context?.subject?.metadata.state ?? '' });
+    setStage(f.funnel_stage ?? 'TOFU');
+    const r = f.remarketing || {};
+    const fu = f.funnel || {};
+    const fonte = f.engine === 'REMARKETING' ? r : fu;
+    setIntent((r.intent as RemarketingIntent) ?? 'site_visitor');
+    setBasket(r.products_source === 'basket');
+    setCopyGerar(Boolean(f.copy?.generate));
+    setTexto({
+      headline: texto_de(fonte.headline), subheadline: texto_de(fonte.subheadline), cta: texto_de(fonte.cta), benefits: lista_de(fonte.benefits),
+      badges: lista_de(fu.badges), chips: lista_de(fu.chips), search: texto_de(fu.search_bar_text), density: texto_de(fonte.text_density),
+      emphasis: texto_de(fonte.cta_emphasis),
+      cleanMode: f.engine === 'REMARKETING' ? texto_de(r.clean_mode) : fu.clean_mode === true ? 'always' : '',
+    });
+    setExtras({ remarketing: f.remarketing, funnel: f.funnel });
+    setCena(f.subjects || f.interaction ? { subjects: f.subjects, interaction: f.interaction } : null);
+    setPreview(null);
+    setErro('');
+  }
 
   const regra = engine ? catalog.multiProductRules[engine] : null;
   const multiPermitido = status.flags.creative_multi_product && Boolean(regra?.enabled);
@@ -139,12 +199,15 @@ export function GerarTab({ status, catalog, onJobCriado }: { status: CriativosSt
     if (engine === 'CLEAN_ANGLES') {
       base.copy = { generate: copyGerar };
     }
+    if (cena?.subjects?.length) base.subjects = cena.subjects;
+    if (cena?.interaction) base.interaction = cena.interaction;
     if (engine === 'REMARKETING') {
-      base.remarketing = { intent, ...comuns, ...(basket ? { products_source: 'basket' } : {}), ...(texto.cleanMode ? { clean_mode: texto.cleanMode } : {}) };
+      base.remarketing = { ...restoDe(extras.remarketing, CHAVES_REMARKETING), intent, ...comuns, ...(basket ? { products_source: 'basket' } : {}), ...(texto.cleanMode ? { clean_mode: texto.cleanMode } : {}) };
     }
     if (engine === 'FUNNEL_VISUAL') {
       base.funnel_stage = stage;
       base.funnel = {
+        ...restoDe(extras.funnel, CHAVES_FUNIL),
         ...comuns,
         ...(texto.badges ? { badges: linhas(texto.badges) } : {}),
         ...(texto.chips ? { chips: linhas(texto.chips) } : {}),
@@ -153,7 +216,7 @@ export function GerarTab({ status, catalog, onJobCriado }: { status: CriativosSt
       };
     }
     return base;
-  }, [engine, productMode, productIds, angles, placements, quantity, quality, brand, niche, personaMode, personaId, contextMode, contextProfileId, geo, texto, stage, intent, basket, copyGerar]);
+  }, [engine, productMode, productIds, angles, placements, quantity, quality, brand, niche, personaMode, personaId, contextMode, contextProfileId, geo, texto, stage, intent, basket, copyGerar, cena, extras]);
 
   const prontoParaPrevia = Boolean(input && productIds.length >= limite.min && productIds.length <= limite.max && angles.length && placements.length);
   const total = angles.length * placements.length * quantity;
@@ -173,6 +236,28 @@ export function GerarTab({ status, catalog, onJobCriado }: { status: CriativosSt
     setProductMode(modo);
     setProductIds([]);
     limparResultado();
+  }
+
+  // "Recomendado: Menina + pai · brincando juntos · sala". Só nomes de tela: sem idade, risco, ids de relação ou política.
+  const resumoCena = useMemo(() => {
+    const pessoas = cena?.subjects;
+    if (!pessoas || pessoas.length < 2) return null;
+    const relacao = (p: CenaPessoa) => (p.relation_to_primary === 'custom' ? p.relation_label : catalog.catalog.relations?.find((r) => r.id === p.relation_to_primary)?.label);
+    const nomes = pessoas.map((p, i) => (i === 0 ? semIdade(p.persona.label) : (relacao(p) ?? semIdade(p.persona.label))).toLowerCase());
+    const interacao = catalog.catalog.interactions?.find((i) => i.id === cena?.interaction)?.label;
+    const contextoNome = contextMode === 'custom' ? String((contextos.find((c) => c.id === contextProfileId)?.data.subject as { name?: string } | undefined)?.name || '') : contextMode === 'geographic' ? geo.city : '';
+    return [capitalizar(nomes.join(' + ')), interacao, contextoNome].filter(Boolean).join(' · ');
+  }, [cena, catalog, contextMode, contextos, contextProfileId, geo.city]);
+
+  const interacoesPossiveis = (catalog.catalog.interactions || []).filter((i) => (cena?.subjects?.length ?? 0) >= i.min_people && (cena?.subjects?.length ?? 0) <= i.max_people);
+
+  // Gerar direto dos dados copiados: "de novo" repete a cena (semente, sorteios, olhar); "variação" larga o que é sorteio.
+  function gerarCopiado(acao: 'again' | 'variation') {
+    if (!input || !origem) return;
+    const remendo: AcaoCena = origem.actions[acao];
+    setOcupado(true);
+    setErro('');
+    createJob({ ...input, ...remendo }).then((job) => onJobCriado(job.id)).catch((e: Error) => setErro(e.message)).finally(() => setOcupado(false));
   }
 
   function executar(acao: 'preview' | 'gerar' | 'copy') {
@@ -208,6 +293,47 @@ export function GerarTab({ status, catalog, onJobCriado }: { status: CriativosSt
             }))}
           />
         </FormSection>
+
+        {origem && (
+          <Card title="Dados copiados de um criativo" description="O formulário abaixo já vem preenchido. Ajuste o que quiser ou gere direto.">
+            <div className="criativos-copia">
+              {origem.unavailable.length > 0 && (
+                <Callout tone="warning" title="Nem tudo pôde ser copiado">
+                  <ul className="criativos-copia__lista">
+                    {origem.unavailable.map((u, i) => <li key={`${u.field}-${i}`}>{CAMPO_INDISPONIVEL[u.field] || u.field}: {MOTIVO_INDISPONIVEL[u.reason] || 'indisponível'}</li>)}
+                  </ul>
+                </Callout>
+              )}
+              {origem.warnings.some((w) => w.startsWith('people_count_risk')) && (
+                <Callout tone="info">Cena com muitas pessoas: prefira uma pose simples e confira o resultado com atenção.</Callout>
+              )}
+              {resumoCena && <p className="criativos-copia__recomendado"><strong>Recomendado:</strong> {resumoCena}</p>}
+              <div className="criativos-copia__acoes">
+                <Button disabled={!prontoParaPrevia || ocupado || !status.openaiKey.configured} onClick={() => gerarCopiado('variation')}>Gerar assim</Button>
+                <Button variant="secondary" disabled={!prontoParaPrevia || ocupado || total !== 1 || !status.openaiKey.configured} onClick={() => gerarCopiado('again')}>Gerar de novo (mesma cena)</Button>
+              </div>
+              {cena && (
+                <Disclosure summary="Personalizar cena">
+                  <ul className="criativos-copia__lista">
+                    {(cena.subjects || []).map((p, i) => {
+                      const rel = p.relation_to_primary === 'custom' ? p.relation_label : catalog.catalog.relations?.find((r) => r.id === p.relation_to_primary)?.label;
+                      return <li key={p.id || i}>{capitalizar(semIdade(p.persona.label))}{rel ? ` · ${rel}` : ''} · {p.wears_product_id ? 'veste o produto' : 'não veste o produto'}</li>;
+                    })}
+                  </ul>
+                  {interacoesPossiveis.length > 0 && (
+                    <Field label="Interação">
+                      <Select value={cena.interaction || ''} onChange={(e) => { setCena({ ...cena, interaction: e.target.value || undefined }); limparResultado(); }}>
+                        <option value="">Deixar o gerador escolher</option>
+                        {interacoesPossiveis.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+                      </Select>
+                    </Field>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => { setCena(null); limparResultado(); }}>Usar cena automática</Button>
+                </Disclosure>
+              )}
+            </div>
+          </Card>
+        )}
 
         {engine && (
           <>

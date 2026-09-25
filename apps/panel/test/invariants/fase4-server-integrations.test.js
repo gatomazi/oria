@@ -161,6 +161,20 @@ test.before(async () => {
   });
   filho = processo.filho;
   base = processo.base;
+
+  // D.1.1 · diagnóstico do STORE-01 (falha intermitente na suíte longa/negative-control, nunca
+  // isolado): `boot-redes-de-seguranca` (server.js) é um job ÚNICO (`agendarUmaVez`, 5s após o
+  // boot) que roda controle de estoque + pix pendente + carrinhos abandonados para TODA
+  // Organization ativa — inclusive A e B, que já têm credencial Ink acima. Isso é comportamento de
+  // produção correto (evita esperar o intervalo cheio a cada deploy) e não foi alterado. O que
+  // faltava era este teste dar tempo dele acontecer ANTES dos subtestes: sob carga (harness do
+  // negative control, ou a suíte completa), os ~5s do timer podem cair no meio do arquivo em vez de
+  // antes do primeiro subteste, e o subteste "tenant novo · zero integrações" (que confere
+  // `chamadasMock().length` — uma contagem GLOBAL do processo) vê nele 2-3 chamadas de A/B que não
+  // têm nada a ver com a Organization nova sendo testada. Esperar aqui é determinístico: o job só
+  // roda uma vez, então dar folga ao timer + ao próprio trabalho assíncrono garante que ele já
+  // terminou antes de QUALQUER subteste começar — nenhum pode mais cair no meio da execução dele.
+  await new Promise((resolve) => setTimeout(resolve, 7000));
 });
 
 test.after(async () => {
@@ -375,7 +389,7 @@ test('tenant novo · Integrações abre com zero integrações: 200, not_configu
   assert.equal(r.json.whatsapp.status, 'not_configured');
 
   // Abrir a tela é leitura: nenhuma chamada externa sai daqui.
-  assert.equal(chamadasMock().length, chamadasAntes, 'abrir Integrações disparou chamada a provider externo');
+  assert.equal(chamadasMock().length, chamadasAntes, 'abrir Integrações disparou chamada a provider externo: ' + JSON.stringify(chamadasMock().slice(chamadasAntes).map((c) => [c.host, c.caminho, c.auth && String(c.auth).slice(0, 12)])));
 
   // E o processo não registrou rejeição não tratada — é isso que virava 502.
   await new Promise((resolve) => setTimeout(resolve, 200));

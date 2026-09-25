@@ -1,0 +1,124 @@
+{
+  "name": "fixture-c1-a-pai-e-filha",
+  "description": "Case A — 'Brincar com Meu Pai': the request states NO subjects; the planner recommends girl (wearer) + father (supporting), playing, gaze interaction, from the product's semantic_context.",
+  "input": {
+    "creative_id": "33333333-3333-4333-8333-333333333333",
+    "strategy": "CLEAN_ANGLES",
+    "product_mode": "single_product",
+    "products": [
+      {
+        "id": "pipa-menina",
+        "name": "Brincar com Meu Pai — Pipa Menina",
+        "type": "camiseta infantil",
+        "description": "camiseta infantil branca, estampa vermelha de pai e filha empinando pipa",
+        "referenceImages": [
+          "tenant-demo/products/pipa-menina/front.webp"
+        ],
+        "semantic_context": {
+          "wearer_roles": [
+            "child"
+          ],
+          "relationship_themes": [
+            "father_child"
+          ],
+          "recommended_supporting_roles": [
+            "father"
+          ],
+          "incompatible_auto_supporting_roles": [
+            "mother"
+          ],
+          "scene_intents": [
+            "play",
+            "bond",
+            "family"
+          ],
+          "visible_text": [
+            "BRINCAR COM MEU PAI"
+          ],
+          "source": "manual"
+        }
+      }
+    ],
+    "brand_kit": {
+      "id": "entre_nos_ab",
+      "name": "Entre Nós",
+      "schemaVersion": 1,
+      "version": 1,
+      "positioning": [
+        "camisetas para celebrar quem faz parte de você; o produto não é a estampa, é o laço que ela representa"
+      ],
+      "visualStyle": [
+        "editorial afetivo de marca contemporânea, não catálogo de fast fashion nem banco de imagem corporativo",
+        "luz natural quente e suave, hora dourada ou luz de janela",
+        "materiais tácteis e domésticos: tecidos, madeira, linho, papel"
+      ],
+      "colors": [
+        "creme e bege quente",
+        "bordô/vinho profundo",
+        "marrom terroso",
+        "navy",
+        "off-white"
+      ],
+      "manualNotes": [
+        "Afeto genuíno e contido: gestos reais, nunca sorriso escancarado de banco de imagem, nunca todos olhando para a câmera em fileira.",
+        "Ambiente doméstico e vivido, com sinal de uso real; nunca cenário de imobiliária vazio.",
+        "Crianças em cena sempre à vontade e em interação real com o adulto."
+      ],
+      "avoid": [
+        "estética de estúdio fotográfico de shopping (fundo infinito colorido, pose simétrica, todos de branco e jeans)",
+        "clima de propaganda de margarina",
+        "cenário de imobiliária sem sinal de uso"
+      ],
+      "suggestedPersonas": [
+        {
+          "label": "menina 6 anos",
+          "source": "automatic"
+        },
+        {
+          "label": "mulher 35 anos, mãe da menina",
+          "source": "automatic"
+        }
+      ],
+      "minorWardrobePolicy": {
+        "enabled": true,
+        "legs_coverage": "full",
+        "allow_short_shorts": false,
+        "allow_short_skirts": false,
+        "allow_revealing_clothing": false,
+        "style": "casual_age_appropriate"
+      }
+    },
+    "niche_kit_id": "fashion",
+    "angle_id": "LIFESTYLE_COTIDIANO",
+    "placement_id": "FEED_4X5",
+    "persona_mode": "automatic",
+    "context": {
+      "mode": "custom",
+      "profile": {
+        "contextId": "entre_nos_sala",
+        "contextType": "custom",
+        "subject": {
+          "name": "Sala de estar acolhedora"
+        },
+        "summary": "Rotina dentro de casa",
+        "sceneContexts": [
+          "sala de estar acolhedora com sofá, manta e luz natural lateral"
+        ],
+        "domainElements": [
+          "manta de tricô jogada no encosto"
+        ],
+        "avoid": [
+          "qualquer paisagem regional reconhecível, bandeira, mapa ou elemento cultural típico de um estado"
+        ],
+        "status": "approved",
+        "schemaVersion": 1,
+        "promptVersion": 1,
+        "profileVersion": 1
+      }
+    },
+    "quality": "medium",
+    "seed": 100,
+    "plan_schema_version": 2,
+    "prompt_version": 2
+  }
+}

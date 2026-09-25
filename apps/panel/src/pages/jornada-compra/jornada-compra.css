@@ -1,0 +1,18 @@
+/* Gate D ("Jornada de Valor") · "Prioridades de hoje" — grade de cards curta de propósito (nunca
+   uma tabela técnica escondida atrás de um layout de card). Empilha em telas estreitas (§5.7 —
+   testado em 390px real), nunca força scroll horizontal na página inteira. */
+.pa-oportunidades-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4, 16px);
+  align-items: stretch;
+}
+
+.pa-oportunidade-hipotese {
+  color: var(--text-secondary, #9aa1ad);
+  margin: 0 0 var(--space-2, 8px);
+}
+
+.pa-oportunidade-acao {
+  margin: 0 0 var(--space-3, 12px);
+}

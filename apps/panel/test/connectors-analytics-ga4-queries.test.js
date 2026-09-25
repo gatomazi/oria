@@ -8,7 +8,10 @@ const assert = require('node:assert/strict');
 
 const {
   DIMENSION_ITEM_ID, DIMENSION_ITEM_NAME, METRICAS_PRODUTO,
+  DIMENSOES_ACQUISITION, METRICAS_ACQUISITION, DIMENSION_TRANSACTION_ID, METRICAS_TRANSACTION,
   reportRequestBody, compatibilidadeRequestBody,
+  acquisitionRequestBody, acquisitionCompatibilityRequestBody,
+  transactionCompatibilityRequestBody, transactionLookupRequestBody,
 } = require('../lib/connectors/analytics/ga4/queries');
 
 test('E · METRICAS_PRODUTO são os 5 nomes confirmados, sem renomear semântica de itens/unidades', () => {
@@ -65,4 +68,49 @@ test('E · compatibilidadeRequestBody: por padrão pede itemId+itemName+as 5 mé
 test('E · compatibilidadeRequestBody aceita subconjunto de métricas para checar isoladamente', () => {
   const body = compatibilidadeRequestBody({ metricas: ['itemsViewed'] });
   assert.deepEqual(body.metrics, ['itemsViewed']);
+});
+
+// ── K (Journey Analytics): aquisição e lookup de transação ────────────────────────────────────
+
+test('K · DIMENSOES_ACQUISITION reaproveita os nomes `sessionManual*` já provados compatíveis no UTM Tracker legado (server.js) — nunca sessionSource/sessionDefaultChannelGroup sem evidência', () => {
+  assert.deepEqual(DIMENSOES_ACQUISITION, ['sessionManualSource', 'sessionManualMedium', 'sessionManualCampaignName']);
+  assert.deepEqual(METRICAS_ACQUISITION, ['sessions', 'ecommercePurchases', 'totalRevenue']);
+});
+
+test('K · acquisitionRequestBody: dateRanges ISO puro, 3 dimensões de sessão, nunca combinado com itemId', () => {
+  const body = acquisitionRequestBody({ startDate: '2026-09-01', endDate: '2026-09-20' });
+  assert.deepEqual(body.dateRanges, [{ startDate: '2026-09-01', endDate: '2026-09-20' }]);
+  assert.deepEqual(body.dimensions, DIMENSOES_ACQUISITION.map((name) => ({ name })));
+  assert.deepEqual(body.metrics, METRICAS_ACQUISITION.map((name) => ({ name })));
+  assert.doesNotMatch(JSON.stringify(body), /itemId/);
+});
+
+test('E · acquisitionRequestBody exige startDate/endDate', () => {
+  assert.throws(() => acquisitionRequestBody({ endDate: '2026-09-20' }), TypeError);
+  assert.throws(() => acquisitionRequestBody({ startDate: '2026-09-01' }), TypeError);
+});
+
+test('K · acquisitionCompatibilityRequestBody pede exatamente as 3 dimensões + 3 métricas de aquisição', () => {
+  const body = acquisitionCompatibilityRequestBody();
+  assert.deepEqual(body.dimensions, DIMENSOES_ACQUISITION);
+  assert.deepEqual(body.metrics, METRICAS_ACQUISITION);
+});
+
+test('K · transactionCompatibilityRequestBody pede transactionId + transactions/purchaseRevenue', () => {
+  const body = transactionCompatibilityRequestBody();
+  assert.deepEqual(body.dimensions, [DIMENSION_TRANSACTION_ID]);
+  assert.deepEqual(body.metrics, METRICAS_TRANSACTION);
+});
+
+test('K · transactionLookupRequestBody: dimensionFilter EXACT fixa 1 único transactionId, limit 1 — nunca uma varredura', () => {
+  const body = transactionLookupRequestBody({ startDate: '2026-09-01', endDate: '2026-09-20', transactionId: 'ink-42' });
+  assert.deepEqual(body.dimensions, [{ name: DIMENSION_TRANSACTION_ID }]);
+  assert.deepEqual(body.dimensionFilter, { filter: { fieldName: DIMENSION_TRANSACTION_ID, stringFilter: { matchType: 'EXACT', value: 'ink-42' } } });
+  assert.equal(body.limit, 1);
+});
+
+test('E · transactionLookupRequestBody exige startDate/endDate/transactionId', () => {
+  assert.throws(() => transactionLookupRequestBody({ endDate: '2026-09-20', transactionId: 'x' }), TypeError);
+  assert.throws(() => transactionLookupRequestBody({ startDate: '2026-09-01', transactionId: 'x' }), TypeError);
+  assert.throws(() => transactionLookupRequestBody({ startDate: '2026-09-01', endDate: '2026-09-20' }), TypeError);
 });

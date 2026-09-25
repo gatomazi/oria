@@ -12,11 +12,22 @@ CORE_VERSION = "1.1.0"
 SCHEMA_VERSION = 1
 
 # Text of the prompts assembled by the core engines (templates + rules).
+# 1 = the generic bank, frozen (golden hashes). 2 = opt-in scene contracts for the four angles that put people
+# in the frame (prompt_v2.py); a plan reports the version it ACTUALLY used, so angles v2 does not touch say 1.
 PROMPT_VERSION = 1
+SUPPORTED_PROMPT_VERSIONS = (1, 2)
 
 # Revision of the internal prompt banks (ads/templates, lojas/*/templates) used
 # by the 6 internal strategies of app.py. Recorded in the local history.
 INTERNAL_PROMPT_BANK_VERSION = 1
+
+# Fase B. CreativePlan schema_version 2 is a superset of 1 (same fields plus the v2 ones); SCHEMA_VERSION above stays
+# the shape version of the v1 contracts. COMPILER_VERSION versions the v2 prompt compiler: bump it whenever a section's
+# text, order or source changes, so a persisted plan can always be recompiled with the compiler that produced it.
+PLAN_SCHEMA_V2 = 2
+SUPPORTED_PLAN_SCHEMA_VERSIONS = (1, 2)
+SUPPORTED_COMPILER_VERSIONS = (1, 2, 3)
+COMPILER_VERSION = 3  # 3 (Fase D.1): custom_angle_direction section. 2 (Fase C1, frozen): interaction section, angle frames. 1 = Fase B, kept compilable.
 
 # Default schema/revision for kits and context profiles created by the core.
 BRAND_KIT_SCHEMA_VERSION = 1

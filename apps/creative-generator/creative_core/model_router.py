@@ -80,10 +80,18 @@ class ModelRouter:
     def run(self, task: str, call: Callable[[str], T]) -> T:
         """Calls `call(model)` with the primary model, falling back only when the
         provider reports the model itself as unavailable (404 / NotFoundError)."""
+        return self.run_traced(task, call)[0]
+
+    def run_traced(self, task: str, call: Callable[[str], T], tried: list[str] | None = None) -> tuple[T, str]:
+        """Same as `run`, but also says WHICH candidate answered. `tried` (when given) is filled, in
+        order, with every model attempted — including the ones that failed as unavailable — so a
+        caller can still record them when the whole chain ends in an error."""
         last_exc: BaseException | None = None
         for model in self.candidates(task):
+            if tried is not None:
+                tried.append(model)
             try:
-                return call(model)
+                return call(model), model
             except Exception as exc:  # noqa: BLE001 — classified below, re-raised otherwise
                 unavailable = type(exc).__name__ in _MODEL_UNAVAILABLE_TYPES or getattr(exc, "status_code", None) == 404
                 if not unavailable:

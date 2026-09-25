@@ -1,0 +1,204 @@
+{
+  "resultados": [
+    {
+      "caso": "Caso 1 — semântica textual clara",
+      "sucesso": true,
+      "modelRequested": "gpt-4o-mini",
+      "modelServed": "gpt-4o-mini",
+      "attempts": 1,
+      "referencesUsed": 1,
+      "latenciaMs": 4322,
+      "usage": {
+        "input_tokens": 3371,
+        "output_tokens": 97,
+        "total_tokens": 3468,
+        "cached_input_tokens": 0
+      },
+      "custoRealUsd": 0.00056385,
+      "proposed": {
+        "wearer_roles": [
+          "child"
+        ],
+        "relationship_themes": [
+          "father_child"
+        ],
+        "recommended_supporting_roles": [
+          "father"
+        ],
+        "incompatible_auto_supporting_roles": [
+          "mother",
+          "sibling",
+          "grandparent",
+          "partner",
+          "friend"
+        ],
+        "scene_intents": [
+          "play",
+          "bond",
+          "family",
+          "everyday"
+        ],
+        "visible_text": [],
+        "source": "enrichment",
+        "confidence": 1
+      },
+      "fieldNotes": {
+        "wearer_roles": {
+          "justification": "A camiseta é infantil e a descrição menciona brincar com o pai, indicando um vínculo pai-filho.",
+          "source": "openai_vision"
+        },
+        "relationship_themes": {
+          "justification": "A camiseta é infantil e a descrição menciona brincar com o pai, indicando um vínculo pai-filho.",
+          "source": "openai_vision"
+        },
+        "recommended_supporting_roles": {
+          "justification": "A camiseta é infantil e a descrição menciona brincar com o pai, indicando um vínculo pai-filho.",
+          "source": "openai_vision"
+        },
+        "scene_intents": {
+          "justification": "A camiseta é infantil e a descrição menciona brincar com o pai, indicando um vínculo pai-filho.",
+          "source": "openai_vision"
+        }
+      }
+    },
+    {
+      "caso": "Caso 2 — semântica ambígua/genérica",
+      "sucesso": true,
+      "modelRequested": "gpt-4o-mini",
+      "modelServed": "gpt-4o-mini",
+      "attempts": 1,
+      "referencesUsed": 0,
+      "latenciaMs": 2356,
+      "usage": {
+        "input_tokens": 534,
+        "output_tokens": 93,
+        "total_tokens": 627,
+        "cached_input_tokens": 0
+      },
+      "custoRealUsd": 0.0001359,
+      "proposed": {
+        "wearer_roles": [
+          "adult",
+          "child",
+          "teen"
+        ],
+        "relationship_themes": [],
+        "recommended_supporting_roles": [],
+        "incompatible_auto_supporting_roles": [],
+        "scene_intents": [
+          "everyday"
+        ],
+        "visible_text": [],
+        "source": "enrichment",
+        "confidence": 0.5
+      },
+      "fieldNotes": {
+        "wearer_roles": {
+          "justification": "A camiseta pode ser usada por diversas faixas etárias, mas não há informações suficientes sobre suas características únicas ou suas finalidades. Portanto, a confiança é moderada.",
+          "source": "openai_text"
+        },
+        "scene_intents": {
+          "justification": "A camiseta pode ser usada por diversas faixas etárias, mas não há informações suficientes sobre suas características únicas ou suas finalidades. Portanto, a confiança é moderada.",
+          "source": "openai_text"
+        }
+      }
+    },
+    {
+      "caso": "Caso 3 — estampa com texto visível",
+      "sucesso": true,
+      "modelRequested": "gpt-4o-mini",
+      "modelServed": "gpt-4o-mini",
+      "attempts": 1,
+      "referencesUsed": 1,
+      "latenciaMs": 3629,
+      "usage": {
+        "input_tokens": 3358,
+        "output_tokens": 108,
+        "total_tokens": 3466,
+        "cached_input_tokens": 0
+      },
+      "custoRealUsd": 0.0005685,
+      "proposed": {
+        "wearer_roles": [
+          "adult",
+          "child",
+          "teen"
+        ],
+        "relationship_themes": [
+          "family",
+          "friends"
+        ],
+        "recommended_supporting_roles": [
+          "father",
+          "mother",
+          "sibling",
+          "grandparent",
+          "partner",
+          "friend"
+        ],
+        "incompatible_auto_supporting_roles": [],
+        "scene_intents": [
+          "everyday",
+          "gift",
+          "outing"
+        ],
+        "visible_text": [
+          "FEITO A MAO"
+        ],
+        "source": "enrichment",
+        "confidence": 1
+      },
+      "fieldNotes": {
+        "wearer_roles": {
+          "justification": "A imagem de referência apresenta o texto \"FEITO A MAO\", confirmando a personalização artesanal da camiseta.",
+          "source": "openai_vision"
+        },
+        "relationship_themes": {
+          "justification": "A imagem de referência apresenta o texto \"FEITO A MAO\", confirmando a personalização artesanal da camiseta.",
+          "source": "openai_vision"
+        },
+        "recommended_supporting_roles": {
+          "justification": "A imagem de referência apresenta o texto \"FEITO A MAO\", confirmando a personalização artesanal da camiseta.",
+          "source": "openai_vision"
+        },
+        "scene_intents": {
+          "justification": "A imagem de referência apresenta o texto \"FEITO A MAO\", confirmando a personalização artesanal da camiseta.",
+          "source": "openai_vision"
+        },
+        "visible_text": {
+          "justification": "A imagem de referência apresenta o texto \"FEITO A MAO\", confirmando a personalização artesanal da camiseta.",
+          "source": "openai_vision"
+        }
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "organization_id": "f2b00000-0000-4000-8000-000000000001",
+      "product_id": "c818ca2c-8d49-4f21-a0ae-97c6895acc30",
+      "status": "succeeded",
+      "model": "gpt-4o-mini",
+      "cost_usd_estimated_cents": 1,
+      "cost_usd_real_cents": 1,
+      "error_code": null
+    },
+    {
+      "organization_id": "f2b00000-0000-4000-8000-000000000001",
+      "product_id": "d237f654-7ce7-44b4-9e23-72379630009c",
+      "status": "succeeded",
+      "model": "gpt-4o-mini",
+      "cost_usd_estimated_cents": 1,
+      "cost_usd_real_cents": 1,
+      "error_code": null
+    },
+    {
+      "organization_id": "f2b00000-0000-4000-8000-000000000001",
+      "product_id": "6c5de4f1-e0cd-4f09-837c-184299201d38",
+      "status": "succeeded",
+      "model": "gpt-4o-mini",
+      "cost_usd_estimated_cents": 1,
+      "cost_usd_real_cents": 1,
+      "error_code": null
+    }
+  ]
+}
