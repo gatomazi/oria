@@ -10,11 +10,19 @@
 //                 indisponível (null — a propriedade GA4 não suporta) NUNCA satisfaz um mínimo > 0
 //   hasData       só produtos com alguma atividade observada no período (volume > 0)
 //   provider      já existia (passthrough pro catálogo)
+//   search        busca pelo NOME (todas as palavras precisam aparecer). Quando usada, TODO o resto
+//                 (status, mínimos, hasData) é ignorado e o produto vem independente da situação —
+//                 quem busca um produto quer achá-lo, não descobrir que um filtro o escondeu
 //
+
 // Mínimos e hasData só existem em memória (o GA4 não vive no banco) — por isso o service os trata
 // no caminho de "conjunto elegível" e nunca no de paginação direta do catálogo.
 
+// Só as situações que a TELA pode pedir. ('synced' — o `is_active` puro — é interno do repositório.)
 const STATUS_VALIDOS = Object.freeze(['active', 'inactive', 'all']);
+
+const BUSCA_MAX_CARACTERES = 100;
+const BUSCA_MAX_PALAVRAS = 6;
 
 // Pseudo-campo de ordenação "mais dados primeiro" (não é coluna do catálogo nem métrica): quem tem
 // dado observado no período vem primeiro, do maior volume pro menor, e o resto do catálogo depois,
@@ -41,8 +49,33 @@ function volumeDeDados(metrics) {
   return total;
 }
 
+/** Palavras da busca por nome ([] = sem busca). Lança TypeError se passar do limite. */
+function termosDeBusca(texto) {
+  if (texto === undefined || texto === null) return [];
+  if (typeof texto !== 'string') throw new TypeError('search deve ser um texto');
+  const limpo = texto.trim().replace(/\s+/g, ' ');
+  if (!limpo) return [];
+  if (limpo.length > BUSCA_MAX_CARACTERES) throw new TypeError(`search deve ter no máximo ${BUSCA_MAX_CARACTERES} caracteres`);
+  const termos = limpo.split(' ');
+  if (termos.length > BUSCA_MAX_PALAVRAS) throw new TypeError(`search aceita no máximo ${BUSCA_MAX_PALAVRAS} palavras`);
+  return termos;
+}
+
 /** Valida e normaliza os filtros. Lança TypeError (mensagem segura, sem dado do tenant). */
 function normalizarFiltros(filters = {}) {
+  // Busca por nome vence tudo: os demais filtros nem são lidos (nem validados) — "ignorados".
+  const termos = termosDeBusca(filters.search);
+  if (termos.length) {
+    return Object.freeze({
+      provider: filters.provider,
+      status: 'all',
+      minimos: Object.freeze([]),
+      somenteComDados: false,
+      temFiltroDeMetrica: false,
+      busca: Object.freeze({ termos: Object.freeze(termos) }),
+    });
+  }
+
   const status = filters.status === undefined || filters.status === null ? 'active' : filters.status;
   if (!STATUS_VALIDOS.includes(status)) throw new TypeError(`status inválido: ${status} (permitidos: ${STATUS_VALIDOS.join(', ')})`);
 
@@ -60,6 +93,7 @@ function normalizarFiltros(filters = {}) {
     minimos: Object.freeze(minimos),
     somenteComDados,
     temFiltroDeMetrica: minimos.length > 0 || somenteComDados,
+    busca: null,
   });
 }
 
@@ -75,4 +109,7 @@ function passaNosFiltrosDeMetrica(acumulado, filtros) {
   return true;
 }
 
-module.exports = { STATUS_VALIDOS, CAMPO_MAIS_DADOS, MINIMOS, CONTAGENS, volumeDeDados, normalizarFiltros, passaNosFiltrosDeMetrica };
+module.exports = {
+  STATUS_VALIDOS, CAMPO_MAIS_DADOS, MINIMOS, CONTAGENS, BUSCA_MAX_CARACTERES, BUSCA_MAX_PALAVRAS,
+  volumeDeDados, termosDeBusca, normalizarFiltros, passaNosFiltrosDeMetrica,
+};

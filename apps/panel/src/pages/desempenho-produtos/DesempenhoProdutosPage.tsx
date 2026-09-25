@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Button, Callout, Checkbox, DataTable, EmptyState, ErrorState, Field, Icon, Input, KpiCard, KpiStrip, PageHeader, PageStack, Pagination, Select, Skeleton, StatusBadge, Tabs, Toolbar, type TableSort,
+  Button, Callout, Checkbox, DataTable, EmptyState, ErrorState, Field, Icon, Input, KpiCard, KpiStrip, PageHeader, PageStack, Pagination, SearchInput, Select, Skeleton, StatusBadge, Tabs, Toolbar, type TableSort,
 } from '../../components/ds';
 import { formatValor, plural } from '../../lib/format';
+import { lookup, PRODUCT_STATUS_MAP } from '../../lib/statusMap';
 import {
   getProductAnalyticsStatus, getProductAnalyticsSummary, listProductAnalytics,
   syncCommerceCatalog, getCommerceCatalogSyncStatus,
@@ -41,7 +42,12 @@ const SORT_INICIAL: TableSort = { key: 'data', direction: 'desc' };
 // Filtros (o que o lojista digita fica em texto; só vira número na hora de pedir). Mínimos são ">="
 // sobre as contagens de item do período — 0 ou vazio = sem filtro. Regra única no servidor
 // (lib/product-analytics/performance-filters.js).
+//
+// `busca` (nome do produto) VENCE todo o resto: preenchida, a tela só manda `q` e o servidor devolve o
+// produto de qualquer situação — quem busca um produto quer achá-lo, não descobrir que um filtro o
+// escondeu. Os outros campos ficam desabilitados enquanto a busca está em uso.
 interface FiltrosUI {
+  busca: string;
   status: ProductAnalyticsStatusFiltro;
   minViewed: string;
   minAddedToCart: string;
@@ -50,7 +56,7 @@ interface FiltrosUI {
   minRevenue: string;
   hasData: boolean;
 }
-const FILTROS_VAZIOS: FiltrosUI = { status: 'active', minViewed: '', minAddedToCart: '', minCheckedOut: '', minPurchased: '', minRevenue: '', hasData: false };
+const FILTROS_VAZIOS: FiltrosUI = { busca: '', status: 'active', minViewed: '', minAddedToCart: '', minCheckedOut: '', minPurchased: '', minRevenue: '', hasData: false };
 const CAMPOS_MINIMO = [
   { chave: 'minViewed', label: 'Visualizados (mín.)' },
   { chave: 'minAddedToCart', label: 'No carrinho (mín.)' },
@@ -66,7 +72,9 @@ function numeroPositivo(texto: string): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-function paraFiltros(f: FiltrosUI): ProductAnalyticsFiltros {
+function paraFiltros(f: FiltrosUI): ProductAnalyticsFiltros & { q?: string } {
+  const q = f.busca.trim();
+  if (q) return { q };
   return {
     status: f.status,
     minViewed: numeroPositivo(f.minViewed),
@@ -221,11 +229,26 @@ function CatalogoVazio({ onSincronizado }: { onSincronizado: () => void }) {
 function FiltrosDaTabela({ filtros, onChange, onLimpar, ativo }: {
   filtros: FiltrosUI; onChange: (proximo: FiltrosUI) => void; onLimpar: () => void; ativo: boolean;
 }) {
+  const buscando = filtros.busca.trim() !== '';
   return (
     <section className="pa-filtros" aria-label="Filtros da tabela de produtos">
-      <Field label="Situação do produto">
-        <Select value={filtros.status} onChange={(e) => onChange({ ...filtros, status: e.target.value as ProductAnalyticsStatusFiltro })}>
-          <option value="active">Ativos</option>
+      <div className="pa-filtros__busca">
+        <Field
+          label="Buscar produto pelo nome"
+          hint={buscando ? 'Busca em uso: os demais filtros ficam de lado e o produto aparece qualquer que seja a situação dele.' : undefined}
+        >
+          <SearchInput
+            aria-label="Buscar produto pelo nome"
+            placeholder="Ex.: camiseta preta"
+            maxLength={100}
+            value={filtros.busca}
+            onChange={(e) => onChange({ ...filtros, busca: e.target.value })}
+          />
+        </Field>
+      </div>
+      <Field label="Situação do produto" hint={buscando ? undefined : 'Ativo = publicado na Ink'}>
+        <Select disabled={buscando} value={filtros.status} onChange={(e) => onChange({ ...filtros, status: e.target.value as ProductAnalyticsStatusFiltro })}>
+          <option value="active">Ativos (publicados)</option>
           <option value="inactive">Desativados</option>
           <option value="all">Todos</option>
         </Select>
@@ -238,6 +261,7 @@ function FiltrosDaTabela({ filtros, onChange, onLimpar, ativo }: {
             step={chave === 'minRevenue' ? 'any' : 1}
             inputMode={chave === 'minRevenue' ? 'decimal' : 'numeric'}
             placeholder="0"
+            disabled={buscando}
             value={filtros[chave]}
             onChange={(e) => onChange({ ...filtros, [chave]: e.target.value })}
           />
@@ -247,13 +271,22 @@ function FiltrosDaTabela({ filtros, onChange, onLimpar, ativo }: {
         <Checkbox
           label="Somente com dados"
           description="Esconde produtos sem nenhum evento no período"
+          disabled={buscando}
           checked={filtros.hasData}
           onChange={(e) => onChange({ ...filtros, hasData: e.target.checked })}
         />
-        {ativo && <Button variant="ghost" size="sm" onClick={onLimpar}>Limpar filtros</Button>}
+        {ativo && <Button variant="ghost" size="sm" onClick={onLimpar}>{buscando ? 'Limpar busca' : 'Limpar filtros'}</Button>}
       </div>
     </section>
   );
+}
+
+// "Desativado" sem motivo é pouco: a Ink diz por que (Não publicado, Recusado, Arte inválida…) e a tela
+// Produtos já traduz isso — mesmo mapa aqui. Sem status conhecido, cai em "Desativado".
+function SeloDesativado({ item }: { item: ProductAnalyticsItem }) {
+  if (item.product.isActive !== false) return null;
+  const { label } = lookup(PRODUCT_STATUS_MAP, item.product.providerStatus, 'Desativado');
+  return <> <StatusBadge tone="neutral" label={label === 'Publicado' ? 'Fora da Ink' : label} /></>;
 }
 
 function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProduto: (id: string) => void }) {
@@ -319,6 +352,7 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
 
   const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / LIMIT)) : 1;
   const filtroAtivo = temFiltroAtivo(aplicados);
+  const buscando = aplicados.busca.trim() !== '';
 
   return (
     <div className="ds-stack">
@@ -328,7 +362,7 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
 
       {data && (
         <KpiStrip label="Cobertura de identidade no período">
-          <KpiCard title="Produtos na tabela" value={data.totalCount} helper={filtroAtivo ? 'Com os filtros aplicados' : 'Total da Store, com o filtro atual'} />
+          <KpiCard title="Produtos na tabela" value={data.totalCount} helper={buscando ? 'Resultado da busca' : filtroAtivo ? 'Com os filtros aplicados' : 'Ativos (publicados) da Store'} />
           <KpiCard title="Ids observados pelo GA4" value={data.coverage.observedAnalyticsIds} helper="itemId distintos no período (produto, variante ou SKU)" />
           <KpiCard
             title="Identidade resolvida"
@@ -347,7 +381,11 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
       <FiltrosDaTabela filtros={filtros} onChange={setFiltros} onLimpar={limparFiltros} ativo={temFiltroAtivo(filtros)} />
 
       <div className="pa-ordem">
-        {sort.key === 'data' ? (
+        {buscando ? (
+          <span className="ds-note">
+            Resultados da busca: produtos de qualquer situação, com mais dados primeiro (depois, por nome). A ordenação por coluna fica desligada durante a busca.
+          </span>
+        ) : sort.key === 'data' ? (
           <span className="ds-note">
             Mais dados primeiro: ordenado por visualizações + carrinho + checkout + compras no período. Produtos sem dado vêm depois, por nome. Clique numa coluna para ordenar por ela.
           </span>
@@ -363,9 +401,11 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
       ) : data.items.length === 0 ? (
         filtroAtivo ? (
           <EmptyState
-            title="Nenhum produto com esses filtros"
-            description="Nenhum produto atende a todos os filtros neste período. Afrouxe um mínimo ou troque a situação para ver mais."
-            action={<Button variant="secondary" size="sm" onClick={limparFiltros}>Limpar filtros</Button>}
+            title={buscando ? 'Nenhum produto com esse nome' : 'Nenhum produto com esses filtros'}
+            description={buscando
+              ? `Nenhum produto do catálogo tem “${aplicados.busca.trim()}” no nome. Confira a grafia ou busque só uma palavra.`
+              : 'Nenhum produto atende a todos os filtros neste período. Afrouxe um mínimo ou troque a situação para ver mais.'}
+            action={<Button variant="secondary" size="sm" onClick={limparFiltros}>{buscando ? 'Limpar busca' : 'Limpar filtros'}</Button>}
           />
         ) : (
           <CatalogoVazio onSincronizado={carregar} />
@@ -379,6 +419,7 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
             onRowClick={(it: ProductAnalyticsItem) => onAbrirProduto(it.product.id)}
             sort={sort}
             onSortChange={onSortChange}
+            sortable={!buscando}
             columns={[
               { key: 'img', priority: 'low', label: 'Foto', hideLabel: true, width: 48, render: (it) => <Thumb item={it} /> },
               { key: 'name', label: 'Produto', truncate: true, width: 240, render: (it) => it.product.name, sortValue: (it) => it.product.name },
@@ -387,7 +428,7 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
                 render: (it) => (
                   <>
                     {`${it.product.provider} · ${it.product.providerProductId}`}
-                    {it.product.isActive === false && <> <StatusBadge tone="neutral" label="Desativado" /></>}
+                    <SeloDesativado item={it} />
                   </>
                 ),
               },

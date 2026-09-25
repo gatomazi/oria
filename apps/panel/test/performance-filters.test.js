@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
-  STATUS_VALIDOS, MINIMOS, volumeDeDados, normalizarFiltros, passaNosFiltrosDeMetrica,
+  STATUS_VALIDOS, MINIMOS, BUSCA_MAX_CARACTERES, BUSCA_MAX_PALAVRAS, volumeDeDados, termosDeBusca, normalizarFiltros, passaNosFiltrosDeMetrica,
 } = require('../lib/product-analytics/performance-filters');
 
 const metricas = (over = {}) => ({
@@ -84,4 +84,42 @@ test('F · somente com dados: volume > 0; zero real e sem métrica ficam de fora
   assert.equal(passaNosFiltrosDeMetrica(metricas(), f), true);
   assert.equal(passaNosFiltrosDeMetrica(metricas({ itemsViewed: 0, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0 }), f), false);
   assert.equal(passaNosFiltrosDeMetrica(undefined, f), false);
+});
+
+// ── Busca por nome ────────────────────────────────────────────────────────────────────────────────
+
+test('F · termosDeBusca: separa por espaço, ignora espaço sobrando e vazio é "sem busca"', () => {
+  assert.deepEqual(termosDeBusca('  camiseta   Preta '), ['camiseta', 'Preta']);
+  assert.deepEqual(termosDeBusca(''), []);
+  assert.deepEqual(termosDeBusca('   \t '), []);
+  assert.deepEqual(termosDeBusca(undefined), []);
+  assert.deepEqual(termosDeBusca(null), []);
+});
+
+test('F · termosDeBusca: passou do limite de caracteres ou de palavras, ou não é texto, é erro', () => {
+  assert.equal(termosDeBusca('a'.repeat(BUSCA_MAX_CARACTERES)).length, 1);
+  assert.throws(() => termosDeBusca('a'.repeat(BUSCA_MAX_CARACTERES + 1)), TypeError);
+  assert.equal(termosDeBusca(Array.from({ length: BUSCA_MAX_PALAVRAS }, () => 'x').join(' ')).length, BUSCA_MAX_PALAVRAS);
+  assert.throws(() => termosDeBusca(Array.from({ length: BUSCA_MAX_PALAVRAS + 1 }, () => 'x').join(' ')), TypeError);
+  for (const ruim of [42, {}, ['a'], true]) assert.throws(() => termosDeBusca(ruim), TypeError);
+});
+
+test('F · com busca, status vira "all" e mínimos/hasData são IGNORADOS (nem validados) — a busca vence tudo', () => {
+  const f = normalizarFiltros({ search: 'camiseta', status: 'active', minPurchased: 5, hasData: true, provider: 'reserva_ink' });
+  assert.equal(f.status, 'all');
+  assert.deepEqual(f.minimos, []);
+  assert.equal(f.somenteComDados, false);
+  assert.equal(f.temFiltroDeMetrica, false);
+  assert.deepEqual(f.busca.termos, ['camiseta']);
+  assert.equal(f.provider, 'reserva_ink'); // o provider não é filtro de tela, segue valendo
+  // filtro inválido junto com busca não derruba: foi ignorado
+  assert.doesNotThrow(() => normalizarFiltros({ search: 'x', status: 'nope', minPurchased: -1 }));
+  // mas sem busca o mesmo filtro inválido continua sendo erro
+  assert.throws(() => normalizarFiltros({ status: 'nope' }), TypeError);
+});
+
+test('F · sem busca o resultado é o de sempre e `busca` é null', () => {
+  assert.equal(normalizarFiltros({}).busca, null);
+  assert.equal(normalizarFiltros({ search: '   ' }).busca, null);
+  assert.equal(normalizarFiltros({ search: '   ', status: 'inactive' }).status, 'inactive');
 });
