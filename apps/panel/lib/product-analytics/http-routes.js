@@ -15,13 +15,15 @@
 
 const express = require('express');
 const { ConnectorError, CODIGOS } = require('../connectors/errors');
+const { CAMPO_MAIS_DADOS, MINIMOS, normalizarFiltros } = require('./performance-filters');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATA_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CAMPOS_CATALOGO = Object.freeze(['name', 'price', 'created_at', 'updated_at']);
 const CAMPOS_METRICA = Object.freeze(['itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue']);
 const CAMPOS_RATIO = Object.freeze(['itemsAddedToCartPerItemViewed', 'itemsCheckedOutPerItemViewed', 'itemsCheckedOutPerItemAddedToCart', 'itemsPurchasedPerItemViewed']);
-const CAMPOS_SORT_VALIDOS = Object.freeze([...CAMPOS_CATALOGO, ...CAMPOS_METRICA, ...CAMPOS_RATIO]);
+// CAMPO_MAIS_DADOS ('data') = "mais dados primeiro" — pseudo-campo, ver performance-filters.js.
+const CAMPOS_SORT_VALIDOS = Object.freeze([...CAMPOS_CATALOGO, ...CAMPOS_METRICA, ...CAMPOS_RATIO, CAMPO_MAIS_DADOS]);
 const LIMITE_MAXIMO = 200;
 
 class EntradaInvalidaError extends TypeError {}
@@ -85,6 +87,35 @@ function validarFilters(query) {
     const provider = String(query.provider).trim();
     if (!provider || provider.length > 60) throw new EntradaInvalidaError('provider inválido');
     filters.provider = provider;
+  }
+
+  // Rodada "Desempenho de Produtos: mais dados primeiro + filtros" · status do catálogo, mínimos por
+  // métrica e "somente com dados". Só forma aqui (string → número/boolean, nunca array nem lixo); a
+  // regra de valor (>= 0, status conhecido) é a MESMA do service (performance-filters.js).
+  const texto = (chave) => {
+    const valor = query[chave];
+    if (valor === undefined) return undefined;
+    if (typeof valor !== 'string') throw new EntradaInvalidaError(`${chave} inválido`);
+    return valor.trim();
+  };
+  const status = texto('status');
+  if (status !== undefined) filters.status = status;
+  for (const chave of Object.keys(MINIMOS)) {
+    const bruto = texto(chave);
+    if (bruto === undefined || bruto === '') continue;
+    const numero = Number(bruto);
+    if (!Number.isFinite(numero) || numero < 0) throw new EntradaInvalidaError(`${chave} deve ser um número maior ou igual a 0`);
+    filters[chave] = numero;
+  }
+  const hasData = texto('hasData');
+  if (hasData !== undefined && hasData !== '') {
+    if (hasData !== 'true' && hasData !== 'false') throw new EntradaInvalidaError('hasData deve ser true ou false');
+    filters.hasData = hasData === 'true';
+  }
+  try {
+    normalizarFiltros(filters);
+  } catch (err) {
+    throw new EntradaInvalidaError(err.message);
   }
   return filters;
 }

@@ -266,6 +266,64 @@ test('H · /products: DTO estável, identity resolvida ponta a ponta, nenhum tok
   assert.equal(r.texto.includes('ya29.'), false); // access token derivado também nunca aparece
 });
 
+// ── Filtros e "mais dados primeiro" (rodada Desempenho de Produtos) ─────────────────────────────
+
+const PRODUTOS = `/api/admin/product-analytics/products?${PERIODO}`;
+
+test('H · /products?sort=data ("mais dados primeiro") é aceito e a linha diz se o produto está ativo', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('GET', `${PRODUTOS}&sort=data&sortDir=desc`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.items.length, 1);
+  assert.equal(r.json.items[0].product.providerProductId, 'sku-mock-5551234567');
+  assert.equal(r.json.items[0].product.isActive, true);
+});
+
+test('H · /products?status=: ativos (padrão), desativados e todos; valor desconhecido é 400', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  assert.equal((await nav.req('GET', `${PRODUTOS}&status=active`)).json.totalCount, 1);
+  const inativos = await nav.req('GET', `${PRODUTOS}&status=inactive`);
+  assert.equal(inativos.status, 200, inativos.texto);
+  assert.equal(inativos.json.totalCount, 0); // o produto do teste está ativo
+  assert.deepEqual(inativos.json.items, []);
+  assert.equal((await nav.req('GET', `${PRODUTOS}&status=all`)).json.totalCount, 1);
+  for (const ruim of ['ativos', 'ALL', 'true']) {
+    const r = await nav.req('GET', `${PRODUTOS}&status=${ruim}`);
+    assert.equal(r.status, 400, `status=${ruim}`);
+    assert.equal(r.json.codigo, 'PRODUCT_ANALYTICS_INVALID_INPUT');
+  }
+});
+
+test('H · /products com mínimos: 0 e vazio são "sem filtro"; mínimo alto demais devolve vazio (200, nunca erro); "somente com dados" segue o volume', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const base = (await nav.req('GET', PRODUTOS)).json.items[0];
+  assert.equal((await nav.req('GET', `${PRODUTOS}&minViewed=0&minPurchased=`)).json.totalCount, 1);
+
+  const alto = await nav.req('GET', `${PRODUTOS}&minPurchased=999999999`);
+  assert.equal(alto.status, 200, alto.texto);
+  assert.equal(alto.json.totalCount, 0);
+  assert.deepEqual(alto.json.items, []);
+
+  const volume = ['itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased'].reduce((t, k) => t + (base.metrics[k] || 0), 0);
+  const comDados = await nav.req('GET', `${PRODUTOS}&hasData=true`);
+  assert.equal(comDados.status, 200, comDados.texto);
+  assert.equal(comDados.json.totalCount, volume > 0 ? 1 : 0);
+  assert.equal((await nav.req('GET', `${PRODUTOS}&hasData=false`)).json.totalCount, 1);
+});
+
+test('H · /products: filtros malformados são 400 estável, nunca 500 nem ignorados em silêncio', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const ruins = [
+    'minPurchased=-1', 'minViewed=abc', 'minRevenue=NaN', 'minCheckedOut=Infinity', 'minAddedToCart=1&minAddedToCart=2',
+    'hasData=talvez', 'hasData=1', 'status=inactive&status=all',
+  ];
+  for (const filtro of ruins) {
+    const r = await nav.req('GET', `${PRODUTOS}&${filtro}`);
+    assert.equal(r.status, 400, `${filtro}: ${r.texto}`);
+    assert.equal(r.json.codigo, 'PRODUCT_ANALYTICS_INVALID_INPUT', filtro);
+  }
+});
+
 test('H · cache reaproveitado entre requests HTTP: 2ª chamada dentro do TTL não bate no Google de novo', async () => {
   // Período PRÓPRIO deste teste (nunca usado por outro) — garante cache frio de verdade no início,
   // em vez de assumir que nenhum teste anterior já aqueceu o cache do mesmo período/escopo.

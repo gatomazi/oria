@@ -404,6 +404,210 @@ test('G · sort por métrica: produto com identity resolvida mas zero atividade 
   assert.equal(zs2.metrics.itemsViewed, 0);
 }));
 
+// ── "Mais dados primeiro" + filtros (rodada Desempenho de Produtos) ───────────────────────────────
+
+// Métricas explícitas (o `item` padrão traz números que atrapalhariam as comparações de ordem).
+const dados = (externalProductId, { v = 0, c = 0, k = 0, p = 0, r = 0 } = {}) => item(externalProductId, {
+  itemsViewed: v, itemsAddedToCart: c, itemsCheckedOut: k, itemsPurchased: p, itemRevenue: r,
+});
+const consulta = (svc, filters, extra = {}) => svc.getProductPerformance({
+  organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, filters, ...PERIODO, ...extra,
+});
+const nomes = (r) => r.items.map((i) => i.product.name);
+const MAIS_DADOS = { field: 'data', direction: 'desc' };
+
+async function catalogoDeDados(provider) {
+  // Zeta e Beta têm dado (Beta mais); Alfa e Delta não foram observados pelo GA4.
+  const ids = await semearCatalogo(ORG_A, STORE_A, provider, [
+    { providerProductId: `${provider}-z`, name: 'Zeta' }, { providerProductId: `${provider}-b`, name: 'Beta' },
+    { providerProductId: `${provider}-a`, name: 'Alfa' }, { providerProductId: `${provider}-d`, name: 'Delta' },
+  ]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider });
+  return ids;
+}
+
+test('D · mais dados primeiro: quem tem dado vem por volume; o RESTO do catálogo vem depois, por nome (nunca escondido)', () => em(ORG_A, STORE_A, async () => {
+  await catalogoDeDados('md_provider');
+  const { registry } = registryComAnalytics([dados('md_provider-z', { v: 5 }), dados('md_provider-b', { v: 50 })]);
+  const r = await consulta(montarServico(registry), { provider: 'md_provider' }, { sort: MAIS_DADOS });
+  assert.deepEqual(nomes(r), ['Beta', 'Zeta', 'Alfa', 'Delta']);
+  assert.equal(r.totalCount, 4); // o catálogo todo, não só quem tem dado
+  assert.equal(r.items[2].metrics, null); // Alfa: nunca observado — "—", nunca 0 inventado
+}));
+
+test('D · mais dados primeiro: volume = visualizações + carrinho + checkout + compras; empate desempata por compras, checkout, carrinho', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'md_tie', [
+    { providerProductId: 'tie-x', name: 'X' }, { providerProductId: 'tie-y', name: 'Y' }, { providerProductId: 'tie-w', name: 'W' },
+  ]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'md_tie' });
+  const { registry } = registryComAnalytics([
+    dados('tie-x', { v: 10 }), // volume 10, 0 compras
+    dados('tie-y', { v: 9, p: 1 }), // volume 10, 1 compra → à frente de X
+    dados('tie-w', { v: 1, c: 1, k: 1, p: 1, r: 9999 }), // volume 4: a receita NÃO entra no volume
+  ]);
+  const r = await consulta(montarServico(registry), { provider: 'md_tie' }, { sort: MAIS_DADOS });
+  assert.deepEqual(nomes(r), ['Y', 'X', 'W']);
+}));
+
+test('D · mais dados primeiro: a página atravessa a fronteira ranqueados → cauda sem repetir nem perder produto', () => em(ORG_A, STORE_A, async () => {
+  await catalogoDeDados('md_pag');
+  const { registry } = registryComAnalytics([dados('md_pag-z', { v: 5 }), dados('md_pag-b', { v: 50 })]);
+  const svc = montarServico(registry);
+
+  // limit 3 → [Beta, Zeta | Alfa] e depois [Delta]
+  const p1 = await consulta(svc, { provider: 'md_pag' }, { sort: MAIS_DADOS, pagination: { limit: 3 } });
+  assert.deepEqual(nomes(p1), ['Beta', 'Zeta', 'Alfa']);
+  assert.equal(p1.nextCursor, '2');
+  const p2 = await consulta(svc, { provider: 'md_pag' }, { sort: MAIS_DADOS, pagination: { limit: 3, cursor: p1.nextCursor } });
+  assert.deepEqual(nomes(p2), ['Delta']);
+  assert.equal(p2.nextCursor, null);
+
+  // limit 1 → uma por página, na ordem exata, cursor encadeado até acabar
+  const vistos = [];
+  let cursor;
+  for (let i = 0; i < 6; i += 1) {
+    const p = await consulta(svc, { provider: 'md_pag' }, { sort: MAIS_DADOS, pagination: { limit: 1, cursor } });
+    vistos.push(...nomes(p));
+    assert.equal(p.totalCount, 4);
+    cursor = p.nextCursor;
+    if (!cursor) break;
+  }
+  assert.deepEqual(vistos, ['Beta', 'Zeta', 'Alfa', 'Delta']);
+  assert.equal(cursor, null);
+}));
+
+test('D · mais dados primeiro: sem NENHUM produto com dado no período, é o catálogo por nome (a tela nunca fica vazia por isso)', () => em(ORG_A, STORE_A, async () => {
+  await catalogoDeDados('md_vazio');
+  const { registry } = registryComAnalytics([dados('id-que-nao-e-de-produto-nenhum', { v: 99 })]);
+  const r = await consulta(montarServico(registry), { provider: 'md_vazio' }, { sort: MAIS_DADOS });
+  assert.deepEqual(nomes(r), ['Alfa', 'Beta', 'Delta', 'Zeta']);
+  assert.equal(r.totalCount, 4);
+}));
+
+test('D · mais dados primeiro num período SEM linha de analytics: cai no catálogo por nome, com insufficient_data', () => em(ORG_A, STORE_A, async () => {
+  await catalogoDeDados('md_semga');
+  const { registry } = registryComAnalytics([]);
+  const r = await consulta(montarServico(registry), { provider: 'md_semga' }, { sort: MAIS_DADOS });
+  assert.deepEqual(nomes(r), ['Alfa', 'Beta', 'Delta', 'Zeta']);
+  assert.ok(r.items.every((i) => i.diagnostics.includes('insufficient_data')));
+}));
+
+test('D · status: padrão só ativos; inactive só desativados; all os dois — com dado ou sem', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearCatalogo(ORG_A, STORE_A, 'st_provider', [
+    { providerProductId: 'st-on', name: 'Ativo' }, { providerProductId: 'st-off', name: 'Desativado' }, { providerProductId: 'st-off2', name: 'Desativado sem dado' },
+  ]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'st_provider' });
+  await sup.query('UPDATE commerce_products SET is_active = false WHERE id = ANY($1::uuid[])', [[ids.get('st-off'), ids.get('st-off2')]]);
+  const { registry } = registryComAnalytics([dados('st-on', { v: 3 }), dados('st-off', { v: 30 })]);
+  const svc = montarServico(registry);
+  const porStatus = async (status, sort) => nomes(await consulta(svc, { provider: 'st_provider', status }, { sort }));
+
+  for (const sort of [MAIS_DADOS, { field: 'name', direction: 'asc' }, undefined]) {
+    assert.deepEqual(await porStatus(undefined, sort), ['Ativo'], `padrão (${sort && sort.field})`);
+    assert.deepEqual((await porStatus('inactive', sort)).sort(), ['Desativado', 'Desativado sem dado'], `inactive (${sort && sort.field})`);
+    assert.deepEqual((await porStatus('all', sort)).sort(), ['Ativo', 'Desativado', 'Desativado sem dado'], `all (${sort && sort.field})`);
+  }
+  // Ordenar por MÉTRICA continua só com quem tem identity no GA4 (contrato da Fase G.1): o desativado
+  // SEM dado nunca foi observado, então não entra — mas o desativado com dado entra, e status vale.
+  const porMetrica = { field: 'itemsViewed', direction: 'desc' };
+  assert.deepEqual(await porStatus(undefined, porMetrica), ['Ativo']);
+  assert.deepEqual(await porStatus('inactive', porMetrica), ['Desativado']);
+  assert.deepEqual(await porStatus('all', porMetrica), ['Desativado', 'Ativo']);
+  // mais dados primeiro dentro de "all": o desativado COM dado (30) vem antes do ativo (3)
+  assert.deepEqual(await porStatus('all', MAIS_DADOS), ['Desativado', 'Ativo', 'Desativado sem dado']);
+  const linha = (await consulta(svc, { provider: 'st_provider', status: 'inactive' })).items[0];
+  assert.equal(linha.product.isActive, false); // a tela consegue rotular o desativado
+}));
+
+test('D · status inválido é erro do service (nunca vira "ativos" em silêncio)', () => em(ORG_A, STORE_A, async () => {
+  const { registry } = registryComAnalytics([]);
+  await assert.rejects(consulta(montarServico(registry), { status: 'ativos' }), TypeError);
+}));
+
+test('D · mínimo de comprados com ordenação por nome: o banco ordena, só passa quem tem >= o mínimo, total é dos que passaram', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'mn_provider', [
+    { providerProductId: 'mn-1', name: 'Nenhuma' }, { providerProductId: 'mn-2', name: 'Duas' }, { providerProductId: 'mn-3', name: 'Cinco' }, { providerProductId: 'mn-4', name: 'Sem dado' },
+  ]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'mn_provider' });
+  const { registry } = registryComAnalytics([dados('mn-1', { v: 100 }), dados('mn-2', { v: 10, p: 2 }), dados('mn-3', { v: 8, p: 5 })]);
+  const svc = montarServico(registry);
+  const r = await consulta(svc, { provider: 'mn_provider', minPurchased: 2 }, { sort: { field: 'name', direction: 'asc' } });
+  assert.deepEqual(nomes(r), ['Cinco', 'Duas']); // exatamente no limite (2) passa
+  assert.equal(r.totalCount, 2);
+  const pag = await consulta(svc, { provider: 'mn_provider', minPurchased: 2 }, { sort: { field: 'name', direction: 'asc' }, pagination: { limit: 1 } });
+  assert.deepEqual(nomes(pag), ['Cinco']);
+  assert.equal(pag.nextCursor, '2');
+}));
+
+test('D · mínimos combinam (E): checkout >= 2 e receita >= 50; produto sem dado e métrica nula ficam de fora', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'cb_provider', [
+    { providerProductId: 'cb-1', name: 'Passa' }, { providerProductId: 'cb-2', name: 'Pouca receita' }, { providerProductId: 'cb-3', name: 'Pouco checkout' },
+  ]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'cb_provider' });
+  const { registry } = registryComAnalytics([
+    dados('cb-1', { v: 9, k: 2, r: 50 }), dados('cb-2', { v: 9, k: 5, r: 49.9 }), dados('cb-3', { v: 9, k: 1, r: 500 }),
+  ]);
+  const r = await consulta(montarServico(registry), { provider: 'cb_provider', minCheckedOut: 2, minRevenue: 50 }, { sort: MAIS_DADOS });
+  assert.deepEqual(nomes(r), ['Passa']);
+}));
+
+test('D · filtro de métrica com "mais dados primeiro" não traz a cauda (produto sem dado não satisfaz "mínimo de X")', () => em(ORG_A, STORE_A, async () => {
+  await catalogoDeDados('md_filtro');
+  const { registry } = registryComAnalytics([dados('md_filtro-z', { v: 5, p: 1 }), dados('md_filtro-b', { v: 50 })]);
+  const svc = montarServico(registry);
+  const r = await consulta(svc, { provider: 'md_filtro', minPurchased: 1 }, { sort: MAIS_DADOS });
+  assert.deepEqual(nomes(r), ['Zeta']);
+  assert.equal(r.totalCount, 1);
+  assert.equal(r.nextCursor, null);
+  const semTail = await consulta(svc, { provider: 'md_filtro', hasData: true }, { sort: MAIS_DADOS });
+  assert.deepEqual(nomes(semTail), ['Beta', 'Zeta']); // "somente com dados": Alfa e Delta (sem dado) saem
+}));
+
+test('D · filtro de métrica combina com ordenação por outra métrica', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'fm_provider', [
+    { providerProductId: 'fm-1', name: 'Um' }, { providerProductId: 'fm-2', name: 'Dois' }, { providerProductId: 'fm-3', name: 'Três' },
+  ]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'fm_provider' });
+  const { registry } = registryComAnalytics([dados('fm-1', { v: 5, p: 1, r: 10 }), dados('fm-2', { v: 5, p: 3, r: 300 }), dados('fm-3', { v: 5, p: 0, r: 999 })]);
+  const r = await consulta(montarServico(registry), { provider: 'fm_provider', minPurchased: 1 }, { sort: { field: 'itemRevenue', direction: 'desc' } });
+  assert.deepEqual(nomes(r), ['Dois', 'Um']);
+}));
+
+test('D · métrica indisponível na propriedade (null) nunca satisfaz um mínimo > 0', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'nl_provider', [{ providerProductId: 'nl-1', name: 'Sem compras medidas' }]);
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'nl_provider' });
+  const { registry } = registryComAnalytics([item('nl-1', { itemsViewed: 40, itemsPurchased: null })]);
+  const svc = montarServico(registry);
+  assert.equal((await consulta(svc, { provider: 'nl_provider', minPurchased: 1 })).totalCount, 0);
+  assert.equal((await consulta(svc, { provider: 'nl_provider', minViewed: 1 })).totalCount, 1); // outra métrica segue valendo
+}));
+
+test('D · ninguém satisfaz o filtro: resposta vazia e honesta (totalCount 0), nunca erro — inclusive sem analytics no período', () => em(ORG_A, STORE_A, async () => {
+  await catalogoDeDados('vz_provider');
+  const { registry } = registryComAnalytics([dados('vz_provider-z', { v: 5 })]);
+  const r = await consulta(montarServico(registry), { provider: 'vz_provider', minPurchased: 1000 }, { sort: MAIS_DADOS });
+  assert.deepEqual(r.items, []);
+  assert.equal(r.totalCount, 0);
+  assert.equal(r.nextCursor, null);
+
+  const { registry: semGa } = registryComAnalytics([]);
+  const s = await consulta(montarServico(semGa), { provider: 'vz_provider', minViewed: 1 });
+  assert.deepEqual(s.items, []);
+  assert.equal(s.totalCount, 0);
+  assert.equal(s.coverage.status, 'insufficient_data'); // o "porquê" segue no coverage
+}));
+
+test('D · isolamento: mais dados primeiro nunca mistura produto de outro provider nem de outra Organization', () => em(ORG_A, STORE_A, async () => {
+  await semearCatalogo(ORG_A, STORE_A, 'iso_a', [{ providerProductId: 'isoa-1', name: 'Do A' }]);
+  await semearCatalogo(ORG_A, STORE_A, 'iso_b', [{ providerProductId: 'isob-1', name: 'Do B' }]);
+  await em(ORG_B, STORE_B, () => semearCatalogo(ORG_B, STORE_B, 'iso_a', [{ providerProductId: 'isoa-1', name: 'De outra Organization' }]));
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'iso_a' });
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider: 'iso_b' });
+  const { registry } = registryComAnalytics([dados('isoa-1', { v: 7 }), dados('isob-1', { v: 70 })]);
+  const r = await consulta(montarServico(registry), { provider: 'iso_a' }, { sort: MAIS_DADOS });
+  assert.deepEqual(nomes(r), ['Do A']);
+}));
+
 // ── Isolamento ────────────────────────────────────────────────────────────────────────────────
 
 test('G · Organization isolation: A não vê produto de B mesmo com o mesmo external id observado', async () => {
