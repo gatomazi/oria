@@ -175,3 +175,56 @@ test('textoAviso: traduz o aviso de cidade não reconhecida com uma ação concr
 test('textoAviso: um código sem tradução volta cru — nunca escondido, nunca inventado', () => {
   assert.equal(mod.textoAviso('layout_fallback_angle_not_compatible'), 'layout_fallback_angle_not_compatible');
 });
+
+// ------------------------------------------------------------------ interação × pessoas (achado real: primeiro uso)
+const CONVERSANDO = { id: 'talking', label: 'conversando', min_people: 2, max_people: 3 };
+const ESPONTANEO = { id: 'candid', label: 'espontâneo', min_people: 1, max_people: 4 };
+const FOTO_GRUPO = { id: 'group_photo', label: 'foto de grupo', min_people: 3, max_people: 4 };
+
+test('pessoasDaCena: people_count manda; sem ele conta subjects; sem subjects, 1 se há persona; sem prévia, null', () => {
+  assert.equal(mod.pessoasDaCena(null), null);
+  assert.equal(mod.pessoasDaCena({ people_count: 2, subjects: [], persona: 'x' }), 2);
+  assert.equal(mod.pessoasDaCena({ people_count: null, subjects: [{}, {}, {}], persona: 'x' }), 3);
+  assert.equal(mod.pessoasDaCena({ subjects: [], persona: 'Mulher 30-40' }), 1);
+  assert.equal(mod.pessoasDaCena({ subjects: [], persona: null }), 0);
+});
+
+test('interacaoCabe: 1 pessoa não cabe em "conversando" (2 a 3), mas cabe em "espontâneo" (1 a 4)', () => {
+  assert.equal(mod.interacaoCabe(CONVERSANDO, 1), false);
+  assert.equal(mod.interacaoCabe(ESPONTANEO, 1), true);
+  assert.equal(mod.interacaoCabe(CONVERSANDO, 2), true);
+  assert.equal(mod.interacaoCabe(CONVERSANDO, 3), true);
+  assert.equal(mod.interacaoCabe(FOTO_GRUPO, 2), false);
+});
+
+test('interacaoCabe: sem contagem conhecida nunca desabilita nada (a decisão continua sendo do core)', () => {
+  assert.equal(mod.interacaoCabe(CONVERSANDO, null), true);
+  assert.equal(mod.interacaoCabe(CONVERSANDO, undefined), true);
+});
+
+test('erroDeInteracaoIncompativel: reconhece a mensagem real do core e nenhuma outra', () => {
+  assert.equal(mod.erroDeInteracaoIncompativel('A interação escolhida não cabe na quantidade de pessoas da cena.'), true);
+  assert.equal(mod.erroDeInteracaoIncompativel('Ângulo não disponível para esta marca, nicho ou estratégia.'), false);
+  assert.equal(mod.erroDeInteracaoIncompativel(''), false);
+  assert.equal(mod.erroDeInteracaoIncompativel(undefined), false);
+});
+
+test('textoInteracaoIncompativel: nomeia a interação e a faixa de pessoas, e aponta a saída (nunca só "não cabe")', () => {
+  const texto = mod.textoInteracaoIncompativel(CONVERSANDO);
+  assert.match(texto, /"conversando" pede 2 a 3 pessoas/);
+  assert.match(texto, /Multipeça/);
+  assert.match(texto, /deixe o gerador escolher/);
+  assert.match(mod.textoInteracaoIncompativel({ id: 'x', label: 'olhando', min_people: 2, max_people: 2 }), /pede 2 pessoas/);
+  assert.match(mod.textoInteracaoIncompativel(undefined), /Multipeça/);
+});
+
+// ------------------------------------------------------------------ persona genérica do motor
+test('textoPersonaPadrao: só avisa quando a persona veio do padrão do motor — nunca para kit, custom ou sem pessoa', () => {
+  const texto = mod.textoPersonaPadrao({ persona_source: 'default' });
+  assert.match(texto, /Brand Kit nem no Nicho/);
+  assert.match(texto, /Marca e nicho/);
+  assert.equal(mod.textoPersonaPadrao({ persona_source: 'kit' }), null);
+  assert.equal(mod.textoPersonaPadrao({ persona_source: 'custom' }), null);
+  assert.equal(mod.textoPersonaPadrao({ persona_source: null }), null);
+  assert.equal(mod.textoPersonaPadrao(undefined), null);
+});

@@ -46,8 +46,9 @@ import {
 import { plural } from '../../lib/format';
 import { ENGINE_LABEL, FUNNEL_STAGE_LABEL, INTENT_DESCRICAO, INTENT_LABEL, type TextoMotor } from './criativosMotores';
 import {
-  CHAVES_FUNIL, CHAVES_REMARKETING, funnelOptions, intentsDisponiveis, limiteDeProdutos, lista_de, MAX_SUBJECTS_EDITAVEIS,
-  overridesAoTrocarDeMotor, remarketingOptions, restoDe, subjectsComOverride, texto_de, textoAviso, TEXTO_MOTOR_VAZIO,
+  CHAVES_FUNIL, CHAVES_REMARKETING, erroDeInteracaoIncompativel, funnelOptions, intentsDisponiveis, interacaoCabe, limiteDeProdutos,
+  lista_de, MAX_SUBJECTS_EDITAVEIS, overridesAoTrocarDeMotor, pessoasDaCena, remarketingOptions, restoDe, subjectsComOverride,
+  texto_de, textoAviso, textoInteracaoIncompativel, textoPersonaPadrao, TEXTO_MOTOR_VAZIO,
 } from './criativosMotorInput.mjs';
 
 // Fase E — UI V2 do gerador (Ângulos Limpos, produto único): "backend rico, planner inteligente, UI simples".
@@ -178,6 +179,9 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
   const [productIds, setProductIds] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ total: number; first: PlanSummary } | null>(null);
   const [erro, setErro] = useState('');
+  // Quantas pessoas tem a cena da prévia atual (null sem prévia) — só filtra o seletor de Interação.
+  const pessoasCena = pessoasDaCena(preview?.first);
+  const erroInteracao = erroDeInteracaoIncompativel(erro);
   const [ocupado, setOcupado] = useState(false);
 
   const [personalizar, setPersonalizar] = useState(false);
@@ -362,8 +366,17 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     createJob({ ...input, ...origem.actions[acao] }).then((job) => onJobCriado(job.id)).catch((e: Error) => setErro(e.message)).finally(() => setOcupado(false));
   }
 
+  // Achado real de uso: a interação escolhida para um estilo (ex.: "conversando", 2 a 3 pessoas) ficava presa ao
+  // trocar para outro estilo com outra quantidade de pessoas e a prévia falhava. Trocar de estilo, de modo
+  // (Um produto/Multipeça) ou de ângulo personalizado muda a cena de verdade — a interação volta ao padrão.
   function selecionarFamilia(family: AngleFamilyId) {
     setEscolha({ tipo: 'family', family });
+    setInteraction('');
+  }
+
+  function selecionarAnguloPersonalizado(id: string) {
+    setEscolha({ tipo: 'custom', id });
+    setInteraction('');
   }
 
   // Troca de motor (G.1 §3): nunca transporta texto/objetivo de um motor pro outro de forma incoerente —
@@ -395,6 +408,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     setCesta(false);
     setPersonalizar(false);
     setEscolha({ tipo: 'auto' });
+    setInteraction('');
     setOrigem(null);
     // `product_view` é só-produto-único no core (MULTI_PRODUCT_RULES.REMARKETING.singleOnlyIntents) —
     // se o lojista já tinha esse intent escolhido e muda para multipeça, ele deixa de ser uma opção
@@ -565,7 +579,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
                 <div role="radiogroup" aria-label="Ângulo personalizado" className="criativos-lista-check">
                   {outrosAngulos.map((a) => (
                     <Checkbox key={a.id} label={a.name} description={`${familias.find((f) => f.id === a.family)?.label || a.family}${a.scope === 'store' ? ' · desta Store' : ' · da Organization'}`}
-                      checked={escolha.tipo === 'custom' && escolha.id === a.id} onChange={() => setEscolha({ tipo: 'custom', id: a.id })} />
+                      checked={escolha.tipo === 'custom' && escolha.id === a.id} onChange={() => selecionarAnguloPersonalizado(a.id)} />
                   ))}
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => setCriar((c) => ({ ...c, aberto: true }))}>+ Criar ângulo personalizado</Button>
@@ -652,7 +666,13 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
                 <Field label="Interação" optional>
                   <Select value={interaction} onChange={(e) => setInteraction(e.target.value)}>
                     <option value="">Deixar o gerador escolher</option>
-                    {interactions.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+                    {/* Só desabilita com uma prévia válida (contagem de pessoas conhecida); a opção já escolhida
+                        nunca some. Cada opção mostra a faixa de pessoas que ela pede. */}
+                    {interactions.map((i) => (
+                      <option key={i.id} value={i.id} disabled={i.id !== interaction && !interacaoCabe(i, pessoasCena)}>
+                        {i.label}{i.min_people > 1 || i.max_people < 4 ? ` (${i.min_people === i.max_people ? i.min_people : `${i.min_people}–${i.max_people}`} pessoas)` : ''}
+                      </option>
+                    ))}
                   </Select>
                 </Field>
                 <Field label="Pessoas">
@@ -692,7 +712,15 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               </Disclosure>
             </FormSection>
 
-            {erro && <p className="ds-form-error" role="alert">{erro}</p>}
+            {erro && !erroInteracao && <p className="ds-form-error" role="alert">{erro}</p>}
+            {erro && erroInteracao && (
+              <>
+                <p className="ds-form-error" role="alert">{textoInteracaoIncompativel(interactions.find((i) => i.id === interaction))}</p>
+                <FormActions>
+                  <Button variant="secondary" onClick={() => setInteraction('')}>Deixar o gerador escolher a interação</Button>
+                </FormActions>
+              </>
+            )}
             {!origem && (
               <FormActions>
                 {/* Achado real de uso: a seleção atual pode não ter uma prévia válida (erro de
@@ -714,7 +742,9 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               NOVA que falhou — `preview` e `erro` sempre trocam juntos (mesmo efeito, acima), então aqui
               é só decidir QUAL mensagem mostrar; nunca uma dl desatualizada ao lado de um erro. */}
           {erro && !preview && (
-            <Callout tone="danger" title="Prévia indisponível para esta seleção">{erro}</Callout>
+            <Callout tone="danger" title="Prévia indisponível para esta seleção">
+              {erroInteracao ? 'A interação escolhida não combina com a quantidade de pessoas desta cena — veja como ajustar logo abaixo do formulário.' : erro}
+            </Callout>
           )}
           {!erro && !preview && !rec && <p>Escolha um produto{engine !== 'CLEAN_ANGLES' ? ' e um objetivo' : ''} para ver a recomendação.</p>}
           {preview && (
@@ -747,6 +777,9 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
             </dl>
           )}
           {preview && preview.first.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.first.warnings.map(textoAviso).join(', ')}</Callout>}
+          {/* Achado real de uso: sem personas sugeridas no Brand Kit/Nicho o motor usa duas pessoas genéricas e a
+              tela não dizia nada — nem quem desenvolveu entendia de onde vinha aquela pessoa. Informativo, não erro. */}
+          {preview && textoPersonaPadrao(preview.first) && <Callout tone="info" title="Pessoa genérica do motor">{textoPersonaPadrao(preview.first)}</Callout>}
         </Card>
       </div>
 
