@@ -150,3 +150,54 @@ const TEXTO_AVISO = {
 export function textoAviso(codigo) {
   return TEXTO_AVISO[codigo] || codigo;
 }
+
+// ------------------------------------------------------------------ interação × quantidade de pessoas
+// Achado real de uso (primeiro criativo, conta interna): "Conexão / vínculo" com UM produto gera 1 pessoa (só a
+// multipeça, ou o preset Presente, gera 2+), mas o seletor de Interação oferecia as 10 interações — "conversando"
+// (2 a 3 pessoas) fazia a prévia falhar com uma mensagem genérica. O catálogo já traz min/max de pessoas por
+// interação; a tela só não usava.
+
+// Quantas pessoas a cena da prévia tem. `people_count` (plano v2) manda; sem ele, conta os `subjects`; sem
+// nenhum dos dois, 1 se há persona, 0 se a cena não usa pessoa. `null` = ainda sem prévia (nada a filtrar).
+export function pessoasDaCena(resumo) {
+  if (!resumo) return null;
+  if (typeof resumo.people_count === 'number') return resumo.people_count;
+  const subjects = Array.isArray(resumo.subjects) ? resumo.subjects.length : 0;
+  if (subjects > 0) return subjects;
+  return resumo.persona ? 1 : 0;
+}
+
+// Uma interação cabe se a quantidade de pessoas está dentro do intervalo do catálogo. Sem contagem conhecida,
+// nunca esconde nem desabilita nada (a decisão continua sendo do core).
+export function interacaoCabe(interacao, pessoas) {
+  if (pessoas === null || pessoas === undefined) return true;
+  return interacao.min_people <= pessoas && pessoas <= interacao.max_people;
+}
+
+// Trecho fixo da mensagem do core (errors.py::INTERACTION_INCOMPATIBLE) — o erro chega à tela só como texto;
+// um teste do core fixa que esta frase continua nela.
+export const TRECHO_INTERACAO_INCOMPATIVEL = 'não cabe na quantidade de pessoas';
+
+export function erroDeInteracaoIncompativel(mensagem) {
+  return typeof mensagem === 'string' && mensagem.includes(TRECHO_INTERACAO_INCOMPATIVEL);
+}
+
+// Explicação acionável no lugar da mensagem genérica. `interacao` é a entrada do catálogo (pode faltar).
+export function textoInteracaoIncompativel(interacao) {
+  if (!interacao) {
+    return 'A interação escolhida não cabe na quantidade de pessoas desta cena. Deixe o gerador escolher, ou use Multipeça para ter mais pessoas.';
+  }
+  const faixa = interacao.min_people === interacao.max_people
+    ? `${interacao.min_people} pessoas`
+    : `${interacao.min_people} a ${interacao.max_people} pessoas`;
+  return `"${interacao.label}" pede ${faixa}, mas esta cena tem outra quantidade. Escolha outra interação, deixe o gerador escolher, ou use Multipeça para ter mais pessoas.`;
+}
+
+// ------------------------------------------------------------------ personas: aviso de "sem personas cadastradas"
+// `persona_source` vem do resumo do plano (lib/creative-core/requests.js::personaSource). 'default' = nem o
+// Brand Kit nem o Nicho têm personas sugeridas, então o core usou as duas pessoas genéricas embutidas.
+export const TEXTO_PERSONA_PADRAO = 'Esta conta ainda não tem personas sugeridas no Brand Kit nem no Nicho, então o gerador usou uma pessoa genérica do próprio motor (mulher ou homem de 30 a 40 anos, estilo casual) — não é uma pessoa do seu público. Para usar pessoas da sua marca, adicione "personas sugeridas" ao Brand Kit em "Marca e nicho" (modo avançado).';
+
+export function textoPersonaPadrao(resumo) {
+  return resumo && resumo.persona_source === 'default' ? TEXTO_PERSONA_PADRAO : null;
+}

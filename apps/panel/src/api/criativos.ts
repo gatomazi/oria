@@ -111,6 +111,10 @@ export interface PlanSummary {
   angle_recommendation: AngleRecommendation | null;
   placement: string;
   persona: string | null;
+  // De onde veio a persona: 'default' = nem o Brand Kit nem o Nicho têm personas sugeridas (o motor usou uma pessoa
+  // genérica embutida); 'custom' = escolhida pelo lojista; 'kit' = sugerida pelo Brand Kit/Nicho; null = sem pessoa.
+  persona_source?: 'default' | 'custom' | 'kit' | null;
+  people_count?: number | null;
   // Fase G.2 — "quem veste o quê", leitura do que o plano já resolveu (nunca calculado na tela). Mesmo tipo
   // de "Copiar dados" (`CenaPessoa`): um item daqui pode voltar, sem alteração, dentro de `subjects` de um
   // POST /jobs novo — só `wears_product_id` é editável na UI. `product_name` (extra, via índice) é só para

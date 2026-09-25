@@ -249,5 +249,23 @@ def test_given_custom_persona_or_product_only_angle_then_rules_apply():
     assert resolve_persona("none", None, brand_kit={}, niche_kit={}, seed=0) is None
 
 
+def test_given_no_suggested_personas_then_the_default_pool_ids_keep_the_prefix_the_panel_relies_on():
+    # O painel avisa "pessoa genérica do motor" quando `persona.id` começa com `default_` e a origem é automática
+    # (apps/panel/lib/creative-core/requests.js::personaSource). Renomear estes ids sem ajustar o painel
+    # esconderia o aviso em silêncio — este teste fixa a convenção.
+    from creative_core.personas import DEFAULT_PERSONAS
+    assert DEFAULT_PERSONAS and all(p["id"].startswith("default_") and p["source"] == "automatic" for p in DEFAULT_PERSONAS)
+    picked = resolve_persona("automatic", None, brand_kit={}, niche_kit={}, seed=0)
+    assert picked["id"].startswith("default_")
+
+
+def test_given_an_interaction_that_does_not_fit_the_people_count_then_the_message_keeps_the_phrase_the_panel_matches():
+    # A tela reconhece este erro pelo trecho abaixo (criativosMotorInput.mjs::TRECHO_INTERACAO_INCOMPATIVEL) para
+    # trocar a mensagem genérica por uma explicação acionável.
+    from creative_core.errors import ERROR_CATALOG
+    message, _retryable, _cause = ERROR_CATALOG["INTERACTION_INCOMPATIBLE"]
+    assert "não cabe na quantidade de pessoas" in message
+
+
 if __name__ == "__main__":
     run(globals())

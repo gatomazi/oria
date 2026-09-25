@@ -388,6 +388,16 @@ function subjectsSummary(plan) {
   }));
 }
 
+// De onde veio a persona automática: 'custom' (escolhida pelo lojista), 'default' (nenhuma persona sugerida no
+// Brand Kit nem no Nicho — o core cai nas duas personas genéricas embutidas, ids `default_*`, ver
+// creative_core/personas.py::DEFAULT_PERSONAS; um teste do core fixa essa convenção) ou 'kit'. `null`: cena sem
+// pessoa. Só a tela usa isto, para avisar o lojista — nunca entra no plano nem no prompt.
+function personaSource(persona) {
+  if (!persona) return null;
+  if (persona.source === 'custom') return 'custom';
+  return /^default_/.test(String(persona.id || '')) ? 'default' : 'kit';
+}
+
 function planSummary(plan) {
   return {
     plan_id: plan.plan_id,
@@ -396,6 +406,7 @@ function planSummary(plan) {
     angle: plan.angle && { id: plan.angle.id, label: plan.angle.label },
     placement: plan.placement && plan.placement.id,
     persona: plan.persona ? plan.persona.label : null,
+    persona_source: personaSource(plan.persona),
     subjects: subjectsSummary(plan),
     scene: plan.context && plan.context.scene,
     context_id: plan.context && plan.context.context_id,
@@ -455,4 +466,4 @@ function planPrompt(plan) {
   };
 }
 
-module.exports = { normalizeJobInput, buildRequests, planSummary, planPrompt, InputError, MAX_ITEMS_PER_JOB };
+module.exports = { normalizeJobInput, buildRequests, planSummary, personaSource, planPrompt, InputError, MAX_ITEMS_PER_JOB };
