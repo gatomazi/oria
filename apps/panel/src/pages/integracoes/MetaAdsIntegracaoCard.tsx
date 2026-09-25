@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Callout, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge } from '../../components/ds';
-import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
+import { Secao, useAtualizarResumo, useEhOwner } from './IntegracaoAcordeao';
 import { formatData, formatDiaISO, idadeDoCache, plural } from '../../lib/format';
 import {
   contaEstaAtiva, definirLojaDaContaMeta, desconectarMeta, getMetaStatus, listarMetaContas, mascararContaMeta, mensagemErroMeta,
@@ -40,6 +40,7 @@ function descricaoConta(conta: MetaConta) {
 
 export function MetaAdsIntegracaoCard() {
   const atualizarResumo = useAtualizarResumo();
+  const ehOwner = useEhOwner();
   const [dados, setDados] = useState<MetaStatus | null>(null);
   const [erro, setErro] = useState('');
   const [escolhendo, setEscolhendo] = useState(false);
@@ -164,7 +165,7 @@ export function MetaAdsIntegracaoCard() {
 
               <span className="ga-linha__acao">
                 {!conectado ? (
-                  dados.oauthConfigurado ? (
+                  !ehOwner ? null : dados.oauthConfigurado ? (
                     <a className="ds-btn ds-btn--secondary ds-btn--sm" href={urlConectarMeta()}>
                       {conexao.status === 'disconnected' ? 'Conectar' : 'Reconectar'}
                     </a>
@@ -174,14 +175,14 @@ export function MetaAdsIntegracaoCard() {
                     </Button>
                   )
                 ) : precisaEscolherConta ? (
-                  <Button variant="secondary" size="sm" onClick={abrirEscolha}>Escolher conta</Button>
+                  ehOwner ? <Button variant="secondary" size="sm" onClick={abrirEscolha}>Escolher conta</Button> : null
                 ) : (
                   <>
                     <Button variant="ghost" size="sm" disabled={dados.syncEmAndamento} onClick={sincronizar}>
                       {dados.syncEmAndamento ? 'Sincronizando…' : 'Sincronizar agora'}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={abrirEscolha}>Trocar conta</Button>
-                    <Button variant="ghost" size="sm" onClick={() => setConfirmandoDesconexao(true)}>Desconectar</Button>
+                    {ehOwner && <Button variant="ghost" size="sm" onClick={abrirEscolha}>Trocar conta</Button>}
+                    {ehOwner && <Button variant="ghost" size="sm" onClick={() => setConfirmandoDesconexao(true)}>Desconectar</Button>}
                   </>
                 )}
               </span>
@@ -202,7 +203,9 @@ export function MetaAdsIntegracaoCard() {
 
             {/* A conta atribui o tráfego à loja da Organization ativa (a loja vem da sessão — Fase 3).
                 Sem o vínculo o consolidado se recusa a calcular MER. */}
-            {contaSelecionada && (
+            {!ehOwner && <p className="pc-nota">Só o responsável pela loja conecta, troca ou desconecta esta integração.</p>}
+
+            {contaSelecionada && ehOwner && (
               <div className="ga-linha__form">
                 {contaSelecionada.atribuidaAEstaStore ? (
                   <span className="pc-nota">Tráfego desta conta leva para a sua loja.</span>

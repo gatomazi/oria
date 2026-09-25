@@ -2,9 +2,8 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Button, Callout, ConfirmDialog, ErrorState, Field, FormActions, FormStack, Input, Skeleton, StatusBadge } from '../../components/ds';
 import { copiar, formatData } from '../../lib/format';
 import { toast } from '../../lib/toast';
-import { useAuth } from '../../auth/AuthContext';
 import { InkWebhookGuia } from './InkWebhookGuia';
-import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
+import { Secao, useAtualizarResumo, useEhOwner } from './IntegracaoAcordeao';
 import {
   gerarUrlWebhookInk,
   getInkCredenciais,
@@ -35,11 +34,6 @@ export function useInkCredenciais() {
 }
 
 export type InkCredenciaisEstado = ReturnType<typeof useInkCredenciais>;
-
-function useEhOwner(): boolean {
-  const { organizacaoAtiva } = useAuth();
-  return organizacaoAtiva?.papel === 'owner';
-}
 
 export function InkConexaoSecao({ estado, lojaNome }: { estado: InkCredenciaisEstado; lojaNome: string | null }) {
   const ehOwner = useEhOwner();

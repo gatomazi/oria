@@ -748,6 +748,9 @@ const AUTH = pgPoolReal && CONFIG_AUTH.disponivel
   })
   : null;
 const TENANT = pgPoolReal ? createTenantPipeline({ poolReal: pgPoolReal }) : null;
+// Ações que criam, trocam ou revogam credencial/vínculo de integração exigem `owner` da Organization ativa (mesma política da
+// credencial da Ink e do número do WhatsApp). Sem Postgres não há papel a conferir: a própria rota responde 503 antes de qualquer mutação.
+const exigirOwner = (req, res, next) => (TENANT ? TENANT.requireOwner(req, res, next) : next());
 
 // Pipeline de toda rota de negócio (Fase 3): sessão → Organization ativa → membership → Store →
 // contexto → entitlement da feature da rota. Mantém o nome `requireAdmin` (222 rotas).
@@ -9917,7 +9920,7 @@ app.get('/api/admin/integrations/google-analytics/status', requireAdmin, async (
   }
 });
 
-app.get('/api/admin/integrations/google-analytics/connect', requireAdmin, async (req, res) => {
+app.get('/api/admin/integrations/google-analytics/connect', requireAdmin, exigirOwner, async (req, res) => {
   // A Store do contexto é quem conecta; ela vai no `state` (anti-CSRF, uso único, amarrado à pessoa,
   // à sessão e à Organization). O callback confere que a Store do contexto é a mesma — nunca aceita
   // Organization/Store vinda do navegador.
@@ -10006,7 +10009,7 @@ app.get('/api/admin/integrations/google-analytics/properties', requireAdmin, asy
   }
 });
 
-app.post('/api/admin/integrations/google-analytics/property', requireAdmin, async (req, res) => {
+app.post('/api/admin/integrations/google-analytics/property', requireAdmin, exigirOwner, async (req, res) => {
   const { propertyId, propertyName } = req.body || {};
   if (!propertyId) return res.status(400).json({ error: 'propertyId é obrigatório' });
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
@@ -10020,7 +10023,7 @@ app.post('/api/admin/integrations/google-analytics/property', requireAdmin, asyn
   }
 });
 
-app.post('/api/admin/integrations/google-analytics/disconnect', requireAdmin, async (req, res) => {
+app.post('/api/admin/integrations/google-analytics/disconnect', requireAdmin, exigirOwner, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'Google Analytics exige Postgres configurado' });
   try {
     // Revoga no Google também — best-effort, não impede a desconexão local se a revogação falhar.
@@ -10437,7 +10440,7 @@ async function googleAdsClient() {
 
 // ── OAuth ───────────────────────────────────────────────────────────────────────────────────
 
-app.get('/api/admin/integrations/google-ads/oauth/start', requireAdmin, async (req, res) => {
+app.get('/api/admin/integrations/google-ads/oauth/start', requireAdmin, exigirOwner, async (req, res) => {
   if (!googleAdsOAuthConfigurado()) {
     return res.status(503).json({ error: 'a conexão com o Google ainda não está habilitada na plataforma', codigo: 'PLATFORM_UNAVAILABLE' });
   }
@@ -10504,7 +10507,7 @@ async function concluirOAuthGoogleAds(code) {
   }
 }
 
-app.post('/api/admin/integrations/google-ads/disconnect', requireAdmin, async (req, res) => {
+app.post('/api/admin/integrations/google-ads/disconnect', requireAdmin, exigirOwner, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   try {
     const integracoes = exigirIntegracoes();
@@ -10722,7 +10725,7 @@ app.post('/api/admin/integrations/google-ads/contas/sincronizar', requireAdmin, 
   }
 });
 
-app.post('/api/admin/integrations/google-ads/contas/:customerId/selecionar', requireAdmin, async (req, res) => {
+app.post('/api/admin/integrations/google-ads/contas/:customerId/selecionar', requireAdmin, exigirOwner, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   const id = gadsMetricas.normalizarCustomerId(req.params.customerId);
   if (!id) return res.status(400).json({ error: 'customer id inválido' });
@@ -10776,7 +10779,7 @@ const googleAdsSyncEmAndamento = () => googleAdsSyncEmAndamentoPorOrg.has(orgDoC
 
 // Atribuir a loja sem precisar refazer a escolha da conta. Sem isso, o aviso de "sem loja
 // atribuída" apontava um problema e não oferecia caminho: era preciso passar por "Trocar conta".
-app.post('/api/admin/integrations/google-ads/contas/:customerId/loja', requireAdmin, async (req, res) => {
+app.post('/api/admin/integrations/google-ads/contas/:customerId/loja', requireAdmin, exigirOwner, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
   const id = gadsMetricas.normalizarCustomerId(req.params.customerId);
   if (!id) return res.status(400).json({ error: 'customer id inválido' });
@@ -11501,7 +11504,7 @@ app.get('/api/admin/integrations/meta/status', requireAdmin, async (req, res) =>
   }
 });
 
-app.get('/api/admin/integrations/meta/connect', requireAdmin, async (req, res) => {
+app.get('/api/admin/integrations/meta/connect', requireAdmin, exigirOwner, async (req, res) => {
   // Configuração da PLATAFORMA (app Meta global): o tenant vê o conceito, não o nome das variáveis.
   if (!metaOAuthConfigurado()) {
     return res.status(503).json({ error: 'a conexão com a Meta ainda não está habilitada na plataforma', codigo: 'PLATFORM_UNAVAILABLE' });
@@ -11604,7 +11607,7 @@ app.get('/api/admin/integrations/meta/ad-accounts', requireAdmin, async (req, re
   }
 });
 
-app.post('/api/admin/integrations/meta/select-account', requireAdmin, async (req, res) => {
+app.post('/api/admin/integrations/meta/select-account', requireAdmin, exigirOwner, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'a integração com a Meta exige Postgres configurado' });
   const { metaAccountId } = req.body || {};
   // A conta atende a Store da Organization da sessão (PD-016, 1:1). Identidade canônica: `store_id`;
@@ -11673,7 +11676,7 @@ app.post('/api/admin/integrations/meta/sync', requireAdmin, async (req, res) => 
   }
 });
 
-app.post('/api/admin/integrations/meta/disconnect', requireAdmin, async (req, res) => {
+app.post('/api/admin/integrations/meta/disconnect', requireAdmin, exigirOwner, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'a integração com a Meta exige Postgres configurado' });
   try {
     await desconectarMeta();

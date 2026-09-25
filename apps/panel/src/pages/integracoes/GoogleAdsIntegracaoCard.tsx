@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Callout, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge } from '../../components/ds';
-import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
+import { Secao, useAtualizarResumo, useEhOwner } from './IntegracaoAcordeao';
 import { formatData, plural } from '../../lib/format';
 import {
   atribuirLojaGoogleAds, desconectarGoogleAds, getGoogleAdsStatus, listarGoogleAdsContas, mensagemErroGoogleAds,
@@ -24,6 +24,7 @@ function descricaoConta(conta: GoogleAdsConta): string {
 
 export function GoogleAdsIntegracaoCard() {
   const atualizarResumo = useAtualizarResumo();
+  const ehOwner = useEhOwner();
   const [dados, setDados] = useState<GoogleAdsStatus | null>(null);
   const [erro, setErro] = useState('');
   const [erroAcao, setErroAcao] = useState('');
@@ -107,7 +108,7 @@ export function GoogleAdsIntegracaoCard() {
     <Secao
       description="Conecte para acompanhar gasto e desempenho das campanhas do Google Ads dentro do painel."
       action={
-        dados.conectado && !emErro ? (
+        ehOwner && dados.conectado && !emErro ? (
           <Button variant="ghost" size="sm" onClick={() => setConfirmandoDesconexao(true)}>Desconectar</Button>
         ) : undefined
       }
@@ -117,6 +118,8 @@ export function GoogleAdsIntegracaoCard() {
           A conexão com o Google Ads ainda não está habilitada na plataforma. Assim que estiver, o botão Conectar fica disponível aqui.
         </Callout>
       )}
+
+      {!ehOwner && <p className="pc-nota">Só o responsável pela loja conecta, troca ou desconecta esta integração.</p>}
 
       <p className="ds-card__status">
         <StatusBadge
@@ -147,7 +150,7 @@ export function GoogleAdsIntegracaoCard() {
             criar e excluir” porque esse é o único escopo que a API do Google Ads oferece — não
             existe versão somente leitura. O Oria não cria, não pausa e não edita nada.
           </Callout>
-          <Button onClick={conectar}>Conectar Google Ads</Button>
+          {ehOwner && <Button onClick={conectar}>Conectar Google Ads</Button>}
         </>
       )}
 
@@ -166,7 +169,7 @@ export function GoogleAdsIntegracaoCard() {
                   distorceria a conta.
                   {/* O aviso resolve o problema que aponta: antes era preciso passar por "Trocar
                       conta" só para escolher a loja. */}
-                  <div className="ga-linha__acao">
+                  {ehOwner && <div className="ga-linha__acao">
                     <Button
                       size="sm"
                       disabled={salvandoLoja}
@@ -182,7 +185,7 @@ export function GoogleAdsIntegracaoCard() {
                     >
                       {salvandoLoja ? 'Salvando…' : 'Vincular à loja'}
                     </Button>
-                  </div>
+                  </div>}
                 </Callout>
               )}
               <p className="pc-nota">
@@ -192,15 +195,17 @@ export function GoogleAdsIntegracaoCard() {
                 <Button variant="secondary" size="sm" disabled={sincronizando || !!dados.syncEmAndamento} onClick={sincronizar}>
                   {sincronizando || dados.syncEmAndamento ? 'Sincronizando…' : 'Sincronizar agora'}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => { setEscolhendo(true); setContaEscolhida(contaAtiva.customerId); }}>
-                  Trocar conta
-                </Button>
+                {ehOwner && (
+                  <Button variant="ghost" size="sm" onClick={() => { setEscolhendo(true); setContaEscolhida(contaAtiva.customerId); }}>
+                    Trocar conta
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
             <Callout tone="info" title="Escolha a conta de anúncios">
               <div className="ga-linha__acao">
-                <Button size="sm" onClick={() => setEscolhendo(true)}>Escolher conta</Button>
+                {ehOwner && <Button size="sm" onClick={() => setEscolhendo(true)}>Escolher conta</Button>}
                 <Button variant="ghost" size="sm" disabled={atualizandoContas} onClick={atualizarContas}>
                   {atualizandoContas ? 'Buscando…' : 'Buscar contas'}
                 </Button>

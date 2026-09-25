@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { Icon, StatusBadge } from '../../components/ds';
+import { useAuth } from '../../auth/AuthContext';
 import type { ResumoProvedor } from './estadoIntegracao';
 
 // Card expansível de um provedor (Integrações). Um <h3> com um <button> que controla a região
@@ -110,6 +111,12 @@ export function Secao({ title, description, action, children }: { title?: string
 // credencial, trocou de conta, desconectou). A página relê o resumo sem desmontar o card.
 const AtualizarResumoContext = createContext<() => void>(() => {});
 export const AtualizarResumoProvider = AtualizarResumoContext.Provider;
+// Quem cria, troca ou revoga credencial/vínculo de uma integração: só o `owner` da Organization ativa (o servidor recusa o
+// resto com 403 — esconder o botão é só a outra ponta da mesma regra).
+export function useEhOwner(): boolean {
+  return useAuth().organizacaoAtiva?.papel === 'owner';
+}
+
 export function useAtualizarResumo(): () => void {
   return useContext(AtualizarResumoContext);
 }

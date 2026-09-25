@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Callout, ConfirmDialog, ErrorState, Select, Skeleton, StatusBadge } from '../../components/ds';
-import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
+import { Secao, useAtualizarResumo, useEhOwner } from './IntegracaoAcordeao';
 import { formatData } from '../../lib/format';
 import {
   desconectarGa, getGaStatus, listGaProperties, salvarGaProperty, urlConectarGa, type GaConnection, type GaProperty,
@@ -10,6 +10,7 @@ import {
 // Ink acima. Conectar é navegação de página inteira (OAuth do Google exige top-level navigation,
 // não dá pra ser um fetch); ao voltar, a página recarrega e essa lista já reflete o novo status.
 function LinhaLoja({ conexao, oauthConfigurado, recarregar }: { conexao: GaConnection; oauthConfigurado: boolean; recarregar: () => void }) {
+  const ehOwner = useEhOwner();
   const [escolhendo, setEscolhendo] = useState(false);
   const [propriedades, setPropriedades] = useState<GaProperty[] | null>(null);
   const [erroProps, setErroProps] = useState('');
@@ -73,7 +74,7 @@ function LinhaLoja({ conexao, oauthConfigurado, recarregar }: { conexao: GaConne
         {conexao.lastSyncAt && <span className="ga-linha__meta">Sincronizado {formatData(conexao.lastSyncAt)}</span>}
 
         <span className="ga-linha__acao">
-          {conexao.status === 'disconnected' || conexao.status === 'error' || conexao.status === 'expired' ? (
+          {!ehOwner ? null : conexao.status === 'disconnected' || conexao.status === 'error' || conexao.status === 'expired' ? (
             oauthConfigurado ? (
               <a className="ds-btn ds-btn--secondary ds-btn--sm" href={urlConectarGa()}>
                 {conexao.status === 'disconnected' ? 'Conectar' : 'Reconectar'}
@@ -135,6 +136,7 @@ function LinhaLoja({ conexao, oauthConfigurado, recarregar }: { conexao: GaConne
 
 export function GoogleAnalyticsIntegracaoCard() {
   const atualizarResumo = useAtualizarResumo();
+  const ehOwner = useEhOwner();
   const [dados, setDados] = useState<{ conexoes: GaConnection[]; oauthConfigurado: boolean } | null>(null);
   const [erro, setErro] = useState('');
 
@@ -158,6 +160,7 @@ export function GoogleAnalyticsIntegracaoCard() {
               A conexão com o Google Analytics ainda não está habilitada na plataforma. Assim que estiver, o botão Conectar fica disponível aqui.
             </Callout>
           )}
+          {!ehOwner && <p className="pc-nota">Só o responsável pela loja conecta, troca ou desconecta esta integração.</p>}
           <div>
             {dados.conexoes.map((c) => (
               <LinhaLoja key={c.storeId} conexao={c} oauthConfigurado={dados.oauthConfigurado} recarregar={() => { carregar(); atualizarResumo(); }} />

@@ -5,7 +5,9 @@
 // continuam aqui: o backend ainda as confere como entitlement, e o espelho precisa refletir o que
 // o servidor faz — não o que ele vai fazer. Saem quando o guard de connector for ligado, junto com
 // o read model do connector. Ver docs/architecture/features-vs-connectors.md § Plano de retirada.
+import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 export interface Entitlements {
   whatsapp: boolean;
@@ -66,4 +68,23 @@ export function hasEntitlement(key: keyof Entitlements): boolean {
 // para omitir a linha em vez de afirmar "sem plano".
 export function entitlementsCarregados(): boolean {
   return cache !== null;
+}
+
+// Para a tela decidir se mostra uma ação: só é `true` depois de o servidor responder que a Organization ATIVA tem a feature.
+// Carregando, falha de leitura ou troca de Organization = `false` (nunca um botão que o servidor recusaria, nunca o plano da
+// Organization anterior). O servidor continua sendo a autoridade: esconder é UX, não segurança.
+export function useEntitlement(chave: keyof Entitlements): boolean {
+  const organizacaoId = useAuth().organizacaoAtiva?.id ?? null;
+  const [lido, setLido] = useState<{ organizacaoId: string | null; liberado: boolean } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    setLido(null);
+    loadEntitlements().then(() => {
+      if (vivo) setLido({ organizacaoId, liberado: entitlementsCarregados() && hasEntitlement(chave) });
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [organizacaoId, chave]);
+  return lido !== null && lido.organizacaoId === organizacaoId && lido.liberado;
 }

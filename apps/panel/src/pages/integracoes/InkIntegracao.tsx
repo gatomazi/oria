@@ -2,6 +2,7 @@ import { Callout, StatusBadge, Tabs } from '../../components/ds';
 import { formatData } from '../../lib/format';
 import type { ReservaInkStatus } from '../../api/integracoes';
 import { adminStores } from '../../state/adminStores';
+import { useEntitlement } from '../../state/entitlements';
 import { BackfillPedidosCard } from './BackfillPedidosCard';
 import { CatalogoCacheCard } from './CatalogoCacheCard';
 import { CatalogSyncCard } from './CatalogSyncCard';
@@ -15,6 +16,8 @@ export const ABAS_INK = ['conexao', 'pedidos', 'catalogo'] as const;
 // depuração: é o que o lojista precisa para decidir o que fazer.
 export function InkIntegracao({ reservaInk, aba, onAba }: { reservaInk: ReservaInkStatus[]; aba: string; onAba: (aba: string) => void }) {
   const estado = useInkCredenciais();
+  // "Catálogo para análises" alimenta Desempenho de produtos e a Jornada de compra: só existe para quem tem a mesma feature que essas telas.
+  const analisesDeCatalogo = useEntitlement('analytics_product_performance');
   const lojas = lojasComTokenInk(reservaInk);
   const principal = reservaInk[0] || null;
   const nomeDaLoja = principal ? principal.nome || (principal.loja ? adminStores.name(principal.loja) : null) : null;
@@ -75,7 +78,7 @@ export function InkIntegracao({ reservaInk, aba, onAba }: { reservaInk: ReservaI
                 lojas.length ? (
                   <div className="ig-secoes">
                     <CatalogoCacheCard stores={lojas} />
-                    <CatalogSyncCard />
+                    {analisesDeCatalogo && <CatalogSyncCard />}
                   </div>
                 ) : (
                   semCredencial
