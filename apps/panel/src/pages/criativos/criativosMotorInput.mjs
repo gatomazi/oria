@@ -201,3 +201,17 @@ export const TEXTO_PERSONA_PADRAO = 'Esta conta ainda não tem personas sugerida
 export function textoPersonaPadrao(resumo) {
   return resumo && resumo.persona_source === 'default' ? TEXTO_PERSONA_PADRAO : null;
 }
+
+// ------------------------------------------------------------------ contexto geográfico é específico de marca
+// O gerador nasceu para lojas regionais, mas serve a qualquer nicho: cidade/UF/região só fazem sentido para uma
+// marca cujo Brand Kit usa contexto geográfico por padrão (`defaultContextProvider: "geographic"` — é também a
+// única condição em que o core tenta resolver geografia). Para as demais, a tela nem oferece o modo
+// "Geográfico" nem os campos Região/Cidade/UF. Um criativo antigo já em modo geográfico ("Copiar dados") continua
+// mostrando o que ele usa — nunca esconde uma escolha ativa.
+export function marcaUsaGeografia(marca) {
+  return Boolean(marca) && marca.defaultContextProvider === 'geographic';
+}
+
+export function geografiaDisponivel(marca, contextModeAtual) {
+  return marcaUsaGeografia(marca) || contextModeAtual === 'geographic';
+}

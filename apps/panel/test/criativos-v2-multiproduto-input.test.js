@@ -228,3 +228,21 @@ test('textoPersonaPadrao: só avisa quando a persona veio do padrão do motor �
   assert.equal(mod.textoPersonaPadrao({ persona_source: null }), null);
   assert.equal(mod.textoPersonaPadrao(undefined), null);
 });
+
+// ------------------------------------------------------------------ geografia é específica de marca
+test('marcaUsaGeografia: só um Brand Kit com defaultContextProvider "geographic" usa geografia', () => {
+  assert.equal(mod.marcaUsaGeografia({ defaultContextProvider: 'geographic' }), true);
+  assert.equal(mod.marcaUsaGeografia({ defaultContextProvider: 'niche' }), false);
+  assert.equal(mod.marcaUsaGeografia({ defaultContextProvider: 'custom' }), false);
+  assert.equal(mod.marcaUsaGeografia({}), false);
+  assert.equal(mod.marcaUsaGeografia(undefined), false);
+});
+
+test('geografiaDisponivel: outro nicho não vê o modo Geográfico — exceto se o criativo copiado já estava nele', () => {
+  const outroNicho = { defaultContextProvider: 'niche' };
+  assert.equal(mod.geografiaDisponivel(outroNicho, 'automatic'), false);
+  assert.equal(mod.geografiaDisponivel(outroNicho, 'niche'), false);
+  assert.equal(mod.geografiaDisponivel(outroNicho, 'geographic'), true, 'nunca esconde uma escolha ativa');
+  assert.equal(mod.geografiaDisponivel({ defaultContextProvider: 'geographic' }, 'automatic'), true);
+  assert.equal(mod.geografiaDisponivel(undefined, 'automatic'), false);
+});
