@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { CorteDeValor, PredicadoRfm } from './clientes';
 
 // Campos de filtro suportados hoje (dado real disponível — ver decisão #7 do plano de
 // Campanhas/Remarketing, docs/PROMPT-CLAUDE-CAMPANHAS-REMARKETING-MIDIA-WHATSAPP.md). Cidade,
@@ -14,7 +15,18 @@ export type AudienciaCampo =
   | 'temCarrinhoAbandonado'
   | 'recebeuCampanha'
   | 'naoRecebeuCampanha'
-  | 'recebeuCampanhaNosUltimosDias';
+  | 'recebeuCampanhaNosUltimosDias'
+  // Segmento de origem RFM (Rodada 5): condição OBRIGATÓRIA avaliada pela mesma classificação da matriz de Clientes.
+  | 'rfm'
+  // "Todos os clientes": só existe se for escolhido de forma explícita (sozinho; sujeito às exclusões).
+  | 'todosClientes';
+
+export interface AudienciaFiltroRfmValor {
+  segmento: string;
+  regraVersao: string;
+  classificadoEm: string | null;
+  predicado: PredicadoRfm;
+}
 
 export const UF_OPCOES = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB',
@@ -36,6 +48,23 @@ export interface AudienciaExclusoes {
   recebeuCampanhaNasUltimasHoras?: number | null;
 }
 
+// Presente só quando a audiência tem um segmento RFM: de onde vem a população e com que regra/corte/`asOf` foi calculada.
+export interface AudienciaRfmResumo {
+  equivalencia: 'exata';
+  segmento: string;
+  segmentoNome: string;
+  regraVersao: string;
+  asOf: string;
+  fuso: string;
+  classificadoEmSalvo: string | null;
+  // Três universos distintos: pessoas com pedido ⊃ compradores válidos (a RFM) ⊃ segmento.
+  universos: { pessoasComPedido: number; compradoresValidos: number; segmento: number };
+  corteSalvo: CorteDeValor | null;
+  corteAtual: CorteDeValor | null;
+  divergente: boolean;
+  pessoasNoSegmentoDeHoje: number | null;
+}
+
 export interface AudienciaPreviewResultado {
   matched: number;
   excluded: number;
@@ -46,6 +75,9 @@ export interface AudienciaPreviewResultado {
     compradoRecentemente: number;
     recebeuCampanhaRecentemente: number;
   };
+  rfm?: AudienciaRfmResumo;
+  // Presente quando a definição é a cópia de um segmento RFM salvo com filtros genéricos (avaliação aproximada).
+  rfmAproximado?: { segmentoId: string; nome: string; rfmSegmento: string };
 }
 
 export function previewAudiencia(match: 'ALL' | 'ANY', filters: AudienciaFiltro[], exclusions: AudienciaExclusoes) {
@@ -72,6 +104,8 @@ export interface AudienceDefinition {
   // últimos não usam `indice` (cada template só tem no máximo 1 de cada).
   variaveis?: { indice: number; fonte: string; variavelFixa?: string; alvo?: 'corpo' | 'header' | 'botao' }[];
   mediaAssetId?: number | null;
+  // Confirmação explícita de que o público de um segmento RFM "aproximado" pode divergir da matriz e ainda assim será usado.
+  aproximadoConfirmado?: boolean;
   sampleLocation?: { nome: string; endereco: string; latitude: number; longitude: number } | null;
 }
 
@@ -99,6 +133,16 @@ export interface Campanha {
   mensagemWebId: string | null;
   mensagemWebNome: string | null;
   mensagemWebCongelada: boolean;
+  // Por que esta campanha (rascunho/agendada) NÃO poderá ser executada como está. `null` = nenhum bloqueio conhecido.
+  bloqueio?: CampanhaBloqueio | null;
+}
+
+export interface CampanhaBloqueio {
+  codigo: string; // AUDIENCIA_FILTRO_INVALIDO | AUDIENCIA_SEM_FILTRO | RFM_SEGMENTO_APROXIMADO | RFM_REGRA_DIVERGENTE | …
+  mensagem: string;
+  origem: 'definicao' | 'agendador';
+  desde?: string;
+  ultimaTentativa?: string;
 }
 
 export interface CampanhaInput {

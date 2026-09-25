@@ -83,3 +83,20 @@ export async function api<T = unknown>(path: string, options?: ApiOptions): Prom
 
   return data as T;
 }
+
+// POST que devolve um ARQUIVO (ex.: CSV), não JSON. Mesmo contrato de credenciais e CSRF de `api()`.
+// Erro devolve a mensagem do servidor; sucesso devolve o Blob e o nome sugerido pelo servidor.
+export async function apiArquivoPost(path: string, corpo: unknown): Promise<{ blob: Blob; nome: string }> {
+  const cabecalhos = new Headers({ 'Content-Type': 'application/json' });
+  if (csrfToken) cabecalhos.set('X-CSRF-Token', csrfToken);
+  const res = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: cabecalhos, body: JSON.stringify(corpo) });
+  if (!res.ok) {
+    let mensagem = `Erro HTTP ${res.status}`;
+    try { mensagem = ((await res.json()) as { error?: string }).error || mensagem; } catch { /* resposta não é JSON */ }
+    toast(mensagem, 'erro');
+    throw new ApiError(mensagem, res.status, null);
+  }
+  const disposicao = res.headers.get('Content-Disposition') || '';
+  const nome = /filename="([^"]+)"/.exec(disposicao)?.[1] || 'clientes.csv';
+  return { blob: await res.blob(), nome };
+}

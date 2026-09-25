@@ -1,10 +1,26 @@
-import { useEffect, useState } from 'react';
-import { DataTable, EmptyState, ErrorState, PageHeader, PageStack, Pagination, SearchInput, Select, Skeleton, StatusBadge, Toolbar } from '../../components/ds';
-import { formatData, formatValor, plural } from '../../lib/format';
-import { useLojaAtiva } from '../../auth/AuthContext';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Button, Callout, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, Input, KpiCard, KpiStrip, PageHeader, PageStack, Pagination,
+  SearchInput, Select, Skeleton, StatusBadge, Toolbar, Card, Disclosure,
+} from '../../components/ds';
+import { formatValor, plural } from '../../lib/format';
+import { useLojaAtiva, useNomeDaStore } from '../../auth/AuthContext';
 import { adminStores } from '../../state/adminStores';
-import { useNomeDaStore } from '../../auth/AuthContext';
-import { listClientes, type ListaDeClientes, type OrdemClientes, type TipoClientes } from '../../api/clientes';
+import { toast } from '../../lib/toast';
+import {
+  criarSegmentoDeFiltros, criarSegmentoRfm, exportarClientes, filtrosComoObjeto, getEstadoSegmentosRfm, getResumoClientes, listClientes,
+  type Cliente, type EstadoSegmentoRfm, type FiltrosAvancados, type IndicadoresPeriodo, type ListaDeClientes, type ResumoClientes, type SegmentoFiltro, type SegmentoResumo,
+} from '../../api/clientes';
+import { ClienteDrawer } from './ClienteDrawer';
+import { GrupoBadge, RfmExplorer, type MetricaMatriz } from './RfmExplorer';
+import { alternarSelecao } from './rfmDistribuicao';
+import { useMediaQuery } from '../../lib/useMediaQuery';
+import { SegmentoPanel } from './SegmentoPanel';
+import { concluirCarga, exibicao, iniciarCarga, totalEsperadoDaMatriz, type CargaLista } from './listaEstado';
+import { ESTADO_INICIAL, gravarFiltros, lerFiltros, ROTULOS_AVANCADOS, temAvancados, UF_LISTA, type EstadoFiltros } from './filtrosUrl';
+import { estiloDe } from './rfmSegmentos';
+import { dataCurta, dataHora, decimal, dia, numero, pct } from './rfmTexto';
 
 import '../../pedidos-central.css';
 import '../../clientes.css';
@@ -13,126 +29,531 @@ const CLIENTES_POR_PAGINA = 25;
 // A busca só vai ao servidor depois de uma pausa na digitação (uma chamada por tecla seria ruído).
 const ATRASO_DA_BUSCA_MS = 300;
 
+const PERIODOS_ROTULO: Record<string, string> = {
+  '30': 'Últimos 30 dias', '90': 'Últimos 90 dias', '180': 'Últimos 180 dias', '365': 'Últimos 365 dias', tudo: 'Todo o histórico sincronizado',
+};
+
+const moeda = (v: number | null | undefined) => (v == null ? '—' : (formatValor(v) ?? '—'));
+
+// Variação percentual contra o período anterior, só quando os dois lados existem e o anterior não é zero.
+function variacao(atual: number | null, anterior: number | null | undefined): { delta: string; trend: 'up' | 'down' } | null {
+  if (atual == null || anterior == null || anterior === 0) return null;
+  const v = (atual - anterior) / anterior;
+  return { delta: `${v >= 0 ? '+' : ''}${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`, trend: v >= 0 ? 'up' : 'down' };
+}
+
+function Kpis({ resumo }: { resumo: ResumoClientes }) {
+  const a = resumo.indicadores.atual;
+  const ant: IndicadoresPeriodo | null = resumo.indicadores.comparacao.anterior;
+  const comparavel = ant != null;
+  // Rótulo curto: as datas do período anterior estão na nota abaixo dos indicadores.
+  const contexto = comparavel ? 'vs. período anterior' : undefined;
+  const cartao = (
+    title: string, valor: string, atualN: number | null, antN: number | null | undefined, info: string, helper?: string,
+  ) => {
+    const v = variacao(atualN, antN);
+    return <KpiCard title={title} value={valor} info={info} delta={v?.delta} trend={v?.trend} helper={v ? contexto : helper} />;
+  };
+  return (
+    <KpiStrip label="Indicadores do período">
+      {cartao('Faturamento', moeda(a.faturamento), a.faturamento, ant?.faturamento,
+        'Soma do valor pago (total do pedido: já líquido de desconto e com o frete pago) dos pedidos com pagamento confirmado e sem troca. Pagamento cancelado, pendente ou reembolsado por inteiro, e troca, ficam de fora. A situação do pedido (cancelado, devolvido) não é considerada e reembolso parcial não é descontado.')}
+      {cartao('Pedidos válidos', numero(a.pedidos), a.pedidos, ant?.pedidos, 'Pedidos com pagamento confirmado (pago ou gratuito), sem troca, com cliente identificável.',
+        a.pedidosReembolsados ? `${plural(a.pedidosReembolsados, 'reembolsado', 'reembolsados')} fora` : undefined)}
+      {cartao('Clientes compradores', numero(a.clientes), a.clientes, ant?.clientes, 'Pessoas distintas (documento, telefone ou e-mail em comum viram uma só) com ao menos um pedido válido no período.',
+        a.clientesPrimeiraCompra ? `${numero(a.clientesPrimeiraCompra)} na 1ª compra` : undefined)}
+      {cartao('Taxa de recompra', pct(a.taxaRecompra), a.taxaRecompra, ant?.taxaRecompra,
+        'Clientes com 2 ou mais pedidos válidos DENTRO do período, divididos pelos clientes compradores do período. Compra anterior ao período não conta como recompra aqui.',
+        `${numero(a.recorrentes)} de ${numero(a.clientes)}`)}
+      {cartao('Ticket médio', moeda(a.ticketMedio), a.ticketMedio, ant?.ticketMedio, 'Faturamento ÷ pedidos válidos do período.')}
+      {cartao('Receita por cliente', moeda(a.receitaPorCliente), a.receitaPorCliente, ant?.receitaPorCliente, 'Faturamento ÷ clientes compradores do período.',
+        a.receitaRecorrente ? `${moeda(a.receitaRecorrente)} de recorrentes` : undefined)}
+    </KpiStrip>
+  );
+}
+
 export function ClientesPage() {
   const nomeStore = useNomeDaStore();
   const escopo = useLojaAtiva() ?? '';
-  const [lista, setLista] = useState<ListaDeClientes | null>(null);
-  const [erro, setErro] = useState('');
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const filtros: EstadoFiltros = useMemo(() => lerFiltros(params), [params]);
+
+  const atualizar = useCallback((mudanca: Partial<EstadoFiltros>, { manterPagina = false } = {}) => {
+    const proximo = { ...lerFiltros(params), ...mudanca };
+    if (!manterPagina && !('pagina' in mudanca)) proximo.pagina = 1;
+    setParams(gravarFiltros(proximo), { replace: true });
+  }, [params, setParams]);
+
+  // Busca fica só em memória (nome/e-mail/telefone não vão para a URL).
   const [busca, setBusca] = useState('');
   const [buscaAplicada, setBuscaAplicada] = useState('');
-  const [ordem, setOrdem] = useState<OrdemClientes>('compras_desc');
-  const [inatividade, setInatividade] = useState('');
-  const [tipo, setTipo] = useState<TipoClientes>('todos');
-  const [pagina, setPagina] = useState(1);
+  const [metrica, setMetrica] = useState<MetricaMatriz>('clientes');
+  const celular = useMediaQuery('(max-width: 720px)');
+  const [estadosSalvos, setEstadosSalvos] = useState<EstadoSegmentoRfm[]>([]);
+  // Filtros recolhidos por padrão (desktop e celular); abrem sozinhos só se já houver algum ativo na URL.
+  const [avancadosAbertos, setAvancadosAbertos] = useState(temAvancados(filtros.avancados) || filtros.tipo !== 'todos' || !!filtros.inatividade);
 
-  // Filtro ou ordem novos mudam a lista inteira: volta para a primeira página.
+  const [resumo, setResumo] = useState<ResumoClientes | null>(null);
+  const [erroResumo, setErroResumo] = useState('');
+  // A lista só é EXIBIDA quando a carga é da chave atual (ver listaEstado.ts): nada de linhas/total de outro filtro.
+  const [carga, setCarga] = useState<CargaLista<ListaDeClientes> | null>(null);
+  const [tentativa, setTentativa] = useState(0);
+  const [aberto, setAberto] = useState<{ chave: string; nome: string | null } | null>(null);
+  const [criando, setCriando] = useState(false);
+  const [exportando, setExportando] = useState<{ quantidade: number } | null>(null);
+  const [nomeSegmentoFiltros, setNomeSegmentoFiltros] = useState<string | null>(null);
+  const secaoLista = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const t = setTimeout(() => {
       setBuscaAplicada(busca);
-      setPagina(1);
+      if (busca !== buscaAplicada) atualizar({ pagina: 1 });
     }, ATRASO_DA_BUSCA_MS);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca]);
 
+  const carregarResumo = useCallback(() => {
+    setErroResumo('');
+    getResumoClientes({ dias: filtros.periodo })
+      .then(setResumo)
+      .catch((err: Error) => setErroResumo(err.message));
+  }, [filtros.periodo]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(carregarResumo, [carregarResumo, escopo]);
+
+  // Segmentos RFM já salvos × corte de hoje (só leitura); usado para avisar corte defasado no painel do segmento.
+  const amostraOk = !!resumo?.rfm.amostraSuficiente;
+  useEffect(() => {
+    if (!amostraOk) return undefined;
+    let atual = true;
+    getEstadoSegmentosRfm().then((r) => { if (atual) setEstadosSalvos(r.segmentos); }).catch(() => { if (atual) setEstadosSalvos([]); });
+    return () => { atual = false; };
+  }, [amostraOk, resumo?.rfm.classificadoEm]);
+
+  const chaveLista = JSON.stringify([escopo, filtros, buscaAplicada, tentativa]);
+  const vista = exibicao(carga, chaveLista);
+  const lista: ListaDeClientes | null = vista.modo === 'ok' ? vista.dados : null;
+  const erroLista = vista.modo === 'erro' ? vista.erro : '';
   useEffect(() => {
     let atual = true;
-    setErro('');
-    listClientes({ page: pagina, perPage: CLIENTES_POR_PAGINA, ordem, busca: buscaAplicada, inativoDias: inatividade, tipo })
+    setCarga(iniciarCarga(chaveLista));
+    listClientes({
+      page: filtros.pagina, perPage: CLIENTES_POR_PAGINA, ordem: filtros.ordem, busca: buscaAplicada, inativoDias: filtros.inatividade,
+      tipo: filtros.tipo, segmentos: filtros.segmentos, avancados: filtros.avancados,
+    })
       .then((r) => {
         if (!atual) return;
-        setLista(r);
+        setCarga((c) => concluirCarga(c, chaveLista, { dados: r }));
         // O servidor devolve a página real (a lista pode ter encolhido com o filtro).
-        if (r.page !== pagina) setPagina(r.page);
+        if (r.page !== filtros.pagina) atualizar({ pagina: r.page }, { manterPagina: true });
       })
-      .catch((err: Error) => { if (atual) setErro(err.message); });
+      .catch((err: Error) => { if (atual) setCarga((c) => concluirCarga(c, chaveLista, { erro: err.message })); });
     return () => { atual = false; };
-  }, [escopo, pagina, ordem, buscaAplicada, inatividade, tipo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveLista]);
+
+  const segmentos = resumo?.rfm.segmentos ?? [];
+  const selecionados = useMemo(() => segmentos.filter((s) => (filtros.segmentos as string[]).includes(s.id)), [segmentos, filtros.segmentos]);
+
+  function alternarSegmento(id: string) {
+    atualizar({ segmentos: alternarSelecao(filtros.segmentos as string[], id) as SegmentoFiltro[] });
+  }
+
+  async function criarCampanha(s: SegmentoResumo) {
+    if (!resumo) return;
+    setCriando(true);
+    try {
+      // Data no fuso da Organização (dataCurta), nunca o dia UTC do ISO: à noite o UTC já é "amanhã".
+      const nome = `RFM · ${s.nome} · ${dataCurta(resumo.rfm.classificadoEm)}`;
+      const r = await criarSegmentoRfm(nome, s.id);
+      toast(r.reaproveitado ? 'Segmento já existia com esta regra: reaproveitado.' : 'Segmento dinâmico criado.', 'sucesso');
+      navigate(`/admin/campanhas/nova?segmento=${encodeURIComponent(r.segmento.id)}`);
+    } catch {
+      /* erro já avisado por toast em api() */
+    } finally {
+      setCriando(false);
+    }
+  }
+
+  const filtrosDaConsulta = () => filtrosComoObjeto({
+    ordem: filtros.ordem, busca: buscaAplicada, inativoDias: filtros.inatividade, tipo: filtros.tipo, segmentos: filtros.segmentos, avancados: filtros.avancados,
+  });
+
+  // Prévia da exportação: quantos clientes COM COMPRA batem nos filtros atuais (o CSV nunca leva quem só tem cadastro).
+  async function abrirExportacao() {
+    try {
+      const r = await listClientes({
+        page: 1, perPage: 1, ordem: filtros.ordem, busca: buscaAplicada, inativoDias: filtros.inatividade, tipo: 'com_pedido',
+        segmentos: filtros.segmentos, avancados: filtros.avancados,
+      });
+      setExportando({ quantidade: r.total });
+    } catch (err) {
+      toast((err as Error).message, 'erro');
+    }
+  }
+
+  async function confirmarExportacao() {
+    if (!exportando) return;
+    const { blob, nome } = await exportarClientes({ ...filtrosDaConsulta(), tipo: 'com_pedido' }, exportando.quantidade);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast(`${plural(exportando.quantidade, 'cliente exportado', 'clientes exportados')}.`, 'sucesso');
+  }
+
+  async function salvarSegmentoDeFiltros() {
+    if (nomeSegmentoFiltros == null) return;
+    const r = await criarSegmentoDeFiltros(nomeSegmentoFiltros.trim(), filtrosDaConsulta());
+    if (r.naoConvertidos.length) toast(`Não entraram no segmento: ${r.naoConvertidos.join(', ')}.`, 'erro');
+    navigate(`/admin/campanhas/nova?segmento=${encodeURIComponent(r.segmento.id)}`);
+  }
+
+  const chipsAtivos: { chave: string; rotulo: string; remover: () => void }[] = [];
+  for (const s of selecionados) chipsAtivos.push({ chave: `seg-${s.id}`, rotulo: `Segmento: ${s.nome}`, remover: () => alternarSegmento(s.id) });
+  for (const id of filtros.segmentos.filter((x) => x === 'sem_compra')) chipsAtivos.push({ chave: `seg-${id}`, rotulo: 'Segmento: Sem compra válida', remover: () => alternarSegmento(id) });
+  if (filtros.tipo !== 'todos') chipsAtivos.push({ chave: 'tipo', rotulo: filtros.tipo === 'com_pedido' ? 'Com pedido' : 'Só cadastro', remover: () => atualizar({ tipo: 'todos' }) });
+  if (filtros.inatividade) chipsAtivos.push({ chave: 'inativo', rotulo: `Sem comprar há ${filtros.inatividade}+ dias`, remover: () => atualizar({ inatividade: '' }) });
+  if (buscaAplicada.trim()) chipsAtivos.push({ chave: 'busca', rotulo: `Busca: ${buscaAplicada.trim()}`, remover: () => { setBusca(''); setBuscaAplicada(''); atualizar({}); } });
+  for (const [campo, valor] of Object.entries(filtros.avancados) as [keyof FiltrosAvancados, string][]) {
+    if (!valor) continue;
+    chipsAtivos.push({
+      chave: `av-${campo}`,
+      rotulo: `${ROTULOS_AVANCADOS[campo]}: ${campo === 'marketing' ? (valor === 'sim' ? 'aceita' : 'não aceita') : campo.startsWith('primeira') || campo.startsWith('ultima') ? dia(valor) : valor}`,
+      remover: () => atualizar({ avancados: { ...filtros.avancados, [campo]: '' } }),
+    });
+  }
+  function limparFiltros() {
+    setBusca('');
+    setBuscaAplicada('');
+    setParams(gravarFiltros({ ...ESTADO_INICIAL, periodo: filtros.periodo }), { replace: true });
+  }
+  const filtrosAtivos = Object.values(filtros.avancados).filter(Boolean).length + (filtros.tipo !== 'todos' ? 1 : 0) + (filtros.inatividade ? 1 : 0);
+  const podeSalvarFiltros = filtros.segmentos.length === 0 && temAvancados(filtros.avancados);
 
   const clientes = lista?.clientes ?? [];
+  const cob = resumo?.cobertura;
+
+  // A tabela pode rolar por dentro (colunas de apoio); quando rola, isso precisa ser perceptível.
+  const tabelaRef = useRef<HTMLDivElement>(null);
+  const [tabelaRola, setTabelaRola] = useState(false);
+  useEffect(() => {
+    const wrap = tabelaRef.current?.querySelector('.ds-table-wrap');
+    if (!wrap || typeof ResizeObserver === 'undefined') return undefined;
+    const ver = () => setTabelaRola(wrap.scrollWidth > wrap.clientWidth + 1);
+    ver();
+    const ro = new ResizeObserver(ver);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [clientes.length, celular]);
+
+  // Matriz × lista: mesma regra e mesmo dia de classificação. Se a lista foi classificada em outro dia ou com outra regra
+  // que a matriz (base mudou/virou o dia entre as duas leituras), recarrega a matriz em vez de deixar as duas divergirem.
+  const diaDaMatriz = resumo ? new Date(resumo.rfm.classificadoEm).toLocaleDateString('en-CA', { timeZone: resumo.rfm.fuso }) : null;
+  const desalinhada = !!(lista && resumo && lista.rfm?.disponivel && (lista.rfm.regraVersao !== resumo.rfm.regraVersao || lista.rfm.diaClassificacao !== diaDaMatriz));
+  useEffect(() => { if (desalinhada) carregarResumo(); }, [desalinhada, carregarResumo]);
+  const clientesPorSegmento = Object.fromEntries(segmentos.map((sg) => [sg.id, sg.clientes]));
+  const outrosFiltros = !!buscaAplicada.trim() || !!filtros.inatividade || temAvancados(filtros.avancados) || filtros.tipo === 'sem_pedido';
+  const totalEsperado = totalEsperadoDaMatriz(filtros.segmentos as string[], clientesPorSegmento, outrosFiltros);
+  // Cobertura confirmada = backfill CONCLUÍDO (não basta "há muitos dias observados").
+  const historicoConfirmado = !!cob?.backfillConfirmado;
 
   return (
-    <PageStack>
+    <PageStack className="cli-pagina">
       <PageHeader
         title="Clientes"
-        description={
-          lista ? 'Quem já fez pedido e quem só tem cadastro na Reserva Ink. A contagem de compras vem do histórico de pedidos já sincronizado (cache local) — não é uma consulta ao vivo.' : undefined
+        description="Compras, segmentação RFM e o caminho até a campanha."
+        actions={
+          <Select aria-label="Período dos indicadores" value={filtros.periodo} onChange={(e) => atualizar({ periodo: e.target.value })}>
+            {Object.entries(PERIODOS_ROTULO).map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          </Select>
         }
+        meta={resumo && cob && (
+          <span className="cli-meta">
+            <span>{dia(resumo.periodo.de)} a {dia(resumo.periodo.ate)}</span>
+            <span>Sincronizado: {cob.ultimoSyncEm ? dataHora(cob.ultimoSyncEm) : 'não registrado'}</span>
+            <StatusBadge tone={historicoConfirmado ? 'success' : 'warning'} label={historicoConfirmado ? 'Backfill concluído' : 'Histórico não confirmado'} />
+          </span>
+        )}
       />
 
-      {erro && <ErrorState description={erro} />}
-      {!erro && !lista && <Skeleton variant="table" rows={8} />}
-      {!erro && lista && (
-        <div className="ds-stack">
-          <Toolbar label="Filtrar clientes" end={<span className="ds-toolbar__meta">{plural(lista.total, 'cliente encontrado', 'clientes encontrados')}</span>}>
-            <SearchInput
-              aria-label="Buscar por nome, email ou telefone"
-              placeholder="Buscar por nome, email ou telefone…"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-            />
-            <Select aria-label="Filtrar por pedido" value={tipo} onChange={(e) => { setTipo(e.target.value as TipoClientes); setPagina(1); }}>
-              <option value="todos">Todos os clientes</option>
-              <option value="com_pedido">Com pedido</option>
-              <option value="sem_pedido">Só cadastro (nunca pediu)</option>
-            </Select>
-            <Select aria-label="Ordenar clientes" value={ordem} onChange={(e) => { setOrdem(e.target.value as OrdemClientes); setPagina(1); }}>
-              <option value="compras_desc">Mais compras primeiro</option>
-              <option value="lucro_desc">Maior lucro primeiro</option>
-              <option value="inativos_primeiro">Sem comprar há mais tempo primeiro</option>
-              <option value="nome">Nome (A-Z)</option>
-            </Select>
-            <Select aria-label="Filtrar por tempo sem comprar" value={inatividade} onChange={(e) => { setInatividade(e.target.value); setPagina(1); }}>
-              <option value="">Qualquer cliente</option>
-              <option value="30">Sem comprar há 30+ dias</option>
-              <option value="60">Sem comprar há 60+ dias</option>
-              <option value="90">Sem comprar há 90+ dias</option>
-              <option value="180">Sem comprar há 180+ dias</option>
-            </Select>
-          </Toolbar>
+      {erroResumo && <ErrorState description={erroResumo} onRetry={carregarResumo} />}
+      {!erroResumo && !resumo && <Skeleton variant="table" rows={4} />}
 
-          {!lista.cadastro.disponivel && (
-            <ErrorState description="O cadastro da Reserva Ink não respondeu agora. Mostrando só quem já fez pedido — tente de novo em instantes." />
+      {resumo && cob && (
+        <>
+          {!historicoConfirmado && (
+            <Callout tone="warning" title="Cobertura histórica não confirmada">
+              {numero(cob.historicoObservadoDias)} dias observados, nenhum confirmado por backfill: os números cobrem só os pedidos já sincronizados.
+              <Disclosure summary="Detalhes da cobertura">
+                <p className="cli-aviso">{cob.leitura}</p>
+                <p className="cli-aviso">
+                  {cob.ultimoBackfillStatus && cob.ultimoBackfillStatus !== 'concluido' ? `O último backfill está "${cob.ultimoBackfillStatus}". ` : ''}
+                  Pedidos sincronizados: {plural(cob.pedidosTotal, 'pedido', 'pedidos')}{cob.primeiroPedidoEm ? `, desde ${dataCurta(cob.primeiroPedidoEm)}` : ''}. Não trate estes números como o histórico completo da loja.
+                </p>
+              </Disclosure>
+            </Callout>
           )}
-          {lista.cadastro.parcial && (
-            <p className="ds-form-note">Cadastro carregado parcialmente: a loja tem mais clientes do que o limite lido de uma vez.</p>
+          {cob.pedidosSemIdentidade > 0 && (
+            <Callout tone="info">
+              {plural(cob.pedidosSemIdentidade, 'pedido válido sem documento, telefone ou e-mail não pôde', 'pedidos válidos sem documento, telefone ou e-mail não puderam')} ser atribuído{cob.pedidosSemIdentidade === 1 ? '' : 's'} a um cliente e ficam fora destes indicadores.
+            </Callout>
           )}
-          {!clientes.length ? (
-            <EmptyState title="Nenhum cliente encontrado" />
-          ) : (
+
+          <div className="cli-kpis">
+            <Kpis resumo={resumo} />
+            <p className="cli-kpi-nota">
+              Indicadores de {dia(resumo.periodo.de)} a {dia(resumo.periodo.ate)}
+              {resumo.indicadores.comparacao.anterior == null
+                ? ` · sem comparação: ${resumo.indicadores.comparacao.motivo ?? 'dados incompletos'}`
+                : ` · variações contra ${dia(resumo.indicadores.comparacao.periodo.de)} a ${dia(resumo.indicadores.comparacao.periodo.ate)}`}.
+              {' '}A distribuição RFM abaixo usa a base inteira até {dataCurta(resumo.rfm.classificadoEm)} (janela de frequência de {numero(resumo.rfm.janelaFrequenciaDias)} dias) e não muda com este período.
+            </p>
+          </div>
+
+          <Card className="cli-rfm-card">
+            {resumo.rfm.universo === 0 ? (
+              <EmptyState
+                title="Ainda não há compradores classificados"
+                description="Assim que houver pedidos pagos (sem troca) sincronizados, a distribuição por segmento aparece aqui. Sem compradores, não há público para criar campanha."
+              />
+            ) : !resumo.rfm.amostraSuficiente ? (
+              <Callout tone="warning" title="Dados insuficientes para classificar com segurança">
+                {resumo.rfm.motivoInsuficiencia}. Mostrar segmentos de recompra com pouca base ou histórico curto seria enganoso; as sugestões de campanha ficam ocultas até haver cobertura. Hoje: {numero(resumo.rfm.universo)} {resumo.rfm.universo === 1 ? 'comprador' : 'compradores'} e {numero(resumo.rfm.historicoObservadoDias)} dias observados.
+              </Callout>
+            ) : (
+              <div className="cli-rfm-grade">
+                <RfmExplorer
+                  segmentos={segmentos}
+                  selecionados={filtros.segmentos as string[]}
+                  onToggle={alternarSegmento}
+                  onLimparSelecao={() => atualizar({ segmentos: [] })}
+                  metrica={metrica}
+                  onMetrica={setMetrica}
+                  historicoObservadoDias={resumo.rfm.historicoObservadoDias}
+                  limitePerdidosDias={resumo.rfm.limitesRecenciaDias[3]}
+                  resumoContexto={`classificado em ${dataCurta(resumo.rfm.classificadoEm)} · ${resumo.rfm.regraVersao}`}
+                  contexto={(
+                    <div className="cli-contexto">
+                      <p>Classificação <strong>{resumo.rfm.regraVersao}</strong> em {dataCurta(resumo.rfm.classificadoEm)} sobre {numero(resumo.rfm.universo)} compradores válidos; janela de frequência de {numero(resumo.rfm.janelaFrequenciaDias)} dias. Não muda com o período dos indicadores. Fonte: pedidos sincronizados.</p>
+                      {!cob.coberturaJanelaConfirmada && (
+                        <p>Cobertura da janela de {numero(resumo.rfm.janelaFrequenciaDias)} dias <strong>não confirmada</strong> ({numero(cob.historicoObservadoDias)} dias observados{cob.coberturaConfirmadaDias != null ? `, ${numero(cob.coberturaConfirmadaDias)} confirmados por backfill` : ', nenhum confirmado por backfill'}). Amostra suficiente para classificar não significa histórico completo.</p>
+                      )}
+                      {resumo.rfm.historicoObservadoDias <= resumo.rfm.limitesRecenciaDias[3] && (
+                        <p>Histórico observado de {numero(resumo.rfm.historicoObservadoDias)} dias, menor que o corte de “Perdidos” ({numero(resumo.rfm.limitesRecenciaDias[3])} dias sem comprar): esse segmento só pode aparecer com mais de {numero(resumo.rfm.limitesRecenciaDias[3])} dias de histórico. Seu zero hoje é consequência do histórico, não do comportamento dos clientes.</p>
+                      )}
+                      {!resumo.rfm.janelaAbrangeHistoricoObservado && (
+                        <p>A janela de frequência ({numero(resumo.rfm.janelaFrequenciaDias)} dias) é menor que o histórico observado ({numero(resumo.rfm.historicoObservadoDias)} dias): compras mais antigas contam no LTV, não na frequência.</p>
+                      )}
+                      {resumo.rfm.identidadesSemCompraValida > 0 && (
+                        <p>{plural(resumo.rfm.identidadesSemCompraValida, 'pessoa tem', 'pessoas têm')} pedido, mas nenhum válido (cancelado, reembolsado ou troca): ficam fora da distribuição, no filtro “Sem compra válida”.</p>
+                      )}
+                    </div>
+                  )}
+                  painelInline={celular}
+                  painel={(
+                    <SegmentoPanel
+                      rfm={resumo.rfm}
+                      selecionados={selecionados}
+                      criando={criando}
+                      estadosSalvos={estadosSalvos}
+                      mostrarVazio={false}
+                      onCriarCampanha={criarCampanha}
+                      onVerClientes={() => secaoLista.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      onExportar={abrirExportacao}
+                      onLimpar={() => atualizar({ segmentos: [] })}
+                    />
+                  )}
+                />
+                {!celular && (
+                  <div className="cli-rfm-lateral">
+                    <SegmentoPanel
+                      rfm={resumo.rfm}
+                      selecionados={selecionados}
+                      criando={criando}
+                      estadosSalvos={estadosSalvos}
+                      mostrarVazio
+                      onCriarCampanha={criarCampanha}
+                      onVerClientes={() => secaoLista.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      onExportar={abrirExportacao}
+                      onLimpar={() => atualizar({ segmentos: [] })}
+                    />
+                  </div>
+                )}
+                {celular && selecionados.length > 1 && (
+                  <SegmentoPanel
+                    rfm={resumo.rfm}
+                    selecionados={selecionados}
+                    criando={criando}
+                    estadosSalvos={estadosSalvos}
+                    mostrarVazio={false}
+                    onCriarCampanha={criarCampanha}
+                    onVerClientes={() => secaoLista.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    onExportar={abrirExportacao}
+                    onLimpar={() => atualizar({ segmentos: [] })}
+                  />
+                )}
+              </div>
+            )}
+          </Card>
+
+          {resumo.rfm.amostraSuficiente && (
+            <Disclosure summary="Tabela completa por segmento (ordenável)">
+              <DataTable
+                label="Distribuição de clientes por segmento RFM"
+                rows={segmentos}
+                rowKey={(s) => s.id}
+                defaultSort={{ key: 'clientes', direction: 'desc' }}
+                onRowClick={(s) => alternarSegmento(s.id)}
+                columns={[
+                  {
+                    key: 'nome', label: 'Segmento',
+                    render: (s) => (
+                      <span className="cli-segnome">
+                        <span className="cli-segnome__marca" style={{ background: estiloDe(s.id).tint, opacity: 0.4 + estiloDe(s.id).opacidade }} aria-hidden="true" />
+                        {s.nome}
+                        {(filtros.segmentos as string[]).includes(s.id) && <StatusBadge tone="info" label="Selecionado" />}
+                      </span>
+                    ),
+                    sortValue: (s) => s.nome,
+                  },
+                  { key: 'grupo', priority: 'low', label: 'Grupo', muted: true, render: (s) => <GrupoBadge id={s.id} />, sortValue: (s) => estiloDe(s.id).grupo },
+                  { key: 'clientes', label: 'Clientes', align: 'right', firstSortDirection: 'desc', render: (s) => numero(s.clientes), sortValue: (s) => s.clientes },
+                  { key: 'pctBase', priority: 'low', label: '% da base', align: 'right', firstSortDirection: 'desc', render: (s) => pct(s.pctBase), sortValue: (s) => s.pctBase },
+                  { key: 'pedidos', priority: 'low', label: 'Pedidos', align: 'right', firstSortDirection: 'desc', render: (s) => numero(s.pedidos), sortValue: (s) => s.pedidos },
+                  { key: 'ppc', priority: 'low', label: 'Pedidos/cliente', align: 'right', firstSortDirection: 'desc', render: (s) => decimal(s.pedidosPorCliente), sortValue: (s) => s.pedidosPorCliente },
+                  { key: 'ticket', priority: 'low', label: 'Ticket médio', align: 'right', firstSortDirection: 'desc', render: (s) => moeda(s.ticketMedio), sortValue: (s) => s.ticketMedio },
+                  { key: 'mediana', priority: 'low', label: 'Recência (mediana)', align: 'right', render: (s) => (s.recenciaMedianaDias == null ? '—' : `${numero(s.recenciaMedianaDias)} d`), sortValue: (s) => s.recenciaMedianaDias },
+                  { key: 'receita', label: 'Valor pago', align: 'right', firstSortDirection: 'desc', render: (s) => moeda(s.receita), sortValue: (s) => s.receita },
+                  { key: 'pctReceita', label: '% da receita', align: 'right', firstSortDirection: 'desc', render: (s) => pct(s.pctReceita), sortValue: (s) => s.pctReceita },
+                ]}
+              />
+            </Disclosure>
+          )}
+        </>
+      )}
+
+      <div ref={secaoLista} id="clientes-lista" className="ds-stack cli-lista">
+        <h2 className="cli-lista__titulo">Lista de clientes</h2>
+        <Toolbar
+          label="Filtrar clientes"
+          end={(
             <>
+              {lista && <span className="ds-toolbar__meta">{plural(lista.total, 'cliente encontrado', 'clientes encontrados')}</span>}
+              <Button variant="secondary" size="sm" onClick={abrirExportacao} disabled={!lista}>Exportar</Button>
+            </>
+          )}
+        >
+          <SearchInput
+            aria-label="Buscar por nome, email ou telefone"
+            placeholder="Buscar por nome, email ou telefone…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+          <Select aria-label="Ordenar clientes" value={filtros.ordem} onChange={(e) => atualizar({ ordem: e.target.value as EstadoFiltros['ordem'] })}>
+            <option value="compras_desc">Mais compras primeiro</option>
+            <option value="ltv_desc">Maior LTV primeiro</option>
+            <option value="lucro_desc">Maior lucro primeiro</option>
+            <option value="inativos_primeiro">Sem comprar há mais tempo primeiro</option>
+            <option value="nome">Nome (A-Z)</option>
+          </Select>
+          <Button variant="secondary" size="sm" aria-expanded={avancadosAbertos} aria-controls="cli-filtros" onClick={() => setAvancadosAbertos((v) => !v)}>
+            {avancadosAbertos ? 'Ocultar filtros' : `Filtros${filtrosAtivos ? ` (${filtrosAtivos})` : ''}`}
+          </Button>
+        </Toolbar>
+
+        {avancadosAbertos && (
+          <FiltrosAvancadosForm
+            valor={filtros.avancados}
+            onChange={(avancados) => atualizar({ avancados })}
+            tipo={filtros.tipo}
+            onTipo={(tipo) => atualizar({ tipo })}
+            inatividade={filtros.inatividade}
+            onInatividade={(inatividade) => atualizar({ inatividade })}
+          />
+        )}
+
+        {resumo && cob && lista && (
+          <div className="cli-universo">
+            <p className="ds-form-note">
+              {numero(cob.clientesIdentificados)} pessoas com pedido = {numero(resumo.rfm.universo)} compradores válidos classificados (a matriz) + {numero(resumo.rfm.identidadesSemCompraValida)} sem compra válida.
+              {' '}Quem só tem cadastro na Ink entra apenas quando nenhum filtro exige pedido e a Ink responde.
+              {totalEsperado != null && lista.total === totalEsperado && ` Confere com a matriz: ${numero(totalEsperado)} no(s) segmento(s) selecionado(s).`}
+            </p>
+            {totalEsperado != null && lista.total !== totalEsperado && (
+              <Callout tone="warning" title="A lista e a matriz divergem">
+                A lista traz {numero(lista.total)} e a matriz {numero(totalEsperado)} para o(s) segmento(s) selecionado(s). A base pode ter mudado desde a classificação de {dataCurta(resumo.rfm.classificadoEm)}; a matriz está sendo recarregada.
+              </Callout>
+            )}
+            {lista.cadastro.motivoOmitido && <p className="ds-form-note">O cadastro da Ink não foi consultado: o filtro escolhido só existe para quem tem pedido.</p>}
+          </div>
+        )}
+
+        {chipsAtivos.length > 0 && (
+          <div className="cli-chips" role="group" aria-label="Filtros ativos">
+            {chipsAtivos.map((c) => (
+              <button key={c.chave} type="button" className="cli-chip cli-chip--remover" onClick={c.remover} aria-label={`Remover filtro ${c.rotulo}`}>
+                {c.rotulo}<span aria-hidden="true"> ×</span>
+              </button>
+            ))}
+            <Button variant="ghost" size="sm" onClick={limparFiltros}>Limpar filtros</Button>
+            {podeSalvarFiltros && <Button variant="secondary" size="sm" onClick={() => setNomeSegmentoFiltros('')}>Salvar como segmento</Button>}
+          </div>
+        )}
+
+        {lista && !lista.cadastro.disponivel && (
+          <ErrorState description="O cadastro da Reserva Ink não respondeu agora. Mostrando só quem já fez pedido — tente de novo em instantes." />
+        )}
+        {lista?.cadastro.parcial && <p className="ds-form-note">Cadastro carregado parcialmente: a loja tem mais clientes do que o limite lido de uma vez.</p>}
+
+        {erroLista && <ErrorState description={erroLista} onRetry={() => setTentativa((t) => t + 1)} />}
+        {vista.modo === 'carregando' && <div aria-busy="true" aria-live="polite"><Skeleton variant="table" rows={8} /></div>}
+        {!erroLista && lista && (!clientes.length ? (
+          <EmptyState
+            title="Nenhum cliente encontrado"
+            description={chipsAtivos.length ? 'Nenhum cliente bate com todos os filtros ativos.' : undefined}
+            action={chipsAtivos.length ? <Button variant="secondary" size="sm" onClick={limparFiltros}>Limpar filtros</Button> : undefined}
+          />
+        ) : (
+          <>
+            <div ref={tabelaRef} className={['cli-tabela', tabelaRola ? 'cli-tabela--rola' : null].filter(Boolean).join(' ')}>
             <DataTable
               label="Clientes"
               // A ordem é a do seletor, aplicada no servidor sobre a lista inteira; ordenar pelo cabeçalho só
               // reordenaria a página atual e enganaria.
               sortable={false}
               rows={clientes}
+              // Só quem tem pedido tem 360°: cadastro sem compra não abre o drawer.
+              onRowClick={(c: Cliente) => { if (c.origem === 'pedido') setAberto({ chave: c.customerKey, nome: c.nome }); }}
               // A chave leva a posição: a lista é trocada inteira a cada página/filtro, e uma chave repetida faria o React duplicar linhas.
               rowKey={(c, i) => c.loja + ':' + c.customerKey + ':' + i}
               columns={[
-                { key: 'nome', label: 'Nome', truncate: true, width: 240, render: (c) => c.nome || 'Sem nome', sortValue: (c) => c.nome },
-                { key: 'loja', priority: 'low', label: 'Loja', muted: true, render: (c) => adminStores.nameOr(c.loja, nomeStore), sortValue: (c) => adminStores.nameOr(c.loja, nomeStore) },
+                { key: 'nome', label: 'Nome', truncate: true, width: 220, render: (c) => c.nome || 'Sem nome' },
                 {
-                  key: 'contato',
-                  priority: 'low',
-                  label: 'Contato',
-                  truncate: true,
-                  width: 320,
-                  muted: true,
+                  key: 'segmento', label: 'Segmento',
+                  render: (c) => (c.segmento ? (
+                    <span className="cli-segnome" title={c.rfm ? `R${c.rfm.r} · F${c.rfm.f} · M${c.rfm.m}` : undefined}>
+                      {c.segmentoNome}
+                      {c.rfm && <span className="cli-escore">R{c.rfm.r}·F{c.rfm.f}·M{c.rfm.m}</span>}
+                    </span>
+                  ) : <span className="ds-table__cell--muted">{c.origem === 'cadastro' ? 'Só cadastro' : 'Sem compra válida'}</span>),
+                },
+                { key: 'loja', priority: 'low', label: 'Loja', muted: true, render: (c) => adminStores.nameOr(c.loja, nomeStore) },
+                {
+                  key: 'contato', priority: 'low', label: 'Contato', truncate: true, width: 260, muted: true,
                   render: (c) => [c.email, c.telefone].filter(Boolean).join(' · ') || '—',
-                  sortValue: (c) => c.email || c.telefone,
                 },
+                { key: 'compras', label: 'Pedidos', align: 'right', render: (c) => (c.pedidosValidos ? numero(c.pedidosValidos) : <span className="ds-table__cell--muted">—</span>) },
+                { key: 'ltv', label: 'LTV', align: 'right', render: (c) => (c.ltv == null ? <span className="ds-table__cell--muted">—</span> : moeda(c.ltv)) },
+                { key: 'ticket', priority: 'low', label: 'Ticket médio', align: 'right', muted: true, render: (c) => moeda(c.ticketMedioValido) },
                 {
-                  key: 'compras',
-                  label: 'Compras',
-                  align: 'right',
-                  // Contagem não é estado: texto tabular, sem cor semântica (Semantic-Only Rule).
-                  render: (c) => (!c.totalCompras ? <span className="ds-table__cell--muted">{c.origem === 'cadastro' ? 'Só cadastro' : 'Sem compra'}</span> : plural(c.totalCompras, 'compra', 'compras')),
-                  sortValue: (c) => c.totalCompras,
-                },
-                {
-                  key: 'lucro',
-                  label: 'Lucro operacional',
-                  align: 'right',
+                  key: 'lucro', priority: 'low', label: 'Lucro operacional', align: 'right',
                   // Pedido pago ainda sem custo calculado fica fora da soma: marcado como parcial em
                   // vez de mostrar um lucro menor que o real sem aviso.
                   render: (c) => {
@@ -145,40 +566,128 @@ export function ClientesPage() {
                       </span>
                     );
                   },
-                  sortValue: (c) => c.lucroOperacional,
                 },
-                {
-                  key: 'ultimaCompra',
-                  priority: 'low',
-                  label: 'Última compra',
-                  align: 'right',
-                  muted: true,
-                  render: (c) => (c.ultimaCompraEm ? `${formatData(c.ultimaCompraEm)} (${c.diasSemComprar}d atrás)` : '—'),
-                  sortValue: (c) => c.ultimaCompraEm,
-                },
-                {
-                  key: 'marketing',
-                  priority: 'low',
-                  label: 'Marketing',
-                  render: (c) => (c.aceitaMarketing ? <StatusBadge tone="info" label="Aceita" /> : '—'),
-                  sortValue: (c) => (c.aceitaMarketing ? 1 : 0),
-                },
+                { key: 'primeira', priority: 'low', label: '1ª compra', align: 'right', muted: true, render: (c) => dataCurta(c.primeiraCompraEm) },
+                { key: 'ultimaCompra', label: 'Última compra', align: 'right', muted: true, render: (c) => (c.ultimaCompraEm ? `${dataCurta(c.ultimaCompraEm)} · ${c.diasSemComprar}d` : '—') },
+                { key: 'marketing', priority: 'low', label: 'Marketing', render: (c) => (c.aceitaMarketing ? <StatusBadge tone="info" label="Aceita" /> : '—') },
               ]}
             />
+            </div>
+            {tabelaRola && <p className="cli-dica-scroll">Deslize a tabela para o lado para ver mais colunas →</p>}
             {lista.totalPages > 1 && (
               <Pagination
                 label="Paginação de clientes"
                 page={lista.page}
                 totalPages={lista.totalPages}
                 totalLabel={plural(lista.total, 'cliente', 'clientes')}
-                onPrev={() => setPagina((p) => Math.max(1, p - 1))}
-                onNext={() => setPagina((p) => Math.min(lista.totalPages, p + 1))}
+                onPrev={() => atualizar({ pagina: Math.max(1, lista.page - 1) }, { manterPagina: true })}
+                onNext={() => atualizar({ pagina: Math.min(lista.totalPages, lista.page + 1) }, { manterPagina: true })}
               />
             )}
-            </>
-          )}
-        </div>
-      )}
+          </>
+        ))}
+      </div>
+
+      <ClienteDrawer customerKey={aberto?.chave ?? null} nomeInicial={aberto?.nome ?? null} onClose={() => setAberto(null)} />
+
+      <ConfirmDialog
+        open={exportando != null}
+        onClose={() => setExportando(null)}
+        title="Exportar clientes"
+        confirmLabel="Exportar CSV"
+        confirmVariant="primary"
+        onConfirm={confirmarExportacao}
+        description={exportando && (
+          <>
+            <p><strong>{plural(exportando.quantidade, 'cliente', 'clientes')}</strong> com compra batem nos filtros atuais e entram no arquivo.</p>
+            <p className="ds-form-note">O CSV traz nome, e-mail, telefone, segmento, pedidos, LTV e datas — sem CPF. A exportação fica registrada no histórico de auditoria. Quem só tem cadastro (sem pedido) não é incluído.</p>
+            {exportando.quantidade === 0 && <p className="ds-form-error">Nenhum cliente para exportar.</p>}
+          </>
+        )}
+      />
+
+      <ConfirmDialog
+        open={nomeSegmentoFiltros != null}
+        onClose={() => setNomeSegmentoFiltros(null)}
+        title="Salvar filtros como segmento"
+        confirmLabel="Salvar e criar campanha"
+        confirmVariant="primary"
+        onConfirm={salvarSegmentoDeFiltros}
+        description={(
+          <>
+            <Field label="Nome do segmento">
+              <Input type="text" value={nomeSegmentoFiltros ?? ''} maxLength={120} onChange={(e) => setNomeSegmentoFiltros(e.target.value)} placeholder="ex: LTV alto sem comprar há 90 dias" />
+            </Field>
+            <p className="ds-form-note">Vira um segmento dinâmico: a audiência é reavaliada a cada uso. Busca e datas absolutas não entram no segmento; o que ficar de fora é avisado.</p>
+          </>
+        )}
+      />
     </PageStack>
+  );
+}
+
+interface FormFiltrosProps {
+  valor: FiltrosAvancados; onChange: (v: FiltrosAvancados) => void;
+  tipo: EstadoFiltros['tipo']; onTipo: (t: EstadoFiltros['tipo']) => void;
+  inatividade: string; onInatividade: (v: string) => void;
+}
+
+function FiltrosAvancadosForm({ valor, onChange, tipo, onTipo, inatividade, onInatividade }: FormFiltrosProps) {
+  const set = (campo: keyof FiltrosAvancados, v: string) => onChange({ ...valor, [campo]: v });
+  const numeroCampo = (campo: keyof FiltrosAvancados, rotulo: string) => (
+    <Field label={rotulo}>
+      <Input type="number" inputMode="decimal" min={0} value={valor[campo]} onChange={(e) => set(campo, /^\d{0,9}(\.\d{0,2})?$/.test(e.target.value) ? e.target.value : valor[campo])} />
+    </Field>
+  );
+  const dataCampo = (campo: keyof FiltrosAvancados, rotulo: string) => (
+    <Field label={rotulo}><Input type="date" value={valor[campo]} onChange={(e) => set(campo, e.target.value)} /></Field>
+  );
+  return (
+    <div id="cli-filtros" className="cli-filtros">
+      <div className="cli-avancados">
+        <Field label="Quem listar">
+          <Select value={tipo} onChange={(e) => onTipo(e.target.value as EstadoFiltros['tipo'])}>
+            <option value="todos">Todos os clientes</option>
+            <option value="com_pedido">Com pedido</option>
+            <option value="sem_pedido">Só cadastro (nunca pediu)</option>
+          </Select>
+        </Field>
+        <Field label="Tempo sem comprar">
+          <Select value={inatividade} onChange={(e) => onInatividade(e.target.value)}>
+            <option value="">Qualquer</option>
+            <option value="30">30+ dias</option>
+            <option value="60">60+ dias</option>
+            <option value="90">90+ dias</option>
+            <option value="180">180+ dias</option>
+          </Select>
+        </Field>
+        {numeroCampo('recenciaMin', 'Sem comprar há (dias, mín.)')}
+        {numeroCampo('recenciaMax', 'Sem comprar há (dias, máx.)')}
+        {numeroCampo('pedidosMin', 'Pedidos válidos (mín.)')}
+        {numeroCampo('pedidosMax', 'Pedidos válidos (máx.)')}
+        {numeroCampo('ltvMin', 'LTV mínimo (R$)')}
+        {numeroCampo('ltvMax', 'LTV máximo (R$)')}
+        {numeroCampo('ticketMin', 'Ticket médio mínimo (R$)')}
+        {numeroCampo('ticketMax', 'Ticket médio máximo (R$)')}
+        {dataCampo('primeiraDe', 'Primeira compra desde')}
+        {dataCampo('primeiraAte', 'Primeira compra até')}
+        {dataCampo('ultimaDe', 'Última compra desde')}
+        {dataCampo('ultimaAte', 'Última compra até')}
+        <Field label="UF de entrega">
+          <Select value={valor.uf} onChange={(e) => set('uf', e.target.value)}>
+            <option value="">Qualquer</option>
+            {UF_LISTA.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+          </Select>
+        </Field>
+        <Field label="Consentimento de marketing">
+          <Select value={valor.marketing} onChange={(e) => set('marketing', e.target.value)}>
+            <option value="">Qualquer</option>
+            <option value="sim">Aceita marketing</option>
+            <option value="nao">Não aceita</option>
+          </Select>
+        </Field>
+      </div>
+      <p className="ds-form-note">Produto e categoria ainda não são filtros aqui: só entram quando o dado estiver capturado por cliente de forma confiável. A UF vem do endereço de entrega do pedido mais recente que a informa.</p>
+    </div>
   );
 }

@@ -4,6 +4,9 @@ import { Button, ConfirmDialog, DataTable, Drawer, EmptyState, ErrorState, Field
 import { plural } from '../../lib/format';
 import { adminStores } from '../../state/adminStores';
 import { criarSegmento, editarSegmento, excluirSegmento, listSegmentos, type Segmento, type SegmentoInput } from '../../api/segments';
+import { getEstadoSegmentosRfm, type EstadoSegmentoRfm } from '../../api/clientes';
+import { rotuloCorte } from '../clientes/AvisoSegmentoRfm';
+import { StatusBadge } from '../../components/ds';
 import { AudienceBuilder, audienceStateDeSalvo, audienceStateParaApi, audienceStateVazio, type AudienceState } from './AudienceBuilder';
 
 import '../../pedidos-central.css';
@@ -68,10 +71,20 @@ export function SegmentosPage() {
   // Prévia de audiência na loja da Organization ativa.
   const lojaPreview = useLojaAtiva() ?? '';
 
+  // Segmentos RFM: corte salvo × corte de hoje (só leitura; nada é reescrito).
+  const [estados, setEstados] = useState<Record<string, EstadoSegmentoRfm>>({});
+
   function carregar() {
     setErro('');
     listSegmentos()
-      .then((data) => setSegmentos(data.segmentos))
+      .then((data) => {
+        setSegmentos(data.segmentos);
+        if (data.segmentos.some((s) => s.origem === 'rfm')) {
+          getEstadoSegmentosRfm()
+            .then((r) => setEstados(Object.fromEntries(r.segmentos.map((e) => [e.id, e]))))
+            .catch(() => setEstados({}));
+        }
+      })
       .catch((err: Error) => setErro(err.message));
   }
 
@@ -120,8 +133,33 @@ export function SegmentosPage() {
           onRowClick={(s) => { setEditando(s); setDrawerAberto(true); }}
           columns={[
             { key: 'nome', label: 'Nome', render: (s) => s.nome, sortValue: (s) => s.nome },
+            {
+              key: 'origem', priority: 'low', label: 'Origem',
+              render: (s) => (s.origem === 'rfm' ? `RFM ${s.rfmVersao ?? ''}`.trim() : s.origem === 'clientes' ? 'Filtros de Clientes' : 'Construtor'),
+              sortValue: (s) => s.origem,
+            },
+            {
+              key: 'politica', priority: 'low', label: 'Tipo', muted: true,
+              render: (s) => (s.origem === 'rfm'
+                ? `Pessoas dinâmicas · corte fixo · ${s.filtros?.some((f) => f.field === 'rfm') ? 'avaliação exata' : 'avaliação aproximada'}`
+                : 'Dinâmico'),
+            },
+            {
+              key: 'corte', priority: 'low', label: 'Corte de valor',
+              render: (s) => {
+                if (s.origem !== 'rfm') return <span className="ds-table__cell--muted">—</span>;
+                const e = estados[s.id];
+                if (!e) return <span className="ds-table__cell--muted">…</span>;
+                return (
+                  <span title={e.divergente ? `Hoje: ${rotuloCorte(e.atual.corte)}` : undefined}>
+                    {rotuloCorte(e.salvo.corte)}{' '}
+                    {e.divergente ? <StatusBadge tone="warning" label="Corte defasado" /> : <StatusBadge tone="neutral" label="Confere com hoje" />}
+                  </span>
+                );
+              },
+            },
             { key: 'match', priority: 'low', label: 'Lógica', render: (s) => (s.match === 'ANY' ? 'Qualquer condição' : 'Todas as condições') },
-            { key: 'filtros', label: 'Filtros', align: 'right', render: (s) => plural(s.filtros?.length || 0, 'filtro', 'filtros') },
+            { key: 'filtros', label: 'Filtros', align: 'right', render: (s) => (s.filtros?.some((f) => f.field === 'rfm') ? 'Segmento RFM' : plural(s.filtros?.length || 0, 'filtro', 'filtros')) },
             { key: 'criadoEm', priority: 'low', label: 'Criado em', align: 'right', muted: true, render: (s) => new Date(s.criadoEm).toLocaleDateString('pt-BR') },
             {
               key: 'acoes',

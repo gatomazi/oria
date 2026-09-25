@@ -1,0 +1,364 @@
+# Clientes 360°, RFM e campanhas — Fase 0 (auditoria) e estado da rodada
+
+Data: 2026-09-23 · Branch `feature/clientes-rfm` · Brief: `oria_clientes_rfm_campanhas.md`.
+Referência funcional: painel da Reserva Ink (capturas) — **nada foi copiado**: visual, regras e nomes são do Oria.
+Fonte de dados verificada no repositório; nenhum dado do painel Ink foi usado, e nenhum endpoint foi presumido.
+
+## 1. O que existia
+
+| Peça | Onde | Observação |
+|---|---|---|
+| Página Clientes | `src/pages/clientes/ClientesPage.tsx`, `src/api/clientes.ts` | lista paginada no servidor; sem indicadores, RFM nem drawer |
+| Lista/filtros | `lib/clientes/lista.js` (`GET /api/admin/clientes/lista`) | busca, ordem, inatividade, `tipo` (com pedido / só cadastro) |
+| Cadastro Ink | `lib/clientes/cadastro.js` → `GET /v1/stores/customers` | remoto, paginado, cache 5 min por Store |
+| Agregado por cliente | `buscarClientesAgregados()` (server.js) | union-find por documento/telefone/e-mail; alimenta Campanhas |
+| Pedidos | `pedidos_ink`, `pedidos_ink_itens` | cache local (webhook + sync horário + backfill), escopo `organization_id` + `store_id` |
+| Campanhas / Segmentos | `segments`, `campaigns`, `campaign_recipients`; `AudienceBuilder` | segmento = definição de filtro **dinâmica**; motor de audiência já calcula elegíveis (opt-in, número, cooldown) |
+| Design system | `src/components/ds/*`, `DESIGN.md` | dark, cor semântica; Drawer, KpiStrip, DataTable, Callout |
+| Backfill | `pedidos_backfill_jobs`, `POST /api/admin/pedidos/backfill-historico` | existe; a tela agora declara o estado dele |
+
+## 2. Inventário de dados
+
+| Dado | Situação | Fonte de verdade | Risco |
+|---|---|---|---|
+| Pedido (id, data, status, total, frete, desconto) | **Disponível** | `pedidos_ink` | cobertura depende de sync/backfill (declarada na tela) |
+| Itens do pedido (produto, modelo, cor, tamanho, qtd, valor, desconto rateado) | **Parcial** | `pedidos_ink_itens` | pedido antigo sem itens gravados → soma vira `—` |
+| Imagem do produto | **Indisponível** | não vem no payload de pedido da Ink | placeholder na tela, sem URL inventada |
+| Reembolso total | **Disponível** | `payment_status = refunded` | — |
+| Reembolso parcial | **Indisponível** | só há auditoria dos feitos pelo painel | LTV pode superestimar; declarado na tela e nas lacunas |
+| Identidade do cliente | **Disponível (heurística)** | documento/telefone/e-mail, transitivo | duas pessoas da mesma família podem virar uma; `motivosDeUniao` explica o merge |
+| Consentimento | **Parcial** | `accepts_marketing` do checkout | não há opt-in/opt-out por canal nem supressão própria |
+| Telefone/e-mail válidos | **Disponível** | pedido | qualidade do dado |
+| UF | **Disponível** | `buyer_uf` (endereço de entrega) | ausente em pedidos antigos |
+| Produto/categoria por cliente | **Parcial** | itens | fora dos filtros nesta rodada |
+| WhatsApp 1:1 pelo Oria | **Indisponível** | só campanhas (templates) | botão do drawer abre `wa.me` externo e diz isso |
+| E-mail pelo Oria | **Indisponível** | sem provedor | `mailto:` rotulado como abrir app |
+| Meta Custom Audiences | **Indisponível** | não configurado | V3, fora da rodada |
+| Timezone da Organization | **Parcial** | não há campo; usa `America/Sao_Paulo` | igual ao dashboard financeiro |
+
+Observado × inferido: pedido, itens, status, UF e consentimento são **observados**. Segmento RFM, LTV, recorrência e identidade unificada são **derivados** e vêm com versão, data de referência e cobertura.
+
+Divergência conhecida (herdada, não alterada): o motor de audiência de Campanhas conta pedido de **troca** paga como compra e mede recência em 24h corridas; a RFM exclui troca e conta dias de calendário. A tela avisa (`observacoes`) ao salvar o segmento.
+
+## 3. Decisões financeiras
+
+- **Pedido válido**: `payment_status ∈ {paid, succeeded, free}`, não é troca, com data e valor. Cancelado, expirado, pendente, reembolsado por inteiro e troca ficam fora.
+- **Valor**: `total_value` (já líquido de desconto; inclui o frete pago pelo cliente). A Ink fecha `total = Σ itens + frete − desconto` (validado em 152/152 pedidos, `lib/ink/financeiro.js`), então o subtotal do pedido é derivado disso e **conferido** contra os itens gravados (`conciliado`).
+- **Faturamento/indicadores**: todos do mesmo universo (pedidos válidos com identidade, Store do contexto, período). Pedido sem documento/telefone/e-mail fica fora de todos e é contado em `cobertura.pedidosSemIdentidade`.
+- **Taxa de recompra**: clientes com ≥2 pedidos válidos **no período** ÷ clientes compradores do período.
+- **Comparação**: só quando o histórico sincronizado cobre o período anterior inteiro.
+
+## 4. RFM `rfm-v1` (próprio, não reproduz regra de terceiros)
+
+- R: dias de calendário (fuso da Organization) desde a última compra válida até `as_of`. F: pedidos válidos na janela (365 d). M: valor pago na janela. LTV = sem janela.
+- Segmentação por **regras** (recência em faixas 45/90/180/365 dias; frequência; valor alto = P75 entre quem tem M>0), não por quantis de F/M, porque em base de baixa recompra quantis colocariam quem comprou 1× ao lado de quem comprou 10×.
+- 11 segmentos exclusivos e exaustivos (provado por teste em toda a grade): Campeões, Leais, Potenciais leais, Primeira compra de alto valor, Novos, Aguardando recompra, Precisam de atenção, Prestes a dormir, Em risco, Hibernando, Perdidos. Nomes e limites são **padrões a validar contra a distribuição da base real** (estão configuráveis).
+- `Dados insuficientes` quando a base tem <30 clientes ou <90 dias de histórico.
+- Notas 1–5 (R e M por quintis; F por contagem) são só leitura relativa; empates caem sempre na mesma nota.
+- `as_of` (data de classificação) não muda com o período dos indicadores.
+
+## 5. Entregue nesta rodada
+
+**Fase 1/2 (dados + engine)** — completo no que foi escopado:
+`lib/clientes/{identidade,rfm,metricas,analise,segmento,detalhe,exportacao}.js`; regra de identidade única extraída de `buscarClientesAgregados` (comportamento preservado); migration `0034` (origem/política/predicado/versão/data no segmento).
+Endpoints: `GET /api/admin/clientes/resumo`, `POST .../detalhe`, `POST .../exportar`, `POST .../segmentos`; `lista` ganhou segmento, faixas, datas, UF, consentimento.
+
+**Fase 3/4 (frontend)**: indicadores, matriz treemap, tabela de distribuição, filtros avançados com URL compartilhável (sem PII), chips, drawer 360°, exportação.
+
+**Fase 5 (parcial, V1)**: segmento dinâmico salvo a partir da RFM ou dos filtros, dedupe por regra, ligação a `Campanhas > Nova campanha` (`?segmento=ID`), origem visível em Segmentos, exportação CSV protegida.
+
+## 6. Não feito / próximos incrementos
+
+- **Snapshots versionados** persistidos e job diário de recálculo: a RFM é calculada sob demanda (com `versao` + `asOf` no retorno). Sem cache; para centenas de milhares de pedidos, medir e materializar.
+- **Segmento congelado** (snapshot com data): só dinâmico por enquanto (`politica` restrita a `dinamico`).
+- Reembolso parcial por cliente; opt-in/opt-out e supressão por canal; histórico de mensagens/respostas/conversões por cliente.
+- Ações do drawer "Adicionar ao segmento" e "Excluir de campanhas": segmento é regra, não lista manual; fica para quando houver lista de supressão.
+- Envio massivo WhatsApp (V2), Meta Custom Audiences (V3), produto/categoria e atribuição de receita (V4).
+- Validar limites de recência e P75 contra a distribuição da base **real** (a Fase 0 não leu dados de produção).
+- `docs/checklist-nova-tela.md` é citado em `.claude/rules/admin-nova-tela.md` mas não existe no repositório.
+
+## 7. Segurança e privacidade
+
+- Organization/Store vêm do contexto da sessão, nunca do request; RLS ativa; testes com duas Organizations (404 cruzado no detalhe, segmento isolado).
+- Ver contato de um cliente e exportar são auditados **antes** da resposta (falha na auditoria = nada devolvido); o `audit_log` guarda hash da chave e só a contagem/nomes dos filtros.
+- Chave do cliente (CPF/telefone/e-mail) nunca vai na URL (detalhe é POST); busca e cliente aberto não entram na query string.
+- CSV sem CPF, com proteção contra fórmula (`=`, `+`, `-`, `@`) e confirmação da quantidade vista na prévia.
+- O predicado do segmento é recalculado no servidor; campos extras enviados pelo navegador são ignorados.
+- Nenhum disparo ao abrir o drawer; botões de canal só ficam clicáveis com rota real e dizem que não enviam pelo Oria.
+
+---
+
+# Rodada 2 — calibração da RFM e validação ponta a ponta (2026-09-23)
+
+Branch `feature/clientes-rfm`, a partir de `d6df73f` / `17ecb9d` / `5e3ac21`. Sem push, merge, deploy, snapshot, job diário ou disparo.
+
+## 1. Base real: não acessada — nenhum limiar foi alterado
+
+Esta rodada **não teve acesso autorizado à base real** (o painel de produção não roda esta branch e não há credencial de banco de produção na sessão), e o banco local só contém dados **sintéticos** gerados por mim (`~2.600` pedidos aleatórios). Distribuição sintética não prova nada sobre a loja, então **nenhum número de calibração real é apresentado aqui e nenhum limiar foi trocado**: a regra continua `rfm-v1` com 45/90/180/365 dias, P75 da soma, janela de 365 dias.
+
+Entregue no lugar: o relatório reproduzível, somente leitura e anonimizado.
+
+```bash
+# Somente leitura: sessão READ ONLY no servidor + BEGIN READ ONLY; escopo = Organization/Store informadas.
+DATABASE_URL='postgres://<usuario-somente-leitura>@<host>/<banco>' \
+  node apps/panel/scripts/clientes/rfm-calibracao.mjs \
+    --organization <uuid-da-organization> [--store <uuid-da-store>] \
+    [--as-of 2026-09-23T15:00:00Z] --json calibracao.json --md calibracao.md
+```
+
+Ele **nunca seleciona nem imprime** nome, e-mail, telefone ou documento (documento/telefone/e-mail entram só em memória para unir pedidos da mesma pessoa). A saída é agregada (contagens, quantis, somas) e amostras limítrofes com rótulo opaco aleatório (`c_ab12cd34`, diferente a cada execução). Lógica pura e testada em `lib/clientes/calibracao.js` (`test/clientes-calibracao.test.js`). Rodei o script contra o banco local sintético **só para provar que ele executa** (integridade, distribuições, regra atual, recompra, alternativas, amostras e conferências saem; sem exceção).
+
+O relatório traz, nesta ordem: (1) integridade das linhas (duplicidade por `ink_order_id`, sem data/valor/identidade, valor ≤ 0, cruzamento `payment_status × order_status`, status de pagamento **não reconhecidos**, pagamento válido com pedido encerrado); (2) universo e distribuições de recência, frequência (concentração de clientes de 1 compra), LTV, ticket e concentração de receita; (3) a regra atual por segmento (clientes, %, pedidos, receita, ticket, **mediana** de recência e frequência) e a estabilidade perto dos cortes (±3 dias / ±5%); (4) o comportamento de recompra da própria loja (intervalo entre compras e "% que recomprou em até 30/60/90/180 dias" só entre quem já teve tempo — sem viés de censura); (5) oito alternativas, cada uma variando **um** parâmetro, com quantos clientes mudam de segmento e como; (6) amostras limítrofes anonimizadas; (7) conferências de soma.
+
+## 2. Auditoria da regra atual (código real)
+
+| Ponto do brief | Situação verificada |
+|---|---|
+| Status que entram | `payment_status ∈ {paid, succeeded, free}`, `is_troca = false`, data e valor ≥ 0 presentes (`pedidoValido`). |
+| Cancelamento / reembolso | `canceled`, `refunded`, `expired`, `pending` etc. ficam fora. **Reembolso parcial não existe no cache**: só o status final. |
+| `order_status` | **Não entra na regra.** Um pedido com pagamento `paid` e `order_status ∈ {canceled, refunded, returned, …}` conta como compra. O relatório mede quantos são; se houver, decidir com o dado (não apliquei sozinho). |
+| Valor | `total_value` = Σ itens + frete − desconto (identidade da Ink validada em 152/152 pedidos). É líquido de **desconto** e **inclui o frete pago**. Não há receita "sem frete" nos indicadores. |
+| Moeda | A Ink não informa moeda no pedido; assume-se BRL, sem conversão. |
+| Fuso / referência | `America/Sao_Paulo` fixo (não há fuso por Organization); recência em dias de calendário; `asOf` = instante da consulta e **não muda com o período dos KPIs**. |
+| Sem pedido válido | Fora da RFM, contados à parte (`identidadesSemCompraValida`). |
+| Identidade | Documento/telefone/e-mail, transitivo, por Store (1 Organization = 1 Store). Duas pessoas que dividem telefone/e-mail viram uma. Não há identidade entre canais além dessas três chaves. |
+| Divergência com Campanhas | O motor de audiência conta troca paga e mede 24h corridas (documentado em `observacoes`); a ida e volta abaixo mede o efeito. |
+
+**Inconsistências encontradas e corrigidas nesta rodada**
+
+1. **Empate de horário** entre pedidos: a chave/nome do cliente (do pedido "mais recente") dependia da ordem de leitura. Agora a ordem é canônica (`criado_em DESC, ink_order_id DESC`), no SQL e na lib.
+2. **Pedido duplicado**: as chaves únicas `(org, loja, id)` e `(org, store_id, id)` são independentes, então uma linha legada e uma da Store podem coexistir para o mesmo `ink_order_id` e contar duas vezes. Agora conta uma vez e o excedente sai em `cobertura.pedidosDuplicadosIgnorados`.
+3. **Ordem de soma em ponto flutuante**: o mesmo conjunto de pedidos podia render receitas/percentuais diferentes na 15ª casa conforme a ordem. Somas em centavos inteiros (RFM e indicadores).
+4. **"Reembolsado" em português**: o rótulo não é mapeado na entrada e ficava fora do contador "pedidos reembolsados" (já ficava fora do faturamento, por não ser `paid`). Agora conta.
+5. **Recência "média"** não é a métrica pedida: o resumo passa a trazer a **mediana** de recência e de frequência por segmento (a tela usa a mediana).
+
+## 3. Achados que dependem dos números reais (não resolvidos)
+
+- **"Valor alto" mede a SOMA da janela.** Numa base dominada por clientes de 1 compra, o P75 da soma é um valor de pedido único; quem tem 3+ compras quase sempre o ultrapassa. Consequência **estrutural** (não depende de calibrar): a divisão Campeões × Leais tende a colapsar em "Campeões" e `Leais` fica vazio. Alternativa já disponível e testada: `valorAltoMetrica = 'ticket_medio'` (compara pedido com pedido). **Não foi ativada**; ver §4.
+- **Frequência**: por regra, sem quantis (F=1 nunca vira fidelidade; teste dedicado). A nota 1–5 de F é a contagem, sem quantil, para não fabricar diferença entre empates.
+- **Cortes de recência 45/90/180/365** e **P75** são padrões, não achados. Sem os intervalos reais de recompra da loja não há critério para trocá-los.
+
+## 4. Opções de calibração e como decidir (sem inventar valores)
+
+Cada opção varia um parâmetro (`ALTERNATIVAS_PADRAO` em `lib/clientes/calibracao.js`); o relatório real diz quantos clientes mudam e para onde.
+
+| Opção | Muda | Efeito esperado | Cuidado |
+|---|---|---|---|
+| Recência mais curta (30/60/120/270) | Novos/Aguardando/Prestes a dormir encolhem, Hibernando/Perdidos crescem | Reativação mais cedo | mais clientes "em risco" sem evidência de que já pararam |
+| Recência mais longa (60/120/240/365) | o inverso | Menos falso alarme | reativa tarde demais |
+| Valor alto = P80/P90 da soma | menos "alto valor" | Segmento de proteção mais estreito | corte cai sobre poucos clientes; ver estabilidade |
+| Valor alto = ticket médio (P75/P90) | separa valor de frequência | `Leais` deixa de colapsar em `Campeões` | filtro de campanha passa a usar **ticket médio**, não total gasto |
+| Janela de frequência 180 d | quem tem 2ª compra antiga cai para F=1 | mais sensível a recorrência recente | histórico curto: janela ≥ histórico é equivalente |
+
+**Critério proposto para escolher, com os números do relatório real** (nenhum foi aplicado ainda):
+
+1. **Recência**: se o relatório trouxer ≥ 30 intervalos entre compras, ancorar "Prestes a dormir"/"Em risco" nos percentis do intervalo (p75/p90) — quem passou do p90 do intervalo típico raramente volta. Se houver < 30 intervalos (esperado com ~5–6% de recompra), **manter 45/90/180/365** e registrar que a amostra não sustenta outra escolha.
+2. **Segunda compra**: usar "% que recomprou em até 30/60/90/180 d" (só coortes com ≥ 30 elegíveis) para definir a janela de "Aguardando recompra".
+3. **Valor alto**: escolher por **ticket** se o relatório mostrar `Leais` colapsado; conferir `clientesAte5PctDoCorte` (estabilidade) antes de fixar o percentil.
+4. **Não** escolher o conjunto que deixa a matriz "equilibrada": só o que os dados e a finalidade do segmento sustentam.
+
+## 4.1 Versão da regra (preparada para snapshots)
+
+`regraVersao = "<algoritmo>:<hash8 da configuração efetiva + tabela de regras>"`, ex.: `rfm-v1:c35267c2` para os padrões atuais. Qualquer mudança de limiar, janela, percentil, métrica ou mínimo muda a versão (teste). Limiares vivem em **um** lugar (`PADROES`/`configuracaoEfetiva`, validados; erro claro se inválidos). A versão vai no resumo (`rfm.regraVersao`, `rfm.configuracao`), na tela e em `segments.rfm_versao` (agora guarda a versão da **regra**, não só a do algoritmo). Nenhum snapshot é persistido.
+
+## 5. Ida e volta com Campanhas (provada)
+
+Teste automatizado (`test/invariants/clientes-rfm-http.test.js`, "ida e volta"), para **cada** segmento com clientes:
+
+1. `POST /api/admin/clientes/segmentos` cria o segmento;
+2. lê a **linha do banco** (não a resposta): `origem = rfm`, `politica = dinamico`, `rfm_segmento`, `rfm_versao = regraVersao do resumo`, `classificado_em`, `predicado` idêntico ao do resumo;
+3. `filtros` persistidos = tradução do predicado persistido;
+4. a prévia de audiência, chamada com os filtros lidos do banco, devolve **exatamente** a contagem de uma avaliação **independente** (recalculada no teste a partir das linhas de pedidos, com a semântica do filtro de audiência);
+5. contra a RFM, a diferença é só a documentada (≤ 2 clientes só-troca);
+6. `campaigns` e `campaign_recipients` continuam vazias (nada disparado).
+
+O teste **detecta defeito**: alterar o limite superior de recência na tradução (`lte max` → `max − 1`) reprovou; restaurado, passa.
+
+Na tela (`scripts/clientes/smoke-viewport.mjs`, Playwright): o CTA criou o segmento, abriu `Nova campanha?segmento=ID`, o nome veio preenchido, **Avançar → Audiência** mostrou os 4 filtros persistidos com campo, operador e valor iguais aos do banco, e a contagem exibida (`elegíveis / encontrados / excluídos`) foi igual à prévia do servidor com os mesmos filtros (dados locais sintéticos; nenhuma campanha criada).
+
+## 6. 390 × 844 (viewport, com emulação de toque)
+
+Playwright (`isMobile`, `hasTouch`, `deviceScaleFactor 2`); o **viewport** foi redimensionado, não a janela. `scripts/clientes/smoke-viewport.mjs`, **34/34 verificações**:
+
+- página sem rolagem horizontal em indicadores, matriz, painel, filtros, tabela, drawer aberto e Audiência (`scrollWidth 390 = clientWidth 390`);
+- KPIs em 2 colunas; treemap 324 px, 9 células, nenhuma coberta por outra (`elementFromPoint`); 11 chips da legenda tocáveis e ≥ 28 px;
+- CTA com 290 px, dentro da viewport; botões do painel tocáveis;
+- filtros avançados: 14 campos dentro da viewport, ≥ 32 px; tabela com contêiner de 358 px (rolagem só interna), colunas de apoio ocultas, essenciais mantidas;
+- drawer 390×844 (tela cheia); ao rolar, **cabeçalho em top 0 e rodapé em bottom 844/844**; 3 botões do rodapé tocáveis e sem sobreposição;
+- sem erro de JavaScript. Única resposta ≥ 400 no fluxo: `503 /api/admin/whatsapp-templates` (WhatsApp não configurado no ambiente local; pré-existente, fora desta feature).
+
+Evidências (8 capturas + `resultado.json`, dados sintéticos, sem dado pessoal) em `~/Downloads/oria-clientes-390-evidencias/` — fora do repositório, que não tem pasta de evidências.
+
+## 7. Testes e resultado
+
+**Suítes relacionadas** (Postgres efêmero, role da aplicação, RLS): 200/200 — motor RFM (incl. fronteiras exatas de recência/valor/janela, fuso 23:59×00:00, determinismo com entrada embaralhada, versão da regra, métrica por ticket, duplicidade, empate de horário), métricas, detalhe, CSV, treemap, calibração, lista, migrations, plano/entitlement, `clientes-rfm-http` (13, com duas Organizations e a ida e volta com Campanhas).
+
+**Suíte completa** (`npm test`, incluindo os ciclos de *negative control*, ~2h30 numa máquina compartilhada com outras sessões): **concluiu** — 1.769 testes, 1.764 passaram, **5 falharam**, classificados assim:
+
+| Falha | Natureza | Situação |
+|---|---|---|
+| `tenancy-migrations` · "banco vazio → todas as migrations" e "rollback das migrations" | **código**: os testes fixam a contagem de migrations (35→36 com a `0034`, criada na rodada anterior e nunca exercitada pela suíte completa) | corrigido (`DEPOIS_DA_FASE1 = 22`); os 2 passam |
+| `r19-runbook-dry-run` · conjunto de migrations do pre-deploy da D' | **código**: lista fixa não incluía `1790001900000_segments-rfm` | corrigido; passa (15/15 com o item anterior) |
+| negative control `MIDIA-04` e `INK-01` | **infraestrutura**: "o processo não executou nenhum teste" — o filho estourou tempo sob carga (99 s e 83 s no primeiro teste) | reexecutados isolados (fatia 3): **passam** (43 s e 78 s) |
+
+Depois dessas correções **não rodei a suíte completa de novo** (custa ~2h30): a aprovação da suíte inteira, portanto, **não está demonstrada**; o que está demonstrado é a suíte completa com esses 5 itens, os 3 de código corrigidos e revalidados e os 2 de infraestrutura revalidados isoladamente.
+
+## 8. Arquivos e commits desta rodada
+
+- `lib/clientes/{rfm,analise,metricas,segmento,calibracao}.js`, `server.js` (ordem canônica, versão da regra no resumo e no segmento), `src/api/clientes.ts`, `src/pages/clientes/{ClientesPage,SegmentoPanel,rfmTexto}.tsx|ts`;
+- `scripts/clientes/rfm-calibracao.mjs` (relatório somente leitura), `scripts/clientes/smoke-viewport.mjs` (390 × 844);
+- testes: `test/clientes-rfm.test.js`, `test/clientes-calibracao.test.js`, `test/invariants/clientes-rfm-http.test.js`, contagens de migrations em `tenancy-migrations`/`r19-runbook-dry-run`.
+- Commits locais: `5fe90fe` (regra versionada, relatório, testes) e `9d7456c` (contagens de migrations fixadas em testes + esta documentação).
+
+## 9. Riscos que permanecem
+
+1. **Nenhum limiar foi calibrado com dado real.** `rfm-v1` segue com 45/90/180/365, P75 da soma e janela 365 — padrões, não achados. Rodar `rfm-calibracao.mjs` numa réplica/leitura da base real é o passo que destrava a decisão.
+2. **Pagamento `paid` com `order_status` encerrado** (cancelado/reembolsado/devolvido) conta como compra. Tamanho desconhecido até o relatório real.
+3. **"Valor alto" pela soma** pode esvaziar `Leais` (ver §3).
+4. **Reembolso parcial** não é rastreado; **frete** está dentro do valor; **moeda** presumida BRL; **fuso** fixo.
+5. Identidade unifica quem divide telefone/e-mail; `Dados insuficientes` depende de ≥ 30 compradores e ≥ 90 dias.
+6. Suíte completa não repetida após as correções de contagem (§7).
+7. RFM segue calculada sob demanda (sem cache/snapshot); custo cresce com o nº de pedidos.
+
+## 10. Próximo incremento (só depois da calibração real)
+
+Snapshots versionados (`as_of`, `regraVersao`, contagens reconciliáveis) e job diário idempotente; depois, segmento congelado e as ações do drawer (`Adicionar ao segmento`, `Excluir de campanhas`).
+
+---
+
+# Rodada 3 — consistência matriz × lista × Audiência, cobertura e calibração real (2026-09-23)
+
+Branch `feature/clientes-rfm`, sobre `5e3ac21`…`f2cc8da`. **Sem push, merge, deploy, campanha disparada, snapshot, job diário ou mudança de limiar.** Todos os números abaixo vêm do banco **sintético local** (2.577 pedidos aleatórios) e só provam mecanismo; não descrevem clientes da loja.
+
+## R3.1 Lista × matriz — bug reproduzido e corrigido
+
+**Reprodução** (`scripts/clientes/smoke-lista.mjs`, Playwright, amostragem do DOM a cada ~60 ms com respostas atrasadas/fora de ordem/503), **antes da correção — 6/13**:
+
+| Cenário | Resultado antes |
+|---|---|
+| 1. chip **Novos** com resposta lenta (2,5 s) | a lista **sem filtro** ficou na tela sob o chip novo: linhas de **Campeões** e **Precisam de atenção** com o total antigo (2.400) — exatamente a captura relatada |
+| 2. troca rápida entre segmentos, respostas fora de ordem | linhas de **Novos** apareceram sob o chip **Em risco** (o estado final ficou certo; o intermediário, não) |
+| 3. falha 503 | o erro apareceu, mas com o **total antigo** (19) ainda no topo e **sem "Tentar novamente"** |
+| 4. cadastro da Ink | com chip de segmento a Ink **era consultada** e o alerta "cadastro indisponível" aparecia sobre uma lista que ela não afeta |
+
+**Causa** (não presumida; confirmada pelos cenários acima): a página guardava só "a última resposta" e a exibia sem conferir a que filtro ela pertencia; ao trocar o filtro, a lista antiga (e o total) ficavam até a nova chegar — ou para sempre, se falhasse. Além disso o servidor consultava o cadastro da Ink (lento/falho) mesmo quando o filtro já excluía quem só tem cadastro.
+
+**Correção**
+- `src/pages/clientes/listaEstado.ts`: a carga carrega a **chave** do pedido (escopo + filtros + busca + tentativa); só se exibe dado cuja chave é a atual — senão, carregamento (`aria-busy`) ou erro; resposta de chave antiga é ignorada; erro tem **"Tentar novamente"**.
+- Servidor (`GET /api/admin/clientes/lista`): filtro que exclui cadastro sem pedido (segmento RFM, LTV, ticket, datas, UF) **não consulta a Ink** (`cadastro.motivoOmitido = filtro_exige_pedido`); falha da Ink com `tipo=todos` segue com os pedidos locais e é declarada; filtro que **depende** da RFM nunca é "degradado" para lista sem o filtro (erro 503 `RFM_INDISPONIVEL`); uma **única leitura** de pedidos alimenta o agregado da lista e a RFM (mesma população da matriz); a resposta traz `rfm.{regraVersao, diaClassificacao}` e a tela recarrega a matriz se diferirem.
+- Tela: linha "**2.400 pessoas com pedido = 2.265 compradores válidos classificados (a matriz) + 135 sem compra válida**" (números sintéticos), com "confere com a matriz" (ou aviso de divergência) quando o único filtro é segmento.
+
+**Depois — 13/13** (mesmo script). Testes de regressão: `test/clientes-lista-estado.test.js` (5), `clientes-lista.test.js` (+3), e no HTTP (`clientes-rfm-http`, com Ink conectada no mock e controle de lentidão/queda): falha → pedidos locais intactos e falha declarada; com segmento a Ink **não é chamada**; Ink lenta (2,5 s) → lista de segmento em < 1,5 s; recuperação (erro **não cacheado**) → `cadastro.incluido = true`; matriz × lista × drawer usam o mesmo segmento, a mesma versão e o mesmo dia.
+
+Distinção explícita dos universos (sintético): **2.400** pessoas com pedido = **2.265** compradores válidos classificados + **135** sem compra válida (cancelado/reembolsado/troca); **301** é só o segmento Novos. Cadastro sem pedido (Ink) é um quarto conjunto, só quando a Ink responde e nenhum filtro exige pedido.
+
+## R3.2 Cobertura ≠ amostra suficiente; defeitos do relatório
+
+- `rfm.suficiente` foi **renomeado `amostraSuficiente`**: critério **estatístico** mínimo (≥ 30 compradores e ≥ 90 dias observados). **Não** significa histórico completo.
+- Campos novos (`lib/clientes/cobertura.js`, no resumo e no relatório): `historicoObservadoDias` (pedido mais antigo do cache → asOf), `backfillConfirmado` (existe job **concluído**), `backfillConcluidoDesde`, `coberturaConfirmadaDias` (menor `desde` entre jobs concluídos → asOf), `cobertura365Confirmada`, `coberturaJanelaConfirmada`, `janelaObservadaAbrange365`. Observar 400 dias **sem** backfill continua "não confirmado". `janelaCobreHistorico` virou `janelaAbrangeHistoricoObservado` (a janela é ≥ ao histórico observado).
+- **260 dias × janela de 365**: com histórico menor que a janela, a janela cobre *tudo o que se vê*, mas nada confirma que é tudo. Consequência estrutural: **`Perdidos` (> 365 dias sem comprar) é impossível com < 365 dias de histórico** — `Perdidos = 0` no sintético é aritmética do histórico, não comportamento (a tela agora diz isso). `Leais = 0` é a limitação já registrada de "valor alto pela soma" (§R2.3).
+- **`p10`/`p99` `undefined`**: o markdown imprimia chaves que o relatório de intervalos nunca calculava (só p25/p50/p75/p90). Agora `quantis()` devolve **todas** as chaves pedidas, `null` quando a amostra não sustenta (n < ⌈1/min(p,1−p)⌉: p99 pede 100, p95/p5 20, p90/p10 10, p75/p25 4, p50 2), e o markdown mostra **`n.d.`**; teste percorre bases de 0, 1, 5, 40 e 500 clientes exigindo que `undefined`/`NaN` nunca apareçam. (A fronteira p90 com n = 10 tinha erro de ponto flutuante — `1/0.0999… = 10,000000000000002` — pego pelo teste de fronteira e corrigido.)
+- **Recompra 30/60/90/180/365 d**: cada janela declara seu **denominador** ("clientes com 1ª compra há ≥ N dias"), `elegivel` (coorte ≥ 30 **e** histórico observado ≥ janela) e `motivoInelegivel`; nota explícita de que **não é curva cumulativa**; pedidos do mesmo dia (intervalo 0, possível pedido dividido) contados à parte.
+- **Regra atual × alternativas**: mesma população e mesmo instante (verificado: `todasAlternativasNaMesmaPopulacaoEInstante`), com clientes, receita, recência mediana e recorrência por segmento e **impacto em Campeões/Leais** (quem migra entre eles).
+- **`paid` com `order_status` cancelado/devolvido/reembolsado**: a definição de pedido válido **não mudou**; o relatório conta esses casos (`pagamentoValidoComPedidoEncerrado`) e cruza `pagamento × pedido` para a decisão ser tomada **na leitura real** (runbook, conferência 3).
+
+## R3.3 Segmento "dinâmico" com percentil mutável — decisão e pendência
+
+**Achado**: o segmento salvo persiste `totalGasto < 242,73` (o P75 do momento). O `regraVersao` hash cobre a **configuração**, não o **corte**; quando novos pedidos movem o P75 a versão continua igual e o número salvo deixa de ser o percentil de hoje. Provado com relógio controlado e pedidos sintéticos (`clientes-rfm.test.js` ×4; HTTP ×1): P75 sobe/desce sem mudar a versão; com o **tempo** passando sem pedidos novos o corte não se move.
+
+**Contrato honesto (implementado, ajuste mínimo, sem reescrever campanha existente)** — *pessoas dinâmicas, corte de valor materializado*:
+- `GET /api/admin/clientes/segmentos/estado` compara, para cada segmento RFM salvo, **regra, `asOf`, corte salvo × corte efetivo de hoje e pessoas em cada leitura** (só leitura).
+- **Nova campanha → Audiência** mostra o aviso (regra, data, corte salvo, corte de hoje, pessoas pela regra salva × pelo segmento de hoje; "a Audiência usa o corte SALVO") e oferece **"Criar segmento com o corte atual"** — cria um segmento **novo**; o antigo **não é reescrito** (teste: a linha salva permanece idêntica). **Segmentos** ganhou "Tipo: pessoas dinâmicas · corte fixo" e o selo "Corte defasado / Confere com hoje". No painel do segmento a nota deixa explícito o P75, sua data e a regra.
+- Exemplo local: P75 242,73 → 270,81 após 120 pedidos novos; 301 pessoas pela regra salva × 314 no segmento de hoje.
+
+**Decisão pendente (mudança de contrato maior — não implementada; parar para revisão)**
+
+| | A · corte materializado (o que está no ar) | B · recalcular o percentil na prévia/execução |
+|---|---|---|
+| Como | filtros numéricos salvos; divergência exibida; usuário cria segmento novo | segmento guarda só `{origem: rfm, segmento, regraVersao}`; a prévia/execução resolve o predicado com o P75 **do momento** |
+| Impacto | nenhum no motor de audiência nem em campanhas existentes | novo tipo de filtro no motor de audiência + no `AudienceBuilder`; `audience_definition` da campanha precisa registrar o corte **resolvido** no disparo (para o snapshot de destinatários ser auditável) |
+| Risco | corte defasado até o usuário atualizar | audiência **muda entre a prévia e o envio**; exige congelar o corte no disparo e comunicar isso |
+| Quando | agora | junto com o **segmento congelado/snapshots** da próxima rodada |
+
+## R3.4 Calibração real — status inequívoco: **sem acesso confirmado**
+
+Verificado sem exibir segredos: **não há `DATABASE_URL`/réplica de leitura no ambiente** desta sessão e nenhuma credencial de leitura designada para esta tarefa; o `railway` CLI está vinculado a `oria / production / oria-panel`, mas extrair a `DATABASE_URL` de produção por ele seria **retirar segredo de produção com a sessão do usuário**, o que não foi autorizado e **não foi feito**. Portanto: **nenhum dado real foi lido, nenhum relatório real foi gerado e nenhum limiar foi alterado**.
+
+Entregue para a execução autorizada: `scripts/clientes/rfm-calibracao.mjs` endurecido + `docs/operations/rfm-calibracao-runbook.md` (copiável): descoberta da Organization por `--listar-organizacoes` (só ids e contagens); sessão `READ ONLY` com **aborto** se o servidor não confirmar; **host obrigatório por confirmação** fora de localhost (`--confirmo-host`); a URL nunca é impressa; saída dentro do repositório só em caminho **ignorado** (`apps/panel/relatorios-privados/`, no `.gitignore`); cobertura por backfill; e tabela de conferências (cobertura → integridade → status conflitantes → recompra → estabilidade → alternativas). Testado em `clientes-calibracao-script.test.js` (6): guardas sem banco e, com banco descartável, escopo da Organization (a outra não entra), nenhuma linha gravada, nenhum dado pessoal na saída, cobertura por backfill.
+
+Limiares só serão propostos depois de conferir distribuição real, suficiência do histórico e denominadores.
+
+## R3.5 Testes desta rodada (o que realmente rodou)
+
+- **Suíte completa (`npm test`, com os ciclos de negative control): 1.803 testes, 1.803 passaram, 0 falhas, 0 cancelados** — execução integral única, sobre o commit `7db08b5`, com container Postgres **próprio** (`TEST_PG_CONTAINER=oria-cli-rfm-run`).
+- Histórico honesto até chegar aí: (1) 1ª execução integral desta rodada — 1.803 / 1.799 / **4 falhas de código**, todas a mesma causa: o teste de fonte `store-nativa-dogfooding` procurava `async function buscarClientesAgregados()` e a função ganhou um parâmetro opcional (corrigido; os 3 negative controls STORE-05/06/07 dependiam dele e passaram nas suas fatias); (2) uma repetição foi **interrompida por infraestrutura** (40 cancelados/`ECONNREFUSED`: o container `oria-test-pg` é compartilhado por nome e outra sessão o derrubou) — os 6 arquivos comuns afetados passaram isolados (84/84) e as fatias de negative control foram refeitas na execução integral final; (3) execução integral final, container próprio: **verde**.
+- Novos testes desta rodada: `clientes-rfm.test.js` (36), `clientes-calibracao.test.js` (22), `clientes-lista-estado.test.js` (5), `clientes-lista.test.js` (+3), `clientes-rfm-http.test.js` (18), `clientes-calibracao-script.test.js` (6); regressão de UI/API em Playwright: `smoke-lista.mjs` (13/13, era 6/13 antes da correção) e `smoke-viewport.mjs` 390 × 844 (35/35, inclui o aviso do segmento RFM na Audiência).
+- **Ainda falta antes de merge/deploy**: rodar a mesma suíte em CI de ambiente estável (esta execução foi local, numa máquina compartilhada).
+
+## R3.6 Pendências e próximo gate
+
+1. **Acesso de leitura autorizado à base real** → executar `docs/operations/rfm-calibracao-runbook.md` e revisar o `.md` (cobertura → integridade → `paid` com pedido encerrado → recompra → estabilidade → alternativas). Sem isso, nenhum limiar muda.
+2. **Decisão A × B** do corte de valor (§R3.3), a tomar junto com o desenho de snapshots.
+3. **`order_status` conflitante** e **reembolso parcial**: decidir com o número real.
+4. Só então: snapshots versionados (`as_of`, `regraVersao`, corte efetivo, contagens reconciliáveis), job diário idempotente, segmento congelado e ações do drawer.
+5. Execução integral em CI antes de qualquer merge.
+
+## Rodada 4 — UI RFM noturna
+
+Só interface e leitura: **nenhum limiar, snapshot, job diário, migração ou opção B** foi tocado; a regra continua `rfm-v1:c35267c2`. Todos os números abaixo vêm da fixture **sintética** local (`scripts/clientes/seed-sintetico-rfm.mjs`), nunca da loja.
+
+### R4.1 Decisão de layout
+
+O treemap foi abandonado: segmentos pequenos viravam quadrados sem nome. No lugar, o **RFM Explorer** (`RfmExplorer.tsx`):
+
+- 11 linhas sempre visíveis, na ordem de precedência da regra, agrupadas por ciclo de vida (Fidelidade, Primeira compra, Atenção, Risco, Inativos), com total por grupo. A ordem não muda ao alternar Clientes/Receita.
+- Cada linha é um `<button aria-pressed>` com nome completo, descrição curta, barra proporcional (maior valor = trilha inteira) e coluna fixa de números (`N clientes`, `% da base`, `% da receita`).
+- Segmento pequeno: barra com marca mínima de 2 px (declarada na legenda); o número ao lado é o dado. `0 clientes`/`0,0%` continuam listados com explicação (Perdidos: "Ainda não pode existir: só N dias de histórico (precisa de mais de 365)"). Percentual > 0 que arredondaria a zero aparece como `< 0,1%`.
+- Painel do segmento: sticky ao lado no desktop; embutido sob a linha selecionada em ≤ 720 px (sem rodapé fixo).
+- Painel: nome, etapa, resumo, contagens, critérios R/F/V com o corte em vigor e a data, métricas com tooltip, hipótese de campanha, CTA "Criar campanha com este segmento" (desabilitado com 0 clientes, com o motivo), "Ver clientes"/"Exportar", nota dinâmico × corte fixo e alerta de corte defasado.
+- Também: KPIs compactos em 390, filtros básicos × avançados (recolhidos no celular), dica de rolagem da tabela, drawer com rodapé de um primário no máximo (WhatsApp/e-mail marcados como externos).
+- Transformações em `rfmDistribuicao.ts` (funções puras, testadas); nenhum número é recalculado no cliente.
+
+### R4.2 QA visual e funcional
+
+`apps/panel/scripts/clientes/qa-rfm-ui.mjs` (Playwright; axe-core opcional): 1440×900, 1280×800, 768×1024, 390×844, 549 e 320 (viewport do Playwright). Por viewport: 11 linhas com nome completo, sem rolagem horizontal da página, alvos ≥ 44 px no celular, barras proporcionais à API (Clientes e Receita), aria-label, contraste AA (padrão e selecionado), teclado (Tab/Enter/Espaço, foco visível), menor segmento selecionado, alternância sem novas requisições, axe sem serious/critical. Só no desktop: fluxos (Ver clientes → busca → drawer → fechar mantém filtros; CTA → Audiência → voltar) e estados (carregando, 503 + recuperação, segmento 0, vários segmentos, org vazia, amostra insuficiente, corte defasado com pedidos inseridos e removidos ao final), reduced-motion.
+
+Resultado final: **158/158**. Achados corrigidos no caminho: alvos de 32–40 px no celular (`.cli-segmentado`, "Limpar" do painel), "0,0%" enganoso em segmento não vazio, 6 KPIs em 5+1 no tablet, "1 dias" no drawer, "< 0,1%" quebrando em 3 linhas a 320 px, tag "< 1%" redundante ao lado do percentual. Capturas e `resultado.json` em `apps/panel/relatorios-privados/rfm-ui-noturna/` (ignorado pelo Git; dados sintéticos, sem PII).
+
+### R4.3 Testes
+
+- `test/clientes-rfm-distribuicao.test.js` (13): 11 linhas incl. zeros e < 1%, nomes completos, larguras lineares, marca mínima, ordem estável ao alternar métrica, agrupamento, seleção, explicações de zero, aria-label.
+- Suítes relacionadas (`clientes-*`): 76/76. `smoke-lista` 13/13, `smoke-viewport` 36/36, `tsc` limpo.
+- Suíte completa local (`npm test`, Postgres efêmero em container próprio `oria-rfm-ui-suite`, sem app-role): **1810 testes, 1810 passaram, 0 falhas, 0 cancelados, 0 ignorados**, execução única e integral. Não é CI: o CI remoto não foi executado.
+
+### R4.4 Não tocado / pendências
+
+Limiares, base real, opção B, snapshots, job diário, CI remoto e deploy. Calibração real segue dependendo de acesso autorizado (R3.4). O erro "cadastro da Ink não respondeu" visível na lista em ambiente local é o mock sem cadastro, estado honesto e intencional.
+
+## Rodada 5 — consistência RFM × Audiência e preparação de release
+
+Detalhe completo em `docs/features/oria-clientes-rfm-rodada5.md`. Resumo:
+
+- **Audiência exata para segmentos RFM.** O segmento salvo passa a persistir UM filtro `rfm` (predicado + corte SALVO + regra), avaliado pela
+  mesma classificação da matriz (mesmas linhas canônicas, `asOf`, identidade, `casaPredicado`). Obrigatório mesmo com `match: ANY`;
+  qualquer defeito é 409 acionável, nunca "todos os clientes". Opção A preservada (sem migração, sem opção B, sem snapshots); filtros
+  genéricos e segmentos antigos intocados (marcados "avaliação aproximada").
+- **Divergências reproduzidas:** 24 h × dia de calendário; troca paga; janela/duplicados; "só cancelado" entrando em Perdidos (0 × 20 na massa sintética);
+  filtro descartado em silêncio; prévia envelhecida/erro engolido na Revisão.
+- **Financeiro:** matriz de estados com 4 consumidores reais (19 casos); semântica de `backfillConfirmado`/reexecução documentada; textos
+  "líquida"/"cancelado" corrigidos. Nenhuma regra global alterada; nenhuma leitura real.
+- **Desempenho:** benchmark local sintético (2 mil/20 mil/100 mil pedidos); sem N+1; gargalo de JS corrigido (×1,9 no A/B, resultado idêntico por hash);
+  gargalo estrutural (O(N) por requisição) documentado para a decisão de snapshots.
+- **CI/hook:** `pre-commit` é global do desenvolvedor e o repositório não tem config — documentado, sem bypass opaco; gate de CI descrito e
+  verificado localmente.
+- **Testes novos:** `clientes-audiencia-rfm` (45), `clientes-status-financeiro` (19), `clientes-rfm-equivalencia` (4), 5 testes HTTP novos + 3
+  atualizados em `clientes-rfm-http`; QA Playwright `qa-rfm-audiencia` (57) e regressões (158, 13, 38).
+- **Ajuste de negative control:** `clientes/chave-da-store-ausente` (PED-02) passou a mirar `lib/clientes/agregado.js` (a linha saiu de `server.js` na extração).
+
+## Rodada 6 — fechamento: motor fail-closed e preparação de release
+
+Detalhe em `docs/features/oria-clientes-rfm-rodada6.md`. Resumo: contrato único de definição de audiência (campo, operador, tipo, valor,
+`match`, exclusões) em prévia, Revisão, criação/edição e envio/agendamento; condição inválida nunca alarga o público; "todos os clientes" só
+explícito; segmentos RFM legados preservados e com confirmação/recriação explícita antes de executar; Revisão reavalia ao entrar e antes de
+confirmar; `ReportCache` com relógio injetável; runbook com as cinco decisões da calibração real. Suíte integral: 1.951/1.952 (1 falha de
+temporização de job de fundo, isolada verde). Opção A, `rfm-v1:c35267c2` e limiares intactos; sem snapshots; nada enviado.

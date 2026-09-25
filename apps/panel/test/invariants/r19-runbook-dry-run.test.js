@@ -360,7 +360,8 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
       '1790002600000_creative-enrichment-pilot-budget',
       // Rodada "Observabilidade e controle do catalog sync" · mesma colisão de timestamp que o
       // Gerador de Criativos já teve — renumerada pra depois de tudo que já estava em main.
-      '1790002700000_catalog-sync-observabilidade'],
+      '1790002700000_catalog-sync-observabilidade',
+      '1790002800000_segments-rfm'],
     'o pre-deploy da D\' aplicou um conjunto de migrations diferente do declarado'
   );
   semSegredo(pdD.saida, 'pre-deploy D\'');

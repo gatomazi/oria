@@ -1235,7 +1235,7 @@ const VIOLACOES = [
     classe: 'clientes/chave-da-store-ausente',
     invariant: 'PED-02',
     teste: 'operacao-store-nativa.test.js',
-    arquivo: 'server.js',
+    arquivo: 'lib/clientes/agregado.js', // a conta do agregado saiu de server.js na Rodada 5 (extração pura, mesmo comportamento)
     descricao: 'o histórico de compras da Store nativa sai com `loja` nula: a tela cruza por `loja + documento` e todo cliente vira "Sem compra"',
     de: '    const chave = r.loja || chaveDoContexto;',
     para: '    const chave = r.loja; // VIOLAÇÃO DELIBERADA (negative control)',

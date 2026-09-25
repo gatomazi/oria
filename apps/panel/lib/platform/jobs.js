@@ -18,8 +18,17 @@
 const { comContexto, semContexto } = require('./tenant-runtime');
 const { ttlPara } = require('./leases');
 
-function createJobRunner({ poolReal, leases = null, logger = console }) {
+// `desligado`: os timers de fundo (`agendar`/`agendarUmaVez`) não são criados. Existe para ISOLAR testes que medem chamadas a
+// providers em janelas de tempo (um job de boot que cai dentro da janela contamina a contagem). O servidor só o honra fora de
+// produção (`server.js`); `executarPorOrganizacao` continua disponível para quem chama um job de propósito.
+function createJobRunner({ poolReal, leases = null, logger = console, desligado = false }) {
   const rodadas = new Map();
+  let avisouDesligado = false;
+  const avisarDesligado = (nome) => {
+    if (avisouDesligado) return;
+    avisouDesligado = true;
+    logger.warn(`[JOBS] timers de fundo DESLIGADOS (ORIA_JOBS_DE_FUNDO=off, só fora de produção): "${nome}" e os demais não serão agendados`);
+  };
 
   async function organizacoes() {
     if (!poolReal) return [];
@@ -74,6 +83,7 @@ function createJobRunner({ poolReal, leases = null, logger = console }) {
   // Timer criado fora de qualquer contexto: nem uma request que por acaso o dispare contamina os
   // ciclos seguintes com a Organization dela.
   function agendar(nome, intervaloMs, fn) {
+    if (desligado) { avisarDesligado(nome); return null; }
     return semContexto(() => {
       const timer = setInterval(() => {
         executarPorOrganizacao(nome, fn, { intervaloMs }).catch((err) => logger.error(`[JOB ${nome}] ciclo falhou: ${err.message}`));
@@ -84,6 +94,7 @@ function createJobRunner({ poolReal, leases = null, logger = console }) {
   }
 
   function agendarUmaVez(nome, atrasoMs, fn) {
+    if (desligado) { avisarDesligado(nome); return null; }
     return semContexto(() => setTimeout(() => {
       executarPorOrganizacao(nome, fn).catch((err) => logger.error(`[JOB ${nome}] falhou: ${err.message}`));
     }, atrasoMs));

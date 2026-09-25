@@ -1,14 +1,16 @@
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, ConfirmDialog, EmptyState, Field, FormActions, Input, MediaDropzone, PageHeader, PageStack, Skeleton, StatusBadge, Stepper } from '../../components/ds';
+import { Button, Callout, Card, ConfirmDialog, EmptyState, Field, FormActions, Input, MediaDropzone, PageHeader, PageStack, Skeleton, StatusBadge, Stepper } from '../../components/ds';
 import { adminStores } from '../../state/adminStores';
 import { lookup, TEMPLATE_META_STATUS_MAP, CAMPANHA_STATUS_MAP } from '../../lib/statusMap';
 import { contarVariaveis, extrairBotaoDinamico, extrairTextosComponentes, extrairTokensVariaveis } from '../../lib/templateVariables';
 import { listTemplates, testarTemplate, type WhatsappTemplate } from '../../api/templates';
 import { listMedia, uploadMedia, type MediaAsset } from '../../api/media';
-import { criarCampanha, editarCampanha, getCampanha, iniciarCampanha, previewAudiencia, type AudienceDefinition } from '../../api/campanhas';
+import { criarCampanha, editarCampanha, getCampanha, iniciarCampanha, previewAudiencia, type AudienceDefinition, type AudienciaPreviewResultado, type CampanhaBloqueio } from '../../api/campanhas';
 import { listSegmentos, type Segmento } from '../../api/segments';
+import { AvisoSegmentoRfm } from '../clientes/AvisoSegmentoRfm';
+import { AvisoCorteDaAudiencia, motivosDeExclusao } from './AudienciaResumo';
 import { AudienceBuilder, audienceStateDeSalvo, audienceStateParaApi, audienceStateVazio, type AudienceState } from './AudienceBuilder';
 import { PreviewMensagemWeb } from '../../components/PreviewMensagemWeb';
 import { getWhatsappWebResumo, listarMensagensWeb, type MensagemWeb, type WhatsappWebResumo } from '../../api/whatsappWeb';
@@ -103,7 +105,13 @@ export function NovaCampanhaPage() {
   const [descricao, setDescricao] = useState('');
 
   const [audiencia, setAudiencia] = useState<AudienceState>(audienceStateVazio());
-  const [audienciaPreview, setAudienciaPreview] = useState<{ matched: number; excluded: number; eligible: number } | null>(null);
+  const [audienciaPreview, setAudienciaPreview] = useState<AudienciaPreviewResultado | null>(null);
+  // Reavaliação da audiência ao ENTRAR na revisão (e antes de enviar): a prévia da etapa Audiência é uma foto de um instante
+  // anterior; a revisão mostra a contagem de agora, com o seu asOf, ou o erro verdadeiro — nunca a última resposta em silêncio.
+  const [revisaoAud, setRevisaoAud] = useState<{ estado: 'carregando' } | { estado: 'ok' } | { estado: 'erro'; mensagem: string } | null>(null);
+  const [avisoRevisao, setAvisoRevisao] = useState('');
+  // Motivo pelo qual a campanha salva não poderá ser executada como está (definição recusada / segmento aproximado / o agendador já tentou).
+  const [bloqueioSalvo, setBloqueioSalvo] = useState<CampanhaBloqueio | null>(null);
   const [segmentos, setSegmentos] = useState<Segmento[] | null>(null);
   const [segmentoSelecionado, setSegmentoSelecionado] = useState('');
 
@@ -158,14 +166,32 @@ export function NovaCampanhaPage() {
   // ver AudienceBuilder/SegmentosPage) — carregar 1x e deixar o wizard aplicar por cima do que
   // já estiver montado na etapa Audiência.
   useEffect(() => {
+    // Recarrega quando o `?segmento=` muda (ex.: "Recriar na avaliação exata" cria um segmento NOVO e navega para ele sem remontar
+    // a página): sem isto, a lista antiga não conhece o segmento novo e a tela seguiria com a audiência anterior.
     listSegmentos()
       .then((data) => setSegmentos(data.segmentos))
       .catch(() => setSegmentos([]));
-  }, []);
+  }, [params.get('segmento')]);
+
+  // Vindo de Clientes (`?segmento=ID`): já abre com a audiência do segmento salvo aplicada.
+  const segmentoDaUrl = params.get('segmento');
+  useEffect(() => {
+    if (!segmentoDaUrl || editarId || !segmentos) return;
+    const s = segmentos.find((x) => x.id === segmentoDaUrl);
+    if (!s) return;
+    setSegmentoSelecionado(s.id);
+    setAudiencia(audienceStateDeSalvo(s.match, s.filtros, s.exclusoes));
+    setNome((atual) => atual || s.nome);
+  }, [segmentoDaUrl, editarId, segmentos]);
 
   function aplicarSegmento(id: string) {
     setSegmentoSelecionado(id);
-    if (!id) return;
+    if (!id) {
+      // "Montar filtros manualmente" depois de um segmento RFM: a condição RFM (obrigatória) não pode ficar oculta atrás de um
+      // seletor que diz "manual" — a audiência recomeça vazia. Filtros genéricos continuam ajustáveis como sempre.
+      if (audiencia.rfm) setAudiencia(audienceStateVazio());
+      return;
+    }
     const segmento = segmentos?.find((s) => s.id === id);
     if (!segmento) return;
     setAudiencia(audienceStateDeSalvo(segmento.match, segmento.filtros, segmento.exclusoes));
@@ -178,6 +204,7 @@ export function NovaCampanhaPage() {
         const c = data.campanha;
         setCampanhaId(c.id);
         setStatusAtual(c.status);
+        setBloqueioSalvo(c.bloqueio ?? null);
         setNome(c.nome);
         setDescricao(c.descricao || '');
         setTemplateNome(c.templateNome);
@@ -187,12 +214,12 @@ export function NovaCampanhaPage() {
         setTamanhoLote(c.tamanhoLote ? String(c.tamanhoLote) : '');
         const def = c.audienceDefinition as AudienceDefinition;
         if (def?.match) {
-          const audState = audienceStateDeSalvo(def.match, def.filtros || [], def.exclusoes || {});
+          const audState = audienceStateDeSalvo(def.match, def.filtros || [], def.exclusoes || {}, !!def.aproximadoConfirmado);
           setAudiencia(audState);
           // Recalcula a audiência de imediato (não espera o usuário visitar a etapa 2) — é o que
           // alimenta os números no resumo compilado exibido antes do wizard.
           const { match, filtros, exclusoes } = audienceStateParaApi(audState);
-          previewAudiencia(match, filtros, exclusoes).then(setAudienciaPreview).catch(() => {});
+          previewAudiencia(match, filtros, exclusoes).then(setAudienciaPreview).catch(() => setAudienciaPreview(null));
         }
         if (def?.variaveis) setVariaveis(def.variaveis.map((v) => ({ indice: v.indice, fonte: v.fonte, valorFixo: v.variavelFixa || '', alvo: v.alvo || 'corpo' })));
         if (def?.mediaAssetId) setMediaAssetId(def.mediaAssetId);
@@ -203,6 +230,29 @@ export function NovaCampanhaPage() {
         setCarregandoInicial(false);
       });
   }, [editarId]);
+
+  const emRevisao = modoResumo || etapaAtual === 'revisao';
+  const audienciaPayload = JSON.stringify(audienceStateParaApi(audiencia));
+  useEffect(() => {
+    if (!emRevisao || carregandoInicial) return;
+    let vigente = true;
+    const { match, filtros, exclusoes } = JSON.parse(audienciaPayload) as ReturnType<typeof audienceStateParaApi>;
+    setRevisaoAud({ estado: 'carregando' });
+    previewAudiencia(match, filtros, exclusoes)
+      .then((r) => {
+        if (!vigente) return;
+        setAudienciaPreview(r);
+        setRevisaoAud({ estado: 'ok' });
+      })
+      .catch((err: Error) => {
+        if (!vigente) return;
+        setAudienciaPreview(null);
+        setRevisaoAud({ estado: 'erro', mensagem: err.message });
+      });
+    return () => { vigente = false; };
+  }, [emRevisao, carregandoInicial, audienciaPayload]);
+  const aproximadoNaoConfirmado = !!audienciaPreview?.rfmAproximado && !audiencia.aproximadoConfirmado;
+  const audienciaBloqueia = emRevisao && (revisaoAud == null || revisaoAud.estado !== 'ok' || aproximadoNaoConfirmado);
 
   const templateSelecionado = templates?.find((t) => t.name === templateNome) || null;
   const textosTemplate = templateSelecionado ? extrairTextosComponentes(templateSelecionado.components) : null;
@@ -287,19 +337,50 @@ export function NovaCampanhaPage() {
       match,
       filtros,
       exclusoes,
+      // Só grava a confirmação quando ela foi dada (nunca `false` "por padrão").
+      ...(audiencia.aproximadoConfirmado ? { aproximadoConfirmado: true } : {}),
       variaveis: variaveis.map((v) => ({ indice: v.indice, fonte: v.fonte, variavelFixa: v.fonte === 'fixo' ? v.valorFixo : undefined, alvo: v.alvo })),
       mediaAssetId: precisaMedia || modoWeb ? mediaAssetId : null,
     };
   }
 
-  function salvar(status: 'draft' | 'scheduled') {
+  // Reavaliação IMEDIATAMENTE antes de agendar/enviar: o público pode ter mudado desde a última prévia, e uma definição que já não
+  // pode ser calculada (regra RFM mudou, condição inválida, segmento aproximado sem confirmação) bloqueia com a causa. Devolve o
+  // resultado ou null (e já mostra o erro).
+  async function reavaliarAntesDeConfirmar(): Promise<AudienciaPreviewResultado | null> {
+    const { match, filtros, exclusoes } = audienceStateParaApi(audiencia);
+    try {
+      const agora = await previewAudiencia(match, filtros, exclusoes);
+      if (agora.rfmAproximado && !audiencia.aproximadoConfirmado) {
+        const texto = `A audiência vem do segmento RFM "${agora.rfmAproximado.nome}" com avaliação aproximada: confirme o uso do público aproximado na etapa Audiência ou recrie o segmento na avaliação exata.`;
+        setRevisaoAud({ estado: 'erro', mensagem: texto });
+        setMsg({ texto, erro: true });
+        return null;
+      }
+      setAvisoRevisao(audienciaPreview && agora.eligible !== audienciaPreview.eligible
+        ? `A audiência foi reavaliada agora: ${plural(agora.eligible, 'destinatário elegível', 'destinatários elegíveis')} (antes ${audienciaPreview.eligible}).`
+        : '');
+      setAudienciaPreview(agora);
+      setRevisaoAud({ estado: 'ok' });
+      return agora;
+    } catch (err) {
+      setAudienciaPreview(null);
+      setRevisaoAud({ estado: 'erro', mensagem: (err as Error).message });
+      setMsg({ texto: (err as Error).message, erro: true });
+      return null;
+    }
+  }
+
+  async function salvar(status: 'draft' | 'scheduled') {
     if (!nome.trim()) { setMsg({ texto: 'Nome da campanha é obrigatório.', erro: true }); setStep(0); return; }
     if (status === 'scheduled' && !agendarData) { setMsg({ texto: 'Escolha data e hora do agendamento.', erro: true }); return; }
     if (tamanhoLoteInvalido) { setMsg({ texto: 'Tamanho do lote deve ser um número inteiro maior que zero.', erro: true }); return; }
     setSalvando(true);
     setMsg(null);
+    if (status === 'scheduled' && !(await reavaliarAntesDeConfirmar())) { setSalvando(false); return; }
     const input = {
       nome: nome.trim(), descricao: descricao.trim() || null, templateNome, mensagemWebId,
+      segmentoId: segmentoSelecionado || null,
       audienceDefinition: montarAudienceDefinition(),
       tamanhoLote: tamanhoLoteValor,
       ...(status === 'scheduled' ? { status: 'scheduled' as const, agendadaPara: new Date(agendarData).toISOString() } : {}),
@@ -309,6 +390,7 @@ export function NovaCampanhaPage() {
       .then((data) => {
         setCampanhaId(data.campanha.id);
         setStatusAtual(data.campanha.status);
+        setBloqueioSalvo(null); // salvou uma definição aceita pelo servidor: o motivo antigo não vale mais
         setMsg({ texto: status === 'scheduled' ? 'Campanha agendada!' : 'Rascunho salvo.', erro: false });
         if (status === 'scheduled') setTimeout(() => navigate('/admin/campanhas'), 1200);
       })
@@ -331,14 +413,18 @@ export function NovaCampanhaPage() {
     try {
       const input = {
         nome: nome.trim(), descricao: descricao.trim() || null, templateNome, mensagemWebId,
+        segmentoId: segmentoSelecionado || null,
         audienceDefinition: montarAudienceDefinition(), tamanhoLote: tamanhoLoteValor,
       };
       const data = campanhaId ? await editarCampanha(campanhaId, input) : await criarCampanha(input);
       setCampanhaId(data.campanha.id);
       setStatusAtual(data.campanha.status);
+      // Última reavaliação ANTES de pedir a confirmação: se não for possível calcular (ex.: regra RFM mudou), não abre a confirmação.
+      if (!(await reavaliarAntesDeConfirmar())) return;
       setEnviarDialogAberto(true);
     } catch (err) {
       setMsg({ texto: (err as Error).message, erro: true });
+      setRevisaoAud({ estado: 'erro', mensagem: (err as Error).message });
     } finally {
       setSalvando(false);
     }
@@ -393,12 +479,55 @@ export function NovaCampanhaPage() {
   const podeEditar = statusAtual === 'draft' || statusAtual === 'scheduled';
   const estimativaWeb = modoWeb && audienciaPreview ? estimarDiasCampanhaWeb(audienciaPreview.eligible, resumoWeb) : null;
 
+  function textoAudiencia(forma: 'resumo' | 'revisao'): string {
+    if (revisaoAud?.estado === 'erro') return 'Não foi possível calcular a audiência';
+    if (!audienciaPreview || revisaoAud?.estado === 'carregando') return 'Calculando…';
+    const base = audienciaPreview.rfm ? 'no segmento' : 'encontrados';
+    return forma === 'resumo'
+      ? `${audienciaPreview.eligible} elegíveis (${audienciaPreview.matched} ${base}, ${audienciaPreview.excluded} excluídos)`
+      : `${audienciaPreview.matched} ${base}, ${audienciaPreview.excluded} excluídos, ${audienciaPreview.eligible} elegíveis`;
+  }
+
+  // Detalhe da audiência na revisão: erro verdadeiro, motivos de exclusão e, no segmento RFM, universos, asOf, regra e corte.
+  const detalheAudiencia = (
+    <>
+      {revisaoAud?.estado === 'erro' && (
+        <div role="alert" className="ds-form-error">{revisaoAud.mensagem} O envio fica bloqueado até a audiência poder ser calculada.</div>
+      )}
+      {audienciaPreview && revisaoAud?.estado === 'ok' && (
+        <>
+          {motivosDeExclusao(audienciaPreview.breakdown).length > 0 && (
+            <p className="pc-nota ad-preview-linha">Excluídos por contato: {motivosDeExclusao(audienciaPreview.breakdown).map((m) => `${m.n} ${m.rotulo}`).join(' · ')}.</p>
+          )}
+          {audienciaPreview.rfm && (
+            <p className="pc-nota ad-preview-linha">
+              Segmento RFM {audienciaPreview.rfm.segmentoNome}: {plural(audienciaPreview.rfm.universos.segmento, 'pessoa', 'pessoas')} de {plural(audienciaPreview.rfm.universos.compradoresValidos, 'comprador válido', 'compradores válidos')} ·
+              calculado agora, regra {audienciaPreview.rfm.regraVersao}.
+            </p>
+          )}
+          <AvisoCorteDaAudiencia preview={audienciaPreview} />
+        </>
+      )}
+      {avisoRevisao && <p className="ds-form-note" role="status">{avisoRevisao}</p>}
+    </>
+  );
+
   return (
     <PageStack>
       <PageHeader title={campanhaId ? `Editar campanha` : 'Nova campanha'} back={{ to: '/admin/campanhas', label: 'Voltar pra campanhas' }} />
 
       {!podeEditar && (
         <p className="ds-form-error">Esta campanha já foi iniciada e não pode mais ser editada por aqui.</p>
+      )}
+
+      {bloqueioSalvo && (
+        <Callout tone="warning" title={statusAtual === 'scheduled' ? 'Campanha agendada BLOQUEADA: não será enviada como está' : 'Esta campanha não poderá ser enviada como está'}>
+          <p className="cli-aviso" role="alert">{bloqueioSalvo.mensagem}</p>
+          <p className="cli-aviso cli-aviso--nota">
+            Nada foi enviado e nenhum destinatário foi criado. Corrija a audiência abaixo (ou confirme/recrie o segmento) e salve de novo.
+            {bloqueioSalvo.origem === 'agendador' && bloqueioSalvo.ultimaTentativa ? ` O agendador tentou iniciar e recusou em ${new Date(bloqueioSalvo.ultimaTentativa).toLocaleString('pt-BR')}.` : ''}
+          </p>
+        </Callout>
       )}
 
       {modoResumo && (
@@ -410,9 +539,7 @@ export function NovaCampanhaPage() {
             <div>
               <span className="pc-nota">Audiência</span>
               <strong>
-                {audienciaPreview
-                  ? `${audienciaPreview.eligible} elegíveis (${audienciaPreview.matched} encontrados, ${audienciaPreview.excluded} excluídos)`
-                  : 'Calculando…'}
+                {textoAudiencia('resumo')}
               </strong>
             </div>
             {modoWeb ? (
@@ -441,6 +568,7 @@ export function NovaCampanhaPage() {
               <strong>{tamanhoLoteValor && !tamanhoLoteInvalido ? `Em lotes de ${tamanhoLoteValor}` : 'Tudo de uma vez'}</strong>
             </div>
           </div>
+          {detalheAudiencia}
 
           <div className="ds-button-row">
             <Button onClick={() => irParaEtapa(0)}>Editar campanha</Button>
@@ -488,6 +616,9 @@ export function NovaCampanhaPage() {
                   ))}
                 </select>
               </Field>
+            )}
+            {segmentoSelecionado && segmentos?.find((sg) => sg.id === segmentoSelecionado)?.origem === 'rfm' && (
+              <AvisoSegmentoRfm segmentoId={segmentoSelecionado} />
             )}
             <AudienceBuilder loja={loja} state={audiencia} onChange={setAudiencia} onPreview={setAudienciaPreview} />
           </div>
@@ -738,7 +869,7 @@ export function NovaCampanhaPage() {
               <div>
                 <span className="pc-nota">Audiência</span>
                 <strong>
-                  {audienciaPreview ? `${audienciaPreview.matched} encontrados, ${audienciaPreview.excluded} excluídos, ${audienciaPreview.eligible} elegíveis` : 'Calculando…'}
+                  {textoAudiencia('revisao')}
                 </strong>
               </div>
               {modoWeb ? (
@@ -751,6 +882,7 @@ export function NovaCampanhaPage() {
               )}
               {!modoWeb && precisaMedia && <div><span className="pc-nota">Mídia</span><strong>{mediaSelecionada?.filename || 'nenhuma selecionada'}</strong></div>}
             </div>
+            {detalheAudiencia}
 
             {modoWeb && estimativaWeb && audienciaPreview && (
               <p className={estimativaWeb.dias > 1 ? 'wa-alerta' : 'pc-nota'}>
@@ -806,12 +938,12 @@ export function NovaCampanhaPage() {
               <Button variant="secondary" disabled={salvando || enviando || !podeEditar} onClick={() => salvar('draft')}>
                 {salvando ? 'Salvando…' : 'Salvar rascunho'}
               </Button>
-              <Button variant="secondary" disabled={salvando || enviando || !podeEditar || !agendarData} onClick={() => salvar('scheduled')}>
+              <Button variant="secondary" disabled={salvando || enviando || !podeEditar || !agendarData || audienciaBloqueia} onClick={() => salvar('scheduled')}>
                 Agendar campanha
               </Button>
               <Button
                 variant="danger"
-                disabled={salvando || enviando || !podeEditar || !!agendarData || !temConteudo}
+                disabled={salvando || enviando || !podeEditar || !!agendarData || !temConteudo || audienciaBloqueia}
                 onClick={prepararEnvioAgora}
               >
                 {salvando ? 'Salvando…' : 'Enviar agora'}

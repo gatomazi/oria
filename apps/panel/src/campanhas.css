@@ -95,3 +95,18 @@
 .ad-funil__etapa { display: grid; grid-template-columns: 110px minmax(0, 1fr) 64px; align-items: center; gap: var(--space-3); }
 .ad-funil__rotulo { font: var(--type-body-dense); color: var(--text-secondary); }
 .ad-funil__valor { font: var(--type-body-dense); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-primary); }
+
+/* Segmento RFM dentro do construtor de audiência: condição obrigatória, somente leitura. */
+.ad-rfm-card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-1); }
+.ad-rfm-card__topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ad-rfm-card__regra { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-1); font: var(--type-body-dense); color: var(--text-primary); }
+.ad-rfm-card__regra span { color: var(--text-secondary); margin-right: var(--space-1); }
+.ad-rfm-card .pc-nota { margin: 0; }
+.ad-preview-erro { display: flex; flex-direction: column; gap: var(--space-1); }
+.ad-preview-linha { margin: var(--space-1) 0 0; }
+.ad-todos-card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px dashed var(--border-default); border-radius: var(--radius-md); background: var(--surface-1); }
+.ad-todos-card .pc-nota { margin: 0; }
+
+/* Lista de campanhas: motivo do bloqueio ao lado do status */
+.cp-bloqueio { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; max-width: 34ch; }
+.cp-bloqueio__motivo { font: var(--type-caption); color: var(--text-secondary); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }

@@ -151,6 +151,7 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       // que o Gerador de Criativos já teve (comentário acima) — as duas branches escolheram
       // 1790001900000 independentemente; renumerada pra depois de tudo que já estava em main.
       '1790002700000_catalog-sync-observabilidade',
+      '1790002800000_segments-rfm', // Clientes/RFM (renumerada na integração: depois das migrations do Gerador de Criativos e do catalog sync)
     ]);
   } finally {
     await pool.end();

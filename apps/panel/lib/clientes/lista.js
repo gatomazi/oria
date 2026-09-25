@@ -11,7 +11,14 @@
 //
 // Entrada: SEMPRE por lista de permissão. Valor fora dela cai no padrão — nunca é repassado ou interpretado.
 
-const ORDENS = Object.freeze(['compras_desc', 'lucro_desc', 'inativos_primeiro', 'nome']);
+const { REGRAS, SEGMENTO_INSUFICIENTE } = require('./rfm');
+const { diaValido, dataLocal } = require('./metricas');
+
+const UFS = Object.freeze(['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']);
+const ORDENS = Object.freeze(['compras_desc', 'lucro_desc', 'inativos_primeiro', 'nome', 'ltv_desc']);
+// Valores aceitos em `segmento`: os da RFM, mais "sem_compra" (só cadastro, sem pedido válido — fora da RFM).
+const SEGMENTOS = Object.freeze([...REGRAS.map((r) => r.id), SEGMENTO_INSUFICIENTE.id, 'sem_compra']);
+const MAX_SEGMENTOS = SEGMENTOS.length;
 const TIPOS = Object.freeze(['todos', 'com_pedido', 'sem_pedido']);
 const INATIVIDADES = Object.freeze([30, 60, 90, 180]);
 const POR_PAGINA_PADRAO = 25;
@@ -21,6 +28,14 @@ const BUSCA_MAXIMA = 100;
 
 const soDigitos = (v) => typeof v === 'string' && /^\d{1,4}$/.test(v);
 const normalizar = (v) => String(v || '').toLowerCase();
+// Número não negativo de até 9 dígitos, com decimais opcionais. Qualquer outra coisa vira `null` (filtro ignorado).
+const numeroOuNulo = (v) => (typeof v === 'string' && /^\d{1,9}(\.\d{1,2})?$/.test(v) ? Number(v) : null);
+const diaOuNulo = (v) => (diaValido(v) ? v : null);
+// `segmento=a,b` (ou repetido): só ids da lista de permissão, sem repetição.
+function segmentosDaConsulta(v) {
+  const brutos = (Array.isArray(v) ? v : [v]).filter((x) => typeof x === 'string').flatMap((x) => x.split(',')).slice(0, MAX_SEGMENTOS * 2);
+  return Array.from(new Set(brutos.map((x) => x.trim()).filter((x) => SEGMENTOS.includes(x))));
+}
 const apenasDigitos = (v) => String(v || '').replace(/\D/g, '');
 
 // `query` é o `req.query` cru: qualquer campo pode vir ausente, repetido (array) ou com outro tipo.
@@ -33,7 +48,20 @@ function normalizarConsulta(query = {}) {
   const inativoDias = soDigitos(query.inativoDias) && INATIVIDADES.includes(Number(query.inativoDias)) ? Number(query.inativoDias) : null;
   const busca = typeof query.busca === 'string' ? query.busca.trim().slice(0, BUSCA_MAXIMA) : '';
   const tipo = typeof query.tipo === 'string' && TIPOS.includes(query.tipo) ? query.tipo : 'todos';
-  return { page, perPage, ordem, inativoDias, busca, tipo };
+  const marketing = query.marketing === 'sim' || query.marketing === 'nao' ? query.marketing : null;
+  return {
+    page, perPage, ordem, inativoDias, busca, tipo,
+    segmentos: segmentosDaConsulta(query.segmento),
+    recenciaMin: numeroOuNulo(query.recenciaMin), recenciaMax: numeroOuNulo(query.recenciaMax),
+    pedidosMin: numeroOuNulo(query.pedidosMin), pedidosMax: numeroOuNulo(query.pedidosMax),
+    ltvMin: numeroOuNulo(query.ltvMin), ltvMax: numeroOuNulo(query.ltvMax),
+    ticketMin: numeroOuNulo(query.ticketMin), ticketMax: numeroOuNulo(query.ticketMax),
+    primeiraDe: diaOuNulo(query.primeiraDe), primeiraAte: diaOuNulo(query.primeiraAte),
+    ultimaDe: diaOuNulo(query.ultimaDe), ultimaAte: diaOuNulo(query.ultimaAte),
+    marketing,
+    // UF do endereço de entrega do pedido mais recente que a informa (captura real; lista de permissão).
+    uf: typeof query.uf === 'string' && UFS.includes(query.uf.toUpperCase()) ? query.uf.toUpperCase() : null,
+  };
 }
 
 function bateBusca(cliente, buscaNorm, buscaDigitos) {
@@ -58,7 +86,31 @@ const COMPARADORES = Object.freeze({
   lucro_desc: (a, b) => (b.lucroOperacional || 0) - (a.lucroOperacional || 0),
   inativos_primeiro: compararInatividade,
   nome: (a, b) => (a.nome || '').localeCompare(b.nome || ''),
+  ltv_desc: (a, b) => (b.ltv || 0) - (a.ltv || 0),
 });
+
+const dentro = (valor, min, max) => valor != null && (min == null || valor >= min) && (max == null || valor <= max);
+const diaDaData = (iso) => (iso ? dataLocal(new Date(iso), 'America/Sao_Paulo') : null);
+const diaDentro = (iso, de, ate) => {
+  const dia = diaDaData(iso);
+  return dia != null && (de == null || dia >= de) && (ate == null || dia <= ate);
+};
+
+// Filtros combináveis da consulta (segmento, faixas de recência/pedidos/LTV/ticket, datas e consentimento).
+// Cliente sem o campo consultado nunca casa com uma faixa; quem só tem cadastro casa apenas com `sem_compra`.
+function passaFiltrosAvancados(c, q) {
+  if (q.segmentos.length && !q.segmentos.includes(c.segmento || 'sem_compra')) return false;
+  if ((q.recenciaMin != null || q.recenciaMax != null) && !dentro(c.diasSemComprar, q.recenciaMin, q.recenciaMax)) return false;
+  if ((q.pedidosMin != null || q.pedidosMax != null) && !dentro(c.pedidosValidos || 0, q.pedidosMin, q.pedidosMax)) return false;
+  if ((q.ltvMin != null || q.ltvMax != null) && !dentro(c.ltv, q.ltvMin, q.ltvMax)) return false;
+  if ((q.ticketMin != null || q.ticketMax != null) && !dentro(c.ticketMedioValido, q.ticketMin, q.ticketMax)) return false;
+  if ((q.primeiraDe || q.primeiraAte) && !diaDentro(c.primeiraCompraEm, q.primeiraDe, q.primeiraAte)) return false;
+  if ((q.ultimaDe || q.ultimaAte) && !diaDentro(c.ultimaCompraEm, q.ultimaDe, q.ultimaAte)) return false;
+  if (q.uf && c.uf !== q.uf) return false;
+  if (q.marketing === 'sim' && !c.aceitaMarketing) return false;
+  if (q.marketing === 'nao' && c.aceitaMarketing) return false;
+  return true;
+}
 
 // Só o que a tela usa. Nada de `legacyCustomerKeys`, totais de gasto ou qualquer outro campo interno do agregado.
 function paraTela(c) {
@@ -74,8 +126,17 @@ function paraTela(c) {
     lucroOperacional: c.lucroOperacional || 0,
     pedidosSemFinanceiro: c.pedidosSemFinanceiro || 0,
     ultimaCompraEm: c.ultimaCompraEm || null,
+    primeiraCompraEm: c.primeiraCompraEm || null,
     diasSemComprar: c.diasSemComprar == null ? null : c.diasSemComprar,
     origem: c.origem === 'cadastro' ? 'cadastro' : 'pedido',
+    // RFM (lib/clientes/rfm.js): `null` em quem não tem compra válida ou cuja base não permite classificar com segurança.
+    segmento: c.segmento || null,
+    segmentoNome: c.segmentoNome || null,
+    rfm: c.rfm || null,
+    pedidosValidos: c.pedidosValidos || 0,
+    ltv: c.ltv == null ? null : c.ltv,
+    ticketMedioValido: c.ticketMedioValido == null ? null : c.ticketMedioValido,
+    uf: c.uf || null,
   };
 }
 
@@ -130,9 +191,31 @@ function unirComCadastro(historico, cadastro, { loja } = {}) {
   return [...historico.map((h) => ({ ...h, origem: 'pedido' })), ...soCadastro];
 }
 
-// `clientes`: saída de `buscarClientesAgregados`. `consulta`: saída de `normalizarConsulta`.
-function listarClientes(clientes, consulta) {
-  const { page, perPage, ordem, inativoDias, busca, tipo = 'todos' } = consulta;
+// O cadastro da Ink (quem nunca pediu) só pode entrar no resultado se NENHUM filtro o exclui. Segmento RFM, recência, LTV,
+// ticket, datas de compra e UF exigem dado de pedido: quem só tem cadastro nunca casa. Nesses casos consultar a Ink é
+// trabalho inútil — e, pior, uma Ink lenta ou fora do ar travaria ou "avisaria" sobre uma lista que ela não pode afetar.
+function podeIncluirCadastro(consulta) {
+  const q = { segmentos: [], ...consulta };
+  if (q.tipo === 'com_pedido') return false;
+  if (q.segmentos.length && !q.segmentos.includes('sem_compra')) return false;
+  const exigemPedido = ['recenciaMin', 'recenciaMax', 'ltvMin', 'ltvMax', 'ticketMin', 'ticketMax', 'primeiraDe', 'primeiraAte', 'ultimaDe', 'ultimaAte', 'uf'];
+  if (exigemPedido.some((k) => q[k] != null)) return false;
+  return true;
+}
+
+// Filtros/ordem que só existem na classificação RFM. Sem ela, a resposta seria uma lista SEM o filtro aplicado — enganosa —,
+// então a rota devolve erro em vez de degradar. Sem esses filtros, a lista segue com os dados locais de pedidos.
+function dependeDeRfm(consulta) {
+  const q = { segmentos: [], ...consulta };
+  const campos = ['ltvMin', 'ltvMax', 'ticketMin', 'ticketMax', 'pedidosMin', 'pedidosMax', 'primeiraDe', 'primeiraAte', 'ultimaDe', 'ultimaAte', 'recenciaMin', 'recenciaMax'];
+  return q.segmentos.length > 0 || q.ordem === 'ltv_desc' || campos.some((k) => q[k] != null);
+}
+
+// Filtra e ordena a base INTEIRA (antes de fatiar). Reusada pela exportação: o CSV leva exatamente o público da lista.
+function selecionarClientes(clientes, consulta) {
+  const { ordem, inativoDias, busca, tipo = 'todos' } = consulta;
+  // `consulta` de teste/legado pode não trazer os campos novos: sem eles, nenhum filtro avançado se aplica.
+  const q = { segmentos: [], ...consulta };
   const buscaNorm = normalizar(busca);
   const buscaDigitos = apenasDigitos(busca);
 
@@ -140,6 +223,7 @@ function listarClientes(clientes, consulta) {
     if (tipo === 'com_pedido' && c.origem === 'cadastro') return false;
     if (tipo === 'sem_pedido' && c.origem !== 'cadastro') return false;
     if (!bateBusca(c, buscaNorm, buscaDigitos)) return false;
+    if (!passaFiltrosAvancados(c, q)) return false;
     // "Sem comprar há X+ dias" também inclui quem nunca teve compra confirmada.
     if (inativoDias == null) return true;
     return c.diasSemComprar == null || c.diasSemComprar >= inativoDias;
@@ -151,6 +235,13 @@ function listarClientes(clientes, consulta) {
   filtrados.sort((a, b) => comparar(a, b)
     || (a.nome || '').localeCompare(b.nome || '')
     || String(a.customerKey).localeCompare(String(b.customerKey)));
+  return filtrados;
+}
+
+// `clientes`: saída de `buscarClientesAgregados`. `consulta`: saída de `normalizarConsulta`.
+function listarClientes(clientes, consulta) {
+  const { page, perPage } = consulta;
+  const filtrados = selecionarClientes(clientes, consulta);
 
   const total = filtrados.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -167,4 +258,4 @@ function listarClientes(clientes, consulta) {
   };
 }
 
-module.exports = { normalizarConsulta, listarClientes, unirComCadastro, ORDENS, TIPOS, INATIVIDADES, POR_PAGINA_PADRAO, POR_PAGINA_MAXIMA };
+module.exports = { normalizarConsulta, listarClientes, selecionarClientes, podeIncluirCadastro, dependeDeRfm, paraTela, unirComCadastro, ORDENS, TIPOS, SEGMENTOS, INATIVIDADES, POR_PAGINA_PADRAO, POR_PAGINA_MAXIMA };
