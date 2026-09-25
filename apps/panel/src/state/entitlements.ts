@@ -60,3 +60,10 @@ export function loadEntitlements(): Promise<Entitlements> {
 export function hasEntitlement(key: keyof Entitlements): boolean {
   return cache ? cache[key] === true : false;
 }
+
+// Diferencia "o servidor disse que não há plano" de "não consegui perguntar": o cache só existe
+// depois de uma resposta válida. Quem só exibe informação (cabeçalho do menu da loja) usa isto
+// para omitir a linha em vez de afirmar "sem plano".
+export function entitlementsCarregados(): boolean {
+  return cache !== null;
+}

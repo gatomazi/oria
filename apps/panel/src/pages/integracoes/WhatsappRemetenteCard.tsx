@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Button, Card, ConfirmDialog, Disclosure, ErrorState, Field, FormActions, FormGrid, FormSection, FormStack, Input, Skeleton, StatusBadge, Textarea } from '../../components/ds';
+import { Button, Callout, ConfirmDialog, Disclosure, ErrorState, Field, FormActions, FormGrid, FormSection, FormStack, Input, Skeleton, StatusBadge, Textarea } from '../../components/ds';
+import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
 import { toast } from '../../lib/toast';
 import { WhatsappConectarMeta } from './WhatsappConectarMeta';
 import { useAuth } from '../../auth/AuthContext';
@@ -17,8 +18,9 @@ const TELEFONE = /^[0-9]{10,15}$/;
 // Número da API oficial do WhatsApp desta loja (Fase 5b). O serviço de envio não tem mais um número
 // próprio: cada envio sai com o número, a conta (WABA) e o token cadastrados aqui. O token fica
 // cifrado no servidor; a tela só vê os 4 últimos caracteres. Só o responsável (owner) grava ou remove.
-export function WhatsappRemetenteCard() {
+export function WhatsappRemetenteCard({ modoWeb }: { modoWeb: boolean }) {
   const { organizacaoAtiva } = useAuth();
+  const atualizarResumo = useAtualizarResumo();
   const ehOwner = organizacaoAtiva?.papel === 'owner';
   const [dados, setDados] = useState<WhatsappRemetente | null>(null);
   const [erro, setErro] = useState('');
@@ -78,6 +80,7 @@ export function WhatsappRemetenteCard() {
         setToken(''); // o token nunca fica no estado da tela depois de enviado
         aplicar(r);
         toast('Número do WhatsApp salvo com criptografia.', 'sucesso');
+        atualizarResumo();
       })
       .catch((e: Error) => setErroForm(e.message))
       .finally(() => setSalvando(false));
@@ -89,6 +92,7 @@ export function WhatsappRemetenteCard() {
       setConfirmarRemocao(false);
       toast('Número do WhatsApp removido.', 'sucesso');
       carregar();
+      atualizarResumo();
     });
   }
 
@@ -99,38 +103,56 @@ export function WhatsappRemetenteCard() {
       .catch((e: Error) => setTeste(e.message));
   }
 
+  const tokenRecusado = conectado && !!dados?.tokenInvalidoEm;
+
   return (
-    <Card
-      title="Número do WhatsApp"
-      description="Número, conta (WABA) e token da API oficial usados em todos os envios desta loja."
+    <Secao
+      title="Número e conexão com a Meta"
+      description="Número, conta (WABA) e autorização da API oficial usados em todos os envios desta loja."
     >
       {erro && <ErrorState description={erro} onRetry={carregar} />}
       {!erro && !dados && <Skeleton rows={2} />}
       {dados && (
         <>
-          <div className="ad-integracao-item__topo">
-            <StatusBadge
-              tone={conectado && !dados.tokenInvalidoEm ? 'success' : 'warning'}
-              label={conectado ? `${dados.tokenInvalidoEm ? 'Token recusado pela Meta' : 'Token cadastrado'}${dados.token?.last4 ? ` · final ${dados.token.last4}` : ''}` : 'Número não configurado'}
-            />
-          </div>
-          {conectado && dados.tokenInvalidoEm && (
-            <p className="ds-form-error" role="alert">
-              A Meta recusou o token do WhatsApp (expirado ou revogado). Cole um token novo em "Cadastro manual" ou reconecte com a Meta —
-              enquanto isso, templates e envios não funcionam. Token de teste da Meta dura 24 horas.
+          {modoWeb && (
+            <p className="pc-nota">
+              Esta loja envia pelo WhatsApp Web. O número da Meta só é usado quando o canal de envio for a API oficial — pode deixá-lo cadastrado.
             </p>
           )}
+          <div className="ig-linha-estado">
+            <StatusBadge
+              tone={tokenRecusado ? 'danger' : conectado ? 'success' : 'neutral'}
+              label={tokenRecusado ? 'Reconexão necessária' : conectado ? (dados.conectadoVia === 'manual' ? 'Token cadastrado' : 'Conectado') : 'Número não configurado'}
+            />
+            {conectado && dados.numeroExibido && <span className="ig-meta">{dados.nomeVerificado ? `${dados.nomeVerificado} · ` : ''}{dados.numeroExibido}</span>}
+            {conectado && !dados.numeroExibido && dados.token?.last4 && <span className="ig-meta">Token final {dados.token.last4}</span>}
+          </div>
+          {tokenRecusado && (
+            <Callout tone="danger" role="alert" title="A Meta recusou a autorização deste número">
+              O token do WhatsApp expirou ou foi revogado — enquanto isso, templates e envios pela API oficial não funcionam. Reconecte com a Meta
+              ou cole um token novo no cadastro manual. (Token de teste da Meta dura 24 horas.)
+            </Callout>
+          )}
           {conectado && dados.conectadoVia === 'embedded_signup' && (
-            <dl className="pc-nota" aria-label="Conexão com a Meta">
-              <div>{dados.nomeVerificado || 'Número conectado'}{dados.numeroExibido ? ` · ${dados.numeroExibido}` : ''}</div>
-              <div>Conta do WhatsApp {dados.wabaId}{dados.businessId ? ` · business ${dados.businessId}` : ''}</div>
-              <div>{dados.webhookAssinado ? 'Recebendo mensagens' : 'Sem webhook'} · {dados.numeroRegistrado ? 'número registrado' : 'número não registrado'}</div>
+            <dl className="ig-fatos" aria-label="Situação da conexão com a Meta">
+              <div>
+                <dt>Autorização</dt>
+                <dd>{tokenRecusado ? 'Recusada pela Meta' : 'Ativa'}</dd>
+              </div>
+              <div>
+                <dt>Número registrado</dt>
+                <dd>{dados.numeroRegistrado ? 'Sim' : 'Não'}</dd>
+              </div>
+              <div>
+                <dt>Recebimento de mensagens</dt>
+                <dd>{dados.webhookAssinado ? 'Ativo' : 'Não configurado'}</dd>
+              </div>
             </dl>
           )}
-          {ehOwner && <WhatsappConectarMeta conectado={conectado} onConectado={aplicar} />}
+          {ehOwner && <WhatsappConectarMeta conectado={conectado} destaque={!conectado || tokenRecusado} onConectado={(r) => { aplicar(r); atualizarResumo(); }} />}
           {!ehOwner && (
             <p className="pc-nota">
-              {dados.phoneNumberId ? `Número ${dados.phoneNumberId} · conta ${dados.wabaId}. ` : ''}
+              {dados.phoneNumberId ? 'Há um número cadastrado nesta loja. ' : ''}
               Só o responsável pela loja cadastra ou remove o número.
             </p>
           )}
@@ -191,6 +213,6 @@ export function WhatsappRemetenteCard() {
         confirmLabel="Remover"
         onConfirm={remover}
       />
-    </Card>
+    </Secao>
   );
 }

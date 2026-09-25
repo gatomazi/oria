@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Callout, Card, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge,  } from '../../components/ds';
+import { Button, Callout, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge } from '../../components/ds';
+import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
 import { formatData, formatDiaISO, idadeDoCache, plural } from '../../lib/format';
 import {
   contaEstaAtiva, definirLojaDaContaMeta, desconectarMeta, getMetaStatus, listarMetaContas, mascararContaMeta, mensagemErroMeta,
@@ -38,6 +39,7 @@ function descricaoConta(conta: MetaConta) {
 }
 
 export function MetaAdsIntegracaoCard() {
+  const atualizarResumo = useAtualizarResumo();
   const [dados, setDados] = useState<MetaStatus | null>(null);
   const [erro, setErro] = useState('');
   const [escolhendo, setEscolhendo] = useState(false);
@@ -100,7 +102,7 @@ export function MetaAdsIntegracaoCard() {
     selecionarMetaConta(contaEscolhida)
       .then(() => {
         setEscolhendo(false);
-        return carregar();
+        return carregar().then(() => atualizarResumo());
       })
       .catch((err: Error) => setErroAcao(err.message))
       .finally(() => setSalvando(false));
@@ -110,6 +112,7 @@ export function MetaAdsIntegracaoCard() {
     setErroAcao('');
     sincronizarMetaAgora()
       .then(() => carregar())
+      .then(() => atualizarResumo())
       .catch((err: Error) => setErroAcao(err.message));
   }
 
@@ -117,7 +120,7 @@ export function MetaAdsIntegracaoCard() {
     await desconectarMeta();
     setConfirmandoDesconexao(false);
     setEscolhendo(false);
-    carregar();
+    carregar().then(() => atualizarResumo());
   }
 
   const conexao = dados?.conexao;
@@ -140,10 +143,7 @@ export function MetaAdsIntegracaoCard() {
         : 'Não conectado';
 
   return (
-    <Card
-      title="Meta Ads"
-      description="Conecte pra acompanhar gasto, CPA, ROAS e criativos das campanhas do Facebook e Instagram dentro do painel."
-    >
+    <Secao description="Conecte para acompanhar gasto, CPA, ROAS e criativos das campanhas do Facebook e Instagram dentro do painel.">
       {erro && <ErrorState description={erro} onRetry={carregar} />}
       {!erro && !dados && <Skeleton rows={3} />}
       {!erro && dados && conexao && (
@@ -216,6 +216,7 @@ export function MetaAdsIntegracaoCard() {
                         setErroAcao('');
                         definirLojaDaContaMeta(contaSelecionada.metaAccountId)
                           .then(() => carregar())
+                          .then(() => atualizarResumo())
                           .catch((err: Error) => setErroAcao(err.message))
                           .finally(() => setSalvandoLoja(false));
                       }}
@@ -299,6 +300,6 @@ export function MetaAdsIntegracaoCard() {
         description="O histórico de campanhas e métricas já sincronizado é apagado junto. Reconectar depois importa os últimos 90 dias de novo."
         onConfirm={confirmarDesconexao}
       />
-    </Card>
+    </Secao>
   );
 }

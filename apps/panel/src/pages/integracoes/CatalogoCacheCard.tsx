@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Card, ConfirmDialog, Field, ProgressBar, Select, StatusBadge, Switch } from '../../components/ds';
+import { Button, ConfirmDialog, Field, ProgressBar, Select, StatusBadge, Switch } from '../../components/ds';
+import { Secao } from './IntegracaoAcordeao';
 import { formatData, plural } from '../../lib/format';
 import type { LojaOpcao } from './lojaOpcao';
 import {
@@ -74,17 +75,14 @@ export function CatalogoCacheCard({ stores }: { stores: LojaOpcao[] }) {
     : 0;
 
   return (
-    <Card title="Cache do catálogo de produtos">
-      <p className="pc-nota">
-        Varre o catálogo completo da Reserva Ink e guarda no banco — inclusive produto desativado, oculto e não
-        aprovado. É o que faz a busca de produtos responder na hora, sem depender da API a cada consulta.
-        Renova sozinho no intervalo escolhido abaixo — ou fica parado, se a renovação automática estiver pausada.
-      </p>
-
+    <Secao
+      title="Catálogo para busca de produtos"
+      description="Guarda o catálogo completo da Reserva Ink (inclusive produto desativado, oculto e não aprovado) para a busca de produtos responder na hora."
+    >
       <div className="ds-form-row">
         <Field label="Loja">
           <Select value={loja} onChange={(e) => setLoja(e.target.value)} disabled={rodando || !stores.length}>
-            {!stores.length && <option value="">Conecte a Reserva Ink pra sincronizar o catálogo</option>}
+            {!stores.length && <option value="">Cadastre a credencial da Reserva Ink para sincronizar o catálogo</option>}
             {stores.map((st) => (
               <option key={st.id} value={st.id}>{st.nome}</option>
             ))}
@@ -171,7 +169,7 @@ export function CatalogoCacheCard({ stores }: { stores: LojaOpcao[] }) {
           }
         }}
       />
-    </Card>
+    </Secao>
   );
 }
 

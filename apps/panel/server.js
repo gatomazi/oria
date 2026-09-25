@@ -935,14 +935,18 @@ if (AUTH) {
   });
 }
 
-// Exibe as últimas entregas de webhook recebidas (headers + corpo) — usado pela tela Eventos e
-// pra confirmar o esquema real de autenticação/payload da Reserva Ink caso mude.
+// Últimos webhooks recebidos por esta Organization: só metadados (nome do evento, origem, se foi
+// verificado). Automações e Templates usam os nomes de evento já observados para sugerir vínculos.
+// O corpo e os headers da entrega (payload cru com dados pessoais de clientes e a assinatura) continuam
+// gravados em webhook_eventos para diagnóstico da plataforma, mas NÃO saem por esta rota: a tela de
+// eventos brutos deixou de existir para o lojista e a rota não pode devolver por API o que a tela
+// deixou de mostrar.
 app.get('/api/admin/webhook-log', requireAdmin, async (req, res) => {
   if (pgPool) {
     try {
       const { rows } = await pgPool.query(
         `SELECT recebido_em AS "recebidoEm", verificado, loja, metodo_auth AS "metodoAuth",
-                event_name AS "eventName", ink_order_id AS "inkOrderId", headers, body
+                event_name AS "eventName", ink_order_id AS "inkOrderId"
          FROM webhook_eventos WHERE organization_id = $1 ORDER BY recebido_em DESC LIMIT 500`,
         [orgDoContexto()]
       );
@@ -954,7 +958,7 @@ app.get('/api/admin/webhook-log', requireAdmin, async (req, res) => {
   }
   let log = [];
   try { log = JSON.parse(fs.readFileSync(WEBHOOK_LOG_FILE, 'utf8')); } catch { log = []; }
-  res.json({ log });
+  res.json({ log: log.map(({ headers, body, ...metadados }) => metadados) });
 });
 
 app.get('/api/admin/pedidos', requireAdmin, async (req, res) => {

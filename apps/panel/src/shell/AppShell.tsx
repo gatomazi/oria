@@ -3,16 +3,18 @@ import { Link, useLocation } from 'react-router-dom';
 import * as RadixDropdown from '@radix-ui/react-dropdown-menu';
 import { useAuth } from '../auth/AuthContext';
 import { loadProductSettings, type ProductSettings } from '../state/productSettings';
-import { loadEntitlements, hasEntitlement } from '../state/entitlements';
+import { loadEntitlements, hasEntitlement, entitlementsCarregados } from '../state/entitlements';
 import { Icon, Select, Skeleton } from '../components/ds';
 import { getInternalToolsStatus } from '../api/internalTools';
 import { useWhatsappProvider } from '../state/whatsappProvider';
 import { AlertaAppWhatsapp } from '../components/AlertaAppWhatsapp';
-import { NAV_TOP, NAV_GROUPS, PAGE_TITLES, NAV_ICON_PATHS, ROUTE_CONTEXT, type NavItem, type NavGroup } from './nav';
+import { NAV_TOP, NAV_GROUPS, NAV_STORE_MENU, STORE_MENU_GROUP, PAGE_TITLES, NAV_ICON_PATHS, ROUTE_CONTEXT, type NavItem, type NavGroup } from './nav';
 
 // Shell do painel (DESIGN.md › Layout, Navigation, Top Bar): sidebar de 240px (drawer abaixo de
 // 1024px), topbar sticky de 56px com breadcrumb + troca de workspace (só para quem tem mais de uma
-// Organization) + menu da loja, e container de conteúdo alinhado com a topbar. Sem busca global,
+// Organization) + menu da loja, e container de conteúdo alinhado com a topbar. A sidebar é só
+// operação do dia a dia; a administração da loja (Configurações, Integrações, Campos personalizados)
+// mora exclusivamente no menu da loja (NAV_STORE_MENU). Sem busca global,
 // ajuda ou notificações até essas funções existirem (decisão D1). Não existe "todas as lojas": cada
 // sessão trabalha numa Organization, escolhida e validada no servidor (Fase 3).
 
@@ -32,11 +34,11 @@ function useFerramentasInternasGroup(): NavGroup | null {
   };
 }
 
-function navIcon(key: string) {
+function navIcon(key: string, className = 'ad-nav__icon') {
   const inner = NAV_ICON_PATHS[key];
   if (!inner) return null;
   return (
-    <span className="ad-nav__icon">
+    <span className={className}>
       <svg
         viewBox="0 0 24 24"
         width={16}
@@ -79,6 +81,10 @@ function useRouteInfo(extraGroup: NavGroup | null): RouteInfo {
     const groups = [...NAV_GROUPS, ...(extraGroup ? [extraGroup] : [])];
     const groupOf = (key: string) => groups.find((g) => g.items.some((i) => i.key === key))?.label ?? null;
     const all = [...NAV_TOP, ...groups.flatMap((g) => g.items)];
+
+    // Páginas do menu da loja: sem item ativo na sidebar, breadcrumb "Loja › Página".
+    const daLoja = NAV_STORE_MENU.find((i) => i.href && (pathname === i.href || pathname.startsWith(i.href + '/')));
+    if (daLoja) return { activeKey: '', title: PAGE_TITLES[daLoja.key] || daLoja.label, group: STORE_MENU_GROUP, parent: null };
 
     const ctx = ROUTE_CONTEXT.find((c) => c.match.test(pathname));
     if (ctx) {
@@ -132,21 +138,30 @@ function WorkspaceSelect() {
   );
 }
 
-function usePlanoLabel(): string {
-  const [label, setLabel] = useState('…');
+// Plano da Organization para o cabeçalho do menu da loja. `null` = ainda carregando ou o servidor
+// não respondeu: a linha some em vez de mostrar "Sem plano ativo" por engano (o carregador de
+// entitlements é fail-closed e devolveria "nada" num erro de rede).
+function usePlanoLabel(): string | null {
+  const [label, setLabel] = useState<string | null>(null);
   useEffect(() => {
+    let vivo = true;
     loadEntitlements().then(() => {
+      if (!vivo) return;
+      if (!entitlementsCarregados()) return setLabel(null);
       const wa = hasEntitlement('whatsapp');
       const ig = hasEntitlement('instagram');
-      if (wa && ig) setLabel('Plano Completo');
-      else if (wa) setLabel('Plano WhatsApp');
-      else if (ig) setLabel('Plano Instagram');
+      if (wa && ig) setLabel('Plano atual: Completo');
+      else if (wa) setLabel('Plano atual: WhatsApp');
+      else if (ig) setLabel('Plano atual: Instagram');
       else setLabel('Sem plano ativo');
     });
+    return () => { vivo = false; };
   }, []);
   return label;
 }
 
+// Menu da loja (canto superior direito): identificação, administração da loja e Sair. Os itens vêm
+// de NAV_STORE_MENU; o servidor continua sendo quem autoriza cada rota e API — aqui é só navegação.
 function StoreMenu({
   nome,
   plano,
@@ -154,10 +169,11 @@ function StoreMenu({
   onLogout,
 }: {
   nome: string;
-  plano: string;
+  plano: string | null;
   usuario: string | null;
   onLogout: () => void;
 }) {
+  const { pathname } = useLocation();
   return (
     <RadixDropdown.Root>
       <RadixDropdown.Trigger asChild>
@@ -170,25 +186,24 @@ function StoreMenu({
         </button>
       </RadixDropdown.Trigger>
       <RadixDropdown.Portal>
-        <RadixDropdown.Content className="ds-dropdown" align="end" sideOffset={6}>
+        <RadixDropdown.Content className="ds-dropdown ad-store-menu__content" align="end" sideOffset={6} collisionPadding={8}>
           <RadixDropdown.Label className="ds-dropdown__label">
             <strong>{nome}</strong>
-            <span>{plano}</span>
+            {plano && <span>{plano}</span>}
             {usuario && <span>{usuario}</span>}
           </RadixDropdown.Label>
           <RadixDropdown.Separator className="ds-dropdown__separator" />
-          <RadixDropdown.Item asChild className="ds-dropdown__item">
-            <Link to="/admin/configuracoes">
-              <Icon name="settings" />
-              Configurações
-            </Link>
-          </RadixDropdown.Item>
-          <RadixDropdown.Item asChild className="ds-dropdown__item">
-            <Link to="/admin/integracoes">
-              <Icon name="plug" />
-              Integrações
-            </Link>
-          </RadixDropdown.Item>
+          {NAV_STORE_MENU.filter((item) => item.href).map((item) => {
+            const ativo = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <RadixDropdown.Item key={item.key} asChild className={'ds-dropdown__item' + (ativo ? ' ds-dropdown__item--active' : '')}>
+                <Link to={item.href as string} aria-current={ativo ? 'page' : undefined}>
+                  {navIcon(item.key, 'ds-dropdown__icon')}
+                  {item.label}
+                </Link>
+              </RadixDropdown.Item>
+            );
+          })}
           <RadixDropdown.Separator className="ds-dropdown__separator" />
           <RadixDropdown.Item className="ds-dropdown__item" onSelect={onLogout}>
             <Icon name="logout" />
@@ -232,6 +247,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
   const planoLabel = usePlanoLabel();
   const whatsappProvider = useWhatsappProvider();
   // Itens sem href ("em breve") não aparecem (D2). Enquanto o provider não carrega, esconde os
@@ -264,7 +280,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    // Drawer aberto é modal: o conteúdo atrás fica fora da ordem de tabulação e da árvore de
+    // acessibilidade. Ao alargar a janela até o layout de desktop (sidebar fixa) o drawer fecha,
+    // para o conteúdo não ficar inerte sem menu para fechá-lo.
+    const principal = mainRef.current;
+    principal?.setAttribute('inert', '');
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const aoMudarLargura = () => { if (desktop.matches) setNavOpen(false); };
+    desktop.addEventListener('change', aoMudarLargura);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      desktop.removeEventListener('change', aoMudarLargura);
+      principal?.removeAttribute('inert');
+    };
   }, [navOpen]);
 
   const grupos = [...NAV_GROUPS, ...(ferramentasInternasGroup ? [ferramentasInternasGroup] : [])]
@@ -317,7 +345,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="ad-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />
 
-      <div className="ad-main">
+      <div className="ad-main" ref={mainRef}>
         <header className="ad-topbar">
           <div className="ad-topbar__inner">
             <button

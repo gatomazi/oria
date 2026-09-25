@@ -340,9 +340,12 @@ test('INV-15 · webhook Ink: URL de A + assinatura de A grava só em A; sem assi
 
   const a = await navegador().entrar('srv-a@teste.oria');
   const logA = (await a.req('GET', '/api/admin/webhook-log')).json.log;
-  assert.ok(logA.some((e) => e.body && e.body.marca === marca));
+  // A rota devolve só metadados (nome do evento, origem): o payload e os headers da entrega não saem
+  // mais para o painel do lojista. O evento é achado pelo nome, e a marca única segue conferida no banco.
+  assert.ok(logA.some((e) => e.eventName === 'teste.fase5c'));
+  assert.ok(logA.every((e) => !('body' in e) && !('headers' in e)), 'corpo e headers do webhook não saem pela API do lojista');
   const b = await navegador().entrar('srv-b@teste.oria');
-  assert.ok(!(await b.req('GET', '/api/admin/webhook-log')).json.log.some((e) => e.body && e.body.marca === marca));
+  assert.ok(!(await b.req('GET', '/api/admin/webhook-log')).json.log.some((e) => e.eventName === 'teste.fase5c'));
 });
 
 test('INV-15 · assinado por A e entregue na URL de B é recusado e NÃO roteado para A', async () => {

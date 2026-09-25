@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Callout, Card, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge,  } from '../../components/ds';
+import { Button, Callout, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge } from '../../components/ds';
+import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
 import { formatData, plural } from '../../lib/format';
 import {
   atribuirLojaGoogleAds, desconectarGoogleAds, getGoogleAdsStatus, listarGoogleAdsContas, mensagemErroGoogleAds,
@@ -22,6 +23,7 @@ function descricaoConta(conta: GoogleAdsConta): string {
 }
 
 export function GoogleAdsIntegracaoCard() {
+  const atualizarResumo = useAtualizarResumo();
   const [dados, setDados] = useState<GoogleAdsStatus | null>(null);
   const [erro, setErro] = useState('');
   const [erroAcao, setErroAcao] = useState('');
@@ -72,7 +74,7 @@ export function GoogleAdsIntegracaoCard() {
     setSalvando(true);
     setErroAcao('');
     selecionarGoogleAdsConta(contaEscolhida)
-      .then(() => { setEscolhendo(false); return carregar(); })
+      .then(() => { setEscolhendo(false); return carregar().then(() => atualizarResumo()); })
       .catch((err: Error) => setErroAcao(err.message))
       .finally(() => setSalvando(false));
   }
@@ -84,17 +86,17 @@ export function GoogleAdsIntegracaoCard() {
       .catch((err: Error) => setErroAcao(mensagemErroGoogleAds(null, err.message)))
       // Recarrega mesmo quando falha: o erro real fica guardado na conexão, e sem este carregar()
       // a tela continuava mostrando o estado velho e escondia o diagnóstico.
-      .finally(() => { setSincronizando(false); syncAtivo.current = true; carregar(); });
+      .finally(() => { setSincronizando(false); syncAtivo.current = true; carregar().then(() => atualizarResumo()); });
   }
 
   function desconectar() {
     desconectarGoogleAds()
-      .then(() => { setConfirmandoDesconexao(false); return carregar(); })
+      .then(() => { setConfirmandoDesconexao(false); return carregar().then(() => atualizarResumo()); })
       .catch((err: Error) => setErroAcao(err.message));
   }
 
-  if (erro) return <Card title="Google Ads"><ErrorState description={erro} onRetry={carregar} /></Card>;
-  if (!dados) return <Card title="Google Ads"><Skeleton rows={3} /></Card>;
+  if (erro) return <Secao><ErrorState description={erro} onRetry={carregar} /></Secao>;
+  if (!dados) return <Secao><Skeleton rows={3} /></Secao>;
 
   const contaAtiva = dados.contas.find((c) => c.selecionada) || null;
   // Erro tem precedência sobre ter conta selecionada: mostrar "Conectado" logo acima de "sua
@@ -102,8 +104,8 @@ export function GoogleAdsIntegracaoCard() {
   const emErro = dados.status === 'error' || !!dados.erroCodigo;
 
   return (
-    <Card
-      title="Google Ads"
+    <Secao
+      description="Conecte para acompanhar gasto e desempenho das campanhas do Google Ads dentro do painel."
       action={
         dados.conectado && !emErro ? (
           <Button variant="ghost" size="sm" onClick={() => setConfirmandoDesconexao(true)}>Desconectar</Button>
@@ -173,6 +175,7 @@ export function GoogleAdsIntegracaoCard() {
                         setErroAcao('');
                         atribuirLojaGoogleAds(contaAtiva.customerId)
                           .then(carregar)
+                          .then(() => atualizarResumo())
                           .catch((err: Error) => setErroAcao(err.message))
                           .finally(() => setSalvandoLoja(false));
                       }}
@@ -272,6 +275,6 @@ export function GoogleAdsIntegracaoCard() {
         description="O painel para de sincronizar e a permissão é revogada na sua conta Google. Os dados já sincronizados continuam no painel."
         onConfirm={desconectar}
       />
-    </Card>
+    </Secao>
   );
 }

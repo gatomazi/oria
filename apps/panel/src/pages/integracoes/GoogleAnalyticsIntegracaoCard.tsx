@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Callout, Card, ConfirmDialog, ErrorState, Select, Skeleton, StatusBadge } from '../../components/ds';
+import { Button, Callout, ConfirmDialog, ErrorState, Select, Skeleton, StatusBadge } from '../../components/ds';
+import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
 import { formatData } from '../../lib/format';
 import {
   desconectarGa, getGaStatus, listGaProperties, salvarGaProperty, urlConectarGa, type GaConnection, type GaProperty,
@@ -132,6 +133,7 @@ function LinhaLoja({ conexao, oauthConfigurado, recarregar }: { conexao: GaConne
 }
 
 export function GoogleAnalyticsIntegracaoCard() {
+  const atualizarResumo = useAtualizarResumo();
   const [dados, setDados] = useState<{ conexoes: GaConnection[]; oauthConfigurado: boolean } | null>(null);
   const [erro, setErro] = useState('');
 
@@ -145,7 +147,7 @@ export function GoogleAnalyticsIntegracaoCard() {
   useEffect(carregar, []);
 
   return (
-    <Card title="Google Analytics 4" description="Conecte pra ver sessões, compras e receita reais das campanhas UTM salvas no UTM Tracker.">
+    <Secao description="Conecte para ver sessões, compras e receita reais das campanhas UTM salvas no UTM Tracker.">
       {erro && <ErrorState description={erro} onRetry={carregar} />}
       {!erro && !dados && <Skeleton rows={3} />}
       {!erro && dados && (
@@ -157,11 +159,11 @@ export function GoogleAnalyticsIntegracaoCard() {
           )}
           <div>
             {dados.conexoes.map((c) => (
-              <LinhaLoja key={c.storeId} conexao={c} oauthConfigurado={dados.oauthConfigurado} recarregar={carregar} />
+              <LinhaLoja key={c.storeId} conexao={c} oauthConfigurado={dados.oauthConfigurado} recarregar={() => { carregar(); atualizarResumo(); }} />
             ))}
           </div>
         </div>
       )}
-    </Card>
+    </Secao>
   );
 }

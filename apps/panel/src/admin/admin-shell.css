@@ -167,6 +167,10 @@
 .ad-store-menu__nome { font: var(--type-label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .ad-store-menu svg { color: var(--text-muted); flex-shrink: 0; }
 
+/* Menu da loja aberto: largura confortável no desktop e nunca maior que a viewport no mobile. */
+.ad-store-menu__content { min-width: 240px; max-width: calc(100vw - 16px); }
+.ad-store-menu__content .ds-dropdown__label span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ── Conteúdo ────────────────────────────────────────────────────── */
 .ad-content { padding: var(--space-6) var(--gutter) var(--space-12); }
 .ad-content__inner { max-width: var(--content-max); min-width: 0; }

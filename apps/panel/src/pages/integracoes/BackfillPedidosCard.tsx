@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Card, ConfirmDialog, Field, Input, ProgressBar, Select, StatusBadge } from '../../components/ds';
+import { Button, ConfirmDialog, Disclosure, Field, Input, ProgressBar, Select, StatusBadge } from '../../components/ds';
+import { Secao } from './IntegracaoAcordeao';
 import { formatData, plural } from '../../lib/format';
 import type { LojaOpcao } from './lojaOpcao';
 import {
@@ -14,6 +15,8 @@ import {
 // o que sub-contava clientes em segmentos de campanha (achado real, 2026-09-10: 712 clientes
 // contra 4000+ pedidos históricos). Este card dispara um backfill sob demanda, reexecutável a
 // qualquer momento (ex.: loja nova, gap depois de instabilidade).
+const ROTULO_STATUS: Record<string, string> = { concluido: 'concluído', falhou: 'falhou', processando: 'em andamento' };
+
 export function BackfillPedidosCard({ stores }: { stores: LojaOpcao[] }) {
   // `loja` guarda o storeId (identidade canônica); o nome é só rótulo.
   const [loja, setLoja] = useState(stores[0]?.id || '');
@@ -76,16 +79,14 @@ export function BackfillPedidosCard({ stores }: { stores: LojaOpcao[] }) {
   const rodando = jobAtivo?.status === 'processando';
 
   return (
-    <Card title="Sincronização histórica de pedidos">
-      <p className="pc-nota">
-        O sync automático só cobre os últimos 30 dias a partir da 1ª ativação da loja. Use isto pra trazer pedidos
-        mais antigos pro cache local (necessário pra segmentos de campanha contarem clientes de compras antigas).
-      </p>
-
+    <Secao
+      title="Pedidos antigos"
+      description="A sincronização automática cobre só os últimos 30 dias a partir da 1ª ativação da loja. Traga o histórico para que segmentos de campanha contem clientes de compras antigas."
+    >
       <div className="ds-form-row">
         <Field label="Loja">
           <Select value={loja} onChange={(e) => setLoja(e.target.value)} disabled={rodando || !stores.length}>
-            {!stores.length && <option value="">Conecte a Reserva Ink pra sincronizar o histórico</option>}
+            {!stores.length && <option value="">Cadastre a credencial da Reserva Ink para importar o histórico</option>}
             {stores.map((st) => (
               <option key={st.id} value={st.id}>{st.nome}</option>
             ))}
@@ -95,7 +96,7 @@ export function BackfillPedidosCard({ stores }: { stores: LojaOpcao[] }) {
           <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} disabled={rodando} />
         </Field>
         <Button className="ds-form-row__action" variant="secondary" onClick={() => setConfirmando(true)} disabled={rodando || !loja}>
-          {rodando ? 'Sincronizando…' : 'Sincronizar histórico completo'}
+          {rodando ? 'Sincronizando…' : 'Importar histórico completo'}
         </Button>
       </div>
 
@@ -111,7 +112,7 @@ export function BackfillPedidosCard({ stores }: { stores: LojaOpcao[] }) {
             <span className="ds-status-linha__meta">
               {jobAtivo.paginas_total
                 ? `página ${jobAtivo.paginas_processadas}/${jobAtivo.paginas_total} — ${plural(jobAtivo.pedidos_processados, 'pedido processado', 'pedidos processados')}`
-                : 'Buscando pedidos na Ink…'}
+                : 'Buscando pedidos na Reserva Ink…'}
             </span>
           </div>
           {rodando && jobAtivo.paginas_total != null && (
@@ -122,24 +123,23 @@ export function BackfillPedidosCard({ stores }: { stores: LojaOpcao[] }) {
       )}
 
       {historico.length > 0 && (
-        <div className="ds-bloco-seguinte">
-          <p className="pc-nota">Execuções anteriores nesta loja:</p>
+        <Disclosure summary={`Execuções anteriores (${historico.length})`}>
           <ul className="ds-lista-meta">
             {historico.map((j) => (
               <li key={j.id}>
-                {formatData(j.criado_em)} — desde {j.desde} — {j.status} — {plural(j.pedidos_processados, 'pedido', 'pedidos')}
+                {formatData(j.criado_em)} — desde {j.desde} — {ROTULO_STATUS[j.status] || j.status} — {plural(j.pedidos_processados, 'pedido', 'pedidos')}
               </li>
             ))}
           </ul>
-        </div>
+        </Disclosure>
       )}
 
       <ConfirmDialog
         open={confirmando}
         onClose={() => setConfirmando(false)}
-        title="Sincronizar histórico completo de pedidos"
+        title="Importar histórico completo de pedidos"
         description={`Isso vai buscar TODOS os pedidos da Ink de ${nomeDe(loja)} desde ${desde || '2015-01-01'} e pode demorar. O sync incremental normal não é afetado.`}
-        confirmLabel="Sincronizar"
+        confirmLabel="Importar"
         confirmVariant="primary"
         onConfirm={async () => {
           try {
@@ -150,6 +150,6 @@ export function BackfillPedidosCard({ stores }: { stores: LojaOpcao[] }) {
           }
         }}
       />
-    </Card>
+    </Secao>
   );
 }
