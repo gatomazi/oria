@@ -16740,6 +16740,7 @@ if (PRODUCT_ANALYTICS) {
     analyticsProvider: PRODUCT_ANALYTICS.analyticsProvider,
     commerceProvider: PRODUCT_ANALYTICS.commerceProvider,
     syncCommerceCatalog: PRODUCT_ANALYTICS.syncCommerceCatalog,
+    cancelCommerceCatalogSync: PRODUCT_ANALYTICS.cancelCommerceCatalogSync,
     getCommerceCatalogSyncStatus: PRODUCT_ANALYTICS.getCommerceCatalogSyncStatus,
   }));
 }

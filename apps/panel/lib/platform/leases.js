@@ -52,7 +52,18 @@ function createJobLeases({ poolReal, dono = donoPadrao() }) {
     return rows[0].ok === true;
   }
 
-  return { adquirir, concluir, dono };
+  // Kill switch: libera o lease IGNORANDO quem é o dono — quem chama isto é uma pessoa na tela,
+  // nunca o processo que pediu o lease originalmente (esse, se ainda existir, só conhece `concluir`).
+  // Não mata o processo antigo, só libera a trava pra um run novo poder começar.
+  async function liberarForcado(job, organizationId) {
+    conferir(job, organizationId);
+    const { rows } = await semContexto(() => poolReal.query(
+      'SELECT job_lease_liberar_forcado($1, $2) AS ok', [job, organizationId]
+    ));
+    return rows[0].ok === true;
+  }
+
+  return { adquirir, concluir, liberarForcado, dono };
 }
 
 module.exports = { createJobLeases, ttlPara, donoPadrao };

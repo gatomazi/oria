@@ -123,17 +123,19 @@ function mapearErro(err, res) {
 }
 
 /**
- * @param {{productPerformanceService, reconciliationService, journeyAnalyticsService, opportunityDiagnosticsService?, registry, analyticsProvider: string, commerceProvider: string, syncCommerceCatalog?: Function, getCommerceCatalogSyncStatus?: Function}} deps
+ * @param {{productPerformanceService, reconciliationService, journeyAnalyticsService, opportunityDiagnosticsService?, registry, analyticsProvider: string, commerceProvider: string, syncCommerceCatalog?: Function, cancelCommerceCatalogSync?: Function, getCommerceCatalogSyncStatus?: Function}} deps
  *   `syncCommerceCatalog`/`getCommerceCatalogSyncStatus`: Rodada M — opcionais de propósito (fica
  *   compatível com quem monta o router sem essas duas, ex.: um teste antigo); sem elas, as rotas de
  *   sincronização do catálogo simplesmente não são registradas.
+ *   `cancelCommerceCatalogSync`: Rodada "Observabilidade e controle do catalog sync" — kill switch
+ *   da tela; mesmo padrão opcional, sem ele POST /catalog-sync/cancelar não é registrada.
  *   `opportunityDiagnosticsService`: Gate C ("Jornada de Valor") — mesmo padrão opcional; sem ele,
  *   GET /journey/opportunities não é registrada.
  * @returns {import('express').Router}
  */
 function createProductAnalyticsRouter({
   productPerformanceService, reconciliationService, journeyAnalyticsService, opportunityDiagnosticsService, registry, analyticsProvider, commerceProvider,
-  syncCommerceCatalog, getCommerceCatalogSyncStatus,
+  syncCommerceCatalog, cancelCommerceCatalogSync, getCommerceCatalogSyncStatus,
 }) {
   if (!productPerformanceService || typeof productPerformanceService.getProductPerformance !== 'function' || typeof productPerformanceService.getProductPerformanceSummary !== 'function') {
     throw new Error('createProductAnalyticsRouter exige productPerformanceService');
@@ -320,6 +322,27 @@ function createProductAnalyticsRouter({
     });
   }
 
+  // Kill switch da tela ("Observabilidade e controle do catalog sync") — achado real de dogfooding
+  // (Use Sul, 2026-09-24): sem isto, um sync travado só libera sozinho depois do TTL do lease (3h) e
+  // não existe jeito de saber, só pelo `/catalog-sync/status`, se ainda está rodando de verdade ou
+  // se o processo caiu. NUNCA mata o processo Node — só libera a trava e marca a linha como
+  // cancelada; ver o cabeçalho de `cancelarCatalogSync` em catalog-sync.js pro que isso garante e o
+  // que não garante. Também limpa o guard em memória (`catalogSyncEmAndamento`) pra um novo clique
+  // em "Sincronizar" não voltar `already_running` por causa de uma promise antiga ainda pendente
+  // NESTE processo — o lease real (Postgres) é que decide se dá pra começar de verdade.
+  if (cancelCommerceCatalogSync) {
+    router.post('/catalog-sync/cancelar', async (req, res) => {
+      const { organizationId, storeId } = req.tenant;
+      try {
+        const r = await cancelCommerceCatalogSync({ organizationId, storeId });
+        catalogSyncEmAndamento.delete(organizationId);
+        return res.json(r);
+      } catch (err) {
+        return mapearErro(err, res);
+      }
+    });
+  }
+
   if (getCommerceCatalogSyncStatus) {
     router.get('/catalog-sync/status', async (req, res) => {
       const { organizationId, storeId } = req.tenant;
@@ -334,7 +357,7 @@ function createProductAnalyticsRouter({
         // entre o fire-and-forget e o primeiro INSERT do log.
         //
         // `state`: a taxonomia do comando — never_synced/queued/running/completed/partial_failure/
-        // failed — nunca um status cru do banco sem rótulo pra UI decidir sozinha.
+        // failed/cancelled — nunca um status cru do banco sem rótulo pra UI decidir sozinha.
         const emProcesso = catalogSyncEmAndamento.has(organizationId);
         const rodandoNoLog = !!ultimoRun && ultimoRun.status === 'running';
         const syncing = emProcesso || rodandoNoLog;
@@ -349,6 +372,7 @@ function createProductAnalyticsRouter({
             startedAt: ultimoRun.started_at,
             finishedAt: ultimoRun.finished_at,
             pagesProcessed: ultimoRun.pages_processed,
+            pagesTotal: ultimoRun.pages_total,
             productsSeen: ultimoRun.products_seen,
             productsInserted: ultimoRun.products_inserted,
             productsUpdated: ultimoRun.products_updated,

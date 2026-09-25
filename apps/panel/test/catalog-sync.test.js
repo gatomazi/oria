@@ -10,7 +10,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
-  runCatalogSync, jobDoSync, contadoresVazios,
+  runCatalogSync, cancelarCatalogSync, jobDoSync, contadoresVazios,
   montarUpsertProdutos, montarUpsertVariantes, montarDesativacao,
 } = require('../lib/product-analytics/catalog-sync');
 const { createConnectorRegistry } = require('../lib/connectors/registry');
@@ -108,7 +108,10 @@ function poolDeControle({ onQuery } = {}) {
         if (r !== undefined) return r;
       }
       if (/INSERT INTO commerce_catalog_sync_logs/.test(text)) return { rows: [] };
-      if (/UPDATE commerce_catalog_sync_logs/.test(text)) return { rows: [] };
+      // Progresso ao vivo (por página) e fechamento final são dois UPDATEs distintos por texto —
+      // ver a nota "cancelado ainda não simulado aqui" nos testes que dependem de rowCount = 1.
+      if (/UPDATE commerce_catalog_sync_logs SET\s+pages_processed/.test(text)) return { rows: [], rowCount: 1 };
+      if (/UPDATE commerce_catalog_sync_logs SET\s+status/.test(text)) return { rows: [], rowCount: 1 };
       if (/INSERT INTO commerce_products/.test(text)) {
         const ids = values[4];
         return { rows: ids.map((pid, i) => { seq += 1; return { id: `cp-${pid}`, provider_product_id: pid, inserted: seq % 2 === 1 }; }) };
@@ -160,7 +163,7 @@ test('D · runCatalogSync: 1 página, upsert de produtos e variantes, log fecha 
   assert.equal(r.productsSeen, 2);
   assert.equal(r.variantsSeen, 2);
   const upsertLog = pool.chamadas.find((c) => /INSERT INTO commerce_catalog_sync_logs/.test(c.text));
-  const fechaLog = pool.chamadas.find((c) => /UPDATE commerce_catalog_sync_logs/.test(c.text));
+  const fechaLog = pool.chamadas.find((c) => /UPDATE commerce_catalog_sync_logs SET\s+status/.test(c.text));
   assert.ok(upsertLog && fechaLog);
   assert.equal(fechaLog.values[2], 'success');
 });
@@ -207,7 +210,7 @@ test('D · runCatalogSync: falha na página 2 deixa a página 1 upsertada e NÃO
   assert.equal(pool.chamadas.filter((c) => /INSERT INTO commerce_products/.test(c.text)).length, 1);
   assert.equal(pool.chamadas.some((c) => /UPDATE commerce_products SET is_active/.test(c.text)), false);
   assert.equal(pool.chamadas.some((c) => /UPDATE commerce_product_variants SET is_active/.test(c.text)), false);
-  const fechaLog = pool.chamadas.find((c) => /UPDATE commerce_catalog_sync_logs/.test(c.text));
+  const fechaLog = pool.chamadas.find((c) => /UPDATE commerce_catalog_sync_logs SET\s+status/.test(c.text));
   assert.equal(fechaLog.values[2], 'partial_failure'); // status
   assert.equal(fechaLog.values[3], 1); // pages_processed
   assert.equal(fechaLog.values[fechaLog.values.length - 1], 'INK_UNAVAILABLE'); // error_code
@@ -217,7 +220,7 @@ test('D · runCatalogSync: falha na PRIMEIRA página fecha o log como failed, n�
   const pool = poolDeControle();
   const registry = registryComPaginas(() => { throw new Error('sem código'); });
   await assert.rejects(runCatalogSync({ pool, registry }, { organizationId: ORG_A, storeId: STORE_A, provider: 'reserva_ink' }));
-  const fechaLog = pool.chamadas.find((c) => /UPDATE commerce_catalog_sync_logs/.test(c.text));
+  const fechaLog = pool.chamadas.find((c) => /UPDATE commerce_catalog_sync_logs SET\s+status/.test(c.text));
   assert.equal(fechaLog.values[2], 'failed');
   assert.equal(fechaLog.values[fechaLog.values.length - 1], 'CATALOG_SYNC_FAILED'); // erro sem .codigo vira o padrão
 });
@@ -290,4 +293,116 @@ test('D · catálogo grande: 40 páginas processadas uma a uma, upsert nunca rec
   assert.equal(r.productsSeen, TOTAL_PAGINAS * POR_PAGINA);
   assert.equal(tamanhosDeLote.length, TOTAL_PAGINAS);
   assert.ok(tamanhosDeLote.every((n) => n === POR_PAGINA), 'nenhum upsert recebeu lote maior que 1 página');
+});
+
+// ── Progresso ao vivo e cancelamento (rodada "Observabilidade e controle do catalog sync") ──────
+
+test('D · runCatalogSync: escreve progresso (páginas, total, contadores) a CADA página, não só no fim', async () => {
+  const pool = poolDeControle();
+  const registry = registryComPaginas([
+    { items: [item(1)], nextCursor: '2', totalPages: 3 },
+    { items: [item(2)], nextCursor: '3', totalPages: 3 },
+    { items: [item(3)], nextCursor: null, totalPages: 3 },
+  ]);
+  await runCatalogSync({ pool, registry }, { organizationId: ORG_A, storeId: STORE_A, provider: 'reserva_ink' });
+  const progressos = pool.chamadas.filter((c) => /UPDATE commerce_catalog_sync_logs SET\s+pages_processed/.test(c.text));
+  assert.equal(progressos.length, 3); // uma escrita por página, não só a última
+  assert.deepEqual(progressos.map((c) => c.values[2]), [1, 2, 3]); // pages_processed sobe a cada chamada
+  assert.deepEqual(progressos.map((c) => c.values[3]), [3, 3, 3]); // pages_total, quando o provider informa
+  assert.equal(progressos[0].values[4], 1); // products_seen já na primeira página, sem esperar o fim
+});
+
+test('D · runCatalogSync: provider sem total_pages deixa pages_total nulo (nunca inventa um número)', async () => {
+  const pool = poolDeControle();
+  const registry = registryComPaginas([{ items: [item(1)], nextCursor: null }]); // sem totalPages
+  await runCatalogSync({ pool, registry }, { organizationId: ORG_A, storeId: STORE_A, provider: 'reserva_ink' });
+  const progresso = pool.chamadas.find((c) => /UPDATE commerce_catalog_sync_logs SET\s+pages_processed/.test(c.text));
+  assert.equal(progresso.values[3], null);
+});
+
+test('D · runCatalogSync: cancelado pela tela no meio do loop para na próxima checagem, sem processar páginas depois disso', async () => {
+  const pool = poolDeControle();
+  let paginasPedidas = 0;
+  const registry = registryComPaginas((chamado) => {
+    paginasPedidas += 1;
+    if (chamado >= 5) return null; // nunca deveria chegar aqui neste teste
+    return { items: [item(chamado)], nextCursor: String(chamado + 2) };
+  });
+  const pool2 = {
+    ...pool,
+    async query(text, values) {
+      // Simula: a partir da 3ª escrita de progresso, a linha já não está mais 'running' (foi
+      // cancelada por outra sessão/admin) — rowCount 0, exatamente o que a UPDATE real devolveria.
+      if (/UPDATE commerce_catalog_sync_logs SET\s+pages_processed/.test(text)) {
+        pool.chamadas.push({ text, values });
+        const numero = pool.chamadas.filter((c) => /UPDATE commerce_catalog_sync_logs SET\s+pages_processed/.test(c.text)).length;
+        return { rows: [], rowCount: numero >= 3 ? 0 : 1 };
+      }
+      return pool.query(text, values);
+    },
+  };
+  const r = await runCatalogSync({ pool: pool2, registry }, { organizationId: ORG_A, storeId: STORE_A, provider: 'reserva_ink' });
+  assert.equal(r.status, 'cancelled');
+  assert.equal(r.pagesProcessed, 3); // parou na página que detectou o cancelamento, não seguiu pedindo mais
+  assert.equal(paginasPedidas, 3);
+  // fecharLog NUNCA roda depois de um cancelamento (não reescreve o que a tela já fechou).
+  assert.equal(pool.chamadas.some((c) => /UPDATE commerce_catalog_sync_logs SET\s+status/.test(c.text)), false);
+});
+
+test('D · runCatalogSync: cancelamento ainda libera o lease no finally, como qualquer outro fim de run', async () => {
+  const pool = poolDeControle();
+  const chamadasLease = [];
+  const leases = {
+    adquirir: async () => true,
+    concluir: async (job, org) => { chamadasLease.push(['concluir', job, org]); return true; },
+  };
+  const pool2 = {
+    async query(text, values) {
+      if (/UPDATE commerce_catalog_sync_logs SET\s+pages_processed/.test(text)) return { rows: [], rowCount: 0 };
+      return pool.query(text, values);
+    },
+  };
+  const registry = registryComPaginas([{ items: [item(1)], nextCursor: null }]);
+  const r = await runCatalogSync({ pool: pool2, registry, leases }, { organizationId: ORG_A, storeId: STORE_A, provider: 'reserva_ink' });
+  assert.equal(r.status, 'cancelled');
+  assert.equal(chamadasLease[0][0], 'concluir');
+});
+
+// ── cancelarCatalogSync (kill switch da tela) ─────────────────────────────────────────────────────
+
+test('D · cancelarCatalogSync: marca a(s) linha(s) running como cancelled e libera o lease, ignorando o dono', async () => {
+  const pool = poolDeControle({
+    onQuery: (text) => {
+      if (/UPDATE commerce_catalog_sync_logs SET status = 'cancelled'/.test(text)) {
+        return { rows: [{ sync_run_id: RUN }] };
+      }
+    },
+  });
+  const chamadasLease = [];
+  const leases = { liberarForcado: async (job, org) => { chamadasLease.push([job, org]); return true; } };
+  const r = await cancelarCatalogSync({ pool, leases }, { organizationId: ORG_A, storeId: STORE_A, provider: 'reserva_ink' });
+  assert.equal(r.status, 'cancelled');
+  assert.deepEqual(r.syncRunIds, [RUN]);
+  assert.equal(r.leaseLiberado, true);
+  assert.deepEqual(chamadasLease[0], ['commerce-catalog-sync:reserva_ink', ORG_A]);
+});
+
+test('D · cancelarCatalogSync: nada rodando é um no-op seguro, nunca um erro', async () => {
+  const pool = poolDeControle({
+    onQuery: (text) => {
+      if (/UPDATE commerce_catalog_sync_logs SET status = 'cancelled'/.test(text)) return { rows: [] };
+    },
+  });
+  const leases = { liberarForcado: async () => false };
+  const r = await cancelarCatalogSync({ pool, leases }, { organizationId: ORG_A, storeId: STORE_A, provider: 'reserva_ink' });
+  assert.equal(r.status, 'nothing_to_cancel');
+  assert.deepEqual(r.syncRunIds, []);
+});
+
+test('D · cancelarCatalogSync exige pool e o alvo completo', async () => {
+  const pool = poolDeControle();
+  await assert.rejects(cancelarCatalogSync({}, { organizationId: ORG_A, storeId: STORE_A, provider: 'x' }), /pool/);
+  await assert.rejects(cancelarCatalogSync({ pool }, { storeId: STORE_A, provider: 'x' }), /organizationId/);
+  await assert.rejects(cancelarCatalogSync({ pool }, { organizationId: ORG_A, provider: 'x' }), /storeId/);
+  await assert.rejects(cancelarCatalogSync({ pool }, { organizationId: ORG_A, storeId: STORE_A }), /provider/);
 });

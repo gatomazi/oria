@@ -35,6 +35,12 @@ const FUNCOES_DA_APLICACAO = Object.freeze([
   // Fase 5c · lease persistente dos jobs (TD-006).
   'job_lease_adquirir(TEXT, UUID, TEXT, INTEGER)',
   'job_lease_concluir(TEXT, UUID, TEXT, INTEGER)',
+  // Rodada "Observabilidade e controle do catalog sync" · libera um lease travado (kill switch da
+  // tela), ignorando o dono — ao contrário de job_lease_concluir. PRODUÇÃO: como este arquivo não é
+  // aplicado por migration (comentário no topo), o GRANT desta função novidade só existe depois que
+  // o operador reaplicar o script OPS-14 — até lá, o endpoint de cancelamento responde
+  // 'insufficient_privilege' em produção mesmo já implantado.
+  'job_lease_liberar_forcado(TEXT, UUID)',
   // Fase 7 · onboarding: reserva da chave de idempotência e convite do primeiro owner. A criação de
   // Organization continua atrás de SECOND_TENANT_ENABLED no serviço (lib/platform/onboarding.js).
   'onboarding_reservar_organizacao(UUID, TEXT, TEXT)',
