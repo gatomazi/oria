@@ -201,13 +201,16 @@ async function abrirLog(pool, { organizationId, storeId, provider, syncRunId }) 
 }
 
 async function fecharLog(pool, { organizationId, syncRunId }, { status, pagesProcessed, contadores, errorCode = null }) {
+  // `AND status = 'running'`: nunca reabre por cima de uma linha que um cancelamento (tela) já
+  // fechou como 'cancelled' — o run original, se ainda estiver vivo, chega aqui DEPOIS e não deve
+  // reescrever o resultado que a pessoa já viu.
   await pool.query(
     `UPDATE commerce_catalog_sync_logs SET
        status = $3, finished_at = now(), pages_processed = $4,
        products_seen = $5, products_inserted = $6, products_updated = $7, products_deactivated = $8,
        variants_seen = $9, variants_inserted = $10, variants_updated = $11, variants_deactivated = $12,
        error_code = $13
-     WHERE organization_id = $1 AND sync_run_id = $2`,
+     WHERE organization_id = $1 AND sync_run_id = $2 AND status = 'running'`,
     [
       organizationId, syncRunId, status, pagesProcessed,
       contadores.productsSeen, contadores.productsInserted, contadores.productsUpdated, contadores.productsDeactivated,
@@ -215,6 +218,56 @@ async function fecharLog(pool, { organizationId, syncRunId }, { status, pagesPro
       errorCode,
     ]
   );
+}
+
+// Progresso ao vivo (observabilidade — achado real de dogfooding, Use Sul 2026-09-24: um catálogo
+// grande contra a API real pode levar dezenas de minutos, e até agora `pages_processed`/
+// `products_seen` só existiam depois que o run inteiro terminava). Chamado a cada página — nunca
+// toca `products_deactivated`/`variants_deactivated` (só fazem sentido depois que TODAS as páginas
+// terminaram) nem `status`/`finished_at`/`error_code` (isso é `fecharLog`).
+//
+// Devolve `cancelado: true` quando a linha NÃO estava mais 'running' (alguém cancelou pela tela
+// enquanto este run seguia rodando) — é o sinal cooperativo que o loop principal usa pra parar sem
+// esperar a página inteira seguinte terminar, sem sobrescrever o 'cancelled' que a tela já gravou.
+async function atualizarProgresso(pool, { organizationId, syncRunId }, { pages, pagesTotal, contadores }) {
+  const { rowCount } = await pool.query(
+    `UPDATE commerce_catalog_sync_logs SET
+       pages_processed = $3, pages_total = $4,
+       products_seen = $5, products_inserted = $6, products_updated = $7,
+       variants_seen = $8, variants_inserted = $9, variants_updated = $10
+     WHERE organization_id = $1 AND sync_run_id = $2 AND status = 'running'`,
+    [
+      organizationId, syncRunId, pages, pagesTotal ?? null,
+      contadores.productsSeen, contadores.productsInserted, contadores.productsUpdated,
+      contadores.variantsSeen, contadores.variantsInserted, contadores.variantsUpdated,
+    ]
+  );
+  return { cancelado: rowCount === 0 };
+}
+
+// Kill switch (tela) · libera um sync travado sem precisar esperar o TTL do lease nem mexer no
+// banco na mão. Marca a(s) linha(s) 'running' desta Organization+Store+provider como 'cancelled' —
+// mais de uma só existe se runs anteriores já ficaram órfãos (processo caiu sem fechar o log); todas
+// são fechadas juntas, nunca só a mais recente. NUNCA mata o processo Node que ainda estiver vivo —
+// só libera a trava (lease) e marca a linha; um processo genuinamente vivo nota o cancelamento no
+// próprio próximo `atualizarProgresso` (cooperativo) e para sozinho, ou — se estiver preso numa
+// chamada de rede sem checar entre páginas — eventualmente termina e a atualização final dele vira
+// no-op (fecharLog também exige `status = 'running'`).
+async function cancelarCatalogSync({ pool, leases }, { organizationId, storeId, provider }) {
+  if (!pool) throw new Error('cancelarCatalogSync exige pool');
+  if (!organizationId || !storeId || !provider) throw new Error('cancelarCatalogSync exige organizationId, storeId e provider');
+  const { rows } = await pool.query(
+    `UPDATE commerce_catalog_sync_logs SET status = 'cancelled', finished_at = now(), error_code = 'CANCELLED_BY_ADMIN'
+      WHERE organization_id = $1 AND store_id = $2 AND provider = $3 AND status = 'running'
+      RETURNING sync_run_id`,
+    [organizationId, storeId, provider]
+  );
+  const leaseLiberado = leases ? await leases.liberarForcado(jobDoSync(provider), organizationId) : false;
+  return {
+    status: rows.length ? 'cancelled' : 'nothing_to_cancel',
+    syncRunIds: rows.map((r) => r.sync_run_id),
+    leaseLiberado,
+  };
 }
 
 /**
@@ -252,13 +305,21 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
     resolvido.require('productsWithVariants');
 
     let cursor = null;
+    let pagesTotal = null;
     do {
       if (pages >= MAX_PAGINAS) throw Object.assign(new Error('paginação do catalog sync não terminou'), { codigo: 'CATALOG_SYNC_PAGINATION_RUNAWAY' });
       // eslint-disable-next-line no-await-in-loop
       const pagina = await resolvido.connector.listProductsWithVariants({ cursor, limit: 100 });
       pages += 1;
+      if (Number.isInteger(pagina.totalPages) && pagina.totalPages > 0) pagesTotal = pagina.totalPages;
       // eslint-disable-next-line no-await-in-loop
       contadores = somar(contadores, await upsertPagina(pool, ctx, pagina.items));
+      // eslint-disable-next-line no-await-in-loop
+      const { cancelado } = await atualizarProgresso(pool, ctx, { pages, pagesTotal, contadores });
+      if (cancelado) {
+        logger.warn(`[CATALOG_SYNC] ${provider}: cancelado pela tela na página ${pages} — parando sem fechar o log de novo`);
+        return { status: 'cancelled', syncRunId, pagesProcessed: pages, ...contadores };
+      }
       cursor = pagina.nextCursor;
     } while (cursor);
 
@@ -287,6 +348,6 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
 }
 
 module.exports = {
-  runCatalogSync, jobDoSync, contadoresVazios,
+  runCatalogSync, cancelarCatalogSync, jobDoSync, contadoresVazios,
   montarUpsertProdutos, montarUpsertVariantes, montarDesativacao,
 };

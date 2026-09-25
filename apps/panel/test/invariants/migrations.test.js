@@ -114,7 +114,11 @@ test('migrations · do zero, num banco vazio, aplicam todas na ordem', async (t)
       '1790002400000_creative-enrichment',
       '1790002500000_creative-enrichment-provider-meta',
       '1790002600000_creative-enrichment-pilot-budget',
-      '1790002700000_segments-rfm', // Clientes/RFM (renumerada na integração com a main: depois das migrations do Gerador de Criativos)
+      // Rodada "Observabilidade e controle do catalog sync" · mesma colisão de timestamp
+      // que o Gerador de Criativos já teve (comentário acima) — as duas branches escolheram
+      // 1790001900000 independentemente; renumerada pra depois de tudo que já estava em main.
+      '1790002700000_catalog-sync-observabilidade',
+      '1790002800000_segments-rfm', // Clientes/RFM (renumerada na integração: depois das migrations do Gerador de Criativos e do catalog sync)
     ]);
     assert.ok((await tabelas(pool)).includes('integration_secrets'));
   } finally { await pool.end(); }

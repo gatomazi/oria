@@ -505,6 +505,78 @@ test('M · POST /catalog-sync: 2ª chamada em voo com a 1ª ainda rodando → al
   });
 });
 
+// ── Kill switch: POST /catalog-sync/cancelar (rodada "Observabilidade e controle do catalog sync") ─
+
+test('M · POST /catalog-sync/cancelar: sem sessão → 401', async () => {
+  const nav = navegador();
+  const r = await nav.req('POST', '/api/admin/product-analytics/catalog-sync/cancelar');
+  assert.equal(r.status, 401);
+});
+
+test('M · POST /catalog-sync/cancelar: autenticado sem X-CSRF-Token → 403 codigo csrf (mesma proteção de qualquer escrita)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  nav.csrf = null;
+  const r = await nav.req('POST', '/api/admin/product-analytics/catalog-sync/cancelar');
+  assert.equal(r.status, 403);
+  assert.equal(r.json.codigo, 'csrf');
+});
+
+test('M · POST /catalog-sync/cancelar: nada rodando → nothing_to_cancel, nunca erro (idempotente, seguro de clicar à toa)', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const r = await nav.req('POST', '/api/admin/product-analytics/catalog-sync/cancelar');
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.status, 'nothing_to_cancel');
+  assert.deepEqual(r.json.syncRunIds, []);
+});
+
+test('M · POST /catalog-sync/cancelar: libera um lease travado de verdade — a linha vira cancelled e um sync novo consegue começar na hora, sem esperar o TTL', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const RUN_ORFAO = crypto.randomUUID();
+
+  // Simula exatamente o incidente real de dogfooding: uma linha 'running' cujo processo já não
+  // existe mais, com o lease ainda de pé (não usamos runCatalogSync aqui de propósito — a intenção é
+  // testar o cancelamento contra um estado JÁ travado, não contra um sync que ainda vai terminar).
+  await sup.query(
+    `INSERT INTO commerce_catalog_sync_logs (organization_id, store_id, provider, sync_run_id, status)
+     VALUES ($1, $2, 'reserva_ink', $3, 'running')`,
+    [ORG_A, stores[ORG_A], RUN_ORFAO]
+  );
+  const { rows: [{ ok: leaseAdquirido }] } = await sup.query(
+    `SELECT job_lease_adquirir('commerce-catalog-sync:reserva_ink', $1, 'processo-morto-no-teste', 3 * 60 * 60 * 1000) AS ok`,
+    [ORG_A]
+  );
+  assert.equal(leaseAdquirido, true);
+
+  // Confirma que, sem cancelar, o lease realmente bloquearia um sync novo (prova que o cenário é
+  // igual ao real, não um teste que passaria de qualquer jeito).
+  const { rows: [{ ok: bloqueadoAntes }] } = await sup.query(
+    `SELECT job_lease_adquirir('commerce-catalog-sync:reserva_ink', $1, 'segunda-tentativa', 60000) AS ok`, [ORG_A]
+  );
+  assert.equal(bloqueadoAntes, false);
+
+  const cancelamento = await nav.req('POST', '/api/admin/product-analytics/catalog-sync/cancelar');
+  assert.equal(cancelamento.status, 200, cancelamento.texto);
+  assert.equal(cancelamento.json.status, 'cancelled');
+  assert.deepEqual(cancelamento.json.syncRunIds, [RUN_ORFAO]);
+  assert.equal(cancelamento.json.leaseLiberado, true);
+
+  const status = await nav.req('GET', '/api/admin/product-analytics/catalog-sync/status');
+  assert.equal(status.json.lastRun.status, 'cancelled');
+  assert.equal(status.json.syncing, false); // 'cancelled' nunca conta como rodando
+
+  // A prova real: um sync disparado AGORA consegue lease (não fica 'locked' escondido atrás do
+  // fire-and-forget) — fecha rápido com INTEGRATION_NOT_CONNECTED (Ink não conectada nesta
+  // Organization), igual ao teste de disparo normal, provando que é um run genuinamente novo.
+  const disparo = await nav.req('POST', '/api/admin/product-analytics/catalog-sync');
+  assert.equal(disparo.status, 200, disparo.texto);
+  const novoStatus = await esperar(async () => {
+    const r = await nav.req('GET', '/api/admin/product-analytics/catalog-sync/status');
+    return r.json.lastRun && r.json.lastRun.status !== 'running' ? r.json : null;
+  });
+  assert.notEqual(novoStatus.lastRun.startedAt, status.json.lastRun.startedAt); // é outra linha
+  assert.equal(novoStatus.lastRun.errorCode, 'INTEGRATION_NOT_CONNECTED');
+});
+
 // ── Reconciliação ──────────────────────────────────────────────────────────────────────────────
 
 test('H · reconciliação com período anterior a 19/08/2026: insufficient_data, sem tentar comparar', async () => {
