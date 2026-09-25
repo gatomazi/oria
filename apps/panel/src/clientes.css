@@ -245,3 +245,55 @@
   .cli-kpi-nota { font-size: 11px; line-height: 15px; }
   .cli-filtros { padding: var(--space-3); }
 }
+
+/* ── Distribuição RFM · visão "Visual" (treemap + legenda) ───────────────────────────────────────── */
+.rfmv { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.rfmv-mapa { position: relative; width: 100%; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-1); }
+.rfmv-vazio { margin: 0; padding: var(--space-4); color: var(--text-secondary); font: var(--type-body-dense); }
+.rfmv-bloco { position: absolute; box-sizing: border-box; padding: 1px; cursor: pointer; }
+.rfmv-bloco__interno {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; height: 100%; box-sizing: border-box; padding: 6px 8px; overflow: hidden;
+  border-radius: var(--radius-xs); border: 1px solid color-mix(in srgb, var(--rfmx-cor) 70%, transparent);
+  background: color-mix(in srgb, var(--rfmx-cor) calc((0.16 + var(--rfmx-opac) * 0.9) * 100%), var(--surface-1));
+  transition: filter 120ms ease;
+}
+.rfmv-bloco:hover .rfmv-bloco__interno { filter: brightness(1.18); }
+.rfmv-bloco.is-selecionado { z-index: 2; }
+.rfmv-bloco.is-selecionado .rfmv-bloco__interno { outline: 2px solid var(--text-primary); outline-offset: -2px; }
+.rfmv-bloco--valor .rfmv-bloco__interno { padding: 2px 4px; align-items: center; justify-content: center; }
+.rfmv-bloco--marcador .rfmv-bloco__interno { padding: 0; }
+.rfmv-bloco__check { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--text-primary); color: var(--bg-app); flex: none; }
+.rfmv-bloco__nome { font: 600 13px/17px var(--font-sans); color: var(--text-primary); overflow-wrap: anywhere; }
+.rfmv-bloco__valor { font: 600 15px/20px var(--font-sans); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.rfmv-bloco--valor .rfmv-bloco__valor { font-size: 12px; line-height: 16px; }
+.rfmv-bloco__pct { font: var(--type-caption); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.rfmv-nota { margin: 0; font: var(--type-caption); color: var(--text-muted); }
+.rfmv-nota strong { color: var(--text-secondary); font-weight: 600; }
+
+.rfmv-legenda { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4) var(--space-5); }
+.rfmv-grupo { min-width: 0; }
+.rfmv-legenda__lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rfmv-chip {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); width: 100%; min-height: 44px; padding: 6px var(--space-3);
+  border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: inherit; text-align: left; cursor: pointer;
+}
+.rfmv-chip:hover { background: var(--surface-2); }
+.rfmv-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rfmv-chip.is-selecionada { background: var(--surface-2); border-color: var(--text-secondary); }
+.rfmv-chip__cor {
+  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: var(--radius-xs); color: var(--bg-app);
+  background: color-mix(in srgb, var(--rfmx-cor) calc((0.45 + var(--rfmx-opac)) * 100%), transparent); border: 1px solid color-mix(in srgb, var(--rfmx-cor) 80%, transparent);
+}
+.rfmv-chip.is-selecionada .rfmv-chip__cor { background: var(--text-primary); border-color: var(--text-primary); }
+.rfmv-chip__texto { display: flex; flex-direction: column; min-width: 0; }
+.rfmv-chip__nome { font: 600 14px/20px var(--font-sans); color: var(--text-primary); overflow-wrap: anywhere; }
+.rfmv-chip__sub { font: var(--type-caption); color: var(--text-muted); overflow-wrap: anywhere; }
+.rfmv-chip.is-vazia .rfmv-chip__nome { color: var(--text-secondary); }
+.rfmv-chip__valor { font: var(--type-body-dense); color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rfmv-chip__valor strong { font: 600 15px/20px var(--font-sans); color: var(--text-primary); }
+@media (max-width: 720px) { .rfmv-legenda { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .rfmv-bloco__interno { transition: none; } }
+
+.rfmv-bloco.is-destaque { z-index: 3; }
+.rfmv-bloco.is-destaque .rfmv-bloco__interno { outline: 2px dashed var(--text-primary); outline-offset: -2px; filter: brightness(1.25); }
+.rfmv-chip.is-destaque:not(.is-selecionada) { background: var(--surface-2); }
