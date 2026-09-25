@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Button, Callout, DataTable, EmptyState, ErrorState, Icon, Input, KpiCard, KpiStrip, PageHeader, PageStack, Pagination, Skeleton, StatusBadge, Tabs, Toolbar, type TableSort,
+  Button, Callout, Checkbox, DataTable, EmptyState, ErrorState, Field, Icon, Input, KpiCard, KpiStrip, PageHeader, PageStack, Pagination, Select, Skeleton, StatusBadge, Tabs, Toolbar, type TableSort,
 } from '../../components/ds';
 import { formatValor, plural } from '../../lib/format';
 import {
   getProductAnalyticsStatus, getProductAnalyticsSummary, listProductAnalytics,
   syncCommerceCatalog, getCommerceCatalogSyncStatus,
-  type ProductAnalyticsItem, type ProductAnalyticsListResponse, type ProductAnalyticsSortField, type ProductAnalyticsStatus, type ProductAnalyticsSummary,
+  type ProductAnalyticsFiltros, type ProductAnalyticsItem, type ProductAnalyticsListResponse, type ProductAnalyticsSortField,
+  type ProductAnalyticsStatus, type ProductAnalyticsStatusFiltro, type ProductAnalyticsSummary,
   type CommerceCatalogSyncStatus,
 } from '../../api/productAnalytics';
 import { ProdutoPerformanceDrawer } from './ProdutoPerformanceDrawer';
@@ -29,9 +30,58 @@ const LIMIT = 20;
 // elegível aos produtos com identity JÁ resolvida no namespace de analytics (design deliberado da
 // Fase G.1 — não dá pra rankear o que nunca foi observado). Como PADRÃO da tela isso escondia o
 // resto do catálogo sem aviso nenhum (piloto real: 3 produtos no catálogo, só 1 com atividade GA4 →
-// a tabela mostrava "1 produto" por padrão, parecendo um catálogo vazio/quebrado). Padrão agora é
-// um campo de CATÁLOGO (mostra a Store inteira); ordenar por métrica continua disponível a 1 clique.
-const SORT_INICIAL: TableSort = { key: 'name', direction: 'asc' };
+// a tabela mostrava "1 produto" por padrão, parecendo um catálogo vazio/quebrado).
+//
+// Rodada "mais dados primeiro + filtros": o padrão agora é `data` — quem tem dado observado no período
+// vem primeiro (mais volume antes) e o RESTO do catálogo vem logo depois, por nome. Ranqueia sem
+// esconder ninguém, que é o que a Rodada J pedia. Clicar numa coluna ordena por ela; o botão "Mais dados
+// primeiro" volta ao padrão.
+const SORT_INICIAL: TableSort = { key: 'data', direction: 'desc' };
+
+// Filtros (o que o lojista digita fica em texto; só vira número na hora de pedir). Mínimos são ">="
+// sobre as contagens de item do período — 0 ou vazio = sem filtro. Regra única no servidor
+// (lib/product-analytics/performance-filters.js).
+interface FiltrosUI {
+  status: ProductAnalyticsStatusFiltro;
+  minViewed: string;
+  minAddedToCart: string;
+  minCheckedOut: string;
+  minPurchased: string;
+  minRevenue: string;
+  hasData: boolean;
+}
+const FILTROS_VAZIOS: FiltrosUI = { status: 'active', minViewed: '', minAddedToCart: '', minCheckedOut: '', minPurchased: '', minRevenue: '', hasData: false };
+const CAMPOS_MINIMO = [
+  { chave: 'minViewed', label: 'Visualizados (mín.)' },
+  { chave: 'minAddedToCart', label: 'No carrinho (mín.)' },
+  { chave: 'minCheckedOut', label: 'Em checkout (mín.)' },
+  { chave: 'minPurchased', label: 'Comprados (mín.)' },
+  { chave: 'minRevenue', label: 'Receita GA4 (mín., R$)' },
+] as const;
+const DEBOUNCE_FILTROS_MS = 400;
+
+function numeroPositivo(texto: string): number | undefined {
+  if (!texto.trim()) return undefined;
+  const n = Number(texto.replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function paraFiltros(f: FiltrosUI): ProductAnalyticsFiltros {
+  return {
+    status: f.status,
+    minViewed: numeroPositivo(f.minViewed),
+    minAddedToCart: numeroPositivo(f.minAddedToCart),
+    minCheckedOut: numeroPositivo(f.minCheckedOut),
+    minPurchased: numeroPositivo(f.minPurchased),
+    minRevenue: numeroPositivo(f.minRevenue),
+    hasData: f.hasData,
+  };
+}
+
+// Comparação por valor efetivo (o que de fato vai pro servidor), não por texto digitado: "05" e "5",
+// ou "0" e vazio, são o mesmo filtro e não devem refazer a consulta.
+const chaveDosFiltros = (f: FiltrosUI) => JSON.stringify(paraFiltros(f));
+const temFiltroAtivo = (f: FiltrosUI) => chaveDosFiltros(f) !== chaveDosFiltros(FILTROS_VAZIOS);
 
 type Periodo = { startDate: string; endDate: string };
 
@@ -165,24 +215,74 @@ function CatalogoVazio({ onSincronizado }: { onSincronizado: () => void }) {
   );
 }
 
+// Barra de filtros da tabela. Fica SEMPRE montada (mesmo carregando ou sem resultado) — se sumisse a
+// cada consulta, o campo que a pessoa está digitando perderia o foco. Situação e "somente com dados"
+// valem na hora; os mínimos esperam a pessoa parar de digitar (debounce em VisaoGeral).
+function FiltrosDaTabela({ filtros, onChange, onLimpar, ativo }: {
+  filtros: FiltrosUI; onChange: (proximo: FiltrosUI) => void; onLimpar: () => void; ativo: boolean;
+}) {
+  return (
+    <section className="pa-filtros" aria-label="Filtros da tabela de produtos">
+      <Field label="Situação do produto">
+        <Select value={filtros.status} onChange={(e) => onChange({ ...filtros, status: e.target.value as ProductAnalyticsStatusFiltro })}>
+          <option value="active">Ativos</option>
+          <option value="inactive">Desativados</option>
+          <option value="all">Todos</option>
+        </Select>
+      </Field>
+      {CAMPOS_MINIMO.map(({ chave, label }) => (
+        <Field key={chave} label={label}>
+          <Input
+            type="number"
+            min={0}
+            step={chave === 'minRevenue' ? 'any' : 1}
+            inputMode={chave === 'minRevenue' ? 'decimal' : 'numeric'}
+            placeholder="0"
+            value={filtros[chave]}
+            onChange={(e) => onChange({ ...filtros, [chave]: e.target.value })}
+          />
+        </Field>
+      ))}
+      <div className="pa-filtros__acoes">
+        <Checkbox
+          label="Somente com dados"
+          description="Esconde produtos sem nenhum evento no período"
+          checked={filtros.hasData}
+          onChange={(e) => onChange({ ...filtros, hasData: e.target.checked })}
+        />
+        {ativo && <Button variant="ghost" size="sm" onClick={onLimpar}>Limpar filtros</Button>}
+      </div>
+    </section>
+  );
+}
+
 function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProduto: (id: string) => void }) {
   const [sort, setSort] = useState<TableSort>(SORT_INICIAL);
   const [page, setPage] = useState(1);
+  const [filtros, setFiltros] = useState<FiltrosUI>(FILTROS_VAZIOS);
+  const [aplicados, setAplicados] = useState<FiltrosUI>(FILTROS_VAZIOS);
   const [data, setData] = useState<ProductAnalyticsListResponse | null>(null);
+  const [carregando, setCarregando] = useState(true);
   const [resumo, setResumo] = useState<ProductAnalyticsSummary | null>(null);
   const [erro, setErro] = useState('');
   const [erroResumo, setErroResumo] = useState('');
+  // Só a resposta da consulta MAIS RECENTE vale: digitar rápido ou trocar de página dispara várias, e
+  // uma resposta antiga que chega atrasada não pode sobrescrever a atual.
+  const requisicao = useRef(0);
 
   function carregar() {
+    const id = ++requisicao.current;
     setErro('');
-    setData(null);
+    setCarregando(true);
     listProductAnalytics({
       startDate: periodo.startDate, endDate: periodo.endDate, limit: LIMIT,
       cursor: page > 1 ? String(page) : undefined,
       sort: sort.key as ProductAnalyticsSortField, sortDir: sort.direction,
+      ...paraFiltros(aplicados),
     })
-      .then(setData)
-      .catch((err: Error) => setErro(err.message));
+      .then((r) => { if (id === requisicao.current) setData(r); })
+      .catch((err: Error) => { if (id === requisicao.current) setErro(err.message); })
+      .finally(() => { if (id === requisicao.current) setCarregando(false); });
   }
 
   function carregarResumo() {
@@ -191,8 +291,18 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
     getProductAnalyticsSummary(periodo).then(setResumo).catch((err: Error) => setErroResumo(err.message));
   }
 
+  // Espera a pessoa parar de digitar antes de consultar, e volta pra página 1 quando o filtro muda.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setAplicados(filtros);
+      setPage(1);
+    }, DEBOUNCE_FILTROS_MS);
+    return () => clearTimeout(t);
+  }, [filtros]);
+
+  const chaveAplicada = chaveDosFiltros(aplicados);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(carregar, [periodo.startDate, periodo.endDate, sort.key, sort.direction, page]);
+  useEffect(carregar, [periodo.startDate, periodo.endDate, sort.key, sort.direction, page, chaveAplicada]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(carregarResumo, [periodo.startDate, periodo.endDate]);
 
@@ -201,10 +311,14 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
     setPage(1);
   }
 
-  if (erro) return <ErrorState description={erro} onRetry={carregar} />;
-  if (!data) return <Skeleton variant="table" rows={6} />;
+  function limparFiltros() {
+    setFiltros(FILTROS_VAZIOS);
+    setAplicados(FILTROS_VAZIOS);
+    setPage(1);
+  }
 
-  const totalPages = Math.max(1, Math.ceil(data.totalCount / LIMIT));
+  const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / LIMIT)) : 1;
+  const filtroAtivo = temFiltroAtivo(aplicados);
 
   return (
     <div className="ds-stack">
@@ -212,26 +326,52 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
       {!erroResumo && !resumo && <Skeleton rows={2} />}
       {!erroResumo && resumo && <CartoesDeTotais resumo={resumo} />}
 
-      <KpiStrip label="Cobertura de identidade no período">
-        <KpiCard title="Produtos no catálogo" value={data.totalCount} helper="Total da Store, com o filtro atual" />
-        <KpiCard title="Ids observados pelo GA4" value={data.coverage.observedAnalyticsIds} helper="itemId distintos no período (produto, variante ou SKU)" />
-        <KpiCard
-          title="Identidade resolvida"
-          value={data.coverage.status === 'insufficient_data' ? '—' : `${data.coverage.matchedAnalyticsIds}/${data.coverage.observedAnalyticsIds}`}
-          helper={data.coverage.coverageRate != null ? `${Math.round(data.coverage.coverageRate * 100)}% de cobertura` : 'Sem dado suficiente no período'}
-        />
-      </KpiStrip>
+      {data && (
+        <KpiStrip label="Cobertura de identidade no período">
+          <KpiCard title="Produtos na tabela" value={data.totalCount} helper={filtroAtivo ? 'Com os filtros aplicados' : 'Total da Store, com o filtro atual'} />
+          <KpiCard title="Ids observados pelo GA4" value={data.coverage.observedAnalyticsIds} helper="itemId distintos no período (produto, variante ou SKU)" />
+          <KpiCard
+            title="Identidade resolvida"
+            value={data.coverage.status === 'insufficient_data' ? '—' : `${data.coverage.matchedAnalyticsIds}/${data.coverage.observedAnalyticsIds}`}
+            helper={data.coverage.coverageRate != null ? `${Math.round(data.coverage.coverageRate * 100)}% de cobertura` : 'Sem dado suficiente no período'}
+          />
+        </KpiStrip>
+      )}
 
-      {data.coverage.status === 'insufficient_data' && (
+      {data && data.coverage.status === 'insufficient_data' && (
         <Callout tone="info" title="Sem dados de analytics neste período">
           Nenhum evento foi observado pelo GA4 entre {periodo.startDate} e {periodo.endDate}. Isso não significa zero vendas — pode ser um período sem dado coletado ainda.
         </Callout>
       )}
 
-      {data.items.length === 0 ? (
-        <CatalogoVazio onSincronizado={carregar} />
+      <FiltrosDaTabela filtros={filtros} onChange={setFiltros} onLimpar={limparFiltros} ativo={temFiltroAtivo(filtros)} />
+
+      <div className="pa-ordem">
+        {sort.key === 'data' ? (
+          <span className="ds-note">
+            Mais dados primeiro: ordenado por visualizações + carrinho + checkout + compras no período. Produtos sem dado vêm depois, por nome. Clique numa coluna para ordenar por ela.
+          </span>
+        ) : (
+          <Button variant="ghost" size="sm" onClick={() => onSortChange(SORT_INICIAL)}>Voltar para “mais dados primeiro”</Button>
+        )}
+      </div>
+
+      {erro ? (
+        <ErrorState description={erro} onRetry={carregar} />
+      ) : !data ? (
+        <Skeleton variant="table" rows={6} />
+      ) : data.items.length === 0 ? (
+        filtroAtivo ? (
+          <EmptyState
+            title="Nenhum produto com esses filtros"
+            description="Nenhum produto atende a todos os filtros neste período. Afrouxe um mínimo ou troque a situação para ver mais."
+            action={<Button variant="secondary" size="sm" onClick={limparFiltros}>Limpar filtros</Button>}
+          />
+        ) : (
+          <CatalogoVazio onSincronizado={carregar} />
+        )
       ) : (
-        <>
+        <div className={carregando ? 'pa-tabela pa-tabela--carregando' : 'pa-tabela'} aria-busy={carregando}>
           <DataTable
             label="Desempenho de produtos"
             rows={data.items}
@@ -241,16 +381,24 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
             onSortChange={onSortChange}
             columns={[
               { key: 'img', priority: 'low', label: 'Foto', hideLabel: true, width: 48, render: (it) => <Thumb item={it} /> },
-              { key: 'name', label: 'Produto', truncate: true, width: 240, render: (it) => it.product.name },
-              { key: 'provider', label: 'Origem', priority: 'low', muted: true, truncate: true, render: (it) => `${it.product.provider} · ${it.product.providerProductId}` },
-              { key: 'itemsViewed', label: 'Visualizados', align: 'right', firstSortDirection: 'desc', render: (it) => it.metrics?.itemsViewed ?? '—' },
-              { key: 'itemsAddedToCart', label: 'No carrinho', align: 'right', firstSortDirection: 'desc', priority: 'low', render: (it) => it.metrics?.itemsAddedToCart ?? '—' },
-              { key: 'itemsCheckedOut', label: 'Em checkout', align: 'right', firstSortDirection: 'desc', priority: 'low', render: (it) => it.metrics?.itemsCheckedOut ?? '—' },
-              { key: 'itemsPurchased', label: 'Comprados (obs.)', align: 'right', firstSortDirection: 'desc', render: (it) => it.metrics?.itemsPurchased ?? '—' },
-              { key: 'itemRevenue', label: 'Receita GA4', align: 'right', firstSortDirection: 'desc', render: (it) => (it.metrics?.itemRevenue != null ? formatValor(it.metrics.itemRevenue) : '—') },
+              { key: 'name', label: 'Produto', truncate: true, width: 240, render: (it) => it.product.name, sortValue: (it) => it.product.name },
+              {
+                key: 'provider', label: 'Origem', priority: 'low', muted: true, truncate: true,
+                render: (it) => (
+                  <>
+                    {`${it.product.provider} · ${it.product.providerProductId}`}
+                    {it.product.isActive === false && <> <StatusBadge tone="neutral" label="Desativado" /></>}
+                  </>
+                ),
+              },
+              { key: 'itemsViewed', label: 'Visualizados', align: 'right', firstSortDirection: 'desc', render: (it) => it.metrics?.itemsViewed ?? '—', sortValue: (it) => it.metrics?.itemsViewed },
+              { key: 'itemsAddedToCart', label: 'No carrinho', align: 'right', firstSortDirection: 'desc', priority: 'low', render: (it) => it.metrics?.itemsAddedToCart ?? '—', sortValue: (it) => it.metrics?.itemsAddedToCart },
+              { key: 'itemsCheckedOut', label: 'Em checkout', align: 'right', firstSortDirection: 'desc', priority: 'low', render: (it) => it.metrics?.itemsCheckedOut ?? '—', sortValue: (it) => it.metrics?.itemsCheckedOut },
+              { key: 'itemsPurchased', label: 'Comprados (obs.)', align: 'right', firstSortDirection: 'desc', render: (it) => it.metrics?.itemsPurchased ?? '—', sortValue: (it) => it.metrics?.itemsPurchased },
+              { key: 'itemRevenue', label: 'Receita GA4', align: 'right', firstSortDirection: 'desc', render: (it) => (it.metrics?.itemRevenue != null ? formatValor(it.metrics.itemRevenue) : '—'), sortValue: (it) => it.metrics?.itemRevenue },
               {
                 key: 'itemsPurchasedPerItemViewed', label: 'Compra/visualização', align: 'right', priority: 'low', firstSortDirection: 'desc',
-                render: (it) => formatarRazao(it.itemRatios.itemsPurchasedPerItemViewed),
+                render: (it) => formatarRazao(it.itemRatios.itemsPurchasedPerItemViewed), sortValue: (it) => it.itemRatios.itemsPurchasedPerItemViewed,
               },
               {
                 key: 'diagnostico', label: 'Qualidade do dado', priority: 'low',
@@ -268,7 +416,7 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
             onPrev={() => setPage((p) => Math.max(1, p - 1))}
             onNext={() => data.nextCursor && setPage((p) => p + 1)}
           />
-        </>
+        </div>
       )}
     </div>
   );

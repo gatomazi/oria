@@ -14,6 +14,9 @@ export interface ProductAnalyticsProduct {
   productType: string | null;
   provider: string;
   providerProductId: string;
+  // false = o full sync do catálogo marcou o produto como fora da Ink. Opcional: respostas de
+  // detalhe/oportunidades antigas não trazem.
+  isActive?: boolean;
 }
 
 export interface ProductAnalyticsMetrics {
@@ -62,13 +65,30 @@ export interface ProductAnalyticsListResponse {
 }
 
 export const SORT_FIELDS = [
+  // 'data' = "mais dados primeiro" (visualizações + carrinho + checkout + compras; quem não tem dado
+  // vem depois, por nome — o catálogo nunca some). Padrão da tela.
+  'data',
   'name', 'price', 'created_at', 'updated_at',
   'itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue',
   'itemsAddedToCartPerItemViewed', 'itemsCheckedOutPerItemViewed', 'itemsCheckedOutPerItemAddedToCart', 'itemsPurchasedPerItemViewed',
 ] as const;
 export type ProductAnalyticsSortField = (typeof SORT_FIELDS)[number];
 
-export interface ProductAnalyticsQuery {
+// Filtros da listagem (rodada "Desempenho de Produtos: mais dados primeiro + filtros"). Mínimos são
+// ">=" sobre as contagens de item do período; ausente ou 0 = sem filtro.
+export type ProductAnalyticsStatusFiltro = 'active' | 'inactive' | 'all';
+
+export interface ProductAnalyticsFiltros {
+  status?: ProductAnalyticsStatusFiltro;
+  minViewed?: number;
+  minAddedToCart?: number;
+  minCheckedOut?: number;
+  minPurchased?: number;
+  minRevenue?: number;
+  hasData?: boolean;
+}
+
+export interface ProductAnalyticsQuery extends ProductAnalyticsFiltros {
   startDate: string;
   endDate: string;
   cursor?: string | null;
@@ -92,6 +112,12 @@ export function listProductAnalytics(q: ProductAnalyticsQuery): Promise<ProductA
   if (q.sort) params.set('sort', q.sort);
   if (q.sortDir) params.set('sortDir', q.sortDir);
   if (q.provider) params.set('provider', q.provider);
+  if (q.status && q.status !== 'active') params.set('status', q.status);
+  for (const chave of ['minViewed', 'minAddedToCart', 'minCheckedOut', 'minPurchased', 'minRevenue'] as const) {
+    const valor = q[chave];
+    if (valor != null && valor > 0) params.set(chave, String(valor));
+  }
+  if (q.hasData) params.set('hasData', 'true');
   return api<ProductAnalyticsListResponse>(`/api/admin/product-analytics/products?${params.toString()}`);
 }
 

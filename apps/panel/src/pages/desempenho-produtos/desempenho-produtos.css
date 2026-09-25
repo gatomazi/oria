@@ -90,3 +90,35 @@
     flex: 1 1 45%;
   }
 }
+
+/* Rodada "mais dados primeiro + filtros" — barra de filtros da tabela. Grade que quebra sozinha
+   (2 colunas no celular, mais no desktop), só tokens do design system. */
+.pa-filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3, 12px);
+  align-items: end;
+  padding: var(--space-3, 12px);
+  border: 1px solid var(--border-subtle, #26314a);
+  border-radius: var(--radius-md, 8px);
+}
+
+.pa-filtros__acoes {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+}
+
+.pa-ordem {
+  min-height: 1.5rem;
+}
+
+/* Recarregando com a tabela anterior ainda na tela: esmaece em vez de piscar um esqueleto. */
+.pa-tabela--carregando {
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
