@@ -298,6 +298,7 @@ export function MetaAdsIntegracaoCard() {
         onClose={() => setConfirmandoDesconexao(false)}
         title="Desconectar a Meta Ads?"
         description="O histórico de campanhas e métricas já sincronizado é apagado junto. Reconectar depois importa os últimos 90 dias de novo."
+        confirmLabel="Desconectar"
         onConfirm={confirmarDesconexao}
       />
     </Secao>

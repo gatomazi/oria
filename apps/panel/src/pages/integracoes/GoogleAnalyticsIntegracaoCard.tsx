@@ -126,6 +126,7 @@ function LinhaLoja({ conexao, oauthConfigurado, recarregar }: { conexao: GaConne
         onClose={() => setConfirmandoDesconexao(false)}
         title={`Desconectar o Google Analytics de ${conexao.storeNome || 'Sua loja'}?`}
         description="As campanhas UTM salvas continuam normalmente — só a performance real por GA4 deixa de aparecer."
+        confirmLabel="Desconectar"
         onConfirm={confirmarDesconexao}
       />
     </div>

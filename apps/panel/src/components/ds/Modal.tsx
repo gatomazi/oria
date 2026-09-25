@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Button, type ButtonVariant } from './Button';
 
@@ -33,11 +33,23 @@ export function Modal({
   onConfirm,
   maxWidth = 480,
 }: ModalProps) {
+  // Sem `Dialog.Trigger` (o modal é aberto por estado), o Radix não sabe para onde devolver o foco e o deixa no <body>
+  // ao fechar. Guarda quem estava focado ao abrir e devolve a ele ao fechar (se ainda existir na página).
+  const retorno = useRef<HTMLElement | null>(null);
   return (
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="ds-modal-overlay" />
-        <Dialog.Content className="ds-modal" style={{ width: `min(calc(100% - 32px), ${maxWidth}px)` }}>
+        <Dialog.Content
+          className="ds-modal"
+          style={{ width: `min(calc(100% - 32px), ${maxWidth}px)` }}
+          onOpenAutoFocus={() => { retorno.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }}
+          onCloseAutoFocus={(ev) => {
+            const alvo = retorno.current;
+            retorno.current = null;
+            if (alvo && alvo.isConnected) { ev.preventDefault(); alvo.focus(); }
+          }}
+        >
           <Dialog.Title className="ds-modal__title">{title}</Dialog.Title>
           <div className="ds-modal__body">{children}</div>
           <div className="ds-modal__actions">

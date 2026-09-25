@@ -112,3 +112,85 @@ test('drawer · o conteúdo fica inerte enquanto o drawer está aberto e o drawe
   assert.match(shell, /setAttribute\('inert', ''\)/);
   assert.match(shell, /matchMedia\('\(min-width: 1024px\)'\)/);
 });
+
+// ── Fechamento (cabeçalho e sidebar compactável) ─────────────────────────────────────────────────────────────
+const cssShell = ler('admin/admin-shell.css');
+
+test('cabeçalho · o gatilho do menu identifica a CONTA (iniciais de quem está logado + chevron) e nunca repete o nome da loja do seletor', () => {
+  assert.match(shell, /const rotulo = 'Abrir menu da conta e da loja';/);
+  assert.match(shell, /aria-label=\{rotulo\} title=\{rotulo\}/);
+  assert.match(shell, /initials\(usuario \|\| nome\)/);
+  assert.doesNotMatch(shell, /ad-store-menu__nome/, 'o nome da loja não é mais texto do gatilho');
+  assert.doesNotMatch(shell, /aria-label=\{`Menu da loja \$\{nome\}`\}/);
+  // o seletor de loja continua à esquerda dos controles do canto direito
+  assert.ok(shell.indexOf('<WorkspaceSelect />') < shell.indexOf('<StoreMenu'), 'seletor de loja antes do menu da conta');
+});
+
+test('cabeçalho · o menu aberto mantém organização, plano (quando carregado), Configurações, Integrações, Campos personalizados e Sair', () => {
+  assert.match(shell, /<strong>\{nome\}<\/strong>/);
+  assert.match(shell, /\{plano && <span>\{plano\}<\/span>\}/);
+  assert.match(shell, /NAV_STORE_MENU\.filter/);
+  assert.match(shell, /aria-current=\{ativo \? 'page' : undefined\}/);
+  assert.match(shell, /onSelect=\{onLogout\}/);
+  assert.deepEqual(Array.from(nav.NAV_STORE_MENU, (i) => i.key), ['configuracoes', 'integracoes', 'campos']);
+});
+
+test('sidebar · botão de recolher/expandir com nome acessível, aria-expanded e aria-controls; a redução só vale no desktop', () => {
+  assert.match(shell, /aria-label=\{prefs\.colapsada \? 'Expandir menu lateral' : 'Recolher menu lateral'\}/);
+  assert.match(shell, /aria-expanded=\{!prefs\.colapsada\}/);
+  assert.match(shell, /aria-controls="ad-sidebar"/);
+  assert.match(shell, /useMediaQuery\('\(min-width: 1024px\)'\)/);
+  assert.match(shell, /const reduzida = prefs\.colapsada && desktop;/);
+});
+
+test('sidebar · grupos recolhíveis: botão com aria-expanded + aria-controls; fechado mostra só a página atual; preferência só local', () => {
+  assert.match(shell, /className="ad-nav__group-toggle"/);
+  assert.match(shell, /aria-expanded=\{aberto\}/);
+  assert.match(shell, /aria-controls=\{listaId\}/);
+  assert.match(shell, /itensVisiveis\(group\.items, aberto, routeInfo\.activeKey, reduzida\)/);
+  const prefs = ler('shell/navPrefs.ts');
+  assert.match(prefs, /oria\.shell\.nav\.v1/);
+  assert.doesNotMatch(prefs, /fetch\(|api\//, 'nenhuma chamada ao servidor para guardar a preferência');
+  assert.match(shell, /gravarPrefs\(prefs\)/);
+});
+
+test('sidebar reduzida · ícones com tooltip (mouse e foco) e o rótulo continua sendo o nome acessível; sem ícone → inicial', () => {
+  assert.match(shell, /reduzida \? <Tooltip content=\{item\.label\} side="right">\{link\}<\/Tooltip> : link/);
+  assert.match(shell, /<span className="ad-nav__label">\{item\.label\}<\/span>/);
+  assert.match(shell, /ad-nav__icon--inicial/);
+});
+
+test('sidebar reduzida · as regras vivem SÓ no breakpoint de desktop (o drawer do mobile não recebe a versão compacta)', () => {
+  const i = cssShell.indexOf('@media (min-width: 1024px) {');
+  assert.ok(i > 0, 'bloco de desktop');
+  let profundidade = 0; let fim = -1;
+  for (let k = cssShell.indexOf('{', i); k < cssShell.length; k += 1) {
+    if (cssShell[k] === '{') profundidade += 1;
+    if (cssShell[k] === '}') { profundidade -= 1; if (profundidade === 0) { fim = k; break; } }
+  }
+  const blocoDesktop = cssShell.slice(i, fim);
+  const fora = cssShell.slice(0, i) + cssShell.slice(fim);
+  assert.match(blocoDesktop, /\.ad-shell--nav-reduzida \.ad-sidebar \{ width: var\(--sidebar-width-reduzida\); \}/);
+  assert.doesNotMatch(fora, /ad-shell--nav-reduzida/, 'nenhuma regra de sidebar reduzida fora do desktop');
+});
+
+test('sidebar · o mapa de rotas e o gating dos itens não mudaram (quem decide é nav.ts e o servidor)', () => {
+  assert.match(shell, /const itemVisivel = \(item: NavItem\) =>/);
+  assert.match(shell, /hasEntitlement\(item\.feature\)/);
+  assert.equal(nav.NAV_GROUPS.length >= 7, true);
+});
+
+test('cabeçalho · o botão de navegação (hambúrguer) e o menu da conta têm nomes acessíveis DISTINTOS', () => {
+  assert.match(shell, /aria-label="Abrir menu de navegação"/);
+  assert.match(shell, /aria-label="Fechar menu de navegação"/);
+  assert.match(shell, /const rotulo = 'Abrir menu da conta e da loja';/);
+  assert.doesNotMatch(shell, /aria-label="Abrir menu"/, 'um nome que é prefixo do outro confunde leitor de tela e comando de voz');
+});
+
+test('drawer · o foco volta ao botão de menu DEPOIS de fechar (com o conteúdo sem `inert`), no Esc e no botão Fechar', () => {
+  assert.match(shell, /const devolverFoco = useRef\(false\);/);
+  assert.equal((shell.match(/devolverFoco\.current = true;/g) || []).length, 2, 'Esc e botão Fechar');
+  assert.match(shell, /if \(navOpen \|\| !devolverFoco\.current\) return;\s+devolverFoco\.current = false;\s+menuBtnRef\.current\?\.focus\(\);/);
+  // o foco NÃO é pedido no mesmo tick do Esc (o botão ainda estaria dentro do conteúdo inerte)
+  assert.doesNotMatch(shell, /setNavOpen\(false\);\s+menuBtnRef\.current\?\.focus\(\);/);
+});

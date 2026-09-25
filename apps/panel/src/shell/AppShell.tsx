@@ -4,7 +4,9 @@ import * as RadixDropdown from '@radix-ui/react-dropdown-menu';
 import { useAuth } from '../auth/AuthContext';
 import { loadProductSettings, type ProductSettings } from '../state/productSettings';
 import { loadEntitlements, hasEntitlement, entitlementsCarregados } from '../state/entitlements';
-import { Icon, Select, Skeleton } from '../components/ds';
+import { Icon, Select, Skeleton, Tooltip } from '../components/ds';
+import { useMediaQuery } from '../lib/useMediaQuery';
+import { alternarColapso, alternarGrupo, gravarPrefs, grupoAberto, itensVisiveis, lerPrefs, type NavPrefs } from './navPrefs';
 import { getInternalToolsStatus } from '../api/internalTools';
 import { useWhatsappProvider } from '../state/whatsappProvider';
 import { AlertaAppWhatsapp } from '../components/AlertaAppWhatsapp';
@@ -55,14 +57,17 @@ function navIcon(key: string, className = 'ad-nav__icon') {
   );
 }
 
-function NavLink({ item, activeKey }: { item: NavItem; activeKey: string }) {
+function NavLink({ item, activeKey, reduzida }: { item: NavItem; activeKey: string; reduzida?: boolean }) {
   const ativo = item.key === activeKey;
-  return (
+  const link = (
     <Link to={item.href ?? '#'} className={'ad-nav__item' + (ativo ? ' ad-nav__item--active' : '')} aria-current={ativo ? 'page' : undefined}>
-      {navIcon(item.key)}
+      {navIcon(item.key) ?? <span className="ad-nav__icon ad-nav__icon--inicial" aria-hidden="true">{item.label.slice(0, 1)}</span>}
+      {/* Reduzida: o rótulo sai da tela mas continua sendo o nome acessível do link. */}
       <span className="ad-nav__label">{item.label}</span>
     </Link>
   );
+  // Sidebar reduzida (só ícones): o nome aparece em tooltip ao passar o mouse OU focar pelo teclado.
+  return reduzida ? <Tooltip content={item.label} side="right">{link}</Tooltip> : link;
 }
 
 interface RouteInfo {
@@ -174,14 +179,16 @@ function StoreMenu({
   onLogout: () => void;
 }) {
   const { pathname } = useLocation();
+  // O gatilho identifica a CONTA (iniciais de quem está logado), não a loja: o nome da loja já está no seletor de loja (quando há
+  // mais de uma) e dentro do menu. Assim os dois controles do canto direito nunca mostram o mesmo texto.
+  const rotulo = 'Abrir menu da conta e da loja';
   return (
     <RadixDropdown.Root>
       <RadixDropdown.Trigger asChild>
-        <button type="button" className="ad-store-menu" aria-label={`Menu da loja ${nome}`}>
+        <button type="button" className="ad-store-menu" aria-label={rotulo} title={rotulo}>
           <span className="ad-store-menu__avatar" aria-hidden="true">
-            {initials(nome)}
+            {initials(usuario || nome)}
           </span>
-          <span className="ad-store-menu__nome">{nome}</span>
           <Icon name="chevron-down" />
         </button>
       </RadixDropdown.Trigger>
@@ -245,8 +252,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { logout, usuario, organizacaoAtiva } = useAuth();
   const [settings, setSettings] = useState<ProductSettings | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  // Preferências locais da navegação (sidebar reduzida + grupos fechados). A reduzida só vale no desktop: o drawer do mobile não muda.
+  const [prefs, setPrefs] = useState<NavPrefs>(() => lerPrefs());
+  const desktop = useMediaQuery('(min-width: 1024px)');
+  const reduzida = prefs.colapsada && desktop;
+  useEffect(() => { gravarPrefs(prefs); }, [prefs]);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  // Foco de volta ao botão de menu DEPOIS que o drawer fecha (com o conteúdo já sem `inert`): focar no mesmo tick do Esc falhava, porque
+  // o botão está dentro do conteúdo ainda inerte, e o foco ia para o <body>.
+  const devolverFoco = useRef(false);
   const mainRef = useRef<HTMLDivElement>(null);
   const planoLabel = usePlanoLabel();
   const whatsappProvider = useWhatsappProvider();
@@ -275,8 +290,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     closeBtnRef.current?.focus();
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Escape') {
+        devolverFoco.current = true;
         setNavOpen(false);
-        menuBtnRef.current?.focus();
       }
     };
     document.addEventListener('keydown', onKey);
@@ -295,12 +310,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [navOpen]);
 
+  useEffect(() => {
+    if (navOpen || !devolverFoco.current) return;
+    devolverFoco.current = false;
+    menuBtnRef.current?.focus();
+  }, [navOpen]);
+
   const grupos = [...NAV_GROUPS, ...(ferramentasInternasGroup ? [ferramentasInternasGroup] : [])]
     .map((g) => ({ ...g, items: g.items.filter(itemVisivel) }))
     .filter((g) => g.items.length > 0);
 
   return (
-    <div className={'ad-shell' + (navOpen ? ' ad-shell--nav-open' : '')}>
+    <div className={'ad-shell' + (navOpen ? ' ad-shell--nav-open' : '') + (prefs.colapsada ? ' ad-shell--nav-reduzida' : '')}>
       <aside className="ad-sidebar" id="ad-sidebar" aria-label="Navegação principal">
         <div className="ad-sidebar__brand">
           <div className="ad-sidebar__logo" aria-hidden="true">
@@ -314,10 +335,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             ref={closeBtnRef}
             type="button"
             className="ds-icon-btn ad-sidebar__close"
-            aria-label="Fechar menu"
+            aria-label="Fechar menu de navegação"
             onClick={() => {
+              devolverFoco.current = true;
               setNavOpen(false);
-              menuBtnRef.current?.focus();
             }}
           >
             <Icon name="close" size={18} />
@@ -325,22 +346,51 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav className="ad-nav">
           {NAV_TOP.map((item) => (
-            <NavLink key={item.key} item={item} activeKey={routeInfo.activeKey} />
+            <NavLink key={item.key} item={item} activeKey={routeInfo.activeKey} reduzida={reduzida} />
           ))}
           {grupos.map((group) => {
             const labelId = `nav-grupo-${group.label.toLowerCase().replace(/\s+/g, '-')}`;
+            const listaId = `${labelId}-itens`;
+            const aberto = grupoAberto(prefs, group.label);
+            const visiveis = itensVisiveis(group.items, aberto, routeInfo.activeKey, reduzida);
             return (
               <div key={group.label} className="ad-nav__group" role="group" aria-labelledby={labelId}>
                 <div className="ad-nav__group-label" id={labelId}>
-                  {group.label}
+                  {/* Grupo recolhível: mostra só a página atual quando fechado (a pessoa nunca perde onde está). */}
+                  <button
+                    type="button"
+                    className="ad-nav__group-toggle"
+                    aria-expanded={aberto}
+                    aria-controls={listaId}
+                    onClick={() => setPrefs((p) => alternarGrupo(p, group.label))}
+                  >
+                    <span>{group.label}</span>
+                    <Icon name="chevron-down" size={14} />
+                  </button>
                 </div>
-                {group.items.map((item) => (
-                  <NavLink key={item.key} item={item} activeKey={routeInfo.activeKey} />
-                ))}
+                <div id={listaId} className="ad-nav__group-items" hidden={visiveis.length === 0}>
+                  {visiveis.map((item) => (
+                    <NavLink key={item.key} item={item} activeKey={routeInfo.activeKey} reduzida={reduzida} />
+                  ))}
+                </div>
               </div>
             );
           })}
         </nav>
+        <div className="ad-sidebar__footer">
+          <Tooltip content={prefs.colapsada ? 'Expandir menu lateral' : 'Recolher menu lateral'} side="right">
+            <button
+              type="button"
+              className="ds-icon-btn ad-sidebar__collapse"
+              aria-label={prefs.colapsada ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+              aria-expanded={!prefs.colapsada}
+              aria-controls="ad-sidebar"
+              onClick={() => setPrefs(alternarColapso)}
+            >
+              <Icon name={prefs.colapsada ? 'chevron-right' : 'chevron-left'} size={18} />
+            </button>
+          </Tooltip>
+        </div>
       </aside>
 
       <div className="ad-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />
@@ -352,7 +402,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               ref={menuBtnRef}
               type="button"
               className="ds-icon-btn ad-topbar__menu"
-              aria-label="Abrir menu"
+              aria-label="Abrir menu de navegação"
               aria-controls="ad-sidebar"
               aria-expanded={navOpen}
               onClick={() => setNavOpen(true)}

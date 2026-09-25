@@ -273,6 +273,7 @@ export function GoogleAdsIntegracaoCard() {
         onClose={() => setConfirmandoDesconexao(false)}
         title="Desconectar o Google Ads?"
         description="O painel para de sincronizar e a permissão é revogada na sua conta Google. Os dados já sincronizados continuam no painel."
+        confirmLabel="Desconectar"
         onConfirm={desconectar}
       />
     </Secao>
