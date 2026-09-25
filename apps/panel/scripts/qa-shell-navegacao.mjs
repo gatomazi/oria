@@ -190,6 +190,55 @@ try {
       const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('.ad-shell'))).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
       ok('axe-core no shell: nenhuma violação serious/critical', viol.length === 0, viol.join(', '));
     }
+    // ── 4. Ordem final dos grupos e marca oficial ────────────────────────────────────────────────────────────────────────────────
+    await page.goto(`${BASE}/admin/dashboard`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.ad-topbar');
+    await page.evaluate((k) => { try { localStorage.removeItem(k); } catch { /* */ } }, CHAVE);
+    await page.reload({ waitUntil: 'networkidle' });
+    const ORDEM = ['Comunicação', 'Marketing e dados', 'Criativos', 'Campanhas', 'Operação', 'Financeiro', 'Catálogo'];
+    const rotulos = await page.$$eval('.ad-nav__group-toggle', (b) => b.map((x) => x.textContent.trim()));
+    ok('sidebar: grupos na ordem final (Comunicação → Marketing e dados → Criativos → Campanhas → Operação → Financeiro → Catálogo)', JSON.stringify(rotulos.filter((r) => ORDEM.includes(r))) === JSON.stringify(ORDEM) && rotulos.filter((r) => !ORDEM.includes(r)).length === 0, rotulos.join(' → '));
+    const primeiro = await page.$eval('#ad-sidebar .ad-nav__item', (e) => e.textContent.trim());
+    ok('"Visão geral" vem isolada antes dos grupos', primeiro === 'Visão geral' && (await page.$$eval('#ad-sidebar .ad-nav > *', (els) => els[0].querySelector('.ad-nav__group-toggle') === null)), primeiro);
+    ok('nada de Conexões, Sistema, Webhooks e logs, Configurações, Integrações ou Campos personalizados na sidebar', !(await page.$$eval('#ad-sidebar .ad-nav__item, #ad-sidebar .ad-nav__group-toggle', (els) => els.map((e) => e.textContent.trim()))).some((t) => /^(Conexões|Sistema|Webhooks|Logs|Configurações|Integrações|Campos personalizados)/.test(t)));
+    const logo = await page.$eval('img.ad-sidebar__logo', (i) => ({ ok: i.complete && i.naturalWidth > 0, w: i.naturalWidth, h: i.naturalHeight, src: i.getAttribute('src'), rw: i.getBoundingClientRect().width, rh: i.getBoundingClientRect().height }));
+    ok('logo oficial (oria-simbolo.png) carregada, sem monograma "OR"', logo.ok && /oria-simbolo\.png$/.test(logo.src) && !(await page.locator('.ad-sidebar__brand').innerText()).match(/^OR\b/), `${logo.w}×${logo.h}`);
+    ok('proporção do símbolo preservada (sem distorção)', Math.abs(logo.rw / logo.rh - logo.w / logo.h) < 0.03 * (logo.w / logo.h), `${logo.rw.toFixed(1)}×${logo.rh.toFixed(1)} vs ${logo.w}×${logo.h}`);
+    if (desktop) {
+      const marca = await page.locator('.ad-sidebar__brand').innerText();
+      ok('expandida: símbolo + "Oria" + "Central operacional" alinhados', /Oria/.test(marca) && /Central operacional/.test(marca));
+      const yl = await page.locator('img.ad-sidebar__logo').boundingBox(); const yt = await page.locator('.ad-sidebar__brand-text').boundingBox();
+      ok('expandida: símbolo e texto centrados na mesma linha', Math.abs((yl.y + yl.height / 2) - (yt.y + yt.height / 2)) <= 3, `${(yl.y + yl.height / 2).toFixed(1)} vs ${(yt.y + yt.height / 2).toFixed(1)}`);
+      await page.screenshot({ path: path.join(OUT, `${vp.nome}-04-marca-ordem-expandida.png`), clip: { x: 0, y: 0, width: 280, height: vp.h } });
+      await page.getByRole('button', { name: 'Recolher menu lateral' }).click();
+      await page.waitForTimeout(400);
+      const bl = await page.locator('img.ad-sidebar__logo').boundingBox();
+      const largura = (await page.locator('#ad-sidebar').boundingBox()).width;
+      ok('recolhida: só o símbolo, centralizado no trilho', Math.abs((bl.x + bl.width / 2) - largura / 2) <= 2 && (await page.locator('.ad-sidebar__brand-text').evaluate((e) => e.getBoundingClientRect().width)) <= 2, `centro ${(bl.x + bl.width / 2).toFixed(1)} de ${largura}`);
+      ok('recolhida: o nome "Oria" continua acessível (texto só para leitores de tela)', /Oria/.test(await page.locator('.ad-sidebar__brand-text').evaluate((e) => e.textContent)));
+      await page.locator('img.ad-sidebar__logo').hover();
+      await page.waitForSelector('.ds-tooltip', { timeout: 3000 }).catch(() => {});
+      ok('recolhida: tooltip "Oria" no símbolo', (await page.locator('.ds-tooltip').allInnerTexts()).some((t) => /Oria/.test(t)));
+      await page.mouse.move(700, 500);
+      await page.screenshot({ path: path.join(OUT, `${vp.nome}-05-marca-recolhida.png`), clip: { x: 0, y: 0, width: 120, height: vp.h } });
+      await page.getByRole('button', { name: 'Expandir menu lateral' }).click();
+      await page.waitForTimeout(350);
+    } else {
+      await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open')); await page.waitForTimeout(350);
+      const bd = await page.locator('img.ad-sidebar__logo').boundingBox();
+      ok('drawer: símbolo visível, com dimensões adequadas e dentro da tela', bd && bd.width >= 30 && bd.height >= 24 && bd.x >= 0 && bd.x + bd.width <= vp.w, bd ? `${bd.width.toFixed(0)}×${bd.height.toFixed(0)}` : 'sem caixa');
+      ok('drawer: "Oria" e "Central operacional" visíveis ao lado do símbolo', (await page.locator('.ad-sidebar__brand-text').innerText()).includes('Central operacional'));
+      await page.screenshot({ path: path.join(OUT, `${vp.nome}-04-drawer-marca-ordem.png`) });
+      await page.keyboard.press('Escape'); await page.waitForTimeout(350);
+    }
+    // Rota de Marketing e de Campanhas: a página atual continua destacada no grupo certo.
+    for (const [rota, item, grupo] of [['/admin/meta-ads', 'Meta Ads', 'Marketing e dados'], ['/admin/campanhas', 'Todas as campanhas', 'Campanhas']]) {
+      await page.goto(`${BASE}${rota}`, { waitUntil: 'networkidle' });
+      await page.waitForSelector('.ad-topbar');
+      const ativo = await page.$$eval('#ad-sidebar .ad-nav__item[aria-current="page"]', (els) => els.map((e) => ({ t: e.textContent.trim(), g: e.closest('.ad-nav__group')?.querySelector('.ad-nav__group-toggle')?.textContent.trim() })));
+      ok(`${item} continua destacado no grupo "${grupo}"`, ativo.length === 1 && ativo[0].t === item && ativo[0].g === grupo, JSON.stringify(ativo));
+    }
+    await page.goto(`${BASE}/admin/dashboard`, { waitUntil: 'networkidle' });
     await semRolagem('final');
     ok('sem erro de JavaScript', erros.length === 0, erros.slice(0, 2).join(' | '));
     await ctx.close();

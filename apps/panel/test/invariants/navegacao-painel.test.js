@@ -204,3 +204,75 @@ test('todo item de navegação visível tem ícone (Desempenho de produtos e Jor
     assert.ok(nav.NAV_ICON_PATHS[chave], `${chave} tem ícone`);
   }
 });
+
+// ── Ordem final da sidebar e marca oficial ─────────────────────────────────────────────────────────────────────────────────────────
+// O nav.ts roda em outro contexto (vm): os arrays têm outro protótipo e o deepEqual estrito os recusa — copia para arrays locais.
+const L = (a) => [...a];
+const visiveis = (g) => g.items.filter((i) => !i.comingSoon);
+
+test('a sidebar segue a ordem final: Visão geral → Comunicação → Marketing e dados → Criativos → Campanhas → Operação → Financeiro → Catálogo', () => {
+  assert.deepEqual(L(nav.NAV_TOP.map((i) => i.label)), ['Visão geral']);
+  assert.deepEqual(L(nav.NAV_GROUPS.filter((g) => visiveis(g).length > 0).map((g) => g.label)), [
+    'Comunicação', 'Marketing e dados', 'Criativos', 'Campanhas', 'Operação', 'Financeiro', 'Catálogo',
+  ]);
+  // O array inteiro (inclusive o grupo só com "em breve") mantém esta ordem: nenhum grupo escondido se intromete.
+  assert.deepEqual(L(nav.NAV_GROUPS.map((g) => g.label)), ['Comunicação', 'Marketing e dados', 'Criativos', 'Campanhas', 'Instagram', 'Operação', 'Financeiro', 'Catálogo']);
+});
+
+test('conteúdo e ordem dos itens de cada grupo (recursos novos por função, sem rotas inventadas)', () => {
+  const por = Object.fromEntries(nav.NAV_GROUPS.map((g) => [g.label, L(visiveis(g).map((i) => i.label))]));
+  assert.deepEqual(por['Comunicação'], ['Canal', 'Recuperação', 'PIX', 'Automações', 'Templates', 'Mensagens', 'Fila de envio']);
+  assert.deepEqual(por['Marketing e dados'], ['Meta Ads', 'Google Ads', 'Google Analytics 4', 'UTM Tracker', 'Desempenho de produtos', 'Jornada de compra']);
+  // Gerar/Lotes/Histórico/Cadastros são abas de estado interno de UMA rota (/admin/criativos), sem deep link: sem subitens fictícios.
+  assert.deepEqual(por['Criativos'], ['Gerador de criativos']);
+  assert.deepEqual(por['Campanhas'], ['Todas as campanhas', 'Segmentos']);
+  assert.deepEqual(por['Operação'], ['Pedidos', 'Clientes', 'Trocas e devoluções', 'Estoque', 'Simular frete']);
+  assert.deepEqual(por['Financeiro'], ['Visão financeira', 'Despesas', 'Custos de API', 'Reembolsos']);
+  assert.deepEqual(por['Catálogo'], ['Produtos', 'Categorias', 'Agrupamentos', 'Promoções']);
+});
+
+test('Conexões, Sistema e Webhooks e logs não existem na sidebar; a administração da loja fica só no menu superior', () => {
+  const rotulos = [...nav.NAV_TOP, ...nav.NAV_GROUPS.flatMap((g) => [{ label: g.label }, ...g.items])].map((i) => i.label);
+  for (const proibido of ['Conexões', 'Sistema', 'Webhooks e logs', 'Webhooks', 'Logs', 'Configurações', 'Integrações', 'Campos personalizados']) {
+    assert.ok(!rotulos.includes(proibido), `"${proibido}" não pode estar na sidebar`);
+  }
+  assert.deepEqual(L(nav.NAV_STORE_MENU.map((i) => i.label)), ['Configurações', 'Integrações', 'Campos personalizados']);
+});
+
+test('ocultar por plano/canal só filtra: a ordem dos grupos e dos itens vem da fonte única, sem reordenar', () => {
+  const shell = ler('shell/AppShell.tsx');
+  assert.match(shell, /const grupos = \[\.\.\.NAV_GROUPS,[\s\S]*?\]\s*\.map\(\(g\) => \(\{ \.\.\.g, items: g\.items\.filter\(itemVisivel\)/, 'só map + filter sobre NAV_GROUPS');
+  assert.doesNotMatch(shell, /NAV_GROUPS[^;]*\.sort\(|grupos\.sort\(|\.reverse\(\)/, 'nenhuma reordenação no componente');
+  // Canal: Templates só na API da Meta; Mensagens e Fila só no WhatsApp Web (regras de exibição preservadas).
+  const com = nav.NAV_GROUPS.find((g) => g.label === 'Comunicação').items;
+  assert.equal(com.find((i) => i.label === 'Templates').provider, 'meta_api');
+  assert.equal(com.find((i) => i.label === 'Mensagens').provider, 'whatsapp_web');
+  assert.equal(com.find((i) => i.label === 'Fila de envio').provider, 'whatsapp_web');
+  // Plano: os dois recursos novos de Marketing continuam atrás do mesmo entitlement.
+  const mkt = nav.NAV_GROUPS.find((g) => g.label === 'Marketing e dados').items;
+  assert.equal(mkt.find((i) => i.key === 'desempenho-produtos').feature, 'analytics_product_performance');
+  assert.equal(mkt.find((i) => i.key === 'jornada-compra').feature, 'analytics_product_performance');
+});
+
+test('todo link da sidebar e do menu da loja aponta para uma rota real do App', () => {
+  const app = ler('App.tsx');
+  const rotas = [...app.matchAll(/path="([^"]+)"/g)].map((m) => m[1]);
+  const itens = [...nav.NAV_TOP, ...nav.NAV_GROUPS.flatMap((g) => g.items), ...nav.NAV_STORE_MENU].filter((i) => i.href);
+  for (const i of itens) assert.ok(rotas.includes(i.href), `${i.label}: ${i.href} não é uma rota do App`);
+});
+
+test('marca oficial: o símbolo do Oria (arquivo único do repositório) substitui o monograma "OR" e mantém o nome acessível', () => {
+  const shell = ler('shell/AppShell.tsx');
+  assert.match(shell, /const SIMBOLO_ORIA = '\/assets\/oria\/oria-simbolo\.png';/);
+  assert.ok(fs.existsSync(path.join(h.RAIZ_SUJEITO, 'assets', 'oria', 'oria-simbolo.png')), 'o arquivo oficial existe e é servido pelo servidor (test/arquivos-publicos)');
+  assert.match(fs.readFileSync(path.join(h.RAIZ_SUJEITO, 'test', 'arquivos-publicos.test.js'), 'utf8'), /'\/assets\/oria\/oria-simbolo\.png'/, 'rota pública já coberta');
+  const marca = shell.slice(shell.indexOf('className="ad-sidebar__brand"'), shell.indexOf('ad-sidebar__close'));
+  assert.doesNotMatch(marca, /initials\(nomeProduto\)/, 'sem monograma genérico');
+  assert.match(marca, /<img className="ad-sidebar__logo" src=\{SIMBOLO_ORIA\} alt="" width=\{35\} height=\{28\} \/>/, 'símbolo decorativo com proporção 256×202');
+  assert.match(marca, /reduzida \? \(\s*<Tooltip content=\{nomeProduto\} side="right">/, 'trilho recolhido: tooltip com o nome');
+  const css = ler('admin/admin-shell.css');
+  assert.match(css, /\.ad-sidebar__logo \{[^}]*object-fit: contain;/, 'sem distorção');
+  const reduzido = css.slice(css.indexOf('.ad-shell--nav-reduzida .ad-sidebar__brand-text'));
+  assert.match(reduzido.slice(0, 260), /clip: rect\(0 0 0 0\)/, 'o nome sai da tela mas continua para leitores de tela (não display:none)');
+  assert.match(reduzido.slice(0, 140) || '', /position: absolute/);
+});
