@@ -141,6 +141,11 @@ export function overridesAoTrocarDeMotor() {
 // volta cru (nunca escondido) — é sempre estritamente mais informativo que sumir com o aviso.
 const TEXTO_AVISO = {
   geographic_context_unresolved_used_niche_context: 'Não foi possível resolver o contexto geográfico pedido — a cena usou o contexto do nicho como alternativa.',
+  // Achado real (primeiro uso, conta interna, 24/09): distinto do aviso acima — aqui a cidade do
+  // produto ESTÁ cadastrada, só não está no catálogo de contextos regionais. A cena usa um ambiente
+  // neutro (nunca a paisagem de outro estado) — mensagem acionável: aponta o caminho manual que já
+  // existe na tela (Personalizar → Ambiente → Geográfico) em vez de só descrever o problema.
+  geographic_city_unrecognized_used_neutral_context: 'A cidade cadastrada no produto não está no catálogo de contextos regionais — a cena usou um ambiente neutro (nunca o cenário de outro estado). Para escolher um contexto específico, use "Personalizar" → Ambiente → Geográfico e informe a região manualmente.',
 };
 export function textoAviso(codigo) {
   return TEXTO_AVISO[codigo] || codigo;

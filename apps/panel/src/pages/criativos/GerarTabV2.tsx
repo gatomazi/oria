@@ -128,7 +128,8 @@ function CardSugestao({ rec, familias, interactions, preview, ocupado, onGerarAs
         </ul>
       )}
       {geral && <p className="criativos-v2__sugestao-nota">Sugestão geral — cadastre o significado da estampa para uma recomendação mais precisa.</p>}
-      {preview.warnings.length > 0 && <Callout tone="warning" title="Avisos">{preview.warnings.map(textoAviso).join(', ')}</Callout>}
+      {/* Achado real de uso: os Avisos já aparecem no painel "Prévia" ao lado (sempre visível, tanto
+          aqui quanto em Personalizar) — mostrar de novo aqui duplicava o mesmo aviso na tela inteira. */}
       <FormActions>
         <Button disabled={ocupado} onClick={onGerarAssim}>Gerar assim</Button>
         <Button variant="secondary" disabled={ocupado} onClick={onPersonalizar}>Personalizar</Button>

@@ -165,6 +165,13 @@ test('textoAviso: traduz o código do aviso geográfico para texto legível', ()
     'Não foi possível resolver o contexto geográfico pedido — a cena usou o contexto do nicho como alternativa.');
 });
 
+test('textoAviso: traduz o aviso de cidade não reconhecida com uma ação concreta (Personalizar → Ambiente → Geográfico)', () => {
+  const texto = mod.textoAviso('geographic_city_unrecognized_used_neutral_context');
+  assert.match(texto, /cidade cadastrada/i);
+  assert.match(texto, /não está no catálogo/i);
+  assert.match(texto, /Personalizar.*Ambiente.*Geográfico/);
+});
+
 test('textoAviso: um código sem tradução volta cru — nunca escondido, nunca inventado', () => {
   assert.equal(mod.textoAviso('layout_fallback_angle_not_compatible'), 'layout_fallback_angle_not_compatible');
 });

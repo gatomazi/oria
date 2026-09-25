@@ -127,16 +127,73 @@ def test_given_city_without_registered_context_then_provider_never_guesses():
     assert GEO.resolve({"name": "Blumenau", "metadata": {"state": "SC"}}, "context_of_other_uf") is None
 
 
-def test_given_automatic_mode_without_geographic_resolution_then_niche_context_is_used():
+def test_given_automatic_mode_with_no_location_at_all_then_niche_context_is_used():
+    # Nenhum state/city no produto — a única informação que existe é a marca/nicho, então o grab-bag
+    # deles (que já mistura RS/SC/PR de propósito, porque a Use Origens é multi-UF por natureza) é
+    # correto aqui: não há UF conhecida para "vazar" incorretamente.
     brand = kits.load_brand_kit("use_origens")
     niche = kits.load_niche_kit("fashion")
     resolved, profile = resolve_context(
         {"mode": "automatic"}, brand_kit=brand, niche_kit=niche,
-        products=[{"id": "p", "metadata": {"city": "Maringá", "state": "PR"}}],
+        products=[{"id": "p", "metadata": {}}],
         angle={"uses_person": True}, seed=1, geographic=GEO,
     )
     assert resolved["provider"] == "niche" and profile["contextType"] == "niche"
     assert resolved["scene"] in profile["sceneContexts"]
+
+
+# Achado real (primeiro uso, conta interna, 24/09): "Roca Sales" (produto real, RS) tem state/city
+# cadastrados, mas a cidade não está em cidades.json (cidade pequena de verdade) — a versão ANTIGA
+# desta função caía no MESMO grab-bag de nicho acima, que mistura RS/SC/PR sem distinção de UF. Um
+# produto do RS recebeu de verdade uma cena de litoral catarinense. `localizacao_conhecida_nao_resolvida`
+# corrige isso: quando a UF É conhecida mas a cidade não resolve, usa um ambiente NEUTRO (nunca a
+# geografia de outro estado, nunca o grab-bag multi-UF).
+def test_given_a_known_state_but_unrecognized_city_then_v2_uses_a_neutral_context_never_the_cross_uf_niche_grab_bag():
+    brand = kits.load_brand_kit("use_origens")
+    niche = kits.load_niche_kit("fashion")
+    resolved, profile = resolve_context(
+        {"mode": "automatic"}, brand_kit=brand, niche_kit=niche,
+        products=[{"id": "p", "metadata": {"city": "Roca Sales", "state": "RS"}}],
+        angle={"uses_person": True}, seed=1, geographic=GEO, v2=True,
+    )
+    assert resolved["provider"] == "geographic_unresolved"
+    assert profile["contextType"] == "neutral"
+    assert resolved["scene"] == "ambiente contemporâneo neutro, luz natural suave, sem elementos que dominem o produto"
+    # nunca uma cena de SC/PR (ou de qualquer contexto regional real) escapando para um produto do RS
+    todas_as_cenas_regionais = {c for uf in ("RS", "SC", "PR") for ctx in REGIOES[uf]["contextos"].values() for c in ctx["cenario"]}
+    assert resolved["scene"] not in todas_as_cenas_regionais
+
+
+def test_given_the_same_unresolved_city_then_v1_keeps_the_exact_old_niche_fallback_byte_identical():
+    # A proteção real: este achado mexe num caminho que o v1 TAMBÉM percorre (resolve_context não tem
+    # versão própria) — sem v2=True (o padrão, e o que plan_creative manda para v1), o comportamento
+    # antigo continua EXATAMENTE como sempre foi. Os 546+ goldens do v1 não podem mudar de cena por
+    # causa de um fix pensado para o v2.
+    brand = kits.load_brand_kit("use_origens")
+    niche = kits.load_niche_kit("fashion")
+    resolved, profile = resolve_context(
+        {"mode": "automatic"}, brand_kit=brand, niche_kit=niche,
+        products=[{"id": "p", "metadata": {"city": "Roca Sales", "state": "RS"}}],
+        angle={"uses_person": True}, seed=1, geographic=GEO,
+    )
+    assert resolved["provider"] == "niche" and profile["contextType"] == "niche"
+
+
+def test_given_a_known_uf_with_an_explicit_context_id_then_geographic_resolution_still_works_exactly_as_before():
+    # Controle negativo do fix: quando a resolução geográfica de fato funciona (aqui, via context_id
+    # explícito — nenhuma cidade do dataset atual resolve puramente pelo nome, ver
+    # test_given_city_without_registered_context_then_provider_never_guesses), o fix não interfere: o
+    # caminho `localizacao_conhecida_nao_resolvida` só entra quando `geographic.resolve()` de fato
+    # devolve None.
+    brand = kits.load_brand_kit("use_origens")
+    niche = kits.load_niche_kit("fashion")
+    resolved, profile = resolve_context(
+        {"mode": "automatic", "context_id": "pampa_campanha_fronteira"}, brand_kit=brand, niche_kit=niche,
+        products=[{"id": "p", "metadata": {"city": "Alegrete", "state": "RS"}}],
+        angle={"uses_person": True}, seed=1, geographic=GEO,
+    )
+    assert resolved["provider"] == "geographic" and profile["contextType"] == "geographic"
+    assert resolved["context_id"] == "geo:RS:pampa_campanha_fronteira"
 
 
 def test_given_geographic_mode_unresolved_then_context_resolution_failed():

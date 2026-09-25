@@ -27,10 +27,20 @@ adiados, para não abrir novas microfases de validação. Cada item cita onde fo
   alcançado foi ~591px. O aceite mobile desta rodada foi feito nessa largura (suficiente para
   confirmar reflow/sem overflow), não exatamente na largura de um iPhone. Limitação da ferramenta,
   não do produto — repetir com um dispositivo real antes do lançamento amplo, se possível.
-- **Suíte monolítica de goldens (~1h) ainda não roda no harness atual** (achado original da G.1) —
-  V1/core Python seguem intocados por esta e pelas rodadas anteriores, então o risco de regressão
-  real é baixo, mas o gate formal completo continua pendente para antes de um lançamento amplo
-  (fora desta conta interna).
+- **Suíte monolítica de goldens (~1h) ainda não roda no harness atual** (achado original da G.1) — o
+  gate formal completo continua pendente para antes de um lançamento amplo (fora desta conta
+  interna). O core Python FOI tocado no hotfix de contexto geográfico (achado real, 24/09) —
+  `test_prompt_v1_golden.py` (4/4) e a suíte inteira do core (21/21, `run_tests.py`) foram rodados e
+  conferidos byte a byte antes do deploy, então o risco de regressão real continua baixo, mas o
+  registro anterior ("V1 intocado") deixou de valer a partir desta rodada.
+- **"Região (id)" em Personalizar → Ambiente → Geográfico é um campo de texto livre**, não um seletor
+  dos ids realmente válidos (`pampa_campanha_fronteira`, `serra_gaucha`, etc.) — a mensagem do aviso de
+  cidade não reconhecida (hotfix do primeiro uso real) já indica esse caminho manual, mas o lojista
+  ainda precisa saber o id exato de cor ou descobrir por tentativa. Um seletor de verdade exigiria
+  expor a lista de contextos regionais válidos por UF no catálogo (`GET /catalog`) — deliberadamente
+  adiado, mesmo raciocínio do item de famílias sem preset acima: o texto livre já funciona e nunca
+  aceita um id inválido silenciosamente (o core recusa), só não é tão descobrível quanto podia ser.
+  (Hotfix do contexto geográfico, 24/09.)
 - **`test_enrichment.py`/`test_enrichment_openai.py` (F.2.B.1) rodam sob `run_tests.py` só como "importa
   sem quebrar"** — o runner chama cada suíte como script solto (`python3 suite.py`) e só olha o exit
   code; como essas duas são pytest-style puro (sem `run()` no fim, ao contrário de toda outra suíte),

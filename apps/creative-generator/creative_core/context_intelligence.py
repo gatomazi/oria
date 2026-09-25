@@ -167,6 +167,7 @@ def resolve_context(
     seed: int,
     recent_scenes: list | None = None,
     geographic: GeographicContextProvider | None = None,
+    v2: bool = False,
 ) -> tuple[dict, dict]:
     """Returns (ResolvedContext, ContextProfile)."""
     selection = selection or {"mode": "automatic"}
@@ -179,6 +180,17 @@ def resolve_context(
     elif mode == "custom":
         raise GenerationError("CONTEXT_RESOLUTION_FAILED", {"reason": "custom_profile_missing"})
 
+    # Achado real (primeiro uso, conta interna, 24/09): um produto com `state`/`city` reais mas cuja
+    # cidade não está em `cidades.json` (cidade pequena de verdade, sem cobertura no dataset curado)
+    # caía direto no fallback de NICHO — que mistura `preferredContexts` do Brand Kit com
+    # `sceneContexts` do Niche Kit SEM distinção de UF (uma marca que cobre várias UFs de propósito,
+    # como esta conta, tem esse grab-bag misturado por natureza). Resultado real: um produto de uma UF
+    # recebeu uma cena de OUTRA UF do mesmo grab-bag — geograficamente errado, mesmo o sistema já
+    # sabendo o estado certo.
+    # `localizacao_conhecida_nao_resolvida` marca esse caso específico (location != None, mas
+    # geographic.resolve() não achou perfil aprovado) para NUNCA cair no grab-bag multi-UF do nicho —
+    # cai num contexto neutro (sem geografia nenhuma) em vez de emprestar paisagem de outro estado.
+    localizacao_conhecida_nao_resolvida = False
     if profile is None and mode in ("geographic", "automatic"):
         wants_geo = mode == "geographic" or brand_kit.get("defaultContextProvider") == "geographic"
         subject = selection.get("subject")
@@ -191,8 +203,23 @@ def resolve_context(
             }
             profile = geographic.resolve(subj, selection.get("context_id"))
             provider = "geographic" if profile else ""
+            localizacao_conhecida_nao_resolvida = profile is None
         if profile is None and mode == "geographic":
             raise GenerationError("CONTEXT_RESOLUTION_FAILED", {"reason": "geographic_context_unresolved"})
+
+    # `v2` só existe porque este fix mexe num caminho que o v1 também percorre (goldens, 546+ casos,
+    # byte a byte) — sem checar a versão do plano aqui, produtos com cidade não-curada em fixtures v1
+    # mudariam de cena (comportamento NOVO onde o v1 promete "nunca muda"). v1 mantém, de propósito, o
+    # comportamento antigo (cai no nicho) — só o v2 ganha o contexto neutro.
+    if profile is None and localizacao_conhecida_nao_resolvida and v2:
+        # `context_type "neutral"` já existe em CONTEXT_TYPES (contracts.py) para exatamente este caso —
+        # nunca usado até agora. `provider` fica com um nome próprio ("geographic_unresolved", nunca
+        # "geographic" nem "niche") para o aviso em engines.py distinguir com certeza dos outros dois.
+        profile, provider = _profile(
+            "geo:unresolved:neutral", "neutral", {"name": "contexto neutro", "metadata": {}},
+            status="approved", summary="Cidade cadastrada não reconhecida — ambiente neutro para não atribuir paisagem de outro estado.",
+            sceneContexts=[NEUTRAL_SCENE], confidence=0.3,
+        ), "geographic_unresolved"
 
     if profile is None:
         profile, provider = NicheContextProvider().resolve(niche_kit, brand_kit), "niche"
