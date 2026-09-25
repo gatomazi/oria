@@ -1,5 +1,11 @@
 # Desempenho de Produtos — "mais dados primeiro" + filtros
 
+> **Atualização (mesma data, rodada seguinte):** "ativo" aqui foi definido como `is_active` do sync — isso
+> se mostrou insuficiente: a Ink também lista produtos **não publicados**, que o lojista chama de
+> desativados. A definição vigente é **publicado na Ink** (`status = published`) **e** listado no sync; e a
+> tela ganhou busca por nome e a Reconciliação passou a ser paginada. Ver
+> `desempenho-produtos-busca-e-reconciliacao.md`.
+
 Pedido do usuário (2026-09-25, olhando a tela com o catálogo real da Use Sul): a tabela listava por
 nome e a maioria das linhas era "Identidade não resolvida / —". Queria **sempre os produtos com mais
 dados primeiro** e **filtros** (ativos, desativados, mais que X comprados, mais que X em checkout…).
