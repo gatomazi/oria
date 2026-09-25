@@ -4,9 +4,17 @@ import type { SegmentoResumo } from '../../api/clientes';
 import { estiloDe } from './rfmSegmentos';
 import { explicarZero, prepararDistribuicao, rotuloAria, type LinhaDistribuicao, type MetricaDistribuicao } from './rfmDistribuicao';
 import { numero, pct } from './rfmTexto';
+import { RfmVisual } from './RfmVisual';
 import { formatValor } from '../../lib/format';
 
 export type MetricaMatriz = MetricaDistribuicao;
+
+type Visao = 'lista' | 'visual';
+const CHAVE_VISAO = 'oria.clientes.rfm.visao';
+// Preferência por visualizador (conveniência): a Lista é o padrão; falha de armazenamento nunca quebra a tela.
+function visaoSalva(): Visao {
+  try { return window.localStorage.getItem(CHAVE_VISAO) === 'visual' ? 'visual' : 'lista'; } catch { return 'lista'; }
+}
 
 export function GrupoBadge({ id }: { id: string }) {
   const g = estiloDe(id).grupo;
@@ -38,6 +46,13 @@ interface Props {
 export function RfmExplorer({
   segmentos, selecionados, onToggle, onLimparSelecao, metrica, onMetrica, historicoObservadoDias, limitePerdidosDias, contexto, resumoContexto, painelInline, painel,
 }: Props) {
+  // Visão (Lista × Visual): só muda a apresentação. Seleção, métrica, painel e "Limpar seleção" são os MESMOS nas duas.
+  const [visao, setVisao] = useState<Visao>(visaoSalva);
+  function trocarVisao(v: Visao) {
+    setVisao(v);
+    try { window.localStorage.setItem(CHAVE_VISAO, v); } catch { /* preferência é só conveniência */ }
+  }
+
   // A escala da barra usa a largura real da trilha para decidir se um valor > 0 precisa de marca mínima.
   const trilha = useRef<HTMLSpanElement>(null);
   const [larguraTrilha, setLarguraTrilha] = useState(300);
@@ -47,10 +62,10 @@ export function RfmExplorer({
     const ro = new ResizeObserver(() => setLarguraTrilha(el.getBoundingClientRect().width || 300));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+    // `visao`: ao voltar para a Lista a trilha é um elemento novo, e o observador precisa segui-lo.
+  }, [visao]);
   const dist = useMemo(() => prepararDistribuicao(segmentos, metrica, larguraTrilha), [segmentos, metrica, larguraTrilha]);
   const selecionadoUnico = selecionados.length === 1 ? selecionados[0] : null;
-
   function linha(l: LinhaDistribuicao, primeira: boolean) {
     const e = estiloDe(l.id);
     const marcado = selecionados.includes(l.id);
@@ -104,6 +119,13 @@ export function RfmExplorer({
           </p>
         </div>
         <div className="rfmx-controles">
+          <div className="cli-segmentado" role="group" aria-label="Visualização">
+            {(['lista', 'visual'] as const).map((v) => (
+              <button key={v} type="button" aria-pressed={visao === v} className={visao === v ? 'is-ativo' : ''} onClick={() => trocarVisao(v)}>
+                {v === 'lista' ? 'Lista' : 'Visual'}
+              </button>
+            ))}
+          </div>
           <div className="cli-segmentado" role="group" aria-label="Medir por">
             {(['clientes', 'receita'] as const).map((m) => (
               <button key={m} type="button" aria-pressed={metrica === m} className={metrica === m ? 'is-ativo' : ''} onClick={() => onMetrica(m)}>
@@ -119,23 +141,37 @@ export function RfmExplorer({
 
       <Disclosure summary="Sobre esta classificação">{contexto}</Disclosure>
 
-      <div className="rfmx-grupos" role="group" aria-label={`Segmentos RFM medidos por ${metrica === 'receita' ? 'receita' : 'número de clientes'}`}>
-        {dist.grupos.map((g) => (
-          <section key={g.grupo} className="rfmx-grupo" aria-label={g.grupo}>
-            <h3 className="rfmx-grupo__titulo">
-              <span>{g.grupo}</span>
-              <span className="rfmx-grupo__desc">{g.descricao}</span>
-              <span className="rfmx-grupo__soma">{numero(g.clientes)} {g.clientes === 1 ? 'cliente' : 'clientes'} · {pct(g.pctBase)}</span>
-            </h3>
-            <ul className="rfmx-lista">
-              {g.linhas.map((l) => { const primeira = indice === 0; indice += 1; return <Fragment key={l.id}>{linha(l, primeira)}</Fragment>; })}
-            </ul>
-          </section>
-        ))}
-      </div>
-      <p className="rfmx-rodape">
-        Barras proporcionais ao valor mostrado (a maior ocupa a trilha inteira). Parcelas menores que a espessura mínima de 2 px aparecem como uma marca fina — o número ao lado é o dado. Segmentos com 0 cliente continuam listados.
-      </p>
+      {visao === 'visual' ? (
+        <RfmVisual
+          dist={dist}
+          selecionados={selecionados}
+          onToggle={onToggle}
+          historicoObservadoDias={historicoObservadoDias}
+          limitePerdidosDias={limitePerdidosDias}
+          painelInline={painelInline}
+          painel={painel}
+        />
+      ) : (
+        <>
+          <div className="rfmx-grupos" role="group" aria-label={`Segmentos RFM medidos por ${metrica === 'receita' ? 'receita' : 'número de clientes'}`}>
+            {dist.grupos.map((g) => (
+              <section key={g.grupo} className="rfmx-grupo" aria-label={g.grupo}>
+                <h3 className="rfmx-grupo__titulo">
+                  <span>{g.grupo}</span>
+                  <span className="rfmx-grupo__desc">{g.descricao}</span>
+                  <span className="rfmx-grupo__soma">{numero(g.clientes)} {g.clientes === 1 ? 'cliente' : 'clientes'} · {pct(g.pctBase)}</span>
+                </h3>
+                <ul className="rfmx-lista">
+                  {g.linhas.map((l) => { const primeira = indice === 0; indice += 1; return <Fragment key={l.id}>{linha(l, primeira)}</Fragment>; })}
+                </ul>
+              </section>
+            ))}
+          </div>
+          <p className="rfmx-rodape">
+            Barras proporcionais ao valor mostrado (a maior ocupa a trilha inteira). Parcelas menores que a espessura mínima de 2 px aparecem como uma marca fina — o número ao lado é o dado. Segmentos com 0 cliente continuam listados.
+          </p>
+        </>
+      )}
     </div>
   );
 }
