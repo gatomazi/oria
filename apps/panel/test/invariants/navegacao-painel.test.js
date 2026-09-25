@@ -194,3 +194,13 @@ test('drawer · o foco volta ao botão de menu DEPOIS de fechar (com o conteúdo
   // o foco NÃO é pedido no mesmo tick do Esc (o botão ainda estaria dentro do conteúdo inerte)
   assert.doesNotMatch(shell, /setNavOpen\(false\);\s+menuBtnRef\.current\?\.focus\(\);/);
 });
+
+test('todo item de navegação visível tem ícone (Desempenho de produtos e Jornada de compra incluídos)', () => {
+  const itens = [...nav.NAV_TOP, ...nav.NAV_GROUPS.flatMap((g) => g.items), ...(nav.NAV_STORE_MENU || [])].filter((i) => !i.comingSoon);
+  const semIcone = itens.filter((i) => !nav.NAV_ICON_PATHS[i.key]).map((i) => i.key);
+  assert.deepEqual(semIcone, [], `itens sem ícone: ${semIcone.join(', ')}`);
+  for (const chave of ['desempenho-produtos', 'jornada-compra']) {
+    assert.ok(itens.some((i) => i.key === chave), `${chave} continua no menu`);
+    assert.ok(nav.NAV_ICON_PATHS[chave], `${chave} tem ícone`);
+  }
+});

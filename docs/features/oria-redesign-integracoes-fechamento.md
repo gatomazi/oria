@@ -38,6 +38,9 @@ de troca de loja foi alterado. O botão do drawer passou a se chamar `Abrir menu
 - **Mobile/tablet < 1024 px:** drawer inalterado (foco, `inert`, retorno de foco); a preferência "reduzida" nunca é aplicada por cima do drawer (o drawer abre completo, com rótulos).
 - Mapa de rotas e gating dos itens **inalterados** (teste de contrato).
 
+**Ícones:** na base (`6829152`/`main`) "Desempenho de produtos" e "Jornada de compra" não tinham ícone (caíam em quadrado vazio; na sidebar reduzida ficariam sem identificação).
+O `abb2d6a` já os desenhou em `NAV_ICON_PATHS`; esta rodada acrescenta o teste de contrato "todo item visível tem ícone" (só `Relatórios`, `comingSoon`, não renderizado, segue sem ícone). Quem ainda vê esses dois sem ícone está no build da `main`, sem esta branch.
+
 ### Defeito real achado e corrigido (vinha do commit anterior)
 Ao fechar o drawer com Esc, o foco caía no `<body>` (o `menuBtn.focus()` rodava enquanto o conteúdo ainda estava `inert`). Agora o foco é devolvido depois que o
 drawer fecha (efeito pós-fechamento). Coberto pelo QA de shell e por teste de contrato.
