@@ -7,6 +7,7 @@ import { loadEntitlements } from '../../state/entitlements';
 import { NOME_DO_PROVIDER, rotuloDaApiInk, rotuloDoWebhookInk, seloDoEstado } from './estadoIntegracao';
 import { BackfillPedidosCard } from './BackfillPedidosCard';
 import { CatalogoCacheCard } from './CatalogoCacheCard';
+import { CatalogSyncCard } from './CatalogSyncCard';
 import { lojasComTokenInk } from './lojaOpcao';
 import { InkCredenciaisCard } from './InkCredenciaisCard';
 import { GoogleAnalyticsIntegracaoCard } from './GoogleAnalyticsIntegracaoCard';
@@ -114,6 +115,8 @@ export function IntegracoesPage() {
           <BackfillPedidosCard stores={lojasComTokenInk(data.reservaInk)} />
 
           <CatalogoCacheCard stores={lojasComTokenInk(data.reservaInk)} />
+
+          <CatalogSyncCard />
 
           <GoogleAnalyticsIntegracaoCard />
 

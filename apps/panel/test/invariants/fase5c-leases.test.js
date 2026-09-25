@@ -187,6 +187,24 @@ test('lease · nome de job e dono validados; outro dono não libera o lease alhe
   }
 });
 
+test('lease · liberarForcado (kill switch da tela) libera IGNORANDO o dono — ao contrário de concluir', async () => {
+  const pool = h.abrirPoolDescartavel(urlApp, { max: 1 });
+  try {
+    const l1 = createJobLeases({ poolReal: pool, dono: 'processo-morto' });
+    const l2 = createJobLeases({ poolReal: pool, dono: 'quem-cancela-pela-tela' });
+    assert.equal(await l1.adquirir('probe-forcado', ORGS[0], 60000), true);
+    // concluir de outro dono não libera (mesmo teste acima) — liberarForcado sim, sem precisar dizer quem é.
+    assert.equal(await l2.concluir('probe-forcado', ORGS[0], 0), false);
+    assert.equal(await l2.adquirir('probe-forcado', ORGS[0], 60000), false);
+    assert.equal(await l2.liberarForcado('probe-forcado', ORGS[0]), true);
+    assert.equal(await l2.adquirir('probe-forcado', ORGS[0], 60000), true);
+    // Nada pra liberar (nunca foi adquirido, ou já expirou) é um no-op seguro — nunca erro.
+    assert.equal(await l2.liberarForcado('probe-nunca-existiu', ORGS[0]), false);
+  } finally {
+    await pool.end();
+  }
+});
+
 test('justiça · a ordem das Organizations gira a cada rodada', async () => {
   const pool = h.abrirPoolDescartavel(urlApp, { max: 1 });
   try {

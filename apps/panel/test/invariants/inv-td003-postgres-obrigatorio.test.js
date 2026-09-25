@@ -147,6 +147,10 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       '1790002400000_creative-enrichment',
       '1790002500000_creative-enrichment-provider-meta',
       '1790002600000_creative-enrichment-pilot-budget',
+      // Rodada "Observabilidade e controle do catalog sync" · mesma colisão de timestamp
+      // que o Gerador de Criativos já teve (comentário acima) — as duas branches escolheram
+      // 1790001900000 independentemente; renumerada pra depois de tudo que já estava em main.
+      '1790002700000_catalog-sync-observabilidade',
     ]);
   } finally {
     await pool.end();

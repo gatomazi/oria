@@ -25,7 +25,7 @@ const { createProductPerformanceService, createReportCache } = require('./produc
 const { createReconciliationService } = require('./reconciliation');
 const { createJourneyAnalyticsService } = require('./journey-analytics-service');
 const { createOpportunityDiagnosticsService } = require('./opportunity-diagnostics');
-const { runCatalogSync } = require('./catalog-sync');
+const { runCatalogSync, cancelarCatalogSync } = require('./catalog-sync');
 const { bootstrapCommerceIdentities } = require('./product-identity-resolver');
 
 const ANALYTICS_PROVIDER = 'ga4';
@@ -52,8 +52,8 @@ const COMMERCE_TRANSACTION_ID_PREFIX = Object.freeze({ reserva_ink: 'INK' });
  *   junto aos defaults abaixo.
  * @returns {Readonly<{registry, catalogRepository, productPerformanceService, reconciliationService,
  *   journeyAnalyticsService, opportunityDiagnosticsService, reportCache, analyticsProvider: string,
- *   commerceProvider: string, syncCommerceCatalog: Function, getCommerceCatalogSyncStatus: Function,
- *   catalogSyncNecessario: Function}>}
+ *   commerceProvider: string, syncCommerceCatalog: Function, cancelCommerceCatalogSync: Function,
+ *   getCommerceCatalogSyncStatus: Function, catalogSyncNecessario: Function}>}
  */
 function createProductAnalyticsComposition({
   pool, keyring, fetchImpl, googleClientId, googleClientSecret, reportCacheTtlMs, leases = null,
@@ -160,9 +160,16 @@ function createProductAnalyticsComposition({
     return resultado;
   }
 
+  // Kill switch da tela ("Observabilidade e controle do catalog sync") — nunca mata o processo Node
+  // que ainda estiver vivo, só libera a trava (lease) e marca a linha 'running' como 'cancelled'
+  // pra um sync novo poder começar sem esperar o TTL de 3h. Ver catalog-sync.js.
+  async function cancelCommerceCatalogSync({ organizationId, storeId }) {
+    return cancelarCatalogSync({ pool, leases }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
+  }
+
   async function getCommerceCatalogSyncStatus({ organizationId, storeId }) {
     const { rows } = await pool.query(
-      `SELECT sync_run_id, status, started_at, finished_at, pages_processed,
+      `SELECT sync_run_id, status, started_at, finished_at, pages_processed, pages_total,
               products_seen, products_inserted, products_updated, products_deactivated,
               variants_seen, variants_inserted, variants_updated, variants_deactivated, error_code
          FROM commerce_catalog_sync_logs
@@ -216,7 +223,7 @@ function createProductAnalyticsComposition({
     registry, catalogRepository, productPerformanceService, reconciliationService, journeyAnalyticsService,
     opportunityDiagnosticsService, reportCache,
     analyticsProvider: ANALYTICS_PROVIDER, commerceProvider: COMMERCE_PROVIDER,
-    syncCommerceCatalog, getCommerceCatalogSyncStatus, catalogSyncNecessario,
+    syncCommerceCatalog, cancelCommerceCatalogSync, getCommerceCatalogSyncStatus, catalogSyncNecessario,
   });
 }
 

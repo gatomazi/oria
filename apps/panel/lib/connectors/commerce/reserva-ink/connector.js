@@ -83,18 +83,20 @@ function createReservaInkCommerceConnector({ context, resolveIntegration, secret
     }
     const produtosBrutos = data.products || [];
     const totalPages = data.total_pages || 1;
-    return { produtosBrutos, nextCursor: page < totalPages ? String(page + 1) : null };
+    return { produtosBrutos, nextCursor: page < totalPages ? String(page + 1) : null, totalPages };
   }
 
   async function listProducts(entrada = {}) {
-    const { produtosBrutos, nextCursor } = await buscarPaginaDeProdutos(entrada);
-    return Object.freeze({ items: produtosBrutos.map((p) => mapProduct(p, context)), nextCursor });
+    const { produtosBrutos, nextCursor, totalPages } = await buscarPaginaDeProdutos(entrada);
+    return Object.freeze({ items: produtosBrutos.map((p) => mapProduct(p, context)), nextCursor, totalPages });
   }
 
+  // `totalPages`: informativo, só pra progresso visível de quem pagina o catálogo inteiro (full
+  // catalog sync) — nunca usado pra decidir quando parar, isso continua sendo `nextCursor === null`.
   async function listProductsWithVariants(entrada = {}) {
-    const { produtosBrutos, nextCursor } = await buscarPaginaDeProdutos(entrada);
+    const { produtosBrutos, nextCursor, totalPages } = await buscarPaginaDeProdutos(entrada);
     const items = produtosBrutos.map((p) => Object.freeze({ product: mapProduct(p, context), variants: mapVariants(p, context) }));
-    return Object.freeze({ items, nextCursor });
+    return Object.freeze({ items, nextCursor, totalPages });
   }
 
   async function getProduct({ providerProductId } = {}) {
