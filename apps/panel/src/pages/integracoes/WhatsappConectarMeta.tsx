@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button } from '../../components/ds';
+import { Button, Disclosure } from '../../components/ds';
 import { toast } from '../../lib/toast';
 import { ApiError } from '../../api/client';
 import {
@@ -44,7 +44,9 @@ type Fase = 'carregando' | 'indisponivel' | 'pronto' | 'aguardando' | 'salvando'
 // `code` (callback do FB.login) e a WABA/número (mensagem na janela) — em ordem que não é garantida;
 // o pedido ao servidor sai quando as duas chegaram. O `state` (uso único, amarrado a esta loja) vem
 // do servidor e é refeito depois de cada tentativa.
-export function WhatsappConectarMeta({ conectado, onConectado }: { conectado: boolean; onConectado: (r: WhatsappRemetente) => void }) {
+// `destaque`: a reconexão é a ação principal da tela (número desconectado ou token recusado pela
+// Meta). Com a conexão saudável o botão fica secundário — não convida a refazer o que já funciona.
+export function WhatsappConectarMeta({ conectado, destaque, onConectado }: { conectado: boolean; destaque: boolean; onConectado: (r: WhatsappRemetente) => void }) {
   const [fase, setFase] = useState<Fase>('carregando');
   const [erro, setErro] = useState('');
   const config = useRef<EmbeddedSignupConfig | null>(null);
@@ -138,19 +140,23 @@ export function WhatsappConectarMeta({ conectado, onConectado }: { conectado: bo
     );
   }
   return (
-    <div>
-      <p className="pc-nota">
-        Você entra com a sua conta da Meta, escolhe ou cria a conta do WhatsApp Business e o número. O Oria guarda o acesso cifrado e
-        recebe as mensagens dos seus clientes. O pagamento das mensagens é feito por você, direto à Meta.
-      </p>
-      <p className="pc-nota">
-        <strong>Modo atual: homologação.</strong> A conexão automática ainda depende da aprovação do Oria como provedor de tecnologia na Meta;
-        até lá, só contas com função no app da Meta concluem o fluxo. Para as demais lojas, use o cadastro manual abaixo.
-      </p>
+    <div className="ds-stack">
       {erro && <p className="ds-form-error" role="alert">{erro}</p>}
-      <Button onClick={conectar} disabled={fase !== 'pronto'}>
-        {fase === 'salvando' ? 'Concluindo…' : fase === 'aguardando' ? 'Aguardando a Meta…' : conectado ? 'Reconectar com a Meta' : 'Conectar com a Meta'}
-      </Button>
+      <div>
+        <Button variant={destaque ? 'primary' : 'secondary'} onClick={conectar} disabled={fase !== 'pronto'}>
+          {fase === 'salvando' ? 'Concluindo…' : fase === 'aguardando' ? 'Aguardando a Meta…' : conectado ? 'Reconectar com a Meta' : 'Conectar com a Meta'}
+        </Button>
+      </div>
+      <Disclosure summary="Como funciona a conexão com a Meta">
+        <p className="pc-nota">
+          Você entra com a sua conta da Meta, escolhe ou cria a conta do WhatsApp Business e o número. O Oria guarda o acesso cifrado e
+          recebe as mensagens dos seus clientes. O pagamento das mensagens é feito por você, direto à Meta.
+        </p>
+        <p className="pc-nota">
+          <strong>Modo atual: homologação.</strong> A conexão automática ainda depende da aprovação do Oria como provedor de tecnologia na Meta;
+          até lá, só contas com função no app da Meta concluem o fluxo. Para as demais lojas, use o cadastro manual abaixo.
+        </p>
+      </Disclosure>
     </div>
   );
 }

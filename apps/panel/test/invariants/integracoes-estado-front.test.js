@@ -37,12 +37,13 @@ test('Given os rótulos, When lidos, Then nenhum vaza env, HTTP, JSON ou código
   assert.doesNotMatch(todos, /META_|GOOGLE_|HTTP|40\d|50\d|STORE_WITHOUT|undefined|\{|\}/);
 });
 
-test('Given a Ink, When a API está conectada e o webhook adiado, Then é API conectada + webhook não ativado — sem pendente nem erro', () => {
-  assert.deepEqual(JSON.parse(JSON.stringify(f.rotuloDaApiInk('connected'))), { label: 'API conectada', tone: 'success' });
+test('Given a Ink, When a credencial está cadastrada e o recebimento adiado, Then não diz "conectada" nem "pendente" nem "erro"', () => {
+  // Ter a credencial salva não prova que ela funciona (só o teste de conexão prova).
+  assert.deepEqual(JSON.parse(JSON.stringify(f.rotuloDaApiInk('connected'))), { label: 'Credencial cadastrada', tone: 'success' });
   const webhook = f.rotuloDoWebhookInk('deferred');
-  assert.equal(webhook.label, 'Webhook não ativado');
+  assert.equal(webhook.label, 'Recebimento automático não ativado');
   assert.equal(webhook.tone, 'neutral', 'adiado de propósito não é warning');
-  assert.doesNotMatch(webhook.label, /pendente|erro/i);
+  assert.doesNotMatch(webhook.label, /pendente|erro|webhook/i);
 });
 
 test('Given erro e falta de recurso, When traduzidos, Then erro é danger e falta de conta é ação (warning)', () => {

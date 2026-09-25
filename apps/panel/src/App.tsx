@@ -20,7 +20,6 @@ const EstoquePage = tela(() => import('./pages/estoque/EstoquePage'), 'EstoquePa
 const CamposPage = tela(() => import('./pages/campos/CamposPage'), 'CamposPage');
 const ConfiguracoesPage = tela(() => import('./pages/configuracoes/ConfiguracoesPage'), 'ConfiguracoesPage');
 const AutomacoesPage = tela(() => import('./pages/automacoes/AutomacoesPage'), 'AutomacoesPage');
-const EventosPage = tela(() => import('./pages/eventos/EventosPage'), 'EventosPage');
 const DashboardPage = tela(() => import('./pages/dashboard/DashboardPage'), 'DashboardPage');
 const RecuperacaoPage = tela(() => import('./pages/recuperacao/RecuperacaoPage'), 'RecuperacaoPage');
 const PedidosCentralPage = tela(() => import('./pages/pedidos-central/PedidosCentralPage'), 'PedidosCentralPage');
@@ -155,7 +154,10 @@ export function App() {
             <Route path="/admin/pedidos/vincular" element={<PedidoVincularPage />} />
 
             <Route path="/admin/campos" element={<CamposPage />} />
-            <Route path="/admin/eventos" element={<EventosPage />} />
+            {/* Webhooks e logs deixaram de ser tela do lojista (decisão de produto): o processamento,
+                o registro e a observabilidade continuam no servidor e no painel da plataforma. A URL
+                antiga não vira 404 — favoritos caem em Integrações, onde está a saúde do recebimento. */}
+            <Route path="/admin/eventos" element={<Navigate to="/admin/integracoes" replace />} />
             <Route path="/admin/integracoes" element={<IntegracoesPage />} />
             <Route path="/admin/configuracoes" element={<ConfiguracoesPage />} />
             {/* Atalho comum: Segmentos mora sob Campanhas. */}

@@ -1,4 +1,5 @@
-// Única fonte de verdade da navegação do painel (sidebar, título da aba, breadcrumb da topbar).
+// Única fonte de verdade da navegação do painel (sidebar operacional, menu da loja, título da aba,
+// breadcrumb da topbar).
 // Itens `comingSoon` ficam declarados aqui mas NÃO aparecem na sidebar (decisão D2 — funcionalidade
 // inexistente não ocupa a navegação); voltam a aparecer quando ganharem `href`.
 import type { Entitlements } from '../state/entitlements';
@@ -32,8 +33,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'pedidos-central', label: 'Pedidos', href: '/admin/pedidos-central' },
       { key: 'clientes', label: 'Clientes', href: '/admin/clientes' },
       { key: 'trocas', label: 'Trocas e devoluções', href: '/admin/trocas' },
-      { key: 'recuperacao', label: 'Recuperação', href: '/admin/recuperacao' },
       { key: 'estoque', label: 'Estoque', href: '/admin/estoque' },
+      { key: 'simular-frete', label: 'Simular frete', href: '/admin/simular-frete' },
     ],
   },
   {
@@ -46,15 +47,37 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'WhatsApp',
+    // Tudo o que conversa com o cliente: canal, recuperação de compra, PIX, automações e templates.
+    // Conectar o número/canal é da página Integrações (menu da loja), não daqui.
+    label: 'Comunicação',
     items: [
       { key: 'whatsapp-visao-geral', label: 'Canal', href: '/admin/whatsapp' },
+      { key: 'recuperacao', label: 'Recuperação', href: '/admin/recuperacao' },
+      { key: 'pix-ferramenta', label: 'PIX', href: '/admin/pix' },
       { key: 'automacoes', label: 'Automações', href: '/admin/automacoes' },
-      { key: 'whatsapp-fila', label: 'Fila de envio', href: '/admin/whatsapp/fila', provider: 'whatsapp_web' },
       { key: 'templates', label: 'Templates', href: '/admin/templates', provider: 'meta_api' },
       { key: 'mensagens-web', label: 'Mensagens', href: '/admin/mensagens', provider: 'whatsapp_web' },
+      { key: 'whatsapp-fila', label: 'Fila de envio', href: '/admin/whatsapp/fila', provider: 'whatsapp_web' },
       { key: 'whatsapp-historico', label: 'Histórico', comingSoon: true },
     ],
+  },
+  {
+    // Relatórios e medição. Conectar Meta/Google, renovar acesso e trocar de conta é da página
+    // Integrações — aqui só entram as telas que leem os dados.
+    label: 'Marketing e dados',
+    items: [
+      { key: 'meta-ads', label: 'Meta Ads', href: '/admin/meta-ads' },
+      { key: 'google-ads', label: 'Google Ads', href: '/admin/google-ads' },
+      { key: 'analytics-ga4', label: 'Google Analytics 4', href: '/admin/analytics' },
+      { key: 'utm-tracker', label: 'UTM Tracker', href: '/admin/utm' },
+      { key: 'desempenho-produtos', label: 'Desempenho de produtos', href: '/admin/desempenho-produtos', feature: 'analytics_product_performance' },
+      { key: 'jornada-compra', label: 'Jornada de compra', href: '/admin/jornada-compra', feature: 'analytics_product_performance' },
+    ],
+  },
+  {
+    // Uma única rota real (/admin/criativos); Gerar, Lotes, Histórico e Cadastros são abas da própria página.
+    label: 'Criativos',
+    items: [{ key: 'criativos', label: 'Gerador de criativos', href: '/admin/criativos' }],
   },
   {
     // Campanhas é deliberadamente separada de Automações (spec, Parte 2): automação é
@@ -78,35 +101,24 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Financeiro',
     items: [
-      { key: 'financeiro', label: 'Financeiro', href: '/admin/financeiro' },
+      { key: 'financeiro', label: 'Visão financeira', href: '/admin/financeiro' },
       { key: 'despesas', label: 'Despesas', href: '/admin/financeiro/despesas' },
       { key: 'custos-api', label: 'Custos de API', href: '/admin/financeiro/custos-api' },
       { key: 'reembolsos', label: 'Reembolsos', href: '/admin/reembolsos' },
     ],
   },
-  {
-    label: 'Ferramentas',
-    items: [
-      { key: 'simular-frete', label: 'Simular frete', href: '/admin/simular-frete' },
-      { key: 'pix-ferramenta', label: 'PIX', href: '/admin/pix' },
-      { key: 'utm-tracker', label: 'UTM Tracker', href: '/admin/utm' },
-      { key: 'analytics-ga4', label: 'Analytics GA4', href: '/admin/analytics' },
-      { key: 'desempenho-produtos', label: 'Desempenho de produtos', href: '/admin/desempenho-produtos', feature: 'analytics_product_performance' },
-      { key: 'jornada-compra', label: 'Jornada de compra', href: '/admin/jornada-compra', feature: 'analytics_product_performance' },
-      { key: 'meta-ads', label: 'Meta Ads', href: '/admin/meta-ads' },
-      { key: 'google-ads', label: 'Google Ads', href: '/admin/google-ads' },
-      { key: 'criativos', label: 'Gerador de criativos', href: '/admin/criativos' },
-    ],
-  },
-  {
-    label: 'Sistema',
-    items: [
-      { key: 'campos', label: 'Campos personalizados', href: '/admin/campos' },
-      { key: 'eventos', label: 'Webhooks e logs', href: '/admin/eventos' },
-      { key: 'integracoes', label: 'Integrações', href: '/admin/integracoes' },
-      { key: 'configuracoes', label: 'Configurações', href: '/admin/configuracoes' },
-    ],
-  },
+];
+
+// Administração da loja: única entrada é o menu do canto superior direito (StoreMenu), nunca a
+// sidebar. Ficam aqui para a navegação ter uma fonte de verdade só — o menu, o breadcrumb
+// ("Loja › Integrações") e o título da aba leem desta lista. Webhooks, logs e diagnósticos
+// técnicos NÃO entram: não são autoatendimento do lojista (a observabilidade é da plataforma).
+export const STORE_MENU_GROUP = 'Loja';
+
+export const NAV_STORE_MENU: NavItem[] = [
+  { key: 'configuracoes', label: 'Configurações', href: '/admin/configuracoes' },
+  { key: 'integracoes', label: 'Integrações', href: '/admin/integracoes' },
+  { key: 'campos', label: 'Campos personalizados', href: '/admin/campos' },
 ];
 
 export const PAGE_TITLES: Record<string, string> = {
@@ -120,7 +132,6 @@ export const PAGE_TITLES: Record<string, string> = {
   'mensagens-web': 'Mensagens',
   templates: 'Templates',
   campos: 'Campos personalizados',
-  eventos: 'Webhooks e logs',
   integracoes: 'Integrações',
   configuracoes: 'Configurações',
   'pedidos-central': 'Pedidos',
@@ -132,7 +143,7 @@ export const PAGE_TITLES: Record<string, string> = {
   categorias: 'Categorias',
   agrupamentos: 'Agrupamentos',
   promocoes: 'Promoções',
-  financeiro: 'Financeiro',
+  financeiro: 'Visão financeira',
   despesas: 'Despesas operacionais',
   'custos-api': 'Custos de API',
   'simular-frete': 'Simular frete',
@@ -141,7 +152,7 @@ export const PAGE_TITLES: Record<string, string> = {
   'campanhas-nova': 'Nova campanha',
   'campanhas-segmentos': 'Segmentos',
   'utm-tracker': 'UTM Tracker',
-  'analytics-ga4': 'Analytics GA4',
+  'analytics-ga4': 'Google Analytics 4',
   'desempenho-produtos': 'Desempenho de produtos',
   'jornada-compra': 'Jornada de compra',
   'meta-ads': 'Meta Ads',
@@ -172,7 +183,7 @@ export const ROUTE_CONTEXT: RouteContext[] = [
   { match: /^\/admin\/pedidos\/novo\/?$/, title: 'Novo PIX manual', parentKey: 'pix-ferramenta' },
   { match: /^\/admin\/pedidos\/vincular\/?$/, title: 'Vincular pedido', parentKey: 'pix-ferramenta' },
   { match: /^\/admin\/pedidos\/?$/, title: 'Pedidos PIX', parentKey: 'pix-ferramenta' },
-  { match: /^\/admin\/playground\/?$/, title: 'Playground', group: 'Sistema' },
+  { match: /^\/admin\/playground\/?$/, title: 'Playground' },
 ];
 
 export const NAV_ICON_PATHS: Record<string, string> = {
@@ -214,8 +225,9 @@ export const NAV_ICON_PATHS: Record<string, string> = {
   'analytics-ga4': '<path d="M3 20h18"/><rect x="5" y="11" width="3.5" height="6" rx="1"/><rect x="10.25" y="7" width="3.5" height="10" rx="1"/><rect x="15.5" y="4" width="3.5" height="13" rx="1"/>',
   'meta-ads': '<path d="M3 17l5-6 4 4 5-7"/><path d="M14 8h4v4"/><path d="M3 21h18"/>',
   'google-ads': '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v9"/><path d="M8.2 9.7l7.6 4.6"/><path d="M15.8 9.7l-7.6 4.6"/>',
+  'desempenho-produtos': '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>',
+  'jornada-compra': '<circle cx="5" cy="6" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="7" cy="18" r="2"/><path d="M7 6h5a4 4 0 0 1 4 4v0"/><path d="M17 13.5c0 2.5-2 4.5-5 4.5H9"/>',
   criativos: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/>',
-  eventos: '<path d="M3 12h4l2 7 4-14 2 7h6"/>',
   integracoes:
     '<path d="M9 2v4M15 2v4"/><path d="M7 6h10v4a5 5 0 0 1-10 0V6z"/><path d="M12 15v3"/><path d="M9 21h6"/>',
   configuracoes:

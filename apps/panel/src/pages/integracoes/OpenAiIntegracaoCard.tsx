@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Button, Card, Disclosure, ErrorState, Field, FormActions, FormStack, Input, Skeleton, StatusBadge } from '../../components/ds';
+import { Button, ConfirmDialog, Disclosure, ErrorState, Field, FormActions, FormStack, Input, Skeleton, StatusBadge } from '../../components/ds';
+import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
 import { toast } from '../../lib/toast';
 import {
   getCriativosStatus,
@@ -13,6 +14,8 @@ import {
 // a chave é cifrada no servidor e só os 4 últimos caracteres voltam. As rotas exigem o módulo ligado e
 // Postgres, então o card explica quando não dá pra cadastrar em vez de mostrar um formulário que falha.
 export function OpenAiIntegracaoCard() {
+  const atualizarResumo = useAtualizarResumo();
+  const [confirmarRemocao, setConfirmarRemocao] = useState(false);
   const [status, setStatus] = useState<CriativosStatus | null>(null);
   const [erro, setErro] = useState('');
   const [chave, setChave] = useState('');
@@ -34,6 +37,7 @@ export function OpenAiIntegracaoCard() {
         setChave(''); // a key nunca fica no estado da tela depois de enviada
         toast('API Key salva com criptografia.', 'sucesso');
         carregar();
+        atualizarResumo();
       })
       .catch(() => {})
       .finally(() => setSalvando(false));
@@ -41,7 +45,7 @@ export function OpenAiIntegracaoCard() {
 
   function remover() {
     setTeste(null);
-    removeOpenAiKey().then(() => { toast('API Key removida.', 'sucesso'); carregar(); }).catch(() => {});
+    return removeOpenAiKey().then(() => { setConfirmarRemocao(false); toast('API Key removida.', 'sucesso'); carregar(); atualizarResumo(); });
   }
 
   function testar() {
@@ -54,7 +58,7 @@ export function OpenAiIntegracaoCard() {
   const chaveInfo = status?.openaiKey;
 
   return (
-    <Card title="OpenAI" description="Chave própria (BYOK) usada pelo Gerador de criativos. É cifrada no servidor e nunca é exibida de novo.">
+    <Secao description="Chave própria (BYOK) usada pelos recursos de IA do Gerador de criativos. É cifrada no servidor e nunca é exibida de novo.">
       {erro && <ErrorState description={erro} onRetry={carregar} />}
       {!erro && !status && <Skeleton rows={2} />}
       {status && (
@@ -78,7 +82,7 @@ export function OpenAiIntegracaoCard() {
               <FormActions start={teste ? <span role="status">{teste}</span> : undefined}>
                 {chaveInfo?.configured && (
                   <>
-                    <Button variant="ghost" onClick={remover}>Remover</Button>
+                    <Button variant="ghost" onClick={() => setConfirmarRemocao(true)}>Remover</Button>
                     <Button variant="secondary" onClick={testar}>Testar chave</Button>
                   </>
                 )}
@@ -96,6 +100,14 @@ export function OpenAiIntegracaoCard() {
           </Disclosure>
         </>
       )}
-    </Card>
+      <ConfirmDialog
+        open={confirmarRemocao}
+        onClose={() => setConfirmarRemocao(false)}
+        title="Remover a chave da OpenAI?"
+        description="O Gerador de criativos para de gerar imagens até uma nova chave ser cadastrada."
+        confirmLabel="Remover"
+        onConfirm={remover}
+      />
+    </Secao>
   );
 }

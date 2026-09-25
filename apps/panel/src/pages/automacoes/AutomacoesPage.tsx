@@ -493,7 +493,7 @@ function LojaSection({
     <Card title={nomeDaLoja(loja)}>
       <div className="ad-vinculos-lista">
         {!todosNomes.length ? (
-          <EmptyState title="Nenhum evento observado ainda pra essa loja" description="Confira em Eventos, ou adicione manualmente abaixo." />
+          <EmptyState title="Nenhum evento observado ainda pra essa loja" description="Assim que a Reserva Ink enviar um evento, ele aparece aqui. Você também pode adicionar um manualmente abaixo." />
         ) : (
           todosNomes.map((nome) =>
             modoWeb ? (
@@ -559,7 +559,7 @@ function FluxoEventosCard() {
 
   return (
     <Card title="Sequência de eventos (referência)">
-      <p className="pc-nota">Decifrado observando o webhook-log, a Reserva Ink não documenta isso oficialmente — confirme em Eventos se um evento novo não estiver aqui.</p>
+      <p className="pc-nota">Decifrado observando os eventos recebidos; a Reserva Ink não documenta isso oficialmente. Se um evento novo não estiver aqui, adicione-o manualmente.</p>
       <div className="ad-fluxo-eventos">
         <div className="ad-fluxo-eventos__origem">
           <Chip nome="order.created" />

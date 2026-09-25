@@ -35,7 +35,7 @@ test('o guia explica a ORDEM (URL → Reserva Ink → segredo → confirmar) e q
   assert.match(guia, /Copie o segredo/);
   assert.match(guia, /Confirme/);
   assert.match(guia, /uma única vez/);
-  assert.match(guia, /Último evento verificado/);
+  assert.match(guia, /Último evento recebido/);
   assert.match(guia, /Sem o segredo salvo o Oria recusa os eventos/);
 });
 
@@ -49,9 +49,12 @@ test('o segredo salvo nunca reaparece inteiro: só os 4 últimos caracteres, e o
   assert.doesNotMatch(guia, /segredoWebhook/);
 });
 
-test('o guia fica recolhido: o webhook está adiado de propósito e não é pendência da API', () => {
-  assert.match(guia, /defaultOpen=\{pendente\}/);
-  assert.match(card, /pendente=\{false\}/);
-  assert.doesNotMatch(card, /Webhook pendente/, 'sem webhook, o selo não diz "pendente"');
-  assert.match(card, /Webhook não ativado/);
+test('o guia fica recolhido, e o recebimento não ativado é orientação — não pendência nem jargão', () => {
+  assert.match(guia, /open=\{aberto\}/);
+  assert.match(card, /const \[guiaAberto, setGuiaAberto\] = useState\(false\)/, 'o guia começa recolhido');
+  assert.doesNotMatch(card, /Webhook pendente/, 'sem o recebimento automático, o selo não diz "pendente"');
+  assert.doesNotMatch(card, /Webhook não ativado/, 'a tela do lojista não usa o jargão "webhook não ativado"');
+  assert.match(card, /O recebimento automático ainda não está ativado/);
+  assert.match(card, /Não é uma falha/, 'a ausência do recebimento é dita como não-falha (adiado de propósito)');
+  assert.match(card, /Ativar recebimento automático/, 'a ação necessária continua visível para o responsável');
 });

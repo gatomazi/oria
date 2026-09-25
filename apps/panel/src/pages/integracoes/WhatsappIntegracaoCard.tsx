@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Callout, Card, ConfirmDialog, Disclosure, Field, Input, Modal, RadioCardGroup, StatusBadge } from '../../components/ds';
+import { Button, Callout, ConfirmDialog, Disclosure, Field, Input, Modal, RadioCardGroup, StatusBadge } from '../../components/ds';
+import { Secao, useAtualizarResumo } from './IntegracaoAcordeao';
+import type { EstadoAgenteWeb } from './estadoIntegracao';
 import { VolumeWhatsappWebCard } from '../../components/VolumeWhatsappWebCard';
 import { copiar, formatData, plural } from '../../lib/format';
-import { hasEntitlement } from '../../state/entitlements';
 import { definirWhatsappProvider } from '../../state/whatsappProvider';
 import {
   gerarTokenAgente,
@@ -18,8 +19,9 @@ import { getWhatsappMetaApp, updateWhatsappMetaApp } from '../../api/integracoes
 
 import '../../whatsapp-web.css';
 
-// Card WhatsApp de Integrações: escolha de provider (API da Meta x WhatsApp Web) e, no modo Web,
-// status do app desktop, token e limites diários. Ver docs/plano-whatsapp-web-envio.md.
+// Canal de envio do WhatsApp (aba de Integrações › WhatsApp): escolha de provider (API da Meta x
+// WhatsApp Web) e, no modo Web, status do app desktop, token e limites diários. Número e autorização
+// da Meta ficam na aba Conexão (WhatsappRemetenteCard). Ver docs/plano-whatsapp-web-envio.md.
 const PROVIDERS: { valor: WhatsappProvider; nome: string; descricao: string }[] = [
   {
     valor: 'meta_api',
@@ -37,6 +39,15 @@ const EXECUTOR_LABEL: Record<string, string> = { desktop: 'WhatsApp Desktop', na
 const PLATAFORMA_LABEL: Record<string, string> = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
 
 const REFRESH_MS = 30000;
+
+// Traduz o heartbeat do app para o vocabulário do resumo da página (mesma regra de statusApp).
+export function estadoDoAgente(agente: WhatsappWebConfig['agente']): EstadoAgenteWeb {
+  if (!agente.ultimoHeartbeatEm) return 'nunca_conectou';
+  if (!agente.online) return 'offline';
+  if (agente.testando) return 'testando';
+  if (agente.pausado) return 'pausado';
+  return 'enviando';
+}
 
 function statusApp(agente: WhatsappWebConfig['agente']): { label: string; detalhe: string; tone: 'success' | 'warning' | 'danger' | 'info' } {
   if (!agente.ultimoHeartbeatEm) return { label: 'App não conectado', detalhe: 'Nunca conectou', tone: 'danger' };
@@ -91,7 +102,8 @@ function MetaAppIdCampo() {
   );
 }
 
-export function WhatsappIntegracaoCard({ conectadoApi, observacao, entitlementsProntos }: { conectadoApi: boolean; observacao?: string | null; entitlementsProntos: boolean }) {
+export function WhatsappIntegracaoCard({ conectadoApi, observacao }: { conectadoApi: boolean; observacao?: string | null }) {
+  const atualizarResumo = useAtualizarResumo();
   const [config, setConfig] = useState<WhatsappWebConfig | null>(null);
   const [erroConfig, setErroConfig] = useState('');
   const [resumo, setResumo] = useState<WhatsappWebResumo | null>(null);
@@ -129,6 +141,7 @@ export function WhatsappIntegracaoCard({ conectadoApi, observacao, entitlementsP
       definirWhatsappProvider(novo);
       setTrocaPara(null);
       carregar();
+      atualizarResumo();
     });
   }
 
@@ -169,29 +182,19 @@ export function WhatsappIntegracaoCard({ conectadoApi, observacao, entitlementsP
 
   return (
     <>
-      <Card title="WhatsApp">
-        <div className="ad-integracao-item__topo">
-          {entitlementsProntos && (
-            <StatusBadge
-              tone={hasEntitlement('whatsapp') ? 'success' : 'neutral'}
-              label={hasEntitlement('whatsapp') ? 'Incluído no plano' : 'Não incluído no plano'}
-            />
-          )}
-          <StatusBadge tone={conectadoApi ? 'success' : 'danger'} label={conectadoApi ? 'API conectada' : 'API não conectada'} />
-          {modoWeb && agente && (
+      <Secao title="Canal de envio" description="Escolha como o WhatsApp desta loja envia as mensagens.">
+        {modoWeb && agente && (
+          <div className="ig-linha-estado">
             <StatusBadge tone={statusApp(agente).tone} label={statusApp(agente).label} />
-          )}
-        </div>
-        {observacao &&
-          // Observação do servidor pode citar variáveis de ambiente: texto de lojista na frente, detalhe técnico sob demanda.
-          (/[A-Z][A-Z0-9]*_[A-Z0-9_]+/.test(observacao) ? (
-            <div className="ds-stack">
-              <p className="ds-note">Serviço de envio de WhatsApp não configurado neste ambiente.</p>
-              <Disclosure summary="Detalhes técnicos">{observacao}</Disclosure>
-            </div>
-          ) : (
-            <p className="pc-nota">{observacao}</p>
-          ))}
+          </div>
+        )}
+        {!modoWeb && !conectadoApi && (
+          <Callout tone="warning" title="Serviço de envio do WhatsApp indisponível">
+            O serviço que envia pela API oficial não está configurado neste ambiente. Fale com o suporte.
+            {observacao && /[A-Z][A-Z0-9]*_[A-Z0-9_]+/.test(observacao) && <Disclosure summary="Detalhes técnicos">{observacao}</Disclosure>}
+          </Callout>
+        )}
+        {!modoWeb && conectadoApi && observacao && <p className="pc-nota">{observacao}</p>}
 
         {!config && erroConfig && (
           <Callout tone="danger" title="Não foi possível carregar a configuração do WhatsApp Web">
@@ -223,7 +226,11 @@ export function WhatsappIntegracaoCard({ conectadoApi, observacao, entitlementsP
                 </Disclosure>
               </div>
             )}
-            {!modoWeb && <MetaAppIdCampo />}
+            {!modoWeb && (
+              <Disclosure summary="Configuração avançada">
+                <MetaAppIdCampo />
+              </Disclosure>
+            )}
           </>
         )}
 
@@ -283,7 +290,7 @@ export function WhatsappIntegracaoCard({ conectadoApi, observacao, entitlementsP
             </p>
           </>
         )}
-      </Card>
+      </Secao>
 
       {modoWeb && resumo && <VolumeWhatsappWebCard resumo={resumo} />}
 

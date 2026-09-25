@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Callout, Card, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge,  } from '../../components/ds';
+import { Button, Callout, ConfirmDialog, ErrorState, RadioCardGroup, Skeleton, StatusBadge } from '../../components/ds';
+import { Secao, useAtualizarResumo, useEhOwner } from './IntegracaoAcordeao';
 import { formatData, plural } from '../../lib/format';
 import {
   atribuirLojaGoogleAds, desconectarGoogleAds, getGoogleAdsStatus, listarGoogleAdsContas, mensagemErroGoogleAds,
@@ -22,6 +23,8 @@ function descricaoConta(conta: GoogleAdsConta): string {
 }
 
 export function GoogleAdsIntegracaoCard() {
+  const atualizarResumo = useAtualizarResumo();
+  const ehOwner = useEhOwner();
   const [dados, setDados] = useState<GoogleAdsStatus | null>(null);
   const [erro, setErro] = useState('');
   const [erroAcao, setErroAcao] = useState('');
@@ -72,7 +75,7 @@ export function GoogleAdsIntegracaoCard() {
     setSalvando(true);
     setErroAcao('');
     selecionarGoogleAdsConta(contaEscolhida)
-      .then(() => { setEscolhendo(false); return carregar(); })
+      .then(() => { setEscolhendo(false); return carregar().then(() => atualizarResumo()); })
       .catch((err: Error) => setErroAcao(err.message))
       .finally(() => setSalvando(false));
   }
@@ -84,17 +87,17 @@ export function GoogleAdsIntegracaoCard() {
       .catch((err: Error) => setErroAcao(mensagemErroGoogleAds(null, err.message)))
       // Recarrega mesmo quando falha: o erro real fica guardado na conexão, e sem este carregar()
       // a tela continuava mostrando o estado velho e escondia o diagnóstico.
-      .finally(() => { setSincronizando(false); syncAtivo.current = true; carregar(); });
+      .finally(() => { setSincronizando(false); syncAtivo.current = true; carregar().then(() => atualizarResumo()); });
   }
 
   function desconectar() {
     desconectarGoogleAds()
-      .then(() => { setConfirmandoDesconexao(false); return carregar(); })
+      .then(() => { setConfirmandoDesconexao(false); return carregar().then(() => atualizarResumo()); })
       .catch((err: Error) => setErroAcao(err.message));
   }
 
-  if (erro) return <Card title="Google Ads"><ErrorState description={erro} onRetry={carregar} /></Card>;
-  if (!dados) return <Card title="Google Ads"><Skeleton rows={3} /></Card>;
+  if (erro) return <Secao><ErrorState description={erro} onRetry={carregar} /></Secao>;
+  if (!dados) return <Secao><Skeleton rows={3} /></Secao>;
 
   const contaAtiva = dados.contas.find((c) => c.selecionada) || null;
   // Erro tem precedência sobre ter conta selecionada: mostrar "Conectado" logo acima de "sua
@@ -102,10 +105,10 @@ export function GoogleAdsIntegracaoCard() {
   const emErro = dados.status === 'error' || !!dados.erroCodigo;
 
   return (
-    <Card
-      title="Google Ads"
+    <Secao
+      description="Conecte para acompanhar gasto e desempenho das campanhas do Google Ads dentro do painel."
       action={
-        dados.conectado && !emErro ? (
+        ehOwner && dados.conectado && !emErro ? (
           <Button variant="ghost" size="sm" onClick={() => setConfirmandoDesconexao(true)}>Desconectar</Button>
         ) : undefined
       }
@@ -115,6 +118,8 @@ export function GoogleAdsIntegracaoCard() {
           A conexão com o Google Ads ainda não está habilitada na plataforma. Assim que estiver, o botão Conectar fica disponível aqui.
         </Callout>
       )}
+
+      {!ehOwner && <p className="pc-nota">Só o responsável pela loja conecta, troca ou desconecta esta integração.</p>}
 
       <p className="ds-card__status">
         <StatusBadge
@@ -145,7 +150,7 @@ export function GoogleAdsIntegracaoCard() {
             criar e excluir” porque esse é o único escopo que a API do Google Ads oferece — não
             existe versão somente leitura. O Oria não cria, não pausa e não edita nada.
           </Callout>
-          <Button onClick={conectar}>Conectar Google Ads</Button>
+          {ehOwner && <Button onClick={conectar}>Conectar Google Ads</Button>}
         </>
       )}
 
@@ -164,7 +169,7 @@ export function GoogleAdsIntegracaoCard() {
                   distorceria a conta.
                   {/* O aviso resolve o problema que aponta: antes era preciso passar por "Trocar
                       conta" só para escolher a loja. */}
-                  <div className="ga-linha__acao">
+                  {ehOwner && <div className="ga-linha__acao">
                     <Button
                       size="sm"
                       disabled={salvandoLoja}
@@ -173,13 +178,14 @@ export function GoogleAdsIntegracaoCard() {
                         setErroAcao('');
                         atribuirLojaGoogleAds(contaAtiva.customerId)
                           .then(carregar)
+                          .then(() => atualizarResumo())
                           .catch((err: Error) => setErroAcao(err.message))
                           .finally(() => setSalvandoLoja(false));
                       }}
                     >
                       {salvandoLoja ? 'Salvando…' : 'Vincular à loja'}
                     </Button>
-                  </div>
+                  </div>}
                 </Callout>
               )}
               <p className="pc-nota">
@@ -189,15 +195,17 @@ export function GoogleAdsIntegracaoCard() {
                 <Button variant="secondary" size="sm" disabled={sincronizando || !!dados.syncEmAndamento} onClick={sincronizar}>
                   {sincronizando || dados.syncEmAndamento ? 'Sincronizando…' : 'Sincronizar agora'}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => { setEscolhendo(true); setContaEscolhida(contaAtiva.customerId); }}>
-                  Trocar conta
-                </Button>
+                {ehOwner && (
+                  <Button variant="ghost" size="sm" onClick={() => { setEscolhendo(true); setContaEscolhida(contaAtiva.customerId); }}>
+                    Trocar conta
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
             <Callout tone="info" title="Escolha a conta de anúncios">
               <div className="ga-linha__acao">
-                <Button size="sm" onClick={() => setEscolhendo(true)}>Escolher conta</Button>
+                {ehOwner && <Button size="sm" onClick={() => setEscolhendo(true)}>Escolher conta</Button>}
                 <Button variant="ghost" size="sm" disabled={atualizandoContas} onClick={atualizarContas}>
                   {atualizandoContas ? 'Buscando…' : 'Buscar contas'}
                 </Button>
@@ -270,8 +278,9 @@ export function GoogleAdsIntegracaoCard() {
         onClose={() => setConfirmandoDesconexao(false)}
         title="Desconectar o Google Ads?"
         description="O painel para de sincronizar e a permissão é revogada na sua conta Google. Os dados já sincronizados continuam no painel."
+        confirmLabel="Desconectar"
         onConfirm={desconectar}
       />
-    </Card>
+    </Secao>
   );
 }

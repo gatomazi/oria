@@ -4,13 +4,13 @@ import * as RadixTooltip from '@radix-ui/react-tooltip';
 // Tooltip genérico (hover/focus) — usar pra explicar um termo/comportamento sem ocupar espaço
 // fixo na tela. Para blocos de texto explicativo mais longos (parágrafo inteiro), preferir
 // InfoTooltip abaixo, que é mais fácil de ler num popover do que espremido num hover simples.
-export function Tooltip({ content, children }: { content: ReactNode; children: ReactNode }) {
+export function Tooltip({ content, children, side }: { content: ReactNode; children: ReactNode; side?: 'top' | 'right' | 'bottom' | 'left' }) {
   return (
     <RadixTooltip.Provider delayDuration={300}>
       <RadixTooltip.Root>
         <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
         <RadixTooltip.Portal>
-          <RadixTooltip.Content className="ds-tooltip" sideOffset={6}>
+          <RadixTooltip.Content className="ds-tooltip" sideOffset={6} side={side}>
             {content}
             <RadixTooltip.Arrow className="ds-tooltip__arrow" />
           </RadixTooltip.Content>

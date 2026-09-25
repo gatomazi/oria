@@ -778,6 +778,10 @@ button.ds-stepper__button:disabled { cursor: default; }
   user-select: none;
 }
 .ds-dropdown__item svg { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+.ds-dropdown__icon { display: flex; flex-shrink: 0; }
+/* Página atual (menu da loja): tom sutil + ícone em accent, igual ao item ativo da sidebar. */
+.ds-dropdown__item--active { background: var(--surface-2); }
+.ds-dropdown__item--active svg { color: var(--accent); }
 .ds-dropdown__item[data-highlighted] { background: var(--surface-2); }
 .ds-dropdown__item[data-disabled] { color: var(--text-disabled); cursor: not-allowed; }
 .ds-dropdown__item--danger { color: var(--danger); }

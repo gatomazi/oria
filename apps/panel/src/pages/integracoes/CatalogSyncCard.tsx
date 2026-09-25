@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Card, ConfirmDialog, ProgressBar, StatusBadge } from '../../components/ds';
+import { Button, ConfirmDialog, ProgressBar, StatusBadge } from '../../components/ds';
+import { Secao } from './IntegracaoAcordeao';
 import { formatData, plural } from '../../lib/format';
 import { cancelarCatalogSync, getCatalogSyncStatus, iniciarCatalogSync, type CatalogSyncStatus } from '../../api/catalogSync';
 
@@ -67,12 +68,10 @@ export function CatalogSyncCard() {
             : 'Nunca sincronizado';
 
   return (
-    <Card title="Catálogo canônico (Desempenho de Produtos)">
-      <p className="pc-nota">
-        Varre o catálogo completo da Reserva Ink pra alimentar Desempenho de Produtos e as Prioridades de hoje da
-        Jornada de Valor. Roda sozinho — no boot e a cada hora — mas você pode disparar na hora aqui.
-      </p>
-
+    <Secao
+      title="Catálogo para análises de desempenho"
+      description="Alimenta Desempenho de produtos e as Prioridades de hoje. Atualiza sozinho a cada hora; você também pode atualizar agora."
+    >
       <div className="ds-form-row">
         <Button variant="secondary" onClick={() => setConfirmandoSync(true)} disabled={rodando}>
           {rodando ? 'Sincronizando…' : 'Sincronizar catálogo agora'}
@@ -95,7 +94,7 @@ export function CatalogSyncCard() {
                 ? rodando
                   ? `${plural(ultimo.productsSeen, 'produto visto', 'produtos vistos')}${ultimo.pagesTotal ? ` — página ${ultimo.pagesProcessed}/${ultimo.pagesTotal}` : ultimo.pagesProcessed ? ` — página ${ultimo.pagesProcessed}` : ''}`
                   : `${plural(ultimo.productsInserted, 'produto novo', 'produtos novos')}, ${plural(ultimo.productsUpdated, 'atualizado', 'atualizados')} — ${formatData(ultimo.finishedAt || ultimo.startedAt)}`
-                : 'Ainda não sincronizou nesta Organization.'}
+                : 'Ainda não sincronizou nesta loja.'}
             </span>
           </div>
           {rodando && progresso !== null && (
@@ -140,6 +139,6 @@ export function CatalogSyncCard() {
           }
         }}
       />
-    </Card>
+    </Secao>
   );
 }

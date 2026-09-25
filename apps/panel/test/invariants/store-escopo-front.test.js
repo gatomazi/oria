@@ -77,8 +77,9 @@ test('Clientes · a tela pagina no servidor (25 por página) e não ordena só a
 
 test('WhatsApp · o card avisa quando a Meta recusa o token, sem sugerir que está tudo conectado', () => {
   const fonte = ler('pages/integracoes/WhatsappRemetenteCard.tsx');
-  assert.match(fonte, /Token recusado pela Meta/);
-  assert.match(fonte, /dados\.tokenInvalidoEm/);
+  assert.match(fonte, /A Meta recusou a autorização deste número/);
+  assert.match(fonte, /'Reconexão necessária'/, 'o selo não diz "Conectado" quando a Meta recusou o token');
+  assert.match(fonte, /dados\?\.tokenInvalidoEm|dados\.tokenInvalidoEm/);
 });
 
 test('Categorias e Agrupamentos · listas longas são paginadas (25 por página) e mostram o rodapé de paginação', () => {
