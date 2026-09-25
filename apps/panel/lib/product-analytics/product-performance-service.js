@@ -22,6 +22,7 @@
 // `<numerador>PerItem<denominador>` para deixar essa base explícita no próprio campo.
 
 const { resolveAndPersist } = require('./product-identity-resolver');
+const { CAMPO_MAIS_DADOS, normalizarFiltros, passaNosFiltrosDeMetrica, volumeDeDados } = require('./performance-filters');
 
 const METRICAS = Object.freeze(['itemsViewed', 'itemsAddedToCart', 'itemsCheckedOut', 'itemsPurchased', 'itemRevenue']);
 const CAMPOS_CATALOGO = Object.freeze(['name', 'price', 'created_at', 'updated_at']);
@@ -36,6 +37,11 @@ const CAMPOS_RATIO = Object.freeze({
 });
 const RATIOS_VAZIOS = Object.freeze(Object.fromEntries(Object.keys(CAMPOS_RATIO).map((k) => [k, null])));
 const CAMPOS_ORDENAVEIS_METRICA = Object.freeze([...METRICAS, ...Object.keys(CAMPOS_RATIO)]);
+// Rodada "Desempenho de Produtos: mais dados primeiro + filtros" · `sort.field === CAMPO_MAIS_DADOS`
+// ('data', ver performance-filters.js): volume = visualizações + carrinho + checkout + compras; desempate
+// por compras, checkout, carrinho e nome. O RESTO do catálogo vem depois, por nome — nunca escondido (o
+// achado da Rodada J: ordenar só por métrica fazia o catálogo parecer vazio). A direção é sempre "mais
+// primeiro"; `sortDir` não muda nada aqui.
 
 function metricasZeradas() {
   return { itemsViewed: 0, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0, itemRevenue: 0 };
@@ -79,9 +85,11 @@ function validarEntrada({ organizationId, storeId, analyticsProvider, startDate,
 // evita carregar o conjunto elegível da Store inteira quando só a página interessa); sem ele, é o
 // conjunto elegível DA STORE inteira (uso: ordenar por métrica/ratio, que precisa do total antes de
 // paginar — nunca o catálogo inteiro em memória, só os ids com identity resolvida, §6.10).
-async function idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, provider, apenasIds }) {
+async function idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, provider, apenasIds, status = 'active' }) {
   if (apenasIds && !apenasIds.length) return [];
-  const condicoes = ['pei.organization_id = $1', 'pei.store_id = $2', 'pei.namespace = $3', 'cp.is_active'];
+  const condicoes = ['pei.organization_id = $1', 'pei.store_id = $2', 'pei.namespace = $3'];
+  if (status === 'active') condicoes.push('cp.is_active');
+  else if (status === 'inactive') condicoes.push('NOT cp.is_active');
   const params = [organizationId, storeId, namespace];
   if (provider) { params.push(provider); condicoes.push(`cp.provider = $${params.length}`); }
   if (apenasIds) { params.push(apenasIds); condicoes.push(`pei.commerce_product_id = ANY($${params.length}::uuid[])`); }
@@ -197,7 +205,8 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
 
   async function getProductPerformance(entrada) {
     validarEntrada(entrada);
-    const { organizationId, storeId, analyticsProvider, startDate, endDate, filters = {}, sort = null, pagination = {} } = entrada;
+    const { organizationId, storeId, analyticsProvider, startDate, endDate, sort = null, pagination = {} } = entrada;
+    const filtros = normalizarFiltros(entrada.filters || {});
     const namespace = `${analyticsProvider}.item_id`;
 
     // Gate 1 · o trabalho por PERÍODO (relatório + resolução + agregação) é sempre computado UMA
@@ -207,14 +216,22 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     // caminho de sempre, usado pela rota HTTP — nenhuma mudança de contrato pra quem já chama sem
     // esse campo).
     const agregacao = entrada.aggregation || await prepareStoreAnalytics({ organizationId, storeId, analyticsProvider, startDate, endDate });
-    const { idsObservados, resolucao, metricasPorProduto, coverage } = agregacao;
+    const { idsObservados, metricasPorProduto, coverage } = agregacao;
+    const limite = pagination.limit || 50;
+    const base = { organizationId, storeId, provider: filtros.provider, status: filtros.status };
 
     if (!idsObservados.length) {
       // Sem NENHUMA linha no período: não dá pra distinguir "zero de verdade" de "sem cobertura" —
-      // representado no nível da resposta, não inventado por produto (§6.8/§5.8).
+      // representado no nível da resposta, não inventado por produto (§6.8/§5.8). Sem dado nenhum,
+      // nenhum produto satisfaz "mínimo de X" nem "somente com dados": a resposta é vazia, honesta.
+      if (filtros.temFiltroDeMetrica) return { items: [], nextCursor: null, totalCount: 0, coverage };
+      // Só um campo do PRÓPRIO catálogo leva a direção pedida; métrica/ratio/"mais dados" não têm
+      // significado sem dado, então caem em nome ascendente (a direção "desc" de uma métrica não pode
+      // virar Z→A por vazamento).
+      const porCatalogo = !!sort && CAMPOS_CATALOGO.includes(sort.field);
       const pagina = await catalogRepository.listPage({
-        organizationId, storeId, provider: filters.provider, cursor: pagination.cursor, limit: pagination.limit || 50,
-        sortBy: (sort && CAMPOS_CATALOGO.includes(sort.field)) ? sort.field : 'name', sortDir: sort && sort.direction,
+        ...base, cursor: pagination.cursor, limit: limite,
+        sortBy: porCatalogo ? sort.field : 'name', sortDir: porCatalogo ? sort.direction : 'asc',
       });
       return {
         items: pagina.items.map((p) => linhaSemAnalytics(p, 'insufficient_data')),
@@ -228,33 +245,93 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     // catálogo grande) ou métrica/ratio (conjunto elegível DA STORE inteira, ordenado e paginado em
     // memória ANTES do corte de página — nunca só a página do catálogo: um produto de alto
     // desempenho fora da primeira página por nome tem que aparecer no topo ao ordenar por receita). ──
-    const ordenarPorMetrica = sort && CAMPOS_ORDENAVEIS_METRICA.includes(sort.field);
+    const campo = sort && sort.field;
+    const ordenarPorMetrica = !!campo && CAMPOS_ORDENAVEIS_METRICA.includes(campo);
+    const ordenarPorMaisDados = campo === CAMPO_MAIS_DADOS;
+    const pagina = pagination.cursor ? Number(pagination.cursor) : 1;
+    if (!Number.isInteger(pagina) || pagina < 1) throw new TypeError('cursor inválido');
+    const inicio = (pagina - 1) * limite;
     let produtosDaPagina;
     let nextCursor = null;
     let totalCount;
-    if (ordenarPorMetrica) {
-      const idsElegiveis = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, provider: filters.provider });
+
+    if (ordenarPorMaisDados) {
+      // Segmento 1 (em memória): produtos COM dado no período que passam nos filtros, do maior volume
+      // pro menor. Segmento 2 (banco): o resto do catálogo, por nome — só quando não há filtro de
+      // métrica (com "mínimo"/"somente com dados" a cauda, por definição, não satisfaz o filtro).
+      // Uma paginação só percorre os dois em sequência: a página N cobre [inicio, inicio+limite) da
+      // lista concatenada — o cursor continua sendo só o número da página.
+      const candidatos = [...metricasPorProduto.keys()].filter((id) => {
+        const acumulado = metricasPorProduto.get(id);
+        return volumeDeDados(acumulado.metrics) > 0 && passaNosFiltrosDeMetrica(acumulado, filtros);
+      });
+      const produtos = await catalogRepository.getByIds({ ...base, ids: candidatos });
+      const chave = (produto) => metricasPorProduto.get(produto.id).metrics;
+      produtos.sort((a, b) => {
+        const ma = chave(a);
+        const mb = chave(b);
+        return (volumeDeDados(mb) - volumeDeDados(ma))
+          || ((mb.itemsPurchased || 0) - (ma.itemsPurchased || 0))
+          || ((mb.itemsCheckedOut || 0) - (ma.itemsCheckedOut || 0))
+          || ((mb.itemsAddedToCart || 0) - (ma.itemsAddedToCart || 0))
+          || String(a.name).localeCompare(String(b.name), 'pt-BR');
+      });
+      const rankeados = produtos.length;
+      produtosDaPagina = produtos.slice(inicio, inicio + limite);
+      let caudaTotal = 0;
+      if (!filtros.temFiltroDeMetrica) {
+        const faltam = limite - produtosDaPagina.length;
+        // Uma consulta só pra cauda: traz a contagem (sempre) e as linhas que faltam pra encher a página.
+        const cauda = await catalogRepository.listPage({
+          ...base, excludeIds: produtos.map((p) => p.id), sortBy: 'name', sortDir: 'asc',
+          limit: Math.max(faltam, 1), offset: Math.max(0, inicio - rankeados),
+        });
+        caudaTotal = cauda.totalCount;
+        if (faltam > 0) {
+          produtosDaPagina = [...produtosDaPagina, ...cauda.items];
+          // Identity conhecida só pra ESTA página — mesma regra do caminho comum do catálogo.
+          const idsDaCauda = await idsComIdentidadeResolvida({
+            pool, organizationId, storeId, namespace, status: filtros.status, apenasIds: cauda.items.map((p) => p.id),
+          });
+          for (const id of idsDaCauda) agregacao.linhaZerada(id);
+        }
+      }
+      totalCount = rankeados + caudaTotal;
+      nextCursor = inicio + produtosDaPagina.length < totalCount ? String(pagina + 1) : null;
+    } else if (ordenarPorMetrica) {
+      const idsElegiveis = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, provider: filtros.provider, status: filtros.status });
       for (const id of idsElegiveis) agregacao.linhaZerada(id);
-      const todos = await catalogRepository.getByIds({ organizationId, storeId, ids: [...metricasPorProduto.keys()] });
+      const candidatos = [...metricasPorProduto.keys()].filter((id) => passaNosFiltrosDeMetrica(metricasPorProduto.get(id), filtros));
+      const todos = await catalogRepository.getByIds({ ...base, ids: candidatos });
       const valorDeOrdenacao = (produto) => valorDoCampo(metricasPorProduto.get(produto.id), sort.field);
       todos.sort((a, b) => compararComNullPorUltimo(valorDeOrdenacao(a), valorDeOrdenacao(b), sort.direction));
       totalCount = todos.length;
-      const limite = pagination.limit || 50;
-      const pagina = pagination.cursor ? Number(pagination.cursor) : 1;
-      const inicio = (pagina - 1) * limite;
       produtosDaPagina = todos.slice(inicio, inicio + limite);
       nextCursor = inicio + produtosDaPagina.length < totalCount ? String(pagina + 1) : null;
-    } else {
-      const pagina = await catalogRepository.listPage({
-        organizationId, storeId, provider: filters.provider, cursor: pagination.cursor, limit: pagination.limit || 50,
-        sortBy: (sort && sort.field) || 'name', sortDir: sort && sort.direction,
+    } else if (filtros.temFiltroDeMetrica) {
+      // Ordenação por campo do catálogo + filtro de métrica: o filtro só existe em memória, então o
+      // conjunto de ids que passou vira `onlyIds` e o BANCO continua ordenando/paginando pela coluna.
+      const candidatos = [...metricasPorProduto.keys()].filter((id) => passaNosFiltrosDeMetrica(metricasPorProduto.get(id), filtros));
+      const paginaCatalogo = await catalogRepository.listPage({
+        ...base, onlyIds: candidatos, cursor: pagination.cursor, limit: limite,
+        sortBy: campo || 'name', sortDir: sort && sort.direction,
       });
-      produtosDaPagina = pagina.items;
-      nextCursor = pagina.nextCursor;
-      totalCount = pagina.totalCount;
+      produtosDaPagina = paginaCatalogo.items;
+      nextCursor = paginaCatalogo.nextCursor;
+      totalCount = paginaCatalogo.totalCount;
+    } else {
+      const paginaCatalogo = await catalogRepository.listPage({
+        ...base, cursor: pagination.cursor, limit: limite,
+        sortBy: campo || 'name', sortDir: sort && sort.direction,
+      });
+      produtosDaPagina = paginaCatalogo.items;
+      nextCursor = paginaCatalogo.nextCursor;
+      totalCount = paginaCatalogo.totalCount;
       // Identity conhecida só para ESTA página (nunca a Store inteira neste ramo — é o caminho
       // comum de navegação por catálogo, tem que ficar barato mesmo com um catálogo grande).
-      const idsDaPagina = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, apenasIds: produtosDaPagina.map((p) => p.id) });
+      const idsDaPagina = await idsComIdentidadeResolvida({
+        pool, organizationId, storeId, namespace, status: filtros.status, apenasIds: produtosDaPagina.map((p) => p.id),
+      });
       for (const id of idsDaPagina) agregacao.linhaZerada(id);
     }
 
