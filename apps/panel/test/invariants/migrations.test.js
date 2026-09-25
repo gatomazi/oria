@@ -104,6 +104,20 @@ test('migrations · do zero, num banco vazio, aplicam todas na ordem', async (t)
       '1790001600000_commerce-catalog',
       '1790001700000_product-external-identities',
       '1790001800000_entitlement-product-performance',
+      // Fase C · Gerador de Criativos (renumeradas na integração para depois de entitlement-product-
+      // performance — as duas branches usaram o mesmo intervalo de timestamps independentemente).
+      '1790001900000_creative-trace',
+      '1790002000000_creative-plan-v2',
+      '1790002100000_creative-feedback',
+      '1790002200000_creative-angles',
+      '1790002300000_creative-angles-compat',
+      '1790002400000_creative-enrichment',
+      '1790002500000_creative-enrichment-provider-meta',
+      '1790002600000_creative-enrichment-pilot-budget',
+      // Rodada "Observabilidade e controle do catalog sync" · mesma colisão de timestamp
+      // que o Gerador de Criativos já teve (comentário acima) — as duas branches escolheram
+      // 1790001900000 independentemente; renumerada pra depois de tudo que já estava em main.
+      '1790002700000_catalog-sync-observabilidade',
     ]);
     assert.ok((await tabelas(pool)).includes('integration_secrets'));
   } finally { await pool.end(); }
