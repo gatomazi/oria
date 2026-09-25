@@ -70,6 +70,9 @@ function NavLink({ item, activeKey, reduzida }: { item: NavItem; activeKey: stri
   return reduzida ? <Tooltip content={item.label} side="right">{link}</Tooltip> : link;
 }
 
+// Marca oficial do produto: servida pelo próprio servidor em /assets (arquivo único em apps/panel/assets/oria/).
+const SIMBOLO_ORIA = '/assets/oria/oria-simbolo.png';
+
 interface RouteInfo {
   activeKey: string;
   title: string;
@@ -324,9 +327,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className={'ad-shell' + (navOpen ? ' ad-shell--nav-open' : '') + (prefs.colapsada ? ' ad-shell--nav-reduzida' : '')}>
       <aside className="ad-sidebar" id="ad-sidebar" aria-label="Navegação principal">
         <div className="ad-sidebar__brand">
-          <div className="ad-sidebar__logo" aria-hidden="true">
-            {settings ? initials(nomeProduto) : ''}
-          </div>
+          {/* Símbolo oficial do Oria (mesmo arquivo público do site e do favicon), sem redesenho. Decorativo: o nome vem do texto ao lado,
+              que na sidebar reduzida fica só para leitores de tela e aparece em tooltip. */}
+          {reduzida ? (
+            <Tooltip content={nomeProduto} side="right">
+              <img className="ad-sidebar__logo" src={SIMBOLO_ORIA} alt="" width={35} height={28} />
+            </Tooltip>
+          ) : (
+            <img className="ad-sidebar__logo" src={SIMBOLO_ORIA} alt="" width={35} height={28} />
+          )}
           <div className="ad-sidebar__brand-text">
             <div className="ad-sidebar__brand-nome">{settings ? nomeProduto : <Skeleton rows={1} height="14px" width="120px" />}</div>
             <div className="ad-sidebar__brand-tagline">Central operacional</div>

@@ -28,25 +28,6 @@ export const NAV_TOP: NavItem[] = [{ key: 'visao-geral', label: 'Visão geral', 
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Operação',
-    items: [
-      { key: 'pedidos-central', label: 'Pedidos', href: '/admin/pedidos-central' },
-      { key: 'clientes', label: 'Clientes', href: '/admin/clientes' },
-      { key: 'trocas', label: 'Trocas e devoluções', href: '/admin/trocas' },
-      { key: 'estoque', label: 'Estoque', href: '/admin/estoque' },
-      { key: 'simular-frete', label: 'Simular frete', href: '/admin/simular-frete' },
-    ],
-  },
-  {
-    label: 'Catálogo',
-    items: [
-      { key: 'produtos', label: 'Produtos', href: '/admin/produtos' },
-      { key: 'categorias', label: 'Categorias', href: '/admin/categorias' },
-      { key: 'agrupamentos', label: 'Agrupamentos', href: '/admin/agrupamentos' },
-      { key: 'promocoes', label: 'Promoções', href: '/admin/promocoes' },
-    ],
-  },
-  {
     // Tudo o que conversa com o cliente: canal, recuperação de compra, PIX, automações e templates.
     // Conectar o número/canal é da página Integrações (menu da loja), não daqui.
     label: 'Comunicação',
@@ -99,12 +80,31 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [{ key: 'instagram', label: 'Visão geral', comingSoon: true }],
   },
   {
+    label: 'Operação',
+    items: [
+      { key: 'pedidos-central', label: 'Pedidos', href: '/admin/pedidos-central' },
+      { key: 'clientes', label: 'Clientes', href: '/admin/clientes' },
+      { key: 'trocas', label: 'Trocas e devoluções', href: '/admin/trocas' },
+      { key: 'estoque', label: 'Estoque', href: '/admin/estoque' },
+      { key: 'simular-frete', label: 'Simular frete', href: '/admin/simular-frete' },
+    ],
+  },
+  {
     label: 'Financeiro',
     items: [
       { key: 'financeiro', label: 'Visão financeira', href: '/admin/financeiro' },
       { key: 'despesas', label: 'Despesas', href: '/admin/financeiro/despesas' },
       { key: 'custos-api', label: 'Custos de API', href: '/admin/financeiro/custos-api' },
       { key: 'reembolsos', label: 'Reembolsos', href: '/admin/reembolsos' },
+    ],
+  },
+  {
+    label: 'Catálogo',
+    items: [
+      { key: 'produtos', label: 'Produtos', href: '/admin/produtos' },
+      { key: 'categorias', label: 'Categorias', href: '/admin/categorias' },
+      { key: 'agrupamentos', label: 'Agrupamentos', href: '/admin/agrupamentos' },
+      { key: 'promocoes', label: 'Promoções', href: '/admin/promocoes' },
     ],
   },
 ];
