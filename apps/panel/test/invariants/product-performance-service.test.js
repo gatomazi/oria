@@ -608,6 +608,154 @@ test('D · isolamento: mais dados primeiro nunca mistura produto de outro provid
   assert.deepEqual(nomes(r), ['Do A']);
 }));
 
+// ── Situação = publicado na Ink · busca por nome · ranking extra (rodada "busca + reconciliação") ──
+
+async function semearComStatus(provider, produtos) {
+  const ids = new Map();
+  for (const p of produtos) {
+    const { rows: [{ id }] } = await sup.query(
+      `INSERT INTO commerce_products (organization_id, store_id, provider, provider_product_id, name, is_active, metadata, last_seen_sync_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8) RETURNING id`,
+      [ORG_A, STORE_A, provider, p.providerProductId, p.nome, p.isActive !== false, JSON.stringify(p.metadata || {}), RUN]
+    );
+    ids.set(p.providerProductId, id);
+  }
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider });
+  return ids;
+}
+
+test('S · ativo = PUBLICADO na Ink: não publicado/recusado ficam de fora do padrão, is_active=false também; sem status do provider conta como ativo', () => em(ORG_A, STORE_A, async () => {
+  await semearComStatus('pub_provider', [
+    { providerProductId: 'pb-1', nome: 'Publicado', metadata: { status: 'published' } },
+    { providerProductId: 'pb-2', nome: 'Não publicado', metadata: { status: 'not_published' } },
+    { providerProductId: 'pb-3', nome: 'Recusado', metadata: { status: 'refused' } },
+    { providerProductId: 'pb-4', nome: 'Fora da Ink', metadata: { status: 'published' }, isActive: false },
+    { providerProductId: 'pb-5', nome: 'Sem status' },
+  ]);
+  const { registry } = registryComAnalytics([dados('pb-1', { v: 5 }), dados('pb-2', { v: 50 }), dados('pb-5', { v: 1 })]);
+  const svc = montarServico(registry);
+  for (const sort of [MAIS_DADOS, { field: 'name', direction: 'asc' }, undefined]) {
+    const rotulo = sort ? sort.field : 'padrão';
+    assert.deepEqual(nomes(await consulta(svc, { provider: 'pub_provider' }, { sort })).sort(), ['Publicado', 'Sem status'], `padrão (${rotulo})`);
+    assert.deepEqual(nomes(await consulta(svc, { provider: 'pub_provider', status: 'inactive' }, { sort })).sort(), ['Fora da Ink', 'Não publicado', 'Recusado'], `inactive (${rotulo})`);
+    assert.equal((await consulta(svc, { provider: 'pub_provider', status: 'all' }, { sort })).totalCount, 5, `all (${rotulo})`);
+  }
+  // A linha diz se está ativo e, se não, POR QUÊ (o status cru da Ink)
+  const inativos = await consulta(svc, { provider: 'pub_provider', status: 'inactive' }, { sort: { field: 'name', direction: 'asc' } });
+  const porNome = Object.fromEntries(inativos.items.map((i) => [i.product.name, i.product]));
+  assert.equal(porNome['Não publicado'].isActive, false);
+  assert.equal(porNome['Não publicado'].providerStatus, 'not_published');
+  assert.equal(porNome['Recusado'].providerStatus, 'refused');
+  assert.equal(porNome['Fora da Ink'].isActive, false);
+  const ativos = await consulta(svc, { provider: 'pub_provider' }, { sort: { field: 'name', direction: 'asc' } });
+  assert.ok(ativos.items.every((i) => i.product.isActive === true));
+}));
+
+test('S · o detalhe do produto continua achando um produto NÃO publicado (o repositório só endurece a listagem, não o getById)', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearComStatus('pub_detalhe', [{ providerProductId: 'pd-1', nome: 'Rascunho', metadata: { status: 'not_published' } }]);
+  const { registry } = registryComAnalytics([dados('pd-1', { v: 3 })]);
+  const r = await montarServico(registry).getProductPerformanceById({
+    organizationId: ORG_A, storeId: STORE_A, analyticsProvider: ANALYTICS_PROVIDER, productId: ids.get('pd-1'), ...PERIODO,
+  });
+  assert.ok(r, 'o drawer tem que abrir o produto que a busca achou');
+  assert.equal(r.product.isActive, false);
+  assert.equal(r.metrics.itemsViewed, 3);
+}));
+
+test('B · busca por nome: acha produto de QUALQUER situação, sem diferenciar maiúscula, e ignora os demais filtros', () => em(ORG_A, STORE_A, async () => {
+  await semearComStatus('bq_provider', [
+    { providerProductId: 'bq-1', nome: 'Camiseta Preta Lisa', metadata: { status: 'published' } },
+    { providerProductId: 'bq-2', nome: 'CAMISETA branca', metadata: { status: 'not_published' } },
+    { providerProductId: 'bq-3', nome: 'Camiseta antiga', metadata: { status: 'published' }, isActive: false },
+    { providerProductId: 'bq-4', nome: 'Calça jeans', metadata: { status: 'published' } },
+  ]);
+  const { registry } = registryComAnalytics([dados('bq-1', { v: 5 })]);
+  const svc = montarServico(registry);
+  const r = await consulta(svc, { provider: 'bq_provider', search: 'camiseta' });
+  assert.deepEqual(nomes(r).sort(), ['CAMISETA branca', 'Camiseta Preta Lisa', 'Camiseta antiga']); // publicado, não publicado e fora da Ink
+  assert.equal(r.totalCount, 3);
+  // Filtros que, sozinhos, esconderiam tudo — ignorados na busca:
+  const ignorando = await consulta(svc, { provider: 'bq_provider', search: 'camiseta', status: 'active', minPurchased: 999999, minViewed: 999999, hasData: true });
+  assert.equal(ignorando.totalCount, 3);
+  // Sem busca, os MESMOS filtros dariam vazio — prova de que a busca é que os neutralizou
+  assert.equal((await consulta(svc, { provider: 'bq_provider', minPurchased: 999999 })).totalCount, 0);
+}));
+
+test('B · busca com várias palavras exige TODAS; texto só com espaços é "sem busca"', () => em(ORG_A, STORE_A, async () => {
+  await semearComStatus('bq_multi', [
+    { providerProductId: 'bm-1', nome: 'Camiseta Preta Lisa' }, { providerProductId: 'bm-2', nome: 'Camiseta Branca' }, { providerProductId: 'bm-3', nome: 'Boné Preto' },
+  ]);
+  const svc = montarServico(registryComAnalytics([]).registry);
+  assert.deepEqual(nomes(await consulta(svc, { provider: 'bq_multi', search: 'camiseta   preta' })), ['Camiseta Preta Lisa']);
+  assert.deepEqual(nomes(await consulta(svc, { provider: 'bq_multi', search: 'preta camiseta' })), ['Camiseta Preta Lisa']); // ordem das palavras não importa
+  assert.equal((await consulta(svc, { provider: 'bq_multi', search: '   ' })).totalCount, 3); // vira "sem busca": listagem normal
+}));
+
+test('B · busca trata % e _ como LETRA (nunca curinga) e o texto nunca vira SQL', () => em(ORG_A, STORE_A, async () => {
+  await semearComStatus('bq_esc', [
+    { providerProductId: 'be-1', nome: 'Algodão 100% puro' }, { providerProductId: 'be-2', nome: 'Algodão 1000 puro' }, { providerProductId: 'be-3', nome: 'camisa_azul' }, { providerProductId: 'be-4', nome: 'camisaXazul' },
+  ]);
+  const svc = montarServico(registryComAnalytics([]).registry);
+  assert.deepEqual(nomes(await consulta(svc, { provider: 'bq_esc', search: '100%' })), ['Algodão 100% puro']); // % não casa "1000"
+  assert.deepEqual(nomes(await consulta(svc, { provider: 'bq_esc', search: 'camisa_azul' })), ['camisa_azul']); // _ não casa "camisaXazul"
+  const injecao = await consulta(svc, { provider: 'bq_esc', search: "'; DROP TABLE commerce_products; --" });
+  assert.equal(injecao.totalCount, 0);
+  assert.ok((await sup.query('SELECT count(*)::int AS n FROM commerce_products')).rows[0].n > 0); // a tabela segue de pé
+}));
+
+test('B · busca mais longa que o limite ou com palavras demais é erro do service (TypeError), nunca ignorada', () => em(ORG_A, STORE_A, async () => {
+  const svc = montarServico(registryComAnalytics([]).registry);
+  await assert.rejects(consulta(svc, { search: 'a'.repeat(101) }), TypeError);
+  await assert.rejects(consulta(svc, { search: 'a b c d e f g' }), TypeError);
+  await assert.rejects(consulta(svc, { search: 42 }), TypeError);
+}));
+
+test('B · busca + ordenação por MÉTRICA não esconde produto nunca observado (cai em "mais dados primeiro")', () => em(ORG_A, STORE_A, async () => {
+  await semearComStatus('bq_metrica', [
+    { providerProductId: 'bx-1', nome: 'Meia listrada' }, { providerProductId: 'bx-2', nome: 'Meia lisa' }, { providerProductId: 'bx-3', nome: 'Meia esquecida' },
+  ]);
+  const { registry } = registryComAnalytics([dados('bx-1', { v: 5 }), dados('bx-2', { v: 50 })]); // bx-3 nunca observado
+  const svc = montarServico(registry);
+  // Sem busca, sort por métrica exclui o nunca observado (contrato da G.1)…
+  assert.deepEqual(nomes(await consulta(svc, { provider: 'bq_metrica' }, { sort: { field: 'itemsViewed', direction: 'desc' } })), ['Meia lisa', 'Meia listrada']);
+  // …com busca, o produto que a pessoa procura aparece.
+  const r = await consulta(svc, { provider: 'bq_metrica', search: 'meia' }, { sort: { field: 'itemsViewed', direction: 'desc' } });
+  assert.deepEqual(nomes(r), ['Meia lisa', 'Meia listrada', 'Meia esquecida']);
+}));
+
+test('B · busca com ordenação por nome, e a paginação atravessa os resultados sem repetir', () => em(ORG_A, STORE_A, async () => {
+  await semearComStatus('bq_pag', [
+    { providerProductId: 'bp-1', nome: 'Toalha C' }, { providerProductId: 'bp-2', nome: 'Toalha A' }, { providerProductId: 'bp-3', nome: 'Toalha B' }, { providerProductId: 'bp-4', nome: 'Lençol' },
+  ]);
+  const svc = montarServico(registryComAnalytics([dados('bp-1', { v: 1 })]).registry);
+  const p1 = await consulta(svc, { provider: 'bq_pag', search: 'toalha' }, { sort: { field: 'name', direction: 'asc' }, pagination: { limit: 2 } });
+  assert.deepEqual(nomes(p1), ['Toalha A', 'Toalha B']);
+  assert.equal(p1.totalCount, 3);
+  const p2 = await consulta(svc, { provider: 'bq_pag', search: 'toalha' }, { sort: { field: 'name', direction: 'asc' }, pagination: { limit: 2, cursor: p1.nextCursor } });
+  assert.deepEqual(nomes(p2), ['Toalha C']);
+  // e no padrão "mais dados primeiro": quem tem dado (Toalha C) na frente, o resto por nome
+  assert.deepEqual(nomes(await consulta(svc, { provider: 'bq_pag', search: 'toalha' }, { sort: MAIS_DADOS })), ['Toalha C', 'Toalha A', 'Toalha B']);
+}));
+
+test('B · busca num período SEM linha de analytics: acha o produto assim mesmo, com "sem dado no período"', () => em(ORG_A, STORE_A, async () => {
+  await semearComStatus('bq_semga', [{ providerProductId: 'bs-1', nome: 'Chinelo verde', metadata: { status: 'not_published' } }]);
+  const r = await consulta(montarServico(registryComAnalytics([]).registry), { provider: 'bq_semga', search: 'chinelo', minViewed: 10 });
+  assert.deepEqual(nomes(r), ['Chinelo verde']); // o minViewed (que sozinho daria vazio) foi ignorado
+  assert.ok(r.items[0].diagnostics.includes('insufficient_data'));
+}));
+
+test('X · rankingExtra (interno): volume que não vem do GA4 entra no ranking — o produto sem GA4 sobe, o sem nada fica na cauda', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semearComStatus('rx_provider', [
+    { providerProductId: 'rx-1', nome: 'X com GA4' }, { providerProductId: 'rx-2', nome: 'Y só vendas' }, { providerProductId: 'rx-3', nome: 'Z nada' },
+  ]);
+  const { registry } = registryComAnalytics([dados('rx-1', { v: 5 })]);
+  const svc = montarServico(registry);
+  const r = await consulta(svc, { provider: 'rx_provider' }, { sort: MAIS_DADOS, rankingExtra: new Map([[ids.get('rx-2'), 100]]) });
+  assert.deepEqual(nomes(r), ['Y só vendas', 'X com GA4', 'Z nada']);
+  // Sem o extra, o Y é só mais um da cauda (comportamento de sempre)
+  assert.deepEqual(nomes(await consulta(svc, { provider: 'rx_provider' }, { sort: MAIS_DADOS })), ['X com GA4', 'Y só vendas', 'Z nada']);
+}));
+
 // ── Isolamento ────────────────────────────────────────────────────────────────────────────────
 
 test('G · Organization isolation: A não vê produto de B mesmo com o mesmo external id observado', async () => {

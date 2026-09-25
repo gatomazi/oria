@@ -17,6 +17,8 @@
 // estado explícito (`insufficient_identity`/`insufficient_data`) em vez de uma diferença que
 // pareceria precisa e não é.
 
+const { CAMPO_MAIS_DADOS } = require('./performance-filters');
+
 const CAVEATS = Object.freeze([
   'itemRevenue (Analytics) e commerceItemRevenue (Commerce) não são diretamente comparáveis sem ajuste: '
     + 'o Commerce não tem reembolso itemizado nem rateio de desconto por item no cache local usado aqui '
@@ -54,6 +56,47 @@ function classificarDivergencia(analyticsUnits, commerceUnits, tolerancia) {
   const delta = analyticsUnits - commerceUnits;
   const deltaRate = Math.abs(delta) / base;
   return deltaRate <= tolerancia ? 'aligned' : 'divergent';
+}
+
+// Uma linha da reconciliação a partir da linha de desempenho do produto (Analytics) e do que o
+// Commerce confirmou. Compartilhada pelo caminho "catálogo inteiro" e pelo paginado — a semântica
+// (status, diagnósticos) é UMA só.
+function linhaDeReconciliacao(linha, commercePorProduto, divergenceTolerance) {
+  const diagnostics = [];
+  // Duas causas diferentes, as DUAS com identity.status 'unmatched' na Fase G — precisam ficar
+  // separadas aqui (§ rodada: "se a identidade ou a cobertura forem insuficientes, devolva
+  // estado explícito"): período INTEIRO sem nenhuma linha de analytics (`insufficient_data`,
+  // linhaSemAnalytics) não é o mesmo problema que ESTE produto não ter identity resolvida
+  // (`unmatched_identity`, montarLinha) com o resto do período coberto normalmente.
+  if (linha.diagnostics.includes('insufficient_data')) {
+    diagnostics.push('no_analytics_data_in_period');
+    return Object.freeze({
+      product: linha.product, analyticsUnits: null, commerceUnits: null, analyticsRevenue: null, commerceRevenue: null,
+      paidOrdersDistinct: 0, status: 'insufficient_data', diagnostics: Object.freeze(diagnostics),
+    });
+  }
+  if (linha.identity.status === 'unmatched') {
+    diagnostics.push('insufficient_identity');
+    return Object.freeze({
+      product: linha.product, analyticsUnits: null, commerceUnits: null, analyticsRevenue: null, commerceRevenue: null,
+      paidOrdersDistinct: 0, status: 'insufficient_identity', diagnostics: Object.freeze(diagnostics),
+    });
+  }
+  const commerce = commercePorProduto.get(linha.product.id) || { unitsSold: 0, itemRevenue: 0, paidOrders: new Set() };
+  const analyticsUnits = linha.metrics ? linha.metrics.itemsPurchased : null;
+  const status = classificarDivergencia(analyticsUnits, commerce.unitsSold, divergenceTolerance);
+  if (status === 'insufficient_data') diagnostics.push('metric_unavailable');
+  if (status === 'divergent') diagnostics.push('units_divergent');
+  return Object.freeze({
+    product: linha.product,
+    analyticsUnits,
+    commerceUnits: commerce.unitsSold,
+    analyticsRevenue: linha.metrics ? linha.metrics.itemRevenue : null,
+    commerceRevenue: commerce.itemRevenue,
+    paidOrdersDistinct: commerce.paidOrders.size,
+    status,
+    diagnostics: Object.freeze(diagnostics),
+  });
 }
 
 /**
@@ -155,49 +198,37 @@ function createReconciliationService({ registry, productPerformanceService }) {
       });
     }
 
+    // Caminho PAGINADO (é o da rota HTTP): nunca materializa o catálogo inteiro. Só a página pedida
+    // vira linha — ranqueada por volume (unidades observadas no Analytics + unidades vendidas no
+    // Commerce, então quem vendeu mas o GA4 nunca viu não cai no fim da fila), e o resto do catálogo
+    // vem depois por nome. É a mesma mecânica de "mais dados primeiro" da Visão Geral.
+    if (entrada.pagination) {
+      const [comercioPagina, aggregation] = await Promise.all([
+        getCommerceUnitsAggregation({ organizationId, storeId, commerceProvider, startDate, endDate }),
+        productPerformanceService.prepareStoreAnalytics({ organizationId, storeId, analyticsProvider, startDate, endDate }),
+      ]);
+      const unidadesVendidas = new Map([...comercioPagina.porProduto].map(([id, v]) => [id, v.unitsSold]));
+      const pagina = await productPerformanceService.getProductPerformance({
+        organizationId, storeId, analyticsProvider, startDate, endDate, filters,
+        aggregation, sort: { field: CAMPO_MAIS_DADOS, direction: 'desc' }, rankingExtra: unidadesVendidas, pagination: entrada.pagination,
+      });
+      return Object.freeze({
+        status: 'ok',
+        items: pagina.items.map((linha) => linhaDeReconciliacao(linha, comercioPagina.porProduto, divergenceTolerance)),
+        nextCursor: pagina.nextCursor,
+        totalCount: pagina.totalCount,
+        coverage: pagina.coverage,
+        caveats: CAVEATS,
+      });
+    }
+
     const [comercio, analyticsCompleto] = await Promise.all([
       getCommerceUnitsAggregation({ organizationId, storeId, commerceProvider, startDate, endDate }),
       agregarAnalyticsCompleto({ organizationId, storeId, analyticsProvider, startDate, endDate, filters }),
     ]);
     const commercePorProduto = comercio.porProduto;
 
-    const items = analyticsCompleto.items.map((linha) => {
-      const diagnostics = [];
-      // Duas causas diferentes, as DUAS com identity.status 'unmatched' na Fase G — precisam ficar
-      // separadas aqui (§ rodada: "se a identidade ou a cobertura forem insuficientes, devolva
-      // estado explícito"): período INTEIRO sem nenhuma linha de analytics (`insufficient_data`,
-      // linhaSemAnalytics) não é o mesmo problema que ESTE produto não ter identity resolvida
-      // (`unmatched_identity`, montarLinha) com o resto do período coberto normalmente.
-      if (linha.diagnostics.includes('insufficient_data')) {
-        diagnostics.push('no_analytics_data_in_period');
-        return Object.freeze({
-          product: linha.product, analyticsUnits: null, commerceUnits: null, analyticsRevenue: null, commerceRevenue: null,
-          paidOrdersDistinct: 0, status: 'insufficient_data', diagnostics: Object.freeze(diagnostics),
-        });
-      }
-      if (linha.identity.status === 'unmatched') {
-        diagnostics.push('insufficient_identity');
-        return Object.freeze({
-          product: linha.product, analyticsUnits: null, commerceUnits: null, analyticsRevenue: null, commerceRevenue: null,
-          paidOrdersDistinct: 0, status: 'insufficient_identity', diagnostics: Object.freeze(diagnostics),
-        });
-      }
-      const commerce = commercePorProduto.get(linha.product.id) || { unitsSold: 0, itemRevenue: 0, paidOrders: new Set() };
-      const analyticsUnits = linha.metrics ? linha.metrics.itemsPurchased : null;
-      const status = classificarDivergencia(analyticsUnits, commerce.unitsSold, divergenceTolerance);
-      if (status === 'insufficient_data') diagnostics.push('metric_unavailable');
-      if (status === 'divergent') diagnostics.push('units_divergent');
-      return Object.freeze({
-        product: linha.product,
-        analyticsUnits,
-        commerceUnits: commerce.unitsSold,
-        analyticsRevenue: linha.metrics ? linha.metrics.itemRevenue : null,
-        commerceRevenue: commerce.itemRevenue,
-        paidOrdersDistinct: commerce.paidOrders.size,
-        status,
-        diagnostics: Object.freeze(diagnostics),
-      });
-    });
+    const items = analyticsCompleto.items.map((linha) => linhaDeReconciliacao(linha, commercePorProduto, divergenceTolerance));
 
     return Object.freeze({
       status: 'ok',

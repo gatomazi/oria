@@ -324,6 +324,39 @@ test('H · /products: filtros malformados são 400 estável, nunca 500 nem ignor
   }
 });
 
+test('H · /products?q= (busca por nome): acha o produto, ignora os demais filtros e responde 400 pra busca inválida', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const achou = await nav.req('GET', `${PRODUTOS}&q=${encodeURIComponent('produto mock')}`);
+  assert.equal(achou.status, 200, achou.texto);
+  assert.equal(achou.json.totalCount, 1);
+  assert.equal(achou.json.items[0].product.name, 'Produto Mock');
+  // um filtro que sozinho esconderia o produto é ignorado enquanto a busca está em uso
+  const ignorando = await nav.req('GET', `${PRODUTOS}&q=mock&minPurchased=999999999&status=inactive&hasData=true`);
+  assert.equal(ignorando.json.totalCount, 1);
+  assert.equal((await nav.req('GET', `${PRODUTOS}&minPurchased=999999999`)).json.totalCount, 0); // sem busca, esconderia
+  assert.equal((await nav.req('GET', `${PRODUTOS}&q=nome-que-nao-existe-em-lugar-nenhum`)).json.totalCount, 0);
+  assert.equal((await nav.req('GET', `${PRODUTOS}&q=`)).json.totalCount, 1); // q vazio = sem busca
+  for (const ruim of [`q=${'a'.repeat(101)}`, 'q=a+b+c+d+e+f+g', 'q=a&q=b']) {
+    const r = await nav.req('GET', `${PRODUTOS}&${ruim}`);
+    assert.equal(r.status, 400, ruim);
+    assert.equal(r.json.codigo, 'PRODUCT_ANALYTICS_INVALID_INPUT');
+  }
+});
+
+test('H · /reconciliation: limit/cursor inválidos são 400 (paginação sempre validada); período antigo segue insufficient_data sem paginar', async () => {
+  const nav = await navegador().entrar('pah-a@teste.oria');
+  const RECON = '/api/admin/product-analytics/reconciliation';
+  for (const ruim of ['limit=0', 'limit=99999', 'limit=abc', `cursor=${'9'.repeat(40)}`]) {
+    const r = await nav.req('GET', `${RECON}?${PERIODO}&${ruim}`);
+    assert.equal(r.status, 400, ruim);
+    assert.equal(r.json.codigo, 'PRODUCT_ANALYTICS_INVALID_INPUT');
+  }
+  const antigo = await nav.req('GET', `${RECON}?startDate=2026-07-01&endDate=2026-08-01&limit=10`);
+  assert.equal(antigo.status, 200, antigo.texto);
+  assert.equal(antigo.json.status, 'insufficient_data');
+  assert.deepEqual(antigo.json.items, []);
+});
+
 test('H · cache reaproveitado entre requests HTTP: 2ª chamada dentro do TTL não bate no Google de novo', async () => {
   // Período PRÓPRIO deste teste (nunca usado por outro) — garante cache frio de verdade no início,
   // em vez de assumir que nenhum teste anterior já aqueceu o cache do mesmo período/escopo.

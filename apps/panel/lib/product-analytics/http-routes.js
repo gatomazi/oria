@@ -98,6 +98,10 @@ function validarFilters(query) {
     if (typeof valor !== 'string') throw new EntradaInvalidaError(`${chave} inválido`);
     return valor.trim();
   };
+  // `q`: busca pelo nome. Se vier preenchida, o service ignora todo o resto (status, mínimos,
+  // hasData) e devolve o produto independente da situação — ver performance-filters.js.
+  const q = texto('q');
+  if (q) filters.search = q;
   const status = texto('status');
   if (status !== undefined) filters.status = status;
   for (const chave of Object.keys(MINIMOS)) {
@@ -273,8 +277,12 @@ function createProductAnalyticsRouter({
     const { organizationId, storeId } = req.tenant;
     try {
       const { startDate, endDate } = validarPeriodo(req.query);
+      // Sempre paginada (o catálogo tem dezenas de milhares de linhas): `limit` (padrão 50) e `cursor`
+      // opaco, como em /products. Ordem: mais volume (Analytics + Commerce) primeiro, resto por nome.
+      const { limit, cursor } = validarPaginacao(req.query);
       const r = await reconciliationService.reconcileProductPerformance({
         organizationId, storeId, commerceProvider, analyticsProvider, startDate, endDate,
+        pagination: { limit: limit || 50, cursor },
       });
       return res.json(r);
     } catch (err) {

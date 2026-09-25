@@ -258,6 +258,120 @@ test('G.1 · caveats de receita/timezone/sync-lag sempre presentes na resposta',
 
 // ── Guarda estática: provider-agnostic de verdade ─────────────────────────────────────────────────
 
+// ── Paginação no servidor (rodada "reconciliação paginada") ─────────────────────────────────────
+//
+// Catálogo próprio (provider `recon_pag*`, passado em `filters`) pra os totais não misturarem com os
+// produtos que os outros testes deste arquivo já semearam.
+
+async function semearDe(provider, produtos) {
+  const ids = new Map();
+  for (const p of produtos) {
+    const { rows: [{ id }] } = await sup.query(
+      `INSERT INTO commerce_products (organization_id, store_id, provider, provider_product_id, name, metadata, last_seen_sync_id)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7) RETURNING id`,
+      [ORG_A, STORE_A, provider, p.providerProductId, p.nome, JSON.stringify(p.metadata || {}), RUN]
+    );
+    ids.set(p.providerProductId, id);
+  }
+  await bootstrapCommerceIdentities({ pool: pool() }, { organizationId: ORG_A, storeId: STORE_A, provider });
+  return ids;
+}
+
+const venda = (id, produtoId, quantity, pedido = `o-${id}`) => pedidoFake(pedido, { items: [{ commerceProductId: produtoId, quantity, totalValue: quantity * 10 }] });
+const reconciliar = (svc, provider, extra = {}) => svc.reconcileProductPerformance({
+  organizationId: ORG_A, storeId: STORE_A, commerceProvider: PROVIDER, analyticsProvider: ANALYTICS_PROVIDER, filters: { provider }, ...PERIODO, ...extra,
+});
+const nomesDe = (r) => r.items.map((i) => i.product.name);
+
+test('R · paginada: ranqueia por volume Analytics + Commerce (quem vendeu sem o GA4 ver não cai no fim) e o resto vem por nome', () => em(async () => {
+  const ids = await semearDe('recon_pag', [
+    { providerProductId: 'rp-a', nome: 'A alinhado' }, { providerProductId: 'rp-b', nome: 'B vendeu sem GA4' }, { providerProductId: 'rp-c', nome: 'C pouco movimento' },
+    { providerProductId: 'rp-d', nome: 'D sem dado' }, { providerProductId: 'rp-e', nome: 'E sem dado' },
+  ]);
+  const registry = registryFake({
+    pedidos: [venda(1, ids.get('rp-a'), 5), venda(2, ids.get('rp-b'), 200)],
+    linhas: [linhaAnalytics('rp-a', { itemsPurchased: 5 }), linhaAnalytics('rp-c', { itemsViewed: 10, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0, itemRevenue: 0 })],
+  });
+  const svc = montarServico(registry);
+  const p1 = await reconciliar(svc, 'recon_pag', { pagination: { limit: 3 } });
+  // volume: B = 200 (só Commerce), A = 100+20+10+5 + 5 = 140, C = 10 — depois D e E, por nome
+  assert.deepEqual(nomesDe(p1), ['B vendeu sem GA4', 'A alinhado', 'C pouco movimento']);
+  assert.equal(p1.totalCount, 5);
+  assert.equal(p1.nextCursor, '2');
+  assert.equal(p1.status, 'ok');
+  const porNome = Object.fromEntries(p1.items.map((i) => [i.product.name, i]));
+  assert.equal(porNome['B vendeu sem GA4'].commerceUnits, null); // sem identity no GA4: nunca compara (mesma regra de sempre)
+  assert.equal(porNome['B vendeu sem GA4'].status, 'insufficient_identity');
+  assert.equal(porNome['A alinhado'].status, 'aligned');
+  assert.equal(porNome['A alinhado'].commerceUnits, 5);
+
+  const p2 = await reconciliar(svc, 'recon_pag', { pagination: { limit: 3, cursor: p1.nextCursor } });
+  assert.deepEqual(nomesDe(p2), ['D sem dado', 'E sem dado']);
+  assert.equal(p2.nextCursor, null);
+  assert.equal(p2.totalCount, 5);
+}));
+
+test('R · paginada: nenhum produto repete nem some entre as páginas (limit 1 percorre o catálogo todo, na ordem)', () => em(async () => {
+  const ids = await semearDe('recon_pag_seq', [
+    { providerProductId: 'rs-1', nome: 'Um' }, { providerProductId: 'rs-2', nome: 'Dois' }, { providerProductId: 'rs-3', nome: 'Três' }, { providerProductId: 'rs-4', nome: 'Quatro' },
+  ]);
+  const registry = registryFake({ pedidos: [venda(1, ids.get('rs-3'), 9)], linhas: [linhaAnalytics('rs-2', { itemsPurchased: 1 })] });
+  const svc = montarServico(registry);
+  const vistos = [];
+  let cursor;
+  for (let i = 0; i < 6; i += 1) {
+    const r = await reconciliar(svc, 'recon_pag_seq', { pagination: { limit: 1, cursor } });
+    vistos.push(...nomesDe(r));
+    cursor = r.nextCursor;
+    if (!cursor) break;
+  }
+  // "Três" vendeu 9 no Commerce (volume 9) e "Dois" tem 136 no GA4: Dois, Três, depois Quatro e Um por nome
+  assert.deepEqual(vistos, ['Dois', 'Três', 'Quatro', 'Um']);
+  assert.equal(cursor, null);
+}));
+
+test('R · paginada: vendeu no Commerce, o GA4 conhece o produto mas viu ZERO neste período → divergente (zero real, não "sem identidade")', () => em(async () => {
+  const ids = await semearDe('recon_pag_zero', [{ providerProductId: 'rz-1', nome: 'Vendeu e o GA4 viu zero' }, { providerProductId: 'rz-2', nome: 'Outro' }]);
+  await sup.query(
+    `INSERT INTO product_external_identities (organization_id, store_id, commerce_product_id, namespace, external_id, source, confidence)
+     VALUES ($1, $2, $3, $4, 'rz-1-de-antes', 'rule', 'exact')`,
+    [ORG_A, STORE_A, ids.get('rz-1'), `${ANALYTICS_PROVIDER}.item_id`]
+  );
+  const registry = registryFake({ pedidos: [venda(1, ids.get('rz-1'), 50)], linhas: [linhaAnalytics('rz-2', { itemsViewed: 1, itemsAddedToCart: 0, itemsCheckedOut: 0, itemsPurchased: 0, itemRevenue: 0 })] });
+  const r = await reconciliar(montarServico(registry), 'recon_pag_zero', { pagination: { limit: 10 } });
+  const linha = r.items.find((i) => i.product.name === 'Vendeu e o GA4 viu zero');
+  assert.equal(r.items[0], linha); // 50 unidades vendidas: no topo
+  assert.equal(linha.analyticsUnits, 0);
+  assert.equal(linha.commerceUnits, 50);
+  assert.equal(linha.status, 'divergent');
+}));
+
+test('R · paginada: só produto ATIVO (publicado na Ink) entra — o desativado some das páginas e do total', () => em(async () => {
+  const ids = await semearDe('recon_pag_ativo', [
+    { providerProductId: 'ra-1', nome: 'Publicado', metadata: { status: 'published' } },
+    { providerProductId: 'ra-2', nome: 'Não publicado', metadata: { status: 'not_published' } },
+    { providerProductId: 'ra-3', nome: 'Sem status do provider' },
+  ]);
+  const registry = registryFake({ pedidos: [venda(1, ids.get('ra-2'), 30)], linhas: [linhaAnalytics('ra-1', { itemsPurchased: 1 }), linhaAnalytics('ra-2', { itemsViewed: 999 })] });
+  const r = await reconciliar(montarServico(registry), 'recon_pag_ativo', { pagination: { limit: 10 } });
+  assert.deepEqual(nomesDe(r).sort(), ['Publicado', 'Sem status do provider']);
+  assert.equal(r.totalCount, 2);
+}));
+
+test('R · sem pagination o contrato antigo segue: TODAS as linhas do catálogo, de uma vez', () => em(async () => {
+  await semearDe('recon_pag_todas', [{ providerProductId: 'rt-1', nome: 'Um' }, { providerProductId: 'rt-2', nome: 'Dois' }, { providerProductId: 'rt-3', nome: 'Três' }]);
+  const r = await reconciliar(montarServico(registryFake({ linhas: [linhaAnalytics('rt-1')] })), 'recon_pag_todas');
+  assert.equal(r.items.length, 3);
+  assert.equal(r.totalCount, undefined); // o caminho antigo não pagina
+}));
+
+test('R · período sem nenhuma linha de analytics, paginado: catálogo por nome com "sem dado no período" em cada linha', () => em(async () => {
+  await semearDe('recon_pag_semga', [{ providerProductId: 'rg-1', nome: 'Beta' }, { providerProductId: 'rg-2', nome: 'Alfa' }]);
+  const r = await reconciliar(montarServico(registryFake({ linhas: [] })), 'recon_pag_semga', { pagination: { limit: 10 } });
+  assert.deepEqual(nomesDe(r), ['Alfa', 'Beta']);
+  assert.ok(r.items.every((i) => i.status === 'insufficient_data'));
+}));
+
 test('G.1 · nenhum literal de provider/status específico (reserva_ink, ga4, "pago", "paid") no reconciliation.js', () => {
   const arq = path.join(__dirname, '..', '..', 'lib', 'product-analytics', 'reconciliation.js');
   const achados = [];
