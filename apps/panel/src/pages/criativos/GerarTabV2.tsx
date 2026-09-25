@@ -46,7 +46,7 @@ import {
 import { plural } from '../../lib/format';
 import { ENGINE_LABEL, FUNNEL_STAGE_LABEL, INTENT_DESCRICAO, INTENT_LABEL, type TextoMotor } from './criativosMotores';
 import {
-  CHAVES_FUNIL, CHAVES_REMARKETING, erroDeInteracaoIncompativel, funnelOptions, intentsDisponiveis, interacaoCabe, limiteDeProdutos,
+  CHAVES_FUNIL, CHAVES_REMARKETING, erroDeInteracaoIncompativel, funnelOptions, geografiaDisponivel, intentsDisponiveis, interacaoCabe, limiteDeProdutos,
   lista_de, MAX_SUBJECTS_EDITAVEIS, overridesAoTrocarDeMotor, pessoasDaCena, remarketingOptions, restoDe, subjectsComOverride,
   texto_de, textoAviso, textoInteracaoIncompativel, textoPersonaPadrao, TEXTO_MOTOR_VAZIO,
 } from './criativosMotorInput.mjs';
@@ -109,7 +109,7 @@ function CardSugestao({ rec, familias, interactions, preview, ocupado, onGerarAs
   const overlay = resumoOverlay(preview.overlay);
   const subjects = preview.subjects || [];
   return (
-    <Card title="Sugestão para esta estampa">
+    <Card title="Sugestão para este criativo">
       {familia && (
         <p className="criativos-v2__sugestao">
           <strong>{familia.label}</strong>
@@ -128,7 +128,7 @@ function CardSugestao({ rec, familias, interactions, preview, ocupado, onGerarAs
           ))}
         </ul>
       )}
-      {geral && <p className="criativos-v2__sugestao-nota">Sugestão geral — cadastre o significado da estampa para uma recomendação mais precisa.</p>}
+      {geral && <p className="criativos-v2__sugestao-nota">Sugestão geral — cadastre o significado do produto (o que ele representa) para uma recomendação mais precisa.</p>}
       {/* Achado real de uso: os Avisos já aparecem no painel "Prévia" ao lado (sempre visível, tanto
           aqui quanto em Personalizar) — mostrar de novo aqui duplicava o mesmo aviso na tela inteira. */}
       <FormActions>
@@ -268,6 +268,11 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     const embutido = catalog.catalog.builtin_kits.brand[0];
     return embutido ? { source: 'builtin', id: embutido.id as string } : null;
   }, [marcas, catalog]);
+
+  // Contexto geográfico é específico de marca: só entra na tela para um Brand Kit que o usa por padrão (ou se o
+  // criativo copiado já estava em modo geográfico). Para os demais nichos não existe Região/Cidade/UF.
+  const marcaAtual = (marcas[0]?.data ?? catalog.catalog.builtin_kits.brand[0]) as { defaultContextProvider?: string } | undefined;
+  const mostrarGeografia = geografiaDisponivel(marcaAtual, contextMode);
 
   const anguloEscolhido = escolha.tipo === 'custom' ? [...(angulos?.organization || []), ...(angulos?.store || [])].find((a) => a.id === escolha.id) : null;
 
@@ -546,7 +551,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
         )}
 
         {pronto && !origem && !personalizar && (
-          ocupado && !preview ? <Card title="Sugestão para esta estampa"><p>Calculando a recomendação do motor…</p></Card>
+          ocupado && !preview ? <Card title="Sugestão para este criativo"><p>Calculando a recomendação do motor…</p></Card>
             : preview ? (
               <CardSugestao rec={rec} familias={familias} interactions={interactions} preview={preview.first} ocupado={ocupado}
                 onGerarAssim={gerar} onPersonalizar={() => { if (rec?.family) setEscolha({ tipo: 'family', family: rec.family }); setPersonalizar(true); }} />
@@ -685,7 +690,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
                   <Select value={contextMode} onChange={(e) => setContextMode(e.target.value as typeof contextMode)}>
                     <option value="automatic">Automático</option>
                     <option value="niche">Do nicho</option>
-                    <option value="geographic">Geográfico (região)</option>
+                    {mostrarGeografia && <option value="geographic">Geográfico (região)</option>}
                   </Select>
                 </Field>
                 <Field label="Olhar" optional>
@@ -695,7 +700,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
                   </Select>
                 </Field>
               </FormGrid>
-              {contextMode === 'geographic' && (
+              {mostrarGeografia && contextMode === 'geographic' && (
                 <FormGrid>
                   <Field label="Região (id)" hint="ex.: vale_europeu"><Input value={geo.context_id} onChange={(e) => setGeo({ ...geo, context_id: e.target.value })} /></Field>
                   <Field label="Cidade"><Input value={geo.city} onChange={(e) => setGeo({ ...geo, city: e.target.value })} /></Field>
