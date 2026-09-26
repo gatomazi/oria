@@ -1,6 +1,6 @@
 'use strict';
 
-// Preferências LOCAIS da navegação (src/shell/navPrefs.ts): sidebar reduzida e grupos fechados. Só conveniência do navegador —
+// Preferências LOCAIS da navegação (src/shell/navPrefs.ts): sidebar reduzida (lembrada) e grupos (sempre fechados ao carregar). Só conveniência do navegador —
 // dado corrompido, armazenamento bloqueado ou ausente nunca quebram a tela nem viram preferência inventada.
 
 const test = require('node:test');
@@ -15,53 +15,52 @@ test('a chave é versionada (mudar o formato exige uma versão nova, nunca reint
   assert.equal(CHAVE_NAV_PREFS, 'oria.shell.nav.v1');
 });
 
-test('padrão: sidebar expandida e todos os grupos abertos (ausência, vazio, sem armazenamento)', () => {
-  const padrao = { colapsada: false, gruposFechados: [] };
+test('padrão: sidebar expandida e TODOS os grupos fechados (ausência, vazio, sem armazenamento)', () => {
+  const padrao = { colapsada: false, gruposAbertos: [] };
   assert.deepEqual(plano(lerPrefs(fonte(null))), padrao);
   assert.deepEqual(plano(lerPrefs(fonte(''))), padrao);
   assert.deepEqual(plano(lerPrefs(null)), padrao);
+  assert.equal(grupoAberto(padrao, 'Operação'), false, 'nenhum grupo começa aberto');
 });
 
-test('leitura tolerante: JSON inválido, forma errada e lixo viram o padrão; campos desconhecidos são descartados', () => {
-  const padrao = { colapsada: false, gruposFechados: [] };
+test('leitura tolerante: JSON inválido, forma errada e lixo viram o padrão; só `colapsada` é lida', () => {
+  const padrao = { colapsada: false, gruposAbertos: [] };
   for (const v of ['{', 'null', '42', '"x"', '[]', '[1,2]', 'undefined']) assert.deepEqual(plano(lerPrefs(fonte(v))), padrao, v);
-  assert.deepEqual(plano(lerPrefs(fonte(JSON.stringify({ colapsada: 'sim', gruposFechados: 'Operação' })))), padrao, 'tipos errados');
-  assert.deepEqual(plano(lerPrefs(fonte(JSON.stringify({ colapsada: true, gruposFechados: ['Operação', 3, null, '', 'Operação', { x: 1 }], token: 'segredo' })))),
-    { colapsada: true, gruposFechados: ['Operação'] }, 'só strings válidas, sem duplicar, e nada além do formato conhecido');
+  assert.deepEqual(plano(lerPrefs(fonte(JSON.stringify({ colapsada: 'sim' })))), padrao, 'tipo errado');
+  assert.deepEqual(plano(lerPrefs(fonte(JSON.stringify({ colapsada: true, token: 'segredo' })))), { colapsada: true, gruposAbertos: [] }, 'nada além do formato conhecido');
 });
 
-test('leitura limita o tamanho (dado enorme não vira preferência gigante) e rótulos absurdos são recusados', () => {
-  const muitos = Array.from({ length: 200 }, (_, i) => `Grupo ${i}`);
-  assert.equal(lerPrefs(fonte(JSON.stringify({ colapsada: false, gruposFechados: muitos }))).gruposFechados.length, 40);
-  assert.deepEqual(plano(lerPrefs(fonte(JSON.stringify({ colapsada: false, gruposFechados: ['x'.repeat(200)] })))).gruposFechados, []);
+test('grupos NUNCA voltam do armazenamento: nem o formato antigo (gruposFechados) nem um gruposAbertos gravado reabrem/fecham nada', () => {
+  const velho = JSON.stringify({ colapsada: true, gruposFechados: ['Operação'], gruposAbertos: ['Catálogo', 'Financeiro'] });
+  assert.deepEqual(plano(lerPrefs(fonte(velho))), { colapsada: true, gruposAbertos: [] });
 });
 
 test('armazenamento que LANÇA (janela privada/bloqueado) nunca propaga o erro', () => {
   const quebrado = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('QuotaExceededError'); } };
-  assert.deepEqual(plano(lerPrefs(quebrado)), { colapsada: false, gruposFechados: [] });
-  assert.doesNotThrow(() => gravarPrefs({ colapsada: true, gruposFechados: ['Operação'] }, quebrado));
+  assert.deepEqual(plano(lerPrefs(quebrado)), { colapsada: false, gruposAbertos: [] });
+  assert.doesNotThrow(() => gravarPrefs({ colapsada: true, gruposAbertos: ['Operação'] }, quebrado));
 });
 
-test('gravar e ler é idempotente e só persiste o formato conhecido', () => {
+test('gravar persiste SÓ a sidebar recolhida (os grupos abertos ficam só na sessão)', () => {
   let salvo = null;
   const armazem = { setItem: (k, v) => { assert.equal(k, CHAVE_NAV_PREFS); salvo = v; }, getItem: () => salvo };
-  gravarPrefs({ colapsada: true, gruposFechados: ['Catálogo', 'Financeiro'], extra: 'não persiste' }, armazem);
-  assert.deepEqual(JSON.parse(salvo), { colapsada: true, gruposFechados: ['Catálogo', 'Financeiro'] });
-  assert.deepEqual(plano(lerPrefs(armazem)), { colapsada: true, gruposFechados: ['Catálogo', 'Financeiro'] });
+  gravarPrefs({ colapsada: true, gruposAbertos: ['Catálogo', 'Financeiro'], extra: 'não persiste' }, armazem);
+  assert.deepEqual(JSON.parse(salvo), { colapsada: true });
+  assert.deepEqual(plano(lerPrefs(armazem)), { colapsada: true, gruposAbertos: [] }, 'recarregar: recolhida lembrada, grupos fechados');
 });
 
 test('alternar: colapso e grupo são reversíveis e não mutam o estado anterior', () => {
-  const p0 = { colapsada: false, gruposFechados: [] };
+  const p0 = { colapsada: false, gruposAbertos: [] };
   const p1 = alternarColapso(p0);
   assert.equal(p1.colapsada, true);
   assert.equal(p0.colapsada, false, 'imutável');
   assert.equal(alternarColapso(p1).colapsada, false);
   const g1 = alternarGrupo(p0, 'Catálogo');
-  assert.deepEqual(plano(g1.gruposFechados), ['Catálogo']);
-  assert.equal(grupoAberto(g1, 'Catálogo'), false);
-  assert.equal(grupoAberto(g1, 'Operação'), true);
-  assert.deepEqual(plano(alternarGrupo(g1, 'Catálogo').gruposFechados), []);
-  assert.deepEqual(plano(p0.gruposFechados), []);
+  assert.deepEqual(plano(g1.gruposAbertos), ['Catálogo']);
+  assert.equal(grupoAberto(g1, 'Catálogo'), true);
+  assert.equal(grupoAberto(g1, 'Operação'), false);
+  assert.deepEqual(plano(alternarGrupo(g1, 'Catálogo').gruposAbertos), []);
+  assert.deepEqual(plano(p0.gruposAbertos), []);
 });
 
 const ITENS = [{ key: 'a' }, { key: 'b' }, { key: 'c' }];

@@ -96,7 +96,8 @@ try {
     // ── 2. Sidebar ──────────────────────────────────────────────────────────────────────────────────
     const toggles = page.locator('.ad-nav__group-toggle');
     const nGrupos = await toggles.count();
-    ok('grupos com botão de recolher (aria-expanded/aria-controls) e todos ABERTOS por padrão', nGrupos >= 6 && (await page.$$eval('.ad-nav__group-toggle', (b) => b.every((x) => x.getAttribute('aria-expanded') === 'true' && document.getElementById(x.getAttribute('aria-controls'))))), `${nGrupos} grupos`);
+    ok('grupos com botão (aria-expanded/aria-controls) e TODOS FECHADOS ao carregar o painel', nGrupos >= 6 && (await page.$$eval('.ad-nav__group-toggle', (b) => b.every((x) => x.getAttribute('aria-expanded') === 'false' && document.getElementById(x.getAttribute('aria-controls'))))), `${nGrupos} grupos`);
+    ok('fechados: nenhum item de grupo à vista (só "Visão geral", que é isolada)', (await page.locator('#ad-sidebar .ad-nav__group-items a').filter({ visible: true }).count()) === 0);
 
     if (desktop) {
       const botao = page.getByRole('button', { name: 'Recolher menu lateral' });
@@ -129,7 +130,7 @@ try {
       ok('reduzida: tooltip com o nome ao focar pelo teclado', focado.length > 0 && tips.includes(focado), `foco "${focado}" · tooltip "${tips}"`);
       await page.screenshot({ path: path.join(OUT, `${vp.nome}-04-sidebar-reduzida.png`) });
       const c = await prefs();
-      ok('a preferência foi gravada LOCALMENTE (chave versionada; sem dado sensível)', c && c.colapsada === true && Array.isArray(c.gruposFechados) && Object.keys(c).sort().join() === 'colapsada,gruposFechados');
+      ok('a preferência foi gravada LOCALMENTE (chave versionada; sem dado sensível)', c && c.colapsada === true && Object.keys(c).sort().join() === 'colapsada');
       await page.reload({ waitUntil: 'networkidle' });
       ok('recarregar mantém a sidebar reduzida', (await page.locator('#ad-sidebar').boundingBox()).width <= 70);
       await page.goto(`${BASE}/admin/clientes`, { waitUntil: 'networkidle' });
@@ -142,7 +143,7 @@ try {
     } else {
       ok('mobile/tablet: NÃO há botão de recolher (o drawer não muda)', (await page.getByRole('button', { name: /(Recolher|Expandir) menu lateral/ }).isVisible().catch(() => false)) === false);
       // prefs colapsada gravadas antes NÃO afetam o drawer
-      await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ colapsada: true, gruposFechados: [] })), CHAVE);
+      await page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ colapsada: true })), CHAVE);
       await page.reload({ waitUntil: 'networkidle' });
       const abrir = page.getByRole('button', { name: 'Abrir menu de navegação' });
       await clicar(abrir);
@@ -160,23 +161,30 @@ try {
       await page.reload({ waitUntil: 'networkidle' });
     }
 
-    // ── 3. Grupos recolhíveis (todas as larguras; no mobile dentro do drawer) ────────────────────────
+    // ── 3. Grupos (todas as larguras; no mobile dentro do drawer): fechados ao carregar, abrem por clique/teclado só na sessão ─────────
     if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open')); await page.waitForTimeout(350); }
     const grupoCat = page.locator('.ad-nav__group-toggle', { hasText: 'Catálogo' });
-    const itensCat = page.locator('#nav-grupo-catálogo-itens a, [id^="nav-grupo-cat"][id$="-itens"] a');
-    const antes = await itensCat.count();
+    const itensCat = page.locator('[id^="nav-grupo-cat"][id$="-itens"] a');
+    ok('Catálogo começa fechado (aria-expanded=false, nenhum item visível)', (await grupoCat.getAttribute('aria-expanded')) === 'false' && (await itensCat.filter({ visible: true }).count()) === 0);
+    await page.screenshot({ path: path.join(OUT, `${vp.nome}-06-grupos-fechados.png`) });
     await clicar(grupoCat);
     await page.waitForTimeout(150);
-    ok('fechar um grupo: aria-expanded=false e os itens saem (grupo sem página atual = nenhum item)', (await grupoCat.getAttribute('aria-expanded')) === 'false' && antes >= 4 && (await itensCat.filter({ visible: true }).count()) === 0, `${antes} → ${await itensCat.filter({ visible: true }).count()}`);
-    await page.screenshot({ path: path.join(OUT, `${vp.nome}-06-grupo-fechado.png`) });
-    ok('preferência de grupo gravada localmente', ((await prefs()) || {}).gruposFechados?.includes('Catálogo'));
+    const abertos = await itensCat.filter({ visible: true }).count();
+    ok('abrir um grupo: aria-expanded=true e os itens aparecem', (await grupoCat.getAttribute('aria-expanded')) === 'true' && abertos >= 4, `${abertos} itens`);
+    await page.screenshot({ path: path.join(OUT, `${vp.nome}-07-grupo-aberto.png`) });
+    const pf = await prefs();
+    ok('abrir/fechar grupo NÃO grava nada (só a sidebar recolhida é lembrada)', !pf || Object.keys(pf).join() === 'colapsada', JSON.stringify(pf));
     await grupoCat.focus();
     await page.keyboard.press('Enter');
     await page.waitForTimeout(150);
-    ok('teclado: Enter reabre o grupo', (await grupoCat.getAttribute('aria-expanded')) === 'true');
+    ok('teclado: Enter fecha o grupo', (await grupoCat.getAttribute('aria-expanded')) === 'false');
     await page.keyboard.press('Space');
     await page.waitForTimeout(150);
-    ok('teclado: Espaço fecha o grupo', (await grupoCat.getAttribute('aria-expanded')) === 'false');
+    ok('teclado: Espaço abre o grupo', (await grupoCat.getAttribute('aria-expanded')) === 'true');
+    // Recarregar volta tudo a fechado (o painel "sempre vem fechado").
+    await page.reload({ waitUntil: 'networkidle' });
+    if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open')); await page.waitForTimeout(350); }
+    ok('depois de recarregar, o grupo aberto volta a ficar fechado', (await page.locator('.ad-nav__group-toggle', { hasText: 'Catálogo' }).getAttribute('aria-expanded')) === 'false');
     // grupo fechado que CONTÉM a página atual mostra só ela (orientação)
     await page.goto(`${BASE}/admin/produtos`, { waitUntil: 'networkidle' });
     if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open')); await page.waitForTimeout(350); }
@@ -238,6 +246,24 @@ try {
       const ativo = await page.$$eval('#ad-sidebar .ad-nav__item[aria-current="page"]', (els) => els.map((e) => ({ t: e.textContent.trim(), g: e.closest('.ad-nav__group')?.querySelector('.ad-nav__group-toggle')?.textContent.trim() })));
       ok(`${item} continua destacado no grupo "${grupo}"`, ativo.length === 1 && ativo[0].t === item && ativo[0].g === grupo, JSON.stringify(ativo));
     }
+    // Gerador de criativos: uma rota e um item de menu por seção; a URL antiga redireciona para Gerar.
+    await page.goto(`${BASE}/admin/criativos`, { waitUntil: 'networkidle' });
+    ok('/admin/criativos redireciona para /admin/criativos/gerar', new URL(page.url()).pathname === '/admin/criativos/gerar', new URL(page.url()).pathname);
+    const SECOES = [['gerar', 'Gerar'], ['lotes', 'Lotes'], ['historico', 'Histórico'], ['produtos', 'Produtos'], ['marca', 'Marca e nicho'], ['contextos', 'Contextos'], ['personas', 'Personas']];
+    // Grupos começam fechados: abre o de Criativos (clique programático, vale também com o drawer fechado) para listar as 7 seções.
+    await page.evaluate(() => { const t = [...document.querySelectorAll('.ad-nav__group-toggle')].find((x) => x.textContent.trim() === 'Criativos'); if (t && t.getAttribute('aria-expanded') !== 'true') t.click(); });
+    await page.waitForTimeout(150);
+    const itensCri = await page.$$eval('#ad-sidebar .ad-nav__group', (gs) => { const g = gs.find((x) => x.querySelector('.ad-nav__group-toggle')?.textContent.trim() === 'Criativos'); return g ? [...g.querySelectorAll('a')].map((a) => [a.getAttribute('href'), a.textContent.trim()]) : []; });
+    ok('menu Criativos: as 7 seções, cada uma com a sua rota', JSON.stringify(itensCri) === JSON.stringify(SECOES.map(([r, t]) => [`/admin/criativos/${r}`, t])), JSON.stringify(itensCri));
+    for (const [rota, rotulo] of [['lotes', 'Lotes'], ['personas', 'Personas']]) {
+      await page.goto(`${BASE}/admin/criativos/${rota}`, { waitUntil: 'networkidle' });
+      await page.waitForSelector('.ad-topbar');
+      const at = await page.$$eval('#ad-sidebar .ad-nav__item[aria-current="page"]', (els) => els.map((e) => ({ t: e.textContent.trim(), g: e.closest('.ad-nav__group')?.querySelector('.ad-nav__group-toggle')?.textContent.trim() })));
+      ok(`/admin/criativos/${rota}: "${rotulo}" destacado no grupo "Criativos"`, at.length === 1 && at[0].t === rotulo && at[0].g === 'Criativos', JSON.stringify(at));
+    }
+    await page.goto(`${BASE}/admin/criativos/inexistente`, { waitUntil: 'networkidle' });
+    ok('seção inexistente volta para Gerar', new URL(page.url()).pathname === '/admin/criativos/gerar', new URL(page.url()).pathname);
+    await semRolagem('criativos');
     await page.goto(`${BASE}/admin/dashboard`, { waitUntil: 'networkidle' });
     await semRolagem('final');
     ok('sem erro de JavaScript', erros.length === 0, erros.slice(0, 2).join(' | '));

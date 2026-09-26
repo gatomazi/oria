@@ -15,15 +15,24 @@ direito; Webhooks e logs não aparece (o processamento e os registros técnicos 
 |---|---|
 | Comunicação | Canal · Recuperação · PIX · Automações · Templates (API Meta) · Mensagens e Fila de envio (WhatsApp Web) |
 | Marketing e dados | Meta Ads · Google Ads · Google Analytics 4 · UTM Tracker · Desempenho de produtos · Jornada de compra (os dois últimos com o entitlement `analytics_product_performance`) |
-| Criativos | Gerador de criativos |
+| Criativos | Gerar · Lotes · Histórico · Produtos · Marca e nicho · Contextos · Personas (uma rota por seção, ver abaixo) |
 | Campanhas | Todas as campanhas · Segmentos |
 | Operação | Pedidos · Clientes · Trocas e devoluções · Estoque · Simular frete |
 | Financeiro | Visão financeira · Despesas · Custos de API · Reembolsos |
 | Catálogo | Produtos · Categorias · Agrupamentos · Promoções |
 
-**Limitação documentada (Criativos):** Gerar, Lotes, Histórico, Produtos, Marca e nicho, Contextos e Personas são **abas de estado interno** de uma única rota (`/admin/criativos`, `useState` em `CriativosPage`),
-sem deep link nem rota própria. Subitens na sidebar seriam links fictícios (todos abririam "Gerar"), então foi preservado o item único **Gerador de criativos**. Expor cada aba exigiria dar-lhes URL (`?aba=`) — mudança
-funcional fora deste escopo.
+## Gerador de criativos por seção (atualização)
+
+Antes o menu tinha um item só (`/admin/criativos`) e as sete seções eram abas de estado interno da página. Agora **cada seção é uma rota com item próprio no menu**:
+`/admin/criativos/{gerar,lotes,historico,produtos,marca,contextos,personas}` (fonte: `nav.ts`; ícone próprio por item). `/admin/criativos` redireciona para `/gerar`; uma seção inexistente também volta para Gerar.
+A página (`CriativosPage`) lê a seção da rota (`useParams`), mostra título e descrição da seção e **perdeu a barra de abas interna** — o menu lateral é a navegação. Como uma única rota (`:aba`) renderiza a página,
+trocar de seção não a remonta: o catálogo carregado, o lote selecionado e os dados copiados de um criativo (Histórico/Lotes → Gerar) continuam valendo; as ações do fluxo (copiar dados → Gerar; lote criado → Lotes)
+apenas trocam a rota. O "Produtos" do grupo Criativos é o cadastro do gerador, distinto de Catálogo › Produtos.
+
+## Menus fechados ao carregar (atualização)
+
+Todo carregamento do painel começa com **todos os grupos fechados**: o grupo mostra só o item da página atual (orientação) e abrir um grupo vale enquanto o painel está aberto (estado em memória). A única preferência lembrada em
+`oria.shell.nav.v1` passou a ser a sidebar recolhida (`{colapsada}`); grupos não são gravados nem lidos (o formato antigo `gruposFechados` é ignorado). O trilho recolhido continua mostrando todos os ícones.
 
 ## Logo oficial
 
@@ -41,10 +50,10 @@ Oficial e em uso na marca pública: `apps/panel/assets/oria/oria-simbolo.png` (2
 
 | Verificação | Resultado |
 |---|---|
-| `navegacao-painel` (contratos: sequência exata dos grupos, itens por grupo, ausência de Conexões/Sistema/Webhooks, ordem preservada sob filtro de plano/canal, links válidos, marca) | 27/27 |
-| 9 arquivos front/públicos relacionados (navegacao, nav-prefs, modal-foco, integracoes-*, store-escopo, ink-webhook-guia, arquivos-publicos) | 86/86 |
+| `navegacao-painel` (contratos: sequência exata dos grupos, itens por grupo, seções de criativos, ausência de Conexões/Sistema/Webhooks, ordem sob filtro de plano/canal, links válidos, marca, menus fechados) | 29/29 |
+| 10 arquivos front/públicos relacionados (navegacao, nav-prefs, modal-foco, integracoes-*, store-escopo, ink-webhook-guia, arquivos-publicos, creative-enrichment) | 98/98 |
 | `tsc -b` + build · `ci/suites.mjs verify` (156 arquivos) | limpos / OK |
-| Playwright real, 6 viewports (1440, 1280, 1024, 768, 390×844, 360×800): ordem dos grupos, logo carregada e sem distorção, expandida/recolhida/drawer, rota de Marketing e de Campanhas destacada no grupo certo | **222/222** |
+| Playwright real, 6 viewports (1440, 1280, 1024, 768, 390×844, 360×800): ordem dos grupos, logo, expandida/recolhida/drawer, **grupos fechados ao carregar (e de novo após recarregar)**, abrir/fechar por clique e teclado sem gravar nada, 7 seções de Criativos com destaque correto e redirecionamentos, Marketing e Campanhas destacados | **276/276** |
 
 Capturas (dados sintéticos, fora do git): `apps/panel/relatorios-privados/redesign-shell/{desktop-1440-04-marca-ordem-expandida,desktop-1440-05-marca-recolhida,mobile-390-04-drawer-marca-ordem}.png`.
 A suíte integral de 2.283 testes não foi repetida (mudança de ordem de array + marca, sem lógica nova).

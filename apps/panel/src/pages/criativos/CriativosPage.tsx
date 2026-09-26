@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button, Callout, ErrorState, PageHeader, PageStack, Skeleton, StatusBadge, TabList } from '../../components/ds';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Button, Callout, ErrorState, PageHeader, PageStack, Skeleton, StatusBadge } from '../../components/ds';
 import {
   getCatalog,
   getCopiaDados,
@@ -22,15 +22,30 @@ import '../../criativos.css';
 
 type Aba = 'gerar' | 'lotes' | 'historico' | 'produtos' | 'marca' | 'contextos' | 'personas';
 
+// Cada seção é uma rota (/admin/criativos/:aba) com item próprio no menu lateral — a página não tem mais abas internas.
+const SECOES: Record<Aba, { titulo: string; descricao: string }> = {
+  gerar: { titulo: 'Gerar criativos', descricao: 'Ângulos Limpos, Remarketing e Funil por Criativo — com um produto ou multipeça.' },
+  lotes: { titulo: 'Lotes', descricao: 'Acompanhe os lotes em geração e abra os criativos prontos.' },
+  historico: { titulo: 'Histórico', descricao: 'Criativos já gerados: reveja, avalie e copie os dados para gerar de novo.' },
+  produtos: { titulo: 'Produtos para criativos', descricao: 'Produtos que o gerador pode usar nos criativos.' },
+  marca: { titulo: 'Marca e nicho', descricao: 'Perfis de marca e de nicho que orientam o tom e o visual dos criativos.' },
+  contextos: { titulo: 'Contextos', descricao: 'Contextos de uso e de cena para os criativos.' },
+  personas: { titulo: 'Personas', descricao: 'Públicos e personas que o gerador considera.' },
+};
+const ehAba = (v: string | undefined): v is Aba => !!v && Object.prototype.hasOwnProperty.call(SECOES, v);
+
 export function CriativosPage() {
+  const { aba: abaDaRota } = useParams();
+  const aba: Aba = ehAba(abaDaRota) ? abaDaRota : 'gerar';
   const [status, setStatus] = useState<CriativosStatus | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [erro, setErro] = useState('');
-  const [aba, setAba] = useState<Aba>('gerar');
   const [jobSelecionado, setJobSelecionado] = useState<string | null>(null);
   // Dados copiados de um criativo pronto; o Gerar preenche o formulário com eles.
   const [copia, setCopia] = useState<CopiaDados | null>(null);
   const navigate = useNavigate();
+  // Trocar de seção troca a rota; a página continua montada, então catálogo, lote selecionado e dados copiados não se perdem.
+  const setAba = useCallback((proxima: Aba) => navigate(`/admin/criativos/${proxima}`), [navigate]);
 
   const carregar = useCallback(() => {
     setErro('');
@@ -51,8 +66,9 @@ export function CriativosPage() {
     const dados = await getCopiaDados(creativeId);
     setCopia(dados);
     setAba('gerar');
-  }, []);
+  }, [setAba]);
 
+  if (!ehAba(abaDaRota)) return <Navigate to="/admin/criativos/gerar" replace />;
   if (erro && !status) return <PageStack><ErrorState description={erro} onRetry={carregar} /></PageStack>;
   if (!status) return <PageStack><Skeleton rows={1} height="56px" width="40%" /><Skeleton variant="table" rows={4} /></PageStack>;
 
@@ -72,27 +88,16 @@ export function CriativosPage() {
   if (habilitado && status.core.configured && !status.core.reachable) avisos.push(<Callout key="core2" tone="danger" title="Serviço do gerador fora do ar">Os lotes ficam na fila e são retomados quando o serviço voltar.</Callout>);
   if (habilitado && !status.openaiKey.configured) avisos.push(<Callout key="key" tone="warning" title="OpenAI API Key não cadastrada" action={<Button size="sm" variant="secondary" onClick={() => navigate('/admin/integracoes')}>Configurar</Button>}>A geração usa a sua própria chave (BYOK).</Callout>);
 
-  const abas: { value: Aba; label: string }[] = [
-    { value: 'gerar', label: 'Gerar' },
-    { value: 'lotes', label: 'Lotes' },
-    { value: 'historico', label: 'Histórico' },
-    { value: 'produtos', label: 'Produtos' },
-    { value: 'marca', label: 'Marca e nicho' },
-    { value: 'contextos', label: 'Contextos' },
-    { value: 'personas', label: 'Personas' },
-  ];
-
   return (
     <PageStack>
       <PageHeader
-        title="Gerador de Criativos"
-        description="Ângulos Limpos, Remarketing e Funil por Criativo — com um produto ou multipeça."
+        title={SECOES[aba].titulo}
+        description={SECOES[aba].descricao}
         meta={status.core.versions ? <StatusBadge tone="neutral" label={`core ${String(status.core.versions.core_version)}`} /> : undefined}
       />
       {avisos}
       {habilitado && (
         <>
-          <TabList label="Seções do gerador" value={aba} onChange={setAba} items={abas} />
           {aba === 'gerar' && (catalog
             ? (status.uiV2
               ? <GerarTabV2 status={status} catalog={catalog} copia={copia} onCopiaLida={() => setCopia(null)} onJobCriado={(id) => { setJobSelecionado(id); setAba('lotes'); }} />

@@ -148,7 +148,9 @@ export function App() {
             <Route path="/admin/jornada-compra" element={<JornadaCompraPage />} />
             <Route path="/admin/meta-ads" element={<MetaAdsPage />} />
             <Route path="/admin/google-ads" element={<GoogleAdsPage />} />
-            <Route path="/admin/criativos" element={<CriativosPage />} />
+            {/* Uma rota por seção do gerador; o mesmo elemento fica montado ao trocar de seção (catálogo, lote selecionado e dados copiados persistem). */}
+            <Route path="/admin/criativos" element={<Navigate to="/admin/criativos/gerar" replace />} />
+            <Route path="/admin/criativos/:aba" element={<CriativosPage />} />
             <Route path="/admin/pedidos" element={<PedidoAdminPage />} />
             <Route path="/admin/pedidos/novo" element={<PedidoNovoPage />} />
             <Route path="/admin/pedidos/vincular" element={<PedidoVincularPage />} />

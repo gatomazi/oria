@@ -75,7 +75,9 @@ test('menu da loja · Configurações, Integrações e Campos personalizados, co
 test('rotas · todo href da sidebar e do menu da loja tem uma <Route> real (nada de link quebrado)', () => {
   const rotas = new Set([...app.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]));
   const hrefs = [...todosOsItens(), ...nav.NAV_STORE_MENU, ...nav.NAV_TOP].filter((i) => i.href).map((i) => i.href);
-  for (const href of hrefs) assert.ok(rotas.has(href), `sem rota para ${href}`);
+  // Rotas com parâmetro (`/admin/criativos/:aba`) atendem os hrefs que casam com o padrão.
+  const casa = (href) => [...rotas].some((r) => r === href || (r.includes(':') && new RegExp(`^${r.replace(/:[^/]+/g, '[^/]+')}$`).test(href)));
+  for (const href of hrefs) assert.ok(casa(href), `sem rota para ${href}`);
 });
 
 test('rotas · itens "em breve" não aparecem como link (sem href)', () => {
@@ -223,8 +225,8 @@ test('conteúdo e ordem dos itens de cada grupo (recursos novos por função, se
   const por = Object.fromEntries(nav.NAV_GROUPS.map((g) => [g.label, L(visiveis(g).map((i) => i.label))]));
   assert.deepEqual(por['Comunicação'], ['Canal', 'Recuperação', 'PIX', 'Automações', 'Templates', 'Mensagens', 'Fila de envio']);
   assert.deepEqual(por['Marketing e dados'], ['Meta Ads', 'Google Ads', 'Google Analytics 4', 'UTM Tracker', 'Desempenho de produtos', 'Jornada de compra']);
-  // Gerar/Lotes/Histórico/Cadastros são abas de estado interno de UMA rota (/admin/criativos), sem deep link: sem subitens fictícios.
-  assert.deepEqual(por['Criativos'], ['Gerador de criativos']);
+  // Cada seção do gerador tem rota e item próprios (a página deixou de ser uma tela única com abas internas).
+  assert.deepEqual(por['Criativos'], ['Gerar', 'Lotes', 'Histórico', 'Produtos', 'Marca e nicho', 'Contextos', 'Personas']);
   assert.deepEqual(por['Campanhas'], ['Todas as campanhas', 'Segmentos']);
   assert.deepEqual(por['Operação'], ['Pedidos', 'Clientes', 'Trocas e devoluções', 'Estoque', 'Simular frete']);
   assert.deepEqual(por['Financeiro'], ['Visão financeira', 'Despesas', 'Custos de API', 'Reembolsos']);
@@ -257,8 +259,9 @@ test('ocultar por plano/canal só filtra: a ordem dos grupos e dos itens vem da 
 test('todo link da sidebar e do menu da loja aponta para uma rota real do App', () => {
   const app = ler('App.tsx');
   const rotas = [...app.matchAll(/path="([^"]+)"/g)].map((m) => m[1]);
+  const casa = (href) => rotas.some((r) => r === href || (r.includes(':') && new RegExp(`^${r.replace(/:[^/]+/g, '[^/]+')}$`).test(href)));
   const itens = [...nav.NAV_TOP, ...nav.NAV_GROUPS.flatMap((g) => g.items), ...nav.NAV_STORE_MENU].filter((i) => i.href);
-  for (const i of itens) assert.ok(rotas.includes(i.href), `${i.label}: ${i.href} não é uma rota do App`);
+  for (const i of itens) assert.ok(casa(i.href), `${i.label}: ${i.href} não é uma rota do App`);
 });
 
 test('marca oficial: o símbolo do Oria (arquivo único do repositório) substitui o monograma "OR" e mantém o nome acessível', () => {
@@ -275,4 +278,33 @@ test('marca oficial: o símbolo do Oria (arquivo único do repositório) substit
   const reduzido = css.slice(css.indexOf('.ad-shell--nav-reduzida .ad-sidebar__brand-text'));
   assert.match(reduzido.slice(0, 260), /clip: rect\(0 0 0 0\)/, 'o nome sai da tela mas continua para leitores de tela (não display:none)');
   assert.match(reduzido.slice(0, 140) || '', /position: absolute/);
+});
+
+// ── Gerador de criativos por seção e menus fechados ao carregar ──────────────────────────────────────────────────────────────────
+test('gerador de criativos: cada seção é uma rota com item de menu; a URL antiga redireciona; um único elemento mantém o estado', () => {
+  const secoes = ['gerar', 'lotes', 'historico', 'produtos', 'marca', 'contextos', 'personas'];
+  const criativos = nav.NAV_GROUPS.find((g) => g.label === 'Criativos').items;
+  assert.deepEqual(L(criativos.map((i) => i.href)), secoes.map((s) => `/admin/criativos/${s}`));
+  assert.match(app, /path="\/admin\/criativos" element=\{<Navigate to="\/admin\/criativos\/gerar" replace \/>\}/, 'a URL antiga continua funcionando');
+  assert.equal((app.match(/element=\{<CriativosPage \/>\}/g) || []).length, 1, 'UMA rota (:aba) renderiza a página: trocar de seção não remonta (catálogo, lote e dados copiados persistem)');
+  assert.match(app, /path="\/admin\/criativos\/:aba" element=\{<CriativosPage \/>\}/);
+  const pagina = ler('pages/criativos/CriativosPage.tsx');
+  assert.match(pagina, /useParams\(\)/);
+  assert.match(pagina, /const setAba = useCallback\(\(proxima: Aba\) => navigate\(`\/admin\/criativos\/\$\{proxima\}`\)/, 'ações do fluxo (copiar dados → Gerar; lote criado → Lotes) trocam a rota');
+  assert.doesNotMatch(pagina, /useState<Aba>/, 'a seção não é mais estado interno');
+  assert.doesNotMatch(pagina, /<TabList/, 'sem abas internas: o menu lateral é a navegação');
+  assert.match(pagina, /!ehAba\(abaDaRota\)\) return <Navigate to="\/admin\/criativos\/gerar" replace \/>/, 'seção inexistente volta para Gerar');
+  for (const s of secoes) assert.match(pagina, new RegExp(`\\b${s}: \\{ titulo:`), `título da seção ${s}`);
+});
+
+test('menus: todo carregamento começa com todos os grupos fechados; só a sidebar recolhida é lembrada', () => {
+  const shell = ler('shell/AppShell.tsx');
+  const prefs = ler('shell/navPrefs.ts');
+  assert.match(prefs, /grupoAberto = \(p: NavPrefs, rotulo: string\): boolean => p\.gruposAbertos\.includes\(rotulo\)/, 'aberto só se o usuário abriu');
+  assert.match(prefs, /JSON\.stringify\(\{ colapsada: prefs\.colapsada \}\)/, 'grupos não são persistidos');
+  assert.match(prefs, /gruposAbertos: \[\] \}\)/, 'o padrão é nenhum grupo aberto');
+  assert.match(shell, /const aberto = grupoAberto\(prefs, group\.label\);/);
+  assert.match(shell, /aria-expanded=\{aberto\}/);
+  // Grupo fechado ainda mostra a página atual (orientação).
+  assert.match(shell, /itensVisiveis\(group\.items, aberto, routeInfo\.activeKey, reduzida\)/);
 });

@@ -1113,7 +1113,7 @@ app.post('/api/admin/pedidos/ink', requireAdmin, async (req, res) => {
     });
   }
 
-  res.json({ ok: true, id: resultado.id, url: `/${resultado.id}`, jaExistia: resultado.jaExistia });
+  res.json({ ok: true, id: resultado.id, url: `/hotpix/${resultado.id}`, jaExistia: resultado.jaExistia });
 });
 
 // Força a sincronização de um pedido vinculado à Reserva Ink (botão manual no admin)
@@ -17065,7 +17065,7 @@ app.post('/api/admin/pedidos', requireAdmin, async (req, res) => {
   };
   await writePedidos(pedidos);
 
-  res.json({ ok: true, id, url: `/${id}` });
+  res.json({ ok: true, id, url: `/hotpix/${id}` });
 });
 
 app.delete('/api/admin/pedidos/:id', requireAdmin, async (req, res) => {
