@@ -314,3 +314,28 @@ test('DV · modo inválido nunca é aceito em silêncio', () => em(ORG_A, STORE_
   await assert.rejects(resolver(ORG_A, STORE_A, ['x'], 'lazy'), TypeError);
   await assert.rejects(bootstrap(ORG_A, STORE_A, 'dv1', 'lazy'), TypeError);
 }));
+
+// ── Bootstrap sem regravar o que não mudou ─────────────────────────────────────────────────────
+
+test('DV · bootstrap repetido não regrava identity nenhuma (mesma versão física); mudou o produto alvo → só essa linha é atualizada', () => em(ORG_A, STORE_A, async () => {
+  const ids = await semear(ORG_A, STORE_A, 'dvr', [
+    { providerProductId: 'dvr-p1', variants: [{ providerVariantId: 'dvr-v1', sku: 'DVR-SKU-1' }] },
+    { providerProductId: 'dvr-p2', variants: [{ providerVariantId: 'dvr-v2', sku: 'DVR-SKU-2' }] },
+  ]);
+  const versoes = async () => (await sup.query(
+    `SELECT namespace || ':' || external_id AS k, xmin::text AS x FROM product_external_identities WHERE organization_id = $1 AND (namespace LIKE 'dvr.%' OR external_id LIKE 'DVR-SKU%') ORDER BY 1`, [ORG_A]
+  )).rows;
+  await bootstrap(ORG_A, STORE_A, 'dvr', 'derived');
+  const antes = await versoes();
+  assert.equal(antes.length, 4); // 2 product_id + 2 sku únicos
+  const r2 = await bootstrap(ORG_A, STORE_A, 'dvr', 'derived');
+  assert.equal(r2.productIdentities, 0);
+  assert.equal(r2.skuIdentities, 0);
+  assert.deepEqual(await versoes(), antes); // nenhuma linha regravada
+  // o provider passa a variante/produto para outro dono: o SKU único aponta para o novo produto
+  await sup.query(`UPDATE commerce_product_variants SET commerce_product_id = $2 WHERE organization_id = $1 AND provider = 'dvr' AND provider_variant_id = 'dvr-v1'`, [ORG_A, ids.get('dvr-p2')]);
+  const r3 = await bootstrap(ORG_A, STORE_A, 'dvr', 'derived');
+  assert.equal(r3.skuIdentities, 1);
+  const { rows: [sku1] } = await sup.query(`SELECT commerce_product_id FROM product_external_identities WHERE organization_id = $1 AND namespace = 'sku' AND external_id = 'DVR-SKU-1'`, [ORG_A]);
+  assert.equal(sku1.commerce_product_id, ids.get('dvr-p2'));
+}));

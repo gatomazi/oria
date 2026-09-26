@@ -80,8 +80,10 @@ async function bootstrapCommerceIdentities(deps, { organizationId, storeId, prov
        FROM commerce_products WHERE organization_id = $1 AND store_id = $2 AND provider = $3 AND is_active
      ON CONFLICT (organization_id, store_id, namespace, external_id) DO UPDATE SET
        commerce_product_id = EXCLUDED.commerce_product_id, last_verified_at = now(), updated_at = now()
-       -- nunca reescreve uma identity que um humano confirmou por cima do bootstrap automático
-       WHERE product_external_identities.source = 'commerce_sync'`,
+       -- nunca reescreve uma identity que um humano confirmou por cima do bootstrap automático; e só
+       -- reescreve quando o produto alvo MUDOU (sem isso cada sync regravava todas as linhas, não-HOT)
+       WHERE product_external_identities.source = 'commerce_sync'
+         AND product_external_identities.commerce_product_id IS DISTINCT FROM EXCLUDED.commerce_product_id`,
     [organizationId, storeId, provider]
   );
 
@@ -95,7 +97,8 @@ async function bootstrapCommerceIdentities(deps, { organizationId, storeId, prov
          FROM commerce_product_variants v WHERE v.organization_id = $1 AND v.store_id = $2 AND v.provider = $3 AND v.is_active
        ON CONFLICT (organization_id, store_id, namespace, external_id) DO UPDATE SET
          commerce_product_id = EXCLUDED.commerce_product_id, last_verified_at = now(), updated_at = now()
-         WHERE product_external_identities.source = 'commerce_sync'`,
+         WHERE product_external_identities.source = 'commerce_sync'
+           AND product_external_identities.commerce_product_id IS DISTINCT FROM EXCLUDED.commerce_product_id`,
       [organizationId, storeId, provider]
     );
 
@@ -125,7 +128,8 @@ async function bootstrapCommerceIdentities(deps, { organizationId, storeId, prov
      SELECT $1, $2, unico, 'sku', sku, 'commerce_sync', 'exact', now() FROM contagem WHERE produtos = 1
      ON CONFLICT (organization_id, store_id, namespace, external_id) DO UPDATE SET
        commerce_product_id = EXCLUDED.commerce_product_id, last_verified_at = now(), updated_at = now()
-       WHERE product_external_identities.source = 'commerce_sync'`,
+       WHERE product_external_identities.source = 'commerce_sync'
+         AND product_external_identities.commerce_product_id IS DISTINCT FROM EXCLUDED.commerce_product_id`,
     [organizationId, storeId]
   );
 
