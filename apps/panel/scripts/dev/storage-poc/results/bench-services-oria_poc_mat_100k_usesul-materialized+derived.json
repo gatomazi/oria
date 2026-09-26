@@ -1,0 +1,79 @@
+{
+  "db": "oria_poc_mat_100k_usesul",
+  "modos": [
+    "materialized",
+    "derived"
+  ],
+  "rodadas": 8,
+  "observados": 19447,
+  "primeiraChamada": {
+    "materialized": 2618,
+    "derived": 1501
+  },
+  "quente": {
+    "prepareStoreAnalytics": {
+      "materialized": {
+        "n": 8,
+        "minMs": 859,
+        "p50Ms": 1302,
+        "p95Ms": 1754,
+        "maxMs": 1754
+      },
+      "derived": {
+        "n": 8,
+        "minMs": 876,
+        "p50Ms": 1264,
+        "p95Ms": 1366,
+        "maxMs": 1366
+      }
+    },
+    "getProductPerformance_pagina_50": {
+      "materialized": {
+        "n": 8,
+        "minMs": 1232,
+        "p50Ms": 1377,
+        "p95Ms": 1724,
+        "maxMs": 1724
+      },
+      "derived": {
+        "n": 8,
+        "minMs": 1218,
+        "p50Ms": 1418,
+        "p95Ms": 1583,
+        "maxMs": 1583
+      }
+    },
+    "reconcileProductPerformance_2000_pedidos": {
+      "materialized": {
+        "n": 8,
+        "minMs": 4506,
+        "p50Ms": 5014,
+        "p95Ms": 6006,
+        "maxMs": 6006
+      },
+      "derived": {
+        "n": 8,
+        "minMs": 4495,
+        "p50Ms": 4847,
+        "p95Ms": 5447,
+        "maxMs": 5447
+      }
+    },
+    "getOpportunities": {
+      "materialized": {
+        "n": 8,
+        "minMs": 1274,
+        "p50Ms": 1408,
+        "p95Ms": 1670,
+        "maxMs": 1670
+      },
+      "derived": {
+        "n": 8,
+        "minMs": 1296,
+        "p50Ms": 1388,
+        "p95Ms": 2057,
+        "maxMs": 2057
+      }
+    }
+  }
+}
