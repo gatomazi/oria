@@ -121,6 +121,15 @@ test('hotpix · o lembrete de Pix monta o link com o caminho novo', () => {
   assert.match(bloco.slice(0, bloco.indexOf('},')), /exemplo: '[^']*\/hotpix\/[A-Za-z0-9_-]+'/);
 });
 
+// Os endpoints do painel (Pix manual e vincular pedido) devolvem o caminho que o front concatena
+// ao origin. Devolver `/{id}` gera um link que dá "Cannot GET" — a rota de um segmento não existe.
+test('hotpix · os endpoints do painel devolvem o caminho /hotpix/{id}', () => {
+  const servidor = fs.readFileSync(SERVER, 'utf8');
+
+  const urls = [...servidor.matchAll(/res\.json\(\{\s*ok: true,\s*id[^`]*\burl:\s*(`[^`]*`)/g)].map((m) => m[1].trim());
+  assert.deepEqual(urls.sort(), ['`/hotpix/${id}`', '`/hotpix/${resultado.id}`']);
+});
+
 // A hotpage lê o id do ÚLTIMO segmento. Enquanto a rota era `/{id}`, ela lia o caminho inteiro —
 // mantida como estava, pediria `/api/pedidos/hotpix%2F{id}` e a página nunca carregaria.
 test('hotpix · a hotpage lê o id do último segmento do caminho', () => {
