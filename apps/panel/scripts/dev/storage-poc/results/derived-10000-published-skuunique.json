@@ -1,0 +1,567 @@
+{
+  "rotulo": "derived-10000-published-skuunique",
+  "arm": "derived",
+  "sweep": "last_seen",
+  "dropidx": false,
+  "vff": null,
+  "produtos": 10000,
+  "variantes": 983514,
+  "mix": "published",
+  "skuMode": "unique",
+  "churn": 0.1,
+  "geradoEm": "2026-09-25T23:31:09.551Z",
+  "pg": "PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "fases": [
+    {
+      "nome": "sync#1 (full sync, carga inicial)",
+      "ms": 50420,
+      "resultado": {
+        "status": "success",
+        "syncRunId": "dadfdd40-513f-4207-ac55-a451db177c7b",
+        "pagesProcessed": 100,
+        "productsSeen": 10000,
+        "productsInserted": 10000,
+        "productsUpdated": 0,
+        "productsDeactivated": 0,
+        "variantsSeen": 983514,
+        "variantsInserted": 983514,
+        "variantsUpdated": 0,
+        "variantsDeactivated": 0
+      },
+      "walMB": 1147.1,
+      "walRegistros": 7126858,
+      "walFullPageImages": 35365,
+      "nodeHeapPicoMB": 47.5,
+      "nodeRssPicoMB": 161,
+      "postgresContainerPicoMB": 322
+    },
+    {
+      "nome": "bootstrap#1 (identities)",
+      "ms": 40380,
+      "resultado": {
+        "productIdentities": 10000,
+        "variantIdentities": 0,
+        "skuIdentities": 983514,
+        "skuConflictsRemoved": 0
+      },
+      "walMB": 883.2,
+      "walRegistros": 6094349,
+      "walFullPageImages": 36446,
+      "nodeHeapPicoMB": 10,
+      "nodeRssPicoMB": 61.6,
+      "postgresContainerPicoMB": 431
+    },
+    {
+      "nome": "VACUUM (ANALYZE) após carga 1",
+      "ms": 969,
+      "walMB": 1.3,
+      "walRegistros": 10058,
+      "walFullPageImages": 10000,
+      "nodeHeapPicoMB": 8,
+      "nodeRssPicoMB": 40.1,
+      "postgresContainerPicoMB": null
+    },
+    {
+      "nome": "sync#2 (segundo full sync, churn)",
+      "ms": 68997,
+      "resultado": {
+        "status": "success",
+        "syncRunId": "34862295-0ed0-4e30-8b76-c874fc63335b",
+        "pagesProcessed": 100,
+        "productsSeen": 10000,
+        "productsInserted": 0,
+        "productsUpdated": 10000,
+        "productsDeactivated": 0,
+        "variantsSeen": 983514,
+        "variantsInserted": 0,
+        "variantsUpdated": 983514,
+        "variantsDeactivated": 0
+      },
+      "walMB": 1908.9,
+      "walRegistros": 8352183,
+      "walFullPageImages": 167480,
+      "nodeHeapPicoMB": 46.9,
+      "nodeRssPicoMB": 135.2,
+      "postgresContainerPicoMB": 550
+    },
+    {
+      "nome": "bootstrap#2 (re-upsert das identities)",
+      "ms": 50074,
+      "resultado": {
+        "productIdentities": 10000,
+        "variantIdentities": 0,
+        "skuIdentities": 983514,
+        "skuConflictsRemoved": 0
+      },
+      "walMB": 1307.7,
+      "walRegistros": 7278637,
+      "walFullPageImages": 106601,
+      "nodeHeapPicoMB": 10.6,
+      "nodeRssPicoMB": 43.5,
+      "postgresContainerPicoMB": 671
+    },
+    {
+      "nome": "VACUUM (ANALYZE) após carga 2",
+      "ms": 3875,
+      "walMB": 98.9,
+      "walRegistros": 112024,
+      "walFullPageImages": 45693,
+      "nodeHeapPicoMB": 8.5,
+      "nodeRssPicoMB": 39.8,
+      "postgresContainerPicoMB": null
+    },
+    {
+      "nome": "REINDEX das 3 tabelas",
+      "ms": 10981,
+      "walMB": 218.9,
+      "walRegistros": 1131,
+      "walFullPageImages": 31088,
+      "nodeHeapPicoMB": 8.5,
+      "nodeRssPicoMB": 33.8,
+      "postgresContainerPicoMB": null
+    },
+    {
+      "nome": "VACUUM FULL das 3 tabelas",
+      "ms": 9845,
+      "walMB": 630.6,
+      "walRegistros": 3355,
+      "walFullPageImages": 84118,
+      "nodeHeapPicoMB": 8.5,
+      "nodeRssPicoMB": 33.8,
+      "postgresContainerPicoMB": null
+    }
+  ],
+  "tamanhos": {
+    "vazio": {
+      "commerce_product_variants": {
+        "heapMB": 0,
+        "indicesMB": 0,
+        "totalMB": 0,
+        "linhasEst": -1,
+        "indexesMB": {
+          "commerce_product_variants_pkey": 0,
+          "uq_commerce_product_variants_identidade": 0,
+          "idx_commerce_product_variants_produto": 0,
+          "idx_commerce_product_variants_ativos": 0,
+          "idx_commerce_product_variants_sync_run": 0
+        }
+      },
+      "commerce_products": {
+        "heapMB": 0,
+        "indicesMB": 0,
+        "totalMB": 0.1,
+        "linhasEst": -1,
+        "indexesMB": {
+          "commerce_products_pkey": 0,
+          "uq_commerce_products_id_organization": 0,
+          "uq_commerce_products_identidade": 0,
+          "idx_commerce_products_store": 0,
+          "idx_commerce_products_ativos": 0,
+          "idx_commerce_products_sync_run": 0
+        }
+      },
+      "product_external_identities": {
+        "heapMB": 0,
+        "indicesMB": 0,
+        "totalMB": 0,
+        "linhasEst": -1,
+        "indexesMB": {
+          "product_external_identities_pkey": 0,
+          "uq_product_external_identities_identidade": 0,
+          "idx_product_external_identities_produto": 0,
+          "idx_product_external_identities_namespace": 0
+        }
+      },
+      "_linhasReais": {
+        "identidades": 0,
+        "variantes": 0,
+        "identidadesPorNamespace": []
+      },
+      "_totalMB": 0.1
+    },
+    "apos_carga_1_sem_vacuum": {
+      "commerce_product_variants": {
+        "heapMB": 258.5,
+        "indicesMB": 169.7,
+        "totalMB": 428.3,
+        "linhasEst": 983527,
+        "indexesMB": {
+          "uq_commerce_product_variants_identidade": 110.3,
+          "commerce_product_variants_pkey": 37.5,
+          "idx_commerce_product_variants_produto": 9.2,
+          "idx_commerce_product_variants_sync_run": 6.4,
+          "idx_commerce_product_variants_ativos": 6.3
+        }
+      },
+      "commerce_products": {
+        "heapMB": 6,
+        "indicesMB": 2,
+        "totalMB": 8.1,
+        "linhasEst": 10000,
+        "indexesMB": {
+          "uq_commerce_products_identidade": 0.8,
+          "uq_commerce_products_id_organization": 0.6,
+          "commerce_products_pkey": 0.4,
+          "idx_commerce_products_ativos": 0.1,
+          "idx_commerce_products_sync_run": 0.1,
+          "idx_commerce_products_store": 0.1
+        }
+      },
+      "product_external_identities": {
+        "heapMB": 149.4,
+        "indicesMB": 126.9,
+        "totalMB": 276.4,
+        "linhasEst": 10000,
+        "indexesMB": {
+          "uq_product_external_identities_identidade": 73.5,
+          "product_external_identities_pkey": 37.8,
+          "idx_product_external_identities_produto": 9.3,
+          "idx_product_external_identities_namespace": 6.3
+        }
+      },
+      "_linhasReais": {
+        "identidades": 993514,
+        "variantes": 983514,
+        "identidadesPorNamespace": [
+          {
+            "namespace": "sku",
+            "source": "commerce_sync",
+            "n": 983514
+          },
+          {
+            "namespace": "reserva_ink.product_id",
+            "source": "commerce_sync",
+            "n": 10000
+          }
+        ]
+      },
+      "_totalMB": 712.8
+    },
+    "apos_carga_1_estavel": {
+      "commerce_product_variants": {
+        "heapMB": 258.5,
+        "indicesMB": 169.7,
+        "totalMB": 428.3,
+        "linhasEst": 983556,
+        "indexesMB": {
+          "uq_commerce_product_variants_identidade": 110.3,
+          "commerce_product_variants_pkey": 37.5,
+          "idx_commerce_product_variants_produto": 9.2,
+          "idx_commerce_product_variants_sync_run": 6.4,
+          "idx_commerce_product_variants_ativos": 6.3
+        }
+      },
+      "commerce_products": {
+        "heapMB": 6,
+        "indicesMB": 2,
+        "totalMB": 8.1,
+        "linhasEst": 10000,
+        "indexesMB": {
+          "uq_commerce_products_identidade": 0.8,
+          "uq_commerce_products_id_organization": 0.6,
+          "commerce_products_pkey": 0.4,
+          "idx_commerce_products_ativos": 0.1,
+          "idx_commerce_products_sync_run": 0.1,
+          "idx_commerce_products_store": 0.1
+        }
+      },
+      "product_external_identities": {
+        "heapMB": 149.4,
+        "indicesMB": 126.9,
+        "totalMB": 276.4,
+        "linhasEst": 993514,
+        "indexesMB": {
+          "uq_product_external_identities_identidade": 73.5,
+          "product_external_identities_pkey": 37.8,
+          "idx_product_external_identities_produto": 9.3,
+          "idx_product_external_identities_namespace": 6.3
+        }
+      },
+      "_linhasReais": {
+        "identidades": 993514,
+        "variantes": 983514,
+        "identidadesPorNamespace": [
+          {
+            "namespace": "sku",
+            "source": "commerce_sync",
+            "n": 983514
+          },
+          {
+            "namespace": "reserva_ink.product_id",
+            "source": "commerce_sync",
+            "n": 10000
+          }
+        ]
+      },
+      "_totalMB": 712.8
+    },
+    "apos_carga_2_pico_sem_vacuum": {
+      "commerce_product_variants": {
+        "heapMB": 473.7,
+        "indicesMB": 214.7,
+        "totalMB": 688.5,
+        "linhasEst": 977665,
+        "indexesMB": {
+          "uq_commerce_product_variants_identidade": 124.3,
+          "commerce_product_variants_pkey": 50.9,
+          "idx_commerce_product_variants_produto": 15.2,
+          "idx_commerce_product_variants_ativos": 13.1,
+          "idx_commerce_product_variants_sync_run": 11.1
+        }
+      },
+      "commerce_products": {
+        "heapMB": 9,
+        "indicesMB": 3.2,
+        "totalMB": 12.2,
+        "linhasEst": 10000,
+        "indexesMB": {
+          "uq_commerce_products_identidade": 1.5,
+          "uq_commerce_products_id_organization": 0.7,
+          "commerce_products_pkey": 0.6,
+          "idx_commerce_products_sync_run": 0.2,
+          "idx_commerce_products_store": 0.1,
+          "idx_commerce_products_ativos": 0.1
+        }
+      },
+      "product_external_identities": {
+        "heapMB": 298.9,
+        "indicesMB": 241.8,
+        "totalMB": 540.8,
+        "linhasEst": 993514,
+        "indexesMB": {
+          "uq_product_external_identities_identidade": 147,
+          "product_external_identities_pkey": 64.1,
+          "idx_product_external_identities_produto": 17.1,
+          "idx_product_external_identities_namespace": 13.5
+        }
+      },
+      "_linhasReais": {
+        "identidades": 993514,
+        "variantes": 983514,
+        "identidadesPorNamespace": [
+          {
+            "namespace": "sku",
+            "source": "commerce_sync",
+            "n": 983514
+          },
+          {
+            "namespace": "reserva_ink.product_id",
+            "source": "commerce_sync",
+            "n": 10000
+          }
+        ]
+      },
+      "_totalMB": 1241.5
+    },
+    "apos_carga_2_estavel": {
+      "commerce_product_variants": {
+        "heapMB": 473.7,
+        "indicesMB": 214.7,
+        "totalMB": 688.5,
+        "linhasEst": 987676,
+        "indexesMB": {
+          "uq_commerce_product_variants_identidade": 124.3,
+          "commerce_product_variants_pkey": 50.9,
+          "idx_commerce_product_variants_produto": 15.2,
+          "idx_commerce_product_variants_ativos": 13.1,
+          "idx_commerce_product_variants_sync_run": 11.1
+        }
+      },
+      "commerce_products": {
+        "heapMB": 9,
+        "indicesMB": 3.2,
+        "totalMB": 12.2,
+        "linhasEst": 10000,
+        "indexesMB": {
+          "uq_commerce_products_identidade": 1.5,
+          "uq_commerce_products_id_organization": 0.7,
+          "commerce_products_pkey": 0.6,
+          "idx_commerce_products_sync_run": 0.2,
+          "idx_commerce_products_store": 0.1,
+          "idx_commerce_products_ativos": 0.1
+        }
+      },
+      "product_external_identities": {
+        "heapMB": 298.9,
+        "indicesMB": 241.8,
+        "totalMB": 540.8,
+        "linhasEst": 997145,
+        "indexesMB": {
+          "uq_product_external_identities_identidade": 147,
+          "product_external_identities_pkey": 64.1,
+          "idx_product_external_identities_produto": 17.1,
+          "idx_product_external_identities_namespace": 13.5
+        }
+      },
+      "_linhasReais": {
+        "identidades": 993514,
+        "variantes": 983514,
+        "identidadesPorNamespace": [
+          {
+            "namespace": "sku",
+            "source": "commerce_sync",
+            "n": 983514
+          },
+          {
+            "namespace": "reserva_ink.product_id",
+            "source": "commerce_sync",
+            "n": 10000
+          }
+        ]
+      },
+      "_totalMB": 1241.5
+    },
+    "apos_reindex": {
+      "commerce_product_variants": {
+        "heapMB": 473.7,
+        "indicesMB": 123.4,
+        "totalMB": 597.3,
+        "linhasEst": 983514,
+        "indexesMB": {
+          "uq_commerce_product_variants_identidade": 72.7,
+          "commerce_product_variants_pkey": 29.6,
+          "idx_commerce_product_variants_sync_run": 7.1,
+          "idx_commerce_product_variants_produto": 7,
+          "idx_commerce_product_variants_ativos": 6.9
+        }
+      },
+      "commerce_products": {
+        "heapMB": 9,
+        "indicesMB": 1.8,
+        "totalMB": 10.9,
+        "linhasEst": 10000,
+        "indexesMB": {
+          "uq_commerce_products_identidade": 0.8,
+          "uq_commerce_products_id_organization": 0.5,
+          "commerce_products_pkey": 0.3,
+          "idx_commerce_products_store": 0.1,
+          "idx_commerce_products_ativos": 0.1,
+          "idx_commerce_products_sync_run": 0.1
+        }
+      },
+      "product_external_identities": {
+        "heapMB": 298.9,
+        "indicesMB": 117.5,
+        "totalMB": 416.5,
+        "linhasEst": 993514,
+        "indexesMB": {
+          "uq_product_external_identities_identidade": 73.5,
+          "product_external_identities_pkey": 29.9,
+          "idx_product_external_identities_produto": 7.1,
+          "idx_product_external_identities_namespace": 6.9
+        }
+      },
+      "_linhasReais": {
+        "identidades": 993514,
+        "variantes": 983514,
+        "identidadesPorNamespace": [
+          {
+            "namespace": "sku",
+            "source": "commerce_sync",
+            "n": 983514
+          },
+          {
+            "namespace": "reserva_ink.product_id",
+            "source": "commerce_sync",
+            "n": 10000
+          }
+        ]
+      },
+      "_totalMB": 1024.7
+    },
+    "apos_vacuum_full": {
+      "commerce_product_variants": {
+        "heapMB": 258.5,
+        "indicesMB": 123.4,
+        "totalMB": 381.9,
+        "linhasEst": 983514,
+        "indexesMB": {
+          "uq_commerce_product_variants_identidade": 72.7,
+          "commerce_product_variants_pkey": 29.6,
+          "idx_commerce_product_variants_sync_run": 7.1,
+          "idx_commerce_product_variants_produto": 7,
+          "idx_commerce_product_variants_ativos": 6.9
+        }
+      },
+      "commerce_products": {
+        "heapMB": 6,
+        "indicesMB": 1.8,
+        "totalMB": 7.9,
+        "linhasEst": 10000,
+        "indexesMB": {
+          "uq_commerce_products_identidade": 0.8,
+          "uq_commerce_products_id_organization": 0.5,
+          "commerce_products_pkey": 0.3,
+          "idx_commerce_products_store": 0.1,
+          "idx_commerce_products_ativos": 0.1,
+          "idx_commerce_products_sync_run": 0.1
+        }
+      },
+      "product_external_identities": {
+        "heapMB": 149.4,
+        "indicesMB": 117.5,
+        "totalMB": 266.9,
+        "linhasEst": 993514,
+        "indexesMB": {
+          "uq_product_external_identities_identidade": 73.5,
+          "product_external_identities_pkey": 29.9,
+          "idx_product_external_identities_produto": 7.1,
+          "idx_product_external_identities_namespace": 6.9
+        }
+      },
+      "_linhasReais": {
+        "identidades": 993514,
+        "variantes": 983514,
+        "identidadesPorNamespace": [
+          {
+            "namespace": "sku",
+            "source": "commerce_sync",
+            "n": 983514
+          },
+          {
+            "namespace": "reserva_ink.product_id",
+            "source": "commerce_sync",
+            "n": 10000
+          }
+        ]
+      },
+      "_totalMB": 656.7
+    }
+  },
+  "bench": {},
+  "estatisticasDeEscrita": [
+    {
+      "relname": "commerce_products",
+      "n_tup_ins": "10000",
+      "n_tup_upd": "10000",
+      "n_tup_hot_upd": "0",
+      "n_tup_del": "0",
+      "n_dead_tup": "0"
+    },
+    {
+      "relname": "commerce_product_variants",
+      "n_tup_ins": "983514",
+      "n_tup_upd": "983514",
+      "n_tup_hot_upd": "0",
+      "n_tup_del": "0",
+      "n_dead_tup": "0"
+    },
+    {
+      "relname": "product_external_identities",
+      "n_tup_ins": "993514",
+      "n_tup_upd": "993514",
+      "n_tup_hot_upd": "13",
+      "n_tup_del": "0",
+      "n_dead_tup": "0"
+    }
+  ],
+  "resumo": {
+    "vazio": 0.1,
+    "apos_carga_1_sem_vacuum": 712.8,
+    "apos_carga_1_estavel": 712.8,
+    "apos_carga_2_pico_sem_vacuum": 1241.5,
+    "apos_carga_2_estavel": 1241.5,
+    "apos_reindex": 1024.7,
+    "apos_vacuum_full": 656.7
+  }
+}

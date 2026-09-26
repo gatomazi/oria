@@ -25,8 +25,8 @@ const { createProductPerformanceService, createReportCache } = require('./produc
 const { createReconciliationService } = require('./reconciliation');
 const { createJourneyAnalyticsService } = require('./journey-analytics-service');
 const { createOpportunityDiagnosticsService } = require('./opportunity-diagnostics');
-const { runCatalogSync, cancelarCatalogSync } = require('./catalog-sync');
-const { bootstrapCommerceIdentities } = require('./product-identity-resolver');
+const { runCatalogSync, cancelarCatalogSync, VARREDURAS_DE_VARIANTE } = require('./catalog-sync');
+const { bootstrapCommerceIdentities, MODOS_VARIANTE } = require('./product-identity-resolver');
 
 const ANALYTICS_PROVIDER = 'ga4';
 const COMMERCE_PROVIDER = 'reserva_ink';
@@ -77,9 +77,28 @@ function createProductAnalyticsComposition({
   // Organization) sem tirar o auto-recovery de quedas de verdade (processo morto = lease livre
   // depois de 3h, não "pra sempre").
   catalogSyncLeaseTtlMs = 3 * 60 * 60 * 1000,
+  // Rodada de otimização de armazenamento · de onde vem a identity de VARIANTE na resolução (ver
+  // product-identity-resolver.js): 'materialized' (padrão — comportamento de sempre), 'dual'
+  // (compara os dois caminhos e loga divergência) ou 'derived' (catálogo canônico, sem espelho).
+  variantIdentityMode = 'materialized',
+  // Idem · como o full sync trata variantes que não mudaram/sumiram (ver catalog-sync.js):
+  // 'last_seen' (padrão, regrava tudo) ou 'per_product' (só o que mudou).
+  variantSweep = 'last_seen',
+  // Interruptor persistente do sync canônico (env CATALOG_SYNC_DISABLED=1): agendador, boot, disparo
+  // pós-conexão e botão manual passam por `syncCommerceCatalog`, que devolve `disabled` sem tocar na Ink
+  // nem no banco. Existe para janelas de manutenção — o boot nunca "reprograma" uma varredura sozinho.
+  syncDisabled = false,
+  // Depois de um run que NÃO fechou em sucesso (falha parcial, 429, ENOSPC…), o agendador espera isto
+  // antes de tentar de novo — antes era 1 h, o que repetia a falha em cima do mesmo limite/disco.
+  catalogSyncRetryCooldownMs = 6 * 60 * 60 * 1000,
+  // Ritmo mínimo entre páginas do full sync e teto de repetições em 429 (ver catalog-sync.js).
+  catalogSyncPaceMs = 0,
+  catalogSyncRateLimitRetries = 6,
 } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new Error('createProductAnalyticsComposition exige pool');
   if (!keyring) throw new Error('createProductAnalyticsComposition exige keyring');
+  if (!VARREDURAS_DE_VARIANTE.includes(variantSweep)) throw new Error(`variantSweep inválido: ${JSON.stringify(variantSweep)} (permitidos: ${VARREDURAS_DE_VARIANTE.join(', ')})`);
+  if (!MODOS_VARIANTE.includes(variantIdentityMode)) throw new Error(`variantIdentityMode inválido: ${JSON.stringify(variantIdentityMode)} (permitidos: ${MODOS_VARIANTE.join(', ')})`);
 
   const integrations = createConnectorIntegrationPort({ pool });
   const secretPort = createConnectorSecretPort({ pool, keyring });
@@ -97,7 +116,15 @@ function createProductAnalyticsComposition({
 
   const catalogRepository = createCommerceCatalogRepository({ pool });
   const reportCache = createReportCache(reportCacheTtlMs ? { ttlMs: reportCacheTtlMs } : undefined);
-  const productPerformanceService = createProductPerformanceService({ pool, registry, catalogRepository, reportCache });
+  // Só ids de produto/variante (nunca PII) e só o resumo por resolução — nunca uma linha de log por id.
+  const onIdentityDivergence = (divergencias) => {
+    const porTipo = {};
+    for (const d of divergencias) porTipo[d.kind] = (porTipo[d.kind] || 0) + 1;
+    console.warn(`[PRODUCT_IDENTITY] divergência materialized×derived: ${JSON.stringify(porTipo)} (ex.: ${divergencias[0].externalId})`);
+  };
+  const productPerformanceService = createProductPerformanceService({
+    pool, registry, catalogRepository, reportCache, variantIdentityMode, onIdentityDivergence,
+  });
   const reconciliationService = createReconciliationService({ registry, productPerformanceService });
   // Rodada K · Journey Analytics reaproveita o MESMO registry (GA4 + Ink já registrados acima) — a
   // conta Meta Ads é lida direto de meta_insights_daily (lib/meta/campaign-performance.js), fora do
@@ -142,15 +169,36 @@ function createProductAnalyticsComposition({
   // DE NOVO contra o banco a cada invocação (resolveAndPersist, sempre fresco). Destruir o
   // ReportCache aqui derrubaria o reuso de 15min sem nenhum ganho — a próxima request já vê a
   // identity nova sozinha, sem precisar que nada seja invalidado.
+  //
+  // Exclusão mútua com o crawl LEGADO (`produtos_ink`, server.js): os dois varrem o MESMO catálogo da
+  // Ink, então rodar juntos dobra o consumo de cota (a origem dos 429). O lease `commerce-scan:<provider>`
+  // é compartilhado; quem chegar depois devolve `locked` e o próximo tick tenta.
   async function syncCommerceCatalog({ organizationId, storeId }) {
+    if (syncDisabled) {
+      console.warn(`[CATALOG_SYNC] ${COMMERCE_PROVIDER}: sync canônico DESABILITADO (CATALOG_SYNC_DISABLED) — nada foi feito`);
+      return { status: 'disabled', syncRunId: null, pagesProcessed: 0 };
+    }
+    const varredura = `commerce-scan:${COMMERCE_PROVIDER}`;
+    if (leases && !(await leases.adquirir(varredura, organizationId, catalogSyncLeaseTtlMs))) {
+      console.warn(`[CATALOG_SYNC] ${COMMERCE_PROVIDER}: outra varredura do catálogo da Ink (legado ou canônica) está em andamento — pulado`);
+      return { status: 'locked', syncRunId: null, pagesProcessed: 0 };
+    }
+    try {
+      return await syncCommerceCatalogSemTrava({ organizationId, storeId });
+    } finally {
+      if (leases) await leases.concluir(varredura, organizationId, 0).catch((err) => console.error(`[CATALOG_SYNC] falha ao liberar ${varredura}: ${err.message}`));
+    }
+  }
+
+  async function syncCommerceCatalogSemTrava({ organizationId, storeId }) {
     const resultado = await runCatalogSync(
       { pool, registry, leases, logger: console },
       { organizationId, storeId, provider: COMMERCE_PROVIDER },
-      { ttlMs: catalogSyncLeaseTtlMs }
+      { ttlMs: catalogSyncLeaseTtlMs, variantSweep, paceMs: catalogSyncPaceMs, tentativasDeLimite: catalogSyncRateLimitRetries }
     );
     if (resultado.status === 'success') {
       try {
-        await bootstrapCommerceIdentities({ pool }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
+        await bootstrapCommerceIdentities({ pool, variantIdentityMode }, { organizationId, storeId, provider: COMMERCE_PROVIDER });
       } catch (err) {
         // O catálogo sincronizou; o bootstrap de identity é best-effort logo em seguida — falhar
         // aqui não desfaz o sync. Fica pro próximo sync (manual ou do scheduler) tentar de novo.
@@ -205,16 +253,21 @@ function createProductAnalyticsComposition({
   //                                           nunca um sync legítimo mais longo que o próprio lease
   //                                           que o protege — a proteção de fato continua sendo o
   //                                           lease em si, nunca este teto sozinho)
-  //   último run != 'success'              → precisa (falhou ou parcial — tenta de novo)
+  //   último run != 'success'              → precisa só depois de `retryCooldownMs` (6 h por padrão)
   //   último sucesso mais velho que maxAgeMs → precisa
   //   senão                                 → não precisa
-  async function catalogSyncNecessario({ organizationId, storeId }, { maxAgeMs = catalogSyncMaxAgeMs, maxRunningAgeMs = catalogSyncLeaseTtlMs } = {}) {
+  async function catalogSyncNecessario({ organizationId, storeId }, { maxAgeMs = catalogSyncMaxAgeMs, maxRunningAgeMs = catalogSyncLeaseTtlMs, retryCooldownMs = catalogSyncRetryCooldownMs } = {}) {
+    if (syncDisabled) return false;
     const ultimo = await getCommerceCatalogSyncStatus({ organizationId, storeId });
     if (!ultimo) return true;
     if (ultimo.status === 'running') {
       return (Date.now() - new Date(ultimo.started_at).getTime()) >= maxRunningAgeMs;
     }
-    if (ultimo.status !== 'success') return true;
+    if (ultimo.status !== 'success') {
+      // Falhou/parcial/cancelado: tenta de novo só depois do cooldown (nunca na hora seguinte).
+      if (!ultimo.finished_at) return true;
+      return (Date.now() - new Date(ultimo.finished_at).getTime()) >= retryCooldownMs;
+    }
     if (!ultimo.finished_at) return true;
     return (Date.now() - new Date(ultimo.finished_at).getTime()) >= maxAgeMs;
   }

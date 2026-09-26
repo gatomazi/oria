@@ -1,0 +1,49 @@
+{
+  "db": "oria_poc_der_100k_usesul",
+  "modos": [
+    "derived"
+  ],
+  "rodadas": 8,
+  "observados": 19447,
+  "primeiraChamada": {
+    "derived": 2158
+  },
+  "quente": {
+    "prepareStoreAnalytics": {
+      "derived": {
+        "n": 8,
+        "minMs": 912,
+        "p50Ms": 1281,
+        "p95Ms": 1487,
+        "maxMs": 1487
+      }
+    },
+    "getProductPerformance_pagina_50": {
+      "derived": {
+        "n": 8,
+        "minMs": 999,
+        "p50Ms": 1397,
+        "p95Ms": 1761,
+        "maxMs": 1761
+      }
+    },
+    "reconcileProductPerformance_2000_pedidos": {
+      "derived": {
+        "n": 8,
+        "minMs": 4402,
+        "p50Ms": 4909,
+        "p95Ms": 5557,
+        "maxMs": 5557
+      }
+    },
+    "getOpportunities": {
+      "derived": {
+        "n": 8,
+        "minMs": 1339,
+        "p50Ms": 1447,
+        "p95Ms": 1775,
+        "maxMs": 1775
+      }
+    }
+  }
+}

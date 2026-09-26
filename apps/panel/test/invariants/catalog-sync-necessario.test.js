@@ -116,16 +116,27 @@ test('A · maxRunningAgeMs por chamada sobrescreve o default (nunca hardcoded gl
   assert.equal(await composicao.catalogSyncNecessario({ organizationId: ORG_E, storeId: STORE_E }), true);
 }));
 
-test('A · último run "failed" → precisa (tenta de novo, mesmo recente)', () => em(ORG_A, STORE_A, async () => {
+// Falha não é mais "tenta de novo na hora seguinte": 2026-09-26 a falha por disco cheio (ENOSPC) foi
+// repetida a cada hora em cima do mesmo problema. Depois de um run que não fechou em sucesso o agendador
+// espera `retryCooldownMs` (6 h por padrão).
+test('A · último run "failed" RECENTE → NÃO precisa (cooldown; nunca retry na hora seguinte)', () => em(ORG_A, STORE_A, async () => {
   await gravarLog(ORG_A, STORE_A, { status: 'failed', finishedAtOffsetMs: 10 });
-  const precisa = await composicao.catalogSyncNecessario({ organizationId: ORG_A, storeId: STORE_A });
-  assert.equal(precisa, true);
+  assert.equal(await composicao.catalogSyncNecessario({ organizationId: ORG_A, storeId: STORE_A }), false);
 }));
 
-test('A · último run "partial_failure" → precisa', () => em(ORG_A, STORE_A, async () => {
+test('A · último run "partial_failure" RECENTE → NÃO precisa; passado o cooldown → precisa', () => em(ORG_A, STORE_A, async () => {
   await gravarLog(ORG_A, STORE_A, { status: 'partial_failure', finishedAtOffsetMs: 10 });
-  const precisa = await composicao.catalogSyncNecessario({ organizationId: ORG_A, storeId: STORE_A });
-  assert.equal(precisa, true);
+  assert.equal(await composicao.catalogSyncNecessario({ organizationId: ORG_A, storeId: STORE_A }), false);
+  assert.equal(await composicao.catalogSyncNecessario({ organizationId: ORG_A, storeId: STORE_A }, { retryCooldownMs: 5 }), true);
+}));
+
+test('A · com o sync desabilitado (CATALOG_SYNC_DISABLED) nada é necessário e syncCommerceCatalog não faz nada', () => em(ORG_B, STORE_B, async () => {
+  const off = createProductAnalyticsComposition({ pool: fachada, keyring: createKeyring({ ENCRYPTION_MASTER_KEY: MESTRA }), syncDisabled: true });
+  assert.equal(await off.catalogSyncNecessario({ organizationId: ORG_B, storeId: STORE_B }), false);
+  const r = await off.syncCommerceCatalog({ organizationId: ORG_B, storeId: STORE_B });
+  assert.equal(r.status, 'disabled');
+  const { rows } = await sup.query('SELECT count(*)::int AS n FROM commerce_catalog_sync_logs WHERE organization_id = $1', [ORG_B]);
+  assert.equal(rows[0].n, 0); // nenhum log aberto
 }));
 
 test('A · sucesso RECENTE (dentro do maxAgeMs) → não precisa', () => em(ORG_A, STORE_A, async () => {

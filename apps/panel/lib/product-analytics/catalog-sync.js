@@ -34,8 +34,26 @@
 // ou 'failed' (se nenhuma), e o erro sobe para o chamador decidir (mesma convenção de
 // lib/platform/jobs.js: falha de uma Organization não impede as outras).
 
+// Estratégia de varredura de VARIANTES (`variantSweep`, rodada de otimização de armazenamento):
+//   last_seen    (padrão, comportamento histórico) toda variante vista é reescrita a cada sync só para
+//                carimbar `last_seen_sync_id`; no fim, o que não tem o carimbo do run vira inativo.
+//                Custo: TODA linha de variante é regravada (versão nova + entrada nova em todos os
+//                índices, nunca HOT) mesmo sem mudança — dobra heap e índices e gera ~1 GB de WAL a
+//                cada 350 mil variantes por sync.
+//   per_product  a variante só é gravada quando algo mudou (ou é nova/reativada). Variante que sumiu do
+//                payload de um produto VISTO vira um TOMBSTONE em memória (limitado); NADA é
+//                desativado durante o run — os tombstones e as variantes de produtos que sumiram só são
+//                aplicados depois que TODAS as páginas terminaram com sucesso, exatamente como antes.
+//                Uma variante que reaparece (outra página, outro produto) cancela o tombstone. Falha
+//                parcial não desativa produto nem variante. `last_seen_sync_id` deixa de ser atualizado
+//                nas variantes que não mudaram.
+
 const crypto = require('node:crypto');
 const { ttlPara } = require('../platform/leases');
+
+const VARREDURAS_DE_VARIANTE = Object.freeze(['last_seen', 'per_product']);
+const LIMITE_DE_TOMBSTONES = 1000000; // ~60 MB de strings; acima disso o sync recusa em vez de crescer sem limite
+const LOTE_DE_TOMBSTONES = 5000;
 
 const CODIGO_ERRO_PADRAO = 'CATALOG_SYNC_FAILED';
 const CODIGO_ERRO_RE = /^[A-Z][A-Z0-9_]{2,63}$/;
@@ -109,7 +127,7 @@ function montarUpsertProdutos({ organizationId, storeId, provider, syncRunId }, 
   };
 }
 
-function montarUpsertVariantes({ organizationId, storeId, provider, syncRunId }, variantes) {
+function montarUpsertVariantes({ organizationId, storeId, provider, syncRunId, variantSweep = 'last_seen' }, variantes) {
   const v = variantes.map((x) => ({
     commerceProductId: x.commerceProductId,
     providerVariantId: x.providerVariantId,
@@ -136,6 +154,9 @@ function montarUpsertVariantes({ organizationId, storeId, provider, syncRunId },
         sku = EXCLUDED.sku, color = EXCLUDED.color, size = EXCLUDED.size, model = EXCLUDED.model,
         metadata = EXCLUDED.metadata, is_active = true, last_seen_sync_id = EXCLUDED.last_seen_sync_id,
         synced_at = now(), updated_at = now()
+      ${variantSweep === 'per_product' ? `WHERE (commerce_product_variants.commerce_product_id, commerce_product_variants.sku, commerce_product_variants.color,
+               commerce_product_variants.size, commerce_product_variants.model, commerce_product_variants.metadata, commerce_product_variants.is_active)
+          IS DISTINCT FROM (EXCLUDED.commerce_product_id, EXCLUDED.sku, EXCLUDED.color, EXCLUDED.size, EXCLUDED.model, EXCLUDED.metadata, true)` : ''}
       RETURNING id, (xmax = 0) AS inserted`,
     values: [
       organizationId, storeId, provider, syncRunId,
@@ -155,6 +176,54 @@ function montarDesativacao(tabela, { organizationId, storeId, provider, syncRunI
         RETURNING id
       )
       SELECT count(*)::int AS n FROM alvo`,
+    values: [organizationId, storeId, provider, syncRunId],
+  };
+}
+
+// per_product · variantes ativas dos produtos desta página que NÃO vieram no payload dele. SÓ LEITURA:
+// vira tombstone em memória, aplicado no fim do run bem-sucedido.
+function montarBuscaDeSumidas({ organizationId, storeId, provider }, produtoIds, variantIds) {
+  return {
+    text: `
+      SELECT provider_variant_id FROM commerce_product_variants
+       WHERE organization_id = $1 AND store_id = $2 AND provider = $3
+         AND commerce_product_id = ANY($4::uuid[]) AND is_active
+         AND NOT (provider_variant_id = ANY($5::text[]))`,
+    values: [organizationId, storeId, provider, produtoIds, variantIds],
+  };
+}
+
+// per_product · aplica os tombstones (em lotes) — só chamado depois de TODAS as páginas com sucesso.
+function montarAplicacaoDeTombstones({ organizationId, storeId, provider }, variantIds) {
+  return {
+    text: `
+      WITH alvo AS (
+        UPDATE commerce_product_variants SET is_active = false, updated_at = now()
+         WHERE organization_id = $1 AND store_id = $2 AND provider = $3
+           AND provider_variant_id = ANY($4::text[]) AND is_active
+        RETURNING id
+      )
+      SELECT count(*)::int AS n FROM alvo`,
+    values: [organizationId, storeId, provider, variantIds],
+  };
+}
+
+// per_product · produtos que sumiram do provider (só depois de TODAS as páginas) + as variantes deles.
+function montarDesativacaoDeProdutosPorProduto({ organizationId, storeId, provider, syncRunId }) {
+  return {
+    text: `
+      WITH produtos AS (
+        UPDATE commerce_products SET is_active = false, updated_at = now()
+         WHERE organization_id = $1 AND store_id = $2 AND provider = $3
+           AND is_active = true AND last_seen_sync_id <> $4
+        RETURNING id
+      ), variantes AS (
+        UPDATE commerce_product_variants SET is_active = false, updated_at = now()
+         WHERE organization_id = $1 AND store_id = $2 AND provider = $3 AND is_active
+           AND commerce_product_id IN (SELECT id FROM produtos)
+        RETURNING id
+      )
+      SELECT (SELECT count(*)::int FROM produtos) AS produtos, (SELECT count(*)::int FROM variantes) AS variantes`,
     values: [organizationId, storeId, provider, syncRunId],
   };
 }
@@ -180,6 +249,20 @@ async function upsertPagina(pool, ctx, itens) {
     const upVariantes = montarUpsertVariantes(ctx, variantes);
     const { rows: linhasVariante } = await pool.query(upVariantes.text, upVariantes.values);
     for (const l of linhasVariante) (l.inserted ? contadores.variantsInserted++ : contadores.variantsUpdated++);
+  }
+  if (ctx.variantSweep === 'per_product') {
+    const idsDoPayload = variantes.map((v) => v.providerVariantId);
+    // Reaparecida em outra página/produto: cancela o tombstone (a última palavra é do payload).
+    for (const id of idsDoPayload) ctx.tombstones.delete(id);
+    // Roda também para página sem nenhuma variante: o payload diz que o produto não tem mais nenhuma.
+    const busca = montarBuscaDeSumidas(ctx, [...idPorProviderProductId.values()], idsDoPayload);
+    const { rows } = await pool.query(busca.text, busca.values);
+    for (const r of rows) {
+      if (ctx.tombstones.size >= LIMITE_DE_TOMBSTONES) {
+        throw Object.assign(new Error(`mais de ${LIMITE_DE_TOMBSTONES} variantes sumiram num único sync — recusado por segurança (rode uma vez com variantSweep=last_seen)`), { codigo: 'CATALOG_SYNC_TOO_MANY_REMOVALS' });
+      }
+      ctx.tombstones.add(r.provider_variant_id);
+    }
   }
   return contadores;
 }
@@ -270,6 +353,60 @@ async function cancelarCatalogSync({ pool, leases }, { organizationId, storeId, 
   };
 }
 
+// ── Limite de taxa do provider (429) ─────────────────────────────────────────────────────────────
+//
+// O full sync são ~1.060 chamadas seguidas. A Ink limita por cota; o retry curto do client (400 ms e
+// 1,2 s) não basta e, sem isto, um único 429 derrubava o run inteiro (partial_failure às 120 páginas,
+// 2026-09-24). Aqui a MESMA página é repetida com backoff que respeita `Retry-After` (ou 2 s, 4 s, 8 s…
+// até 60 s), no máximo `tentativasDeLimite` vezes; esgotado, o erro sobe como sempre (partial_failure)
+// e o agendador só tenta de novo depois do cooldown — nunca em cima do limite.
+const ESPERA_MAXIMA_429_MS = 120 * 1000;
+
+function ehLimiteDeTaxa(err) {
+  return !!err && (err.status === 429 || err.codigo === 'INK_RATE_LIMITED');
+}
+
+async function comBackoffDeLimite(executar, { tentativas = 6, dormir = (ms) => new Promise((r) => setTimeout(r, ms)), logger = console, provider = '' } = {}) {
+  for (let i = 0; ; i += 1) {
+    try {
+      return await executar();
+    } catch (err) {
+      if (!ehLimiteDeTaxa(err) || i >= tentativas) throw err;
+      const espera = Math.min(ESPERA_MAXIMA_429_MS, Number.isFinite(err.retryAfterMs) ? err.retryAfterMs : Math.min(60000, 2000 * (2 ** i)));
+      logger.warn(`[CATALOG_SYNC] ${provider}: limite de taxa do provider — esperando ${Math.round(espera / 1000)}s antes de repetir a página (tentativa ${i + 1}/${tentativas})`);
+      await dormir(espera); // eslint-disable-line no-await-in-loop
+    }
+  }
+}
+
+// Posição do WAL (só para medir o custo do run; nunca quebra o sync).
+async function posicaoDoWal(pool) {
+  try {
+    const { rows } = await pool.query('SELECT pg_current_wal_lsn()::text AS lsn');
+    return rows && rows[0] ? rows[0].lsn : null;
+  } catch { return null; }
+}
+
+async function bytesDeWal(pool, inicio) {
+  if (!inicio) return null;
+  try {
+    const { rows } = await pool.query('SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), $1::pg_lsn)::bigint AS bytes', [inicio]);
+    return rows && rows[0] ? Number(rows[0].bytes) : null;
+  } catch { return null; }
+}
+
+// Com o lease em mãos ninguém mais roda este (Organization, Store, provider): qualquer linha `running`
+// é de um processo que caiu. Fecha como `failed`/ABANDONED — sem isso elas ficam `running` para sempre
+// e o "último run" que o agendador lê nunca é o real.
+async function fecharOrfaos(pool, { organizationId, storeId, provider, syncRunId }) {
+  const { rowCount } = await pool.query(
+    `UPDATE commerce_catalog_sync_logs SET status = 'failed', finished_at = now(), error_code = 'ABANDONED'
+      WHERE organization_id = $1 AND store_id = $2 AND provider = $3 AND status = 'running' AND sync_run_id <> $4`,
+    [organizationId, storeId, provider, syncRunId]
+  );
+  return rowCount;
+}
+
 /**
  * Full catalog sync de UMA Organization/Store/provider. `pool` é a fachada tenant-scoped
  * (lib/platform/tenant-runtime.js) — chamar de dentro de `comContexto`/`comOrganization` da
@@ -279,7 +416,8 @@ async function cancelarCatalogSync({ pool, leases }, { organizationId, storeId, 
  * @param {{organizationId: string, storeId: string, provider: string}} alvo
  * @param {{ttlMs?: number}} [opcoes]
  */
-async function runCatalogSync({ pool, registry, leases = null, logger = console }, { organizationId, storeId, provider }, { ttlMs = ttlPara(0) } = {}) {
+async function runCatalogSync({ pool, registry, leases = null, logger = console }, { organizationId, storeId, provider }, { ttlMs = ttlPara(0), variantSweep = 'last_seen', tentativasDeLimite = 6, dormir, paceMs = 0 } = {}) {
+  if (!VARREDURAS_DE_VARIANTE.includes(variantSweep)) throw new TypeError(`variantSweep inválido: ${JSON.stringify(variantSweep)} (permitidos: ${VARREDURAS_DE_VARIANTE.join(', ')})`);
   if (!pool) throw new Error('runCatalogSync exige pool');
   if (!registry) throw new Error('runCatalogSync exige registry');
   if (!organizationId || !storeId || !provider) throw new Error('runCatalogSync exige organizationId, storeId e provider');
@@ -294,11 +432,16 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
   }
 
   const syncRunId = crypto.randomUUID();
-  const ctx = { organizationId, storeId, provider, syncRunId };
+  const ctx = { organizationId, storeId, provider, syncRunId, variantSweep, tombstones: new Set() };
   let pages = 0;
   let contadores = contadoresVazios();
   try {
     await abrirLog(pool, ctx);
+    if (leases) {
+      const orfaos = await fecharOrfaos(pool, ctx);
+      if (orfaos) logger.warn(`[CATALOG_SYNC] ${provider}: ${orfaos} run(s) anterior(es) ficaram 'running' sem processo — fechados como ABANDONED`);
+    }
+    const walInicio = await posicaoDoWal(pool);
 
     const resolvido = registry.resolve('commerce', provider, { organizationId, storeId });
     // Falha cedo, com código estável: nunca cai para 1 chamada de variantes por produto.
@@ -309,7 +452,10 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
     do {
       if (pages >= MAX_PAGINAS) throw Object.assign(new Error('paginação do catalog sync não terminou'), { codigo: 'CATALOG_SYNC_PAGINATION_RUNAWAY' });
       // eslint-disable-next-line no-await-in-loop
-      const pagina = await resolvido.connector.listProductsWithVariants({ cursor, limit: 100 });
+      const pagina = await comBackoffDeLimite(
+        () => resolvido.connector.listProductsWithVariants({ cursor, limit: 100 }),
+        { tentativas: tentativasDeLimite, dormir, logger, provider }
+      );
       pages += 1;
       if (Number.isInteger(pagina.totalPages) && pagina.totalPages > 0) pagesTotal = pagina.totalPages;
       // eslint-disable-next-line no-await-in-loop
@@ -321,18 +467,36 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
         return { status: 'cancelled', syncRunId, pagesProcessed: pages, ...contadores };
       }
       cursor = pagina.nextCursor;
+      // Ritmo mínimo entre páginas (0 = só o tempo da própria API): quem dorme aqui não segura conexão de banco.
+      if (cursor && paceMs > 0) await (dormir || ((ms) => new Promise((r) => setTimeout(r, ms))))(paceMs); // eslint-disable-line no-await-in-loop
     } while (cursor);
 
     // Só depois que TODAS as páginas terminaram com sucesso: o que não apareceu neste run vira inativo.
-    const desativarProdutos = montarDesativacao('commerce_products', ctx);
-    const { rows: [{ n: prodDesativados }] } = await pool.query(desativarProdutos.text, desativarProdutos.values);
-    const desativarVariantes = montarDesativacao('commerce_product_variants', ctx);
-    const { rows: [{ n: variantDesativados }] } = await pool.query(desativarVariantes.text, desativarVariantes.values);
-    contadores.productsDeactivated = prodDesativados;
-    contadores.variantsDeactivated = variantDesativados;
+    if (variantSweep === 'per_product') {
+      const sumidas = [...ctx.tombstones];
+      for (let i = 0; i < sumidas.length; i += LOTE_DE_TOMBSTONES) {
+        const ap = montarAplicacaoDeTombstones(ctx, sumidas.slice(i, i + LOTE_DE_TOMBSTONES));
+        // eslint-disable-next-line no-await-in-loop
+        const { rows: [{ n }] } = await pool.query(ap.text, ap.values);
+        contadores.variantsDeactivated += n;
+      }
+      const desativar = montarDesativacaoDeProdutosPorProduto(ctx);
+      const { rows: [{ produtos, variantes }] } = await pool.query(desativar.text, desativar.values);
+      contadores.productsDeactivated = produtos;
+      contadores.variantsDeactivated += variantes;
+    } else {
+      const desativarProdutos = montarDesativacao('commerce_products', ctx);
+      const { rows: [{ n: prodDesativados }] } = await pool.query(desativarProdutos.text, desativarProdutos.values);
+      const desativarVariantes = montarDesativacao('commerce_product_variants', ctx);
+      const { rows: [{ n: variantDesativados }] } = await pool.query(desativarVariantes.text, desativarVariantes.values);
+      contadores.productsDeactivated = prodDesativados;
+      contadores.variantsDeactivated = variantDesativados;
+    }
 
     await fecharLog(pool, ctx, { status: 'success', pagesProcessed: pages, contadores });
-    return { status: 'success', syncRunId, pagesProcessed: pages, ...contadores };
+    const walBytes = await bytesDeWal(pool, walInicio);
+    logger.log?.(`[CATALOG_SYNC] ${provider}: sucesso · ${pages} páginas · variantes vistas=${contadores.variantsSeen} gravadas=${contadores.variantsInserted + contadores.variantsUpdated} desativadas=${contadores.variantsDeactivated} · WAL≈${walBytes === null ? 'n/d' : `${(walBytes / 1048576).toFixed(0)}MB`} (medido no cluster inteiro, inclui outras escritas)`);
+    return { status: 'success', syncRunId, pagesProcessed: pages, walBytes, ...contadores };
   } catch (err) {
     const errorCode = codigoDeErro(err);
     await fecharLog(pool, ctx, { status: pages > 0 ? 'partial_failure' : 'failed', pagesProcessed: pages, contadores, errorCode })
@@ -349,5 +513,5 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
 
 module.exports = {
   runCatalogSync, cancelarCatalogSync, jobDoSync, contadoresVazios,
-  montarUpsertProdutos, montarUpsertVariantes, montarDesativacao,
+  montarUpsertProdutos, montarUpsertVariantes, montarDesativacao, VARREDURAS_DE_VARIANTE, comBackoffDeLimite, ehLimiteDeTaxa,
 };

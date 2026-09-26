@@ -1,0 +1,340 @@
+{
+ "_source": "Aggregated read-only measurement of production (Use Sul, 1 Organization / 1 Store) on 2026-09-25. No identifiers, no PII: only counts.",
+ "joint": [
+  {
+   "type": "Body Infantil",
+   "variants": 6,
+   "products": 53,
+   "published": 0,
+   "ga4Observed": 1
+  },
+  {
+   "type": "Body Infantil",
+   "variants": 12,
+   "products": 2407,
+   "published": 0,
+   "ga4Observed": 175
+  },
+  {
+   "type": "Body Infantil",
+   "variants": 18,
+   "products": 9,
+   "published": 0,
+   "ga4Observed": 0
+  },
+  {
+   "type": "Body Infantil",
+   "variants": 24,
+   "products": 7702,
+   "published": 0,
+   "ga4Observed": 631
+  },
+  {
+   "type": "Camiseta",
+   "variants": 6,
+   "products": 2,
+   "published": 0,
+   "ga4Observed": 2
+  },
+  {
+   "type": "Camiseta",
+   "variants": 12,
+   "products": 2,
+   "published": 0,
+   "ga4Observed": 2
+  },
+  {
+   "type": "Camiseta",
+   "variants": 24,
+   "products": 7,
+   "published": 0,
+   "ga4Observed": 7
+  },
+  {
+   "type": "Camiseta",
+   "variants": 48,
+   "products": 92,
+   "published": 90,
+   "ga4Observed": 91
+  },
+  {
+   "type": "Camiseta",
+   "variants": 54,
+   "products": 13,
+   "published": 12,
+   "ga4Observed": 12
+  },
+  {
+   "type": "Camiseta",
+   "variants": 72,
+   "products": 3,
+   "published": 2,
+   "ga4Observed": 2
+  },
+  {
+   "type": "Camiseta",
+   "variants": 84,
+   "products": 24,
+   "published": 23,
+   "ga4Observed": 24
+  },
+  {
+   "type": "Camiseta",
+   "variants": 90,
+   "products": 14,
+   "published": 14,
+   "ga4Observed": 14
+  },
+  {
+   "type": "Camiseta",
+   "variants": 96,
+   "products": 7208,
+   "published": 7192,
+   "ga4Observed": 7202
+  },
+  {
+   "type": "Camiseta",
+   "variants": 108,
+   "products": 6621,
+   "published": 2484,
+   "ga4Observed": 2492
+  },
+  {
+   "type": "Camiseta Algodão Peruano",
+   "variants": 24,
+   "products": 61,
+   "published": 0,
+   "ga4Observed": 22
+  },
+  {
+   "type": "Camiseta Algodão Peruano",
+   "variants": 34,
+   "products": 2,
+   "published": 0,
+   "ga4Observed": 0
+  },
+  {
+   "type": "Camiseta Algodão Peruano",
+   "variants": 36,
+   "products": 5896,
+   "published": 0,
+   "ga4Observed": 1272
+  },
+  {
+   "type": "Camiseta Algodão Peruano",
+   "variants": 46,
+   "products": 4325,
+   "published": 0,
+   "ga4Observed": 538
+  },
+  {
+   "type": "Camiseta Infantil",
+   "variants": 7,
+   "products": 1,
+   "published": 0,
+   "ga4Observed": 1
+  },
+  {
+   "type": "Camiseta Infantil",
+   "variants": 23,
+   "products": 61,
+   "published": 0,
+   "ga4Observed": 3
+  },
+  {
+   "type": "Camiseta Infantil",
+   "variants": 37,
+   "products": 5894,
+   "published": 0,
+   "ga4Observed": 351
+  },
+  {
+   "type": "Camiseta Infantil",
+   "variants": 44,
+   "products": 4246,
+   "published": 0,
+   "ga4Observed": 493
+  },
+  {
+   "type": "Camiseta Oversized",
+   "variants": 6,
+   "products": 2,
+   "published": 1,
+   "ga4Observed": 2
+  },
+  {
+   "type": "Camiseta Oversized",
+   "variants": 12,
+   "products": 72,
+   "published": 9,
+   "ga4Observed": 19
+  },
+  {
+   "type": "Camiseta Oversized",
+   "variants": 18,
+   "products": 10176,
+   "published": 8,
+   "ga4Observed": 1132
+  },
+  {
+   "type": "Cropped",
+   "variants": 10,
+   "products": 6,
+   "published": 0,
+   "ga4Observed": 0
+  },
+  {
+   "type": "Cropped",
+   "variants": 15,
+   "products": 1,
+   "published": 0,
+   "ga4Observed": 0
+  },
+  {
+   "type": "Cropped",
+   "variants": 25,
+   "products": 62,
+   "published": 0,
+   "ga4Observed": 3
+  },
+  {
+   "type": "Cropped",
+   "variants": 35,
+   "products": 10126,
+   "published": 0,
+   "ga4Observed": 901
+  },
+  {
+   "type": "Cropped Moletom",
+   "variants": 5,
+   "products": 62,
+   "published": 0,
+   "ga4Observed": 2
+  },
+  {
+   "type": "Cropped Moletom",
+   "variants": 10,
+   "products": 10124,
+   "published": 0,
+   "ga4Observed": 807
+  },
+  {
+   "type": "Hoodie Moletom",
+   "variants": 6,
+   "products": 1,
+   "published": 0,
+   "ga4Observed": 1
+  },
+  {
+   "type": "Hoodie Moletom",
+   "variants": 18,
+   "products": 61,
+   "published": 0,
+   "ga4Observed": 12
+  },
+  {
+   "type": "Hoodie Moletom",
+   "variants": 24,
+   "products": 10121,
+   "published": 0,
+   "ga4Observed": 1476
+  },
+  {
+   "type": "Regata",
+   "variants": 5,
+   "products": 67,
+   "published": 0,
+   "ga4Observed": 3
+  },
+  {
+   "type": "Regata",
+   "variants": 10,
+   "products": 10135,
+   "published": 0,
+   "ga4Observed": 893
+  },
+  {
+   "type": "Suéter Moletom",
+   "variants": 12,
+   "products": 1,
+   "published": 0,
+   "ga4Observed": 1
+  },
+  {
+   "type": "Suéter Moletom",
+   "variants": 18,
+   "products": 62,
+   "published": 0,
+   "ga4Observed": 5
+  },
+  {
+   "type": "Suéter Moletom",
+   "variants": 24,
+   "products": 10135,
+   "published": 0,
+   "ga4Observed": 1016
+  }
+ ],
+ "colors": {
+  "Preta": 0.20736666,
+  "Branca": 0.15433334,
+  "Marinho": 0.144,
+  "Amarelo": 0.086,
+  "Cinza": 0.0769,
+  "Vermelho": 0.0577,
+  "Verde": 0.057033334,
+  "Off White": 0.050133333,
+  "Rosa": 0.04586667,
+  "Bege": 0.0343,
+  "Bordeaux": 0.030466666,
+  "Areia": 0.018233333,
+  "Rosa Bebê": 0.0134333335,
+  "Azul Bebê": 0.0124,
+  "Verde Oliva": 0.006366667,
+  "Verde Musgo": 0.0054666665
+ },
+ "sizesAdult": [
+  "PP",
+  "P",
+  "M",
+  "G",
+  "GG",
+  "3G",
+  "4G"
+ ],
+ "sizesKids": [
+  "02 anos",
+  "04 anos",
+  "06 anos",
+  "08 anos",
+  "10 anos",
+  "12 anos",
+  "14 anos",
+  "03 meses",
+  "06 meses",
+  "09 meses",
+  "12 meses",
+  "18 meses",
+  "24 meses"
+ ],
+ "models": [
+  "Masculino",
+  "Feminino",
+  "Infantil",
+  "Cropped",
+  "Suéter Slim",
+  "Hoodie Slim",
+  "Unissex",
+  "Moletom Cropped",
+  "Regata"
+ ],
+ "widths": {
+  "productName": 25,
+  "slug": 58,
+  "imageUrl": 110,
+  "productUrl": 99,
+  "skuLen": 12,
+  "variantIdLen": 9,
+  "productIdLen": 7
+ }
+}
