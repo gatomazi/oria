@@ -18,6 +18,16 @@
 //     5. nada                                        → unresolved
 //   Mais de um candidato em qualquer passo           → conflict; NUNCA escolhe, NUNCA persiste.
 //
+// Modo de identidade de VARIANTE (`variantIdentityMode`, rodada de otimização de armazenamento):
+//   materialized  (padrão, comportamento histórico) uma linha `<provider>.variant_id` por variante em
+//                 product_external_identities — espelho 1:1 do commerce_product_variants
+//   dual          continua gravando como `materialized`, mas resolve o passo 3 pelos DOIS caminhos,
+//                 devolve o resultado do caminho materializado e reporta divergências (`onDivergence`)
+//   derived       não grava mais a identity mecânica de variante; o passo 3 lê o índice único
+//                 (organization, store, provider, provider_variant_id) do catálogo canônico. Linhas
+//                 que NÃO são espelho (manual/regra/histórica) continuam na tabela e VENCEM o catálogo.
+// Nada disso muda o contrato de resolução (ordem, conflito, unresolved) — só de onde vem o passo 3.
+//
 // Tudo aqui é `pool` (fachada tenant-scoped, lib/platform/tenant-runtime.js) — quem chama já está
 // dentro de `comContexto`/`comOrganization` da Organization certa, mesmo padrão de
 // lib/product-analytics/catalog-sync.js e lib/platform/connector-integration-port.js.
@@ -25,6 +35,14 @@
 const NAMESPACE_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/;
 const FONTES = Object.freeze(['commerce_sync', 'analytics_observed', 'manual', 'rule']);
 const CONFIANCAS = Object.freeze(['exact', 'verified', 'inferred']);
+const MODOS_VARIANTE = Object.freeze(['materialized', 'dual', 'derived']);
+const MODO_VARIANTE_PADRAO = 'materialized';
+
+function modoDeVariante(deps) {
+  const modo = deps && deps.variantIdentityMode ? deps.variantIdentityMode : MODO_VARIANTE_PADRAO;
+  if (!MODOS_VARIANTE.includes(modo)) throw new TypeError(`variantIdentityMode inválido: ${JSON.stringify(modo)} (permitidos: ${MODOS_VARIANTE.join(', ')})`);
+  return modo;
+}
 
 function validarNamespace(namespace) {
   if (typeof namespace !== 'string' || namespace === 'id' || !NAMESPACE_RE.test(namespace)) {
@@ -47,8 +65,10 @@ function validarAlvo({ organizationId, storeId }) {
  * @param {{pool}} deps
  * @param {{organizationId: string, storeId: string, provider: string}} alvo
  */
-async function bootstrapCommerceIdentities({ pool }, { organizationId, storeId, provider }) {
+async function bootstrapCommerceIdentities(deps, { organizationId, storeId, provider }) {
+  const { pool } = deps;
   if (!pool) throw new Error('bootstrapCommerceIdentities exige pool');
+  const modoVariante = modoDeVariante(deps);
   validarAlvo({ organizationId, storeId });
   if (!provider) throw new TypeError('provider é obrigatório');
 
@@ -65,15 +85,19 @@ async function bootstrapCommerceIdentities({ pool }, { organizationId, storeId, 
     [organizationId, storeId, provider]
   );
 
-  const upVariantes = await pool.query(
-    `INSERT INTO product_external_identities (organization_id, store_id, commerce_product_id, namespace, external_id, source, confidence, last_verified_at)
-     SELECT v.organization_id, v.store_id, v.commerce_product_id, $3 || '.variant_id', v.provider_variant_id, 'commerce_sync', 'exact', now()
-       FROM commerce_product_variants v WHERE v.organization_id = $1 AND v.store_id = $2 AND v.provider = $3 AND v.is_active
-     ON CONFLICT (organization_id, store_id, namespace, external_id) DO UPDATE SET
-       commerce_product_id = EXCLUDED.commerce_product_id, last_verified_at = now(), updated_at = now()
-       WHERE product_external_identities.source = 'commerce_sync'`,
-    [organizationId, storeId, provider]
-  );
+  // Modo `derived`: a identity mecânica de variante seria cópia exata de commerce_product_variants
+  // (o passo 3 da resolução lê o catálogo direto) — não se grava mais.
+  const upVariantes = modoVariante === 'derived'
+    ? { rowCount: 0 }
+    : await pool.query(
+      `INSERT INTO product_external_identities (organization_id, store_id, commerce_product_id, namespace, external_id, source, confidence, last_verified_at)
+       SELECT v.organization_id, v.store_id, v.commerce_product_id, $3 || '.variant_id', v.provider_variant_id, 'commerce_sync', 'exact', now()
+         FROM commerce_product_variants v WHERE v.organization_id = $1 AND v.store_id = $2 AND v.provider = $3 AND v.is_active
+       ON CONFLICT (organization_id, store_id, namespace, external_id) DO UPDATE SET
+         commerce_product_id = EXCLUDED.commerce_product_id, last_verified_at = now(), updated_at = now()
+         WHERE product_external_identities.source = 'commerce_sync'`,
+      [organizationId, storeId, provider]
+    );
 
   // SKU: só entra como identity quando é ÚNICO dentro da Store (entre TODOS os providers, porque SKU
   // costuma ser identificador do lojista, não do provider) — §5.4. Um SKU que deixou de ser único
@@ -121,15 +145,98 @@ const CANDIDATOS = Object.freeze([
   ['sku', 'sku'],
 ]);
 
+// Candidatos vindos de product_external_identities (namespace LIKE padrão).
+async function candidatosPorIdentidade(pool, { organizationId, storeId, padrao, ids }) {
+  const { rows } = await pool.query(
+    `SELECT external_id, commerce_product_id, namespace, source FROM product_external_identities
+      WHERE organization_id = $1 AND store_id = $2 AND namespace LIKE $3 AND external_id = ANY($4::text[])`,
+    [organizationId, storeId, padrao, ids]
+  );
+  return rows;
+}
+
+// Candidatos derivados do catálogo canônico: o índice único (organization, store, provider,
+// provider_variant_id) já É o mapeamento variante → produto. Os providers da Store saem do próprio
+// índice (loose index scan recursivo: 1 sonda por provider, sem tabela auxiliar que possa ficar
+// velha) e entram como ARRAY num init-plan: o Postgres usa as DUAS listas (provider e id) como
+// condição do mesmo índice. Medido nas versões 16 e 18: um JOIN com o CTE virava Hash Join + Seq Scan
+// da tabela inteira no 16 (e LATERAL/OFFSET 0 era até 5× mais lento nos ids sem correspondência).
+// Não filtra `is_active`: a identity materializada nunca foi apagada quando a variante saía do
+// catálogo (só deixava de ser atualizada), e o histórico continua resolvendo.
+async function candidatosDoCatalogo(pool, { organizationId, storeId, ids }) {
+  const { rows } = await pool.query(
+    `WITH RECURSIVE providers(provider) AS (
+       (SELECT provider FROM commerce_product_variants WHERE organization_id = $1 AND store_id = $2 ORDER BY provider LIMIT 1)
+       UNION ALL
+       SELECT (SELECT provider FROM commerce_product_variants WHERE organization_id = $1 AND store_id = $2 AND provider > p.provider ORDER BY provider LIMIT 1)
+         FROM providers p WHERE p.provider IS NOT NULL
+     )
+     SELECT provider_variant_id AS external_id, commerce_product_id, provider || '.variant_id' AS namespace
+       FROM commerce_product_variants
+      WHERE organization_id = $1 AND store_id = $2
+        AND provider = ANY(ARRAY(SELECT provider FROM providers WHERE provider IS NOT NULL))
+        AND provider_variant_id = ANY($3::text[])`,
+    [organizationId, storeId, ids]
+  );
+  return rows;
+}
+
+// Identity gravada (manual/regra/histórica) vence o catálogo no MESMO (namespace, external_id):
+// é o que já acontecia quando o bootstrap não sobrescrevia uma identity `manual`.
+function mesclarCandidatos(identidades, doCatalogo) {
+  const gravadas = new Set(identidades.map((c) => `${c.namespace}\u0000${c.external_id}`));
+  return [...identidades, ...doCatalogo.filter((c) => !gravadas.has(`${c.namespace}\u0000${c.external_id}`))];
+}
+
+function produtosPorId(candidatos) {
+  const porId = new Map();
+  for (const c of candidatos) {
+    if (!porId.has(c.external_id)) porId.set(c.external_id, new Set());
+    porId.get(c.external_id).add(c.commerce_product_id);
+  }
+  return porId;
+}
+
+// Passo 3 (variant id) nos três modos — ver o cabeçalho do arquivo.
+async function candidatosDeVariante(deps, alvo, modo) {
+  const { pool } = deps;
+  const gravados = await candidatosPorIdentidade(pool, { ...alvo, padrao: '%.variant_id' });
+  if (modo === 'materialized') return gravados;
+
+  // Linhas `commerce_sync` são o ESPELHO do catálogo (bootstrap): no derived não valem nem enquanto
+  // ainda existem (antes da poda) — uma linha espelho velha (variante que o provider passou para outro
+  // produto) nunca pode vencer o catálogo, que é a verdade. Só manual/regra/etc. vencem o catálogo.
+  const derivados = mesclarCandidatos(gravados.filter((c) => c.source !== 'commerce_sync'), await candidatosDoCatalogo(pool, alvo));
+  if (modo === 'derived') return derivados;
+
+  // dual: o resultado que vale continua sendo o materializado; o derivado só é comparado.
+  if (typeof deps.onDivergence === 'function') {
+    const antigo = produtosPorId(gravados);
+    const novo = produtosPorId(derivados);
+    const divergencias = [];
+    for (const id of new Set([...antigo.keys(), ...novo.keys()])) {
+      const a = [...(antigo.get(id) || [])].sort();
+      const n = [...(novo.get(id) || [])].sort();
+      if (a.length === n.length && a.every((v, i) => v === n[i])) continue;
+      divergencias.push({ externalId: id, materialized: a, derived: n, kind: !a.length ? 'derived_only' : !n.length ? 'materialized_only' : 'different_product' });
+    }
+    // Uma chamada por resolução (nunca uma por id): quem loga agrega e nunca inunda o log.
+    if (divergencias.length) deps.onDivergence(divergencias);
+  }
+  return gravados;
+}
+
 /**
  * Resolve uma lista de ids observados (ex.: GA4 item_id) contra as identities já conhecidas —
  * SOMENTE LEITURA, nunca persiste. Ordem determinística (§5.5): mapping existente → product id →
  * variant id → sku único → unresolved. Nunca fuzzy.
  */
-async function resolveExternalIds({ pool }, { organizationId, storeId, namespace, externalIds }) {
+async function resolveExternalIds(deps, { organizationId, storeId, namespace, externalIds }) {
+  const { pool } = deps;
   if (!pool) throw new Error('resolveExternalIds exige pool');
   validarAlvo({ organizationId, storeId });
   validarNamespace(namespace);
+  const modoVariante = modoDeVariante(deps);
   const ids = [...new Set((externalIds || []).map((v) => String(v ?? '').trim()).filter(Boolean))];
   if (!ids.length) return { resolved: [], conflicts: [], unresolved: [] };
 
@@ -145,16 +252,10 @@ async function resolveExternalIds({ pool }, { organizationId, storeId, namespace
   for (const [classe, padrao] of CANDIDATOS) {
     if (!restantes.length) break;
     // eslint-disable-next-line no-await-in-loop
-    const { rows: candidatos } = await pool.query(
-      `SELECT external_id, commerce_product_id FROM product_external_identities
-        WHERE organization_id = $1 AND store_id = $2 AND namespace LIKE $3 AND external_id = ANY($4::text[])`,
-      [organizationId, storeId, padrao, restantes]
-    );
-    const porId = new Map();
-    for (const c of candidatos) {
-      if (!porId.has(c.external_id)) porId.set(c.external_id, new Set());
-      porId.get(c.external_id).add(c.commerce_product_id);
-    }
+    const candidatos = classe === 'variant_id'
+      ? await candidatosDeVariante(deps, { organizationId, storeId, ids: restantes }, modoVariante)
+      : await candidatosPorIdentidade(pool, { organizationId, storeId, padrao, ids: restantes });
+    const porId = produtosPorId(candidatos);
     const naoResolvidos = [];
     for (const id of restantes) {
       const produtos = porId.get(id);
@@ -224,6 +325,6 @@ function computeCoverage(resolucao, observedCount) {
 }
 
 module.exports = {
-  FONTES, CONFIANCAS, NAMESPACE_RE, validarNamespace,
+  FONTES, CONFIANCAS, MODOS_VARIANTE, NAMESPACE_RE, validarNamespace,
   bootstrapCommerceIdentities, resolveExternalIds, persistRuleMatches, resolveAndPersist, computeCoverage,
 };

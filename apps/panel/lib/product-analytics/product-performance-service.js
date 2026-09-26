@@ -110,7 +110,7 @@ async function idsComIdentidadeResolvida({ pool, organizationId, storeId, namesp
 /**
  * @param {{pool, registry, catalogRepository, reportCache?}} deps
  */
-function createProductPerformanceService({ pool, registry, catalogRepository, reportCache = createReportCache() }) {
+function createProductPerformanceService({ pool, registry, catalogRepository, reportCache = createReportCache(), variantIdentityMode, onIdentityDivergence }) {
   if (!pool) throw new Error('createProductPerformanceService exige pool');
   if (!registry || typeof registry.resolve !== 'function') throw new Error('createProductPerformanceService exige registry');
   if (!catalogRepository || typeof catalogRepository.listPage !== 'function') throw new Error('createProductPerformanceService exige catalogRepository');
@@ -159,7 +159,7 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     // Resolve (e persiste as novas regras determinísticas) os ids observados — UMA VEZ pro
     // conjunto INTEIRO, nunca por página/por consumidor.
     const idsObservados = [...new Set(linhasAnalytics.map((l) => l.externalProductId))];
-    const resolucao = await resolveAndPersist({ pool }, { organizationId, storeId, namespace, externalIds: idsObservados });
+    const resolucao = await resolveAndPersist({ pool, variantIdentityMode, onDivergence: onIdentityDivergence }, { organizationId, storeId, namespace, externalIds: idsObservados });
     const produtoPorExternalId = new Map(resolucao.resolved.map((r) => [r.externalId, r.commerceProductId]));
 
     // Métrica indisponível na propriedade inteira: se NENHUMA linha observada trouxe valor para
@@ -370,7 +370,7 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     if (!linhasAnalytics.length) return linhaSemAnalytics(produto, 'insufficient_data');
 
     const idsObservados = [...new Set(linhasAnalytics.map((l) => l.externalProductId))];
-    const resolucao = await resolveAndPersist({ pool }, { organizationId, storeId, namespace, externalIds: idsObservados });
+    const resolucao = await resolveAndPersist({ pool, variantIdentityMode, onDivergence: onIdentityDivergence }, { organizationId, storeId, namespace, externalIds: idsObservados });
     const produtoPorExternalId = new Map(resolucao.resolved.map((r) => [r.externalId, r.commerceProductId]));
 
     const idsElegiveis = await idsComIdentidadeResolvida({ pool, organizationId, storeId, namespace, apenasIds: [productId] });
@@ -426,7 +426,7 @@ function createProductPerformanceService({ pool, registry, catalogRepository, re
     aplicarIndisponiveis(observed);
 
     const idsObservados = [...new Set(linhasAnalytics.map((l) => l.externalProductId))];
-    const resolucao = await resolveAndPersist({ pool }, { organizationId, storeId, namespace, externalIds: idsObservados });
+    const resolucao = await resolveAndPersist({ pool, variantIdentityMode, onDivergence: onIdentityDivergence }, { organizationId, storeId, namespace, externalIds: idsObservados });
     const produtoPorExternalId = new Map(resolucao.resolved.map((r) => [r.externalId, r.commerceProductId]));
 
     // Com filters.provider: só conta como "matched" o que resolveu a um produto DESSE provider —
