@@ -34,8 +34,26 @@
 // ou 'failed' (se nenhuma), e o erro sobe para o chamador decidir (mesma convenção de
 // lib/platform/jobs.js: falha de uma Organization não impede as outras).
 
+// Estratégia de varredura de VARIANTES (`variantSweep`, rodada de otimização de armazenamento):
+//   last_seen    (padrão, comportamento histórico) toda variante vista é reescrita a cada sync só para
+//                carimbar `last_seen_sync_id`; no fim, o que não tem o carimbo do run vira inativo.
+//                Custo: TODA linha de variante é regravada (versão nova + entrada nova em todos os
+//                índices, nunca HOT) mesmo sem mudança — dobra heap e índices e gera ~1 GB de WAL a
+//                cada 350 mil variantes por sync.
+//   per_product  a variante só é gravada quando algo mudou (ou é nova/reativada). Variante que sumiu do
+//                payload de um produto VISTO vira um TOMBSTONE em memória (limitado); NADA é
+//                desativado durante o run — os tombstones e as variantes de produtos que sumiram só são
+//                aplicados depois que TODAS as páginas terminaram com sucesso, exatamente como antes.
+//                Uma variante que reaparece (outra página, outro produto) cancela o tombstone. Falha
+//                parcial não desativa produto nem variante. `last_seen_sync_id` deixa de ser atualizado
+//                nas variantes que não mudaram.
+
 const crypto = require('node:crypto');
 const { ttlPara } = require('../platform/leases');
+
+const VARREDURAS_DE_VARIANTE = Object.freeze(['last_seen', 'per_product']);
+const LIMITE_DE_TOMBSTONES = 1000000; // ~60 MB de strings; acima disso o sync recusa em vez de crescer sem limite
+const LOTE_DE_TOMBSTONES = 5000;
 
 const CODIGO_ERRO_PADRAO = 'CATALOG_SYNC_FAILED';
 const CODIGO_ERRO_RE = /^[A-Z][A-Z0-9_]{2,63}$/;
@@ -109,7 +127,7 @@ function montarUpsertProdutos({ organizationId, storeId, provider, syncRunId }, 
   };
 }
 
-function montarUpsertVariantes({ organizationId, storeId, provider, syncRunId }, variantes) {
+function montarUpsertVariantes({ organizationId, storeId, provider, syncRunId, variantSweep = 'last_seen' }, variantes) {
   const v = variantes.map((x) => ({
     commerceProductId: x.commerceProductId,
     providerVariantId: x.providerVariantId,
@@ -136,6 +154,9 @@ function montarUpsertVariantes({ organizationId, storeId, provider, syncRunId },
         sku = EXCLUDED.sku, color = EXCLUDED.color, size = EXCLUDED.size, model = EXCLUDED.model,
         metadata = EXCLUDED.metadata, is_active = true, last_seen_sync_id = EXCLUDED.last_seen_sync_id,
         synced_at = now(), updated_at = now()
+      ${variantSweep === 'per_product' ? `WHERE (commerce_product_variants.commerce_product_id, commerce_product_variants.sku, commerce_product_variants.color,
+               commerce_product_variants.size, commerce_product_variants.model, commerce_product_variants.metadata, commerce_product_variants.is_active)
+          IS DISTINCT FROM (EXCLUDED.commerce_product_id, EXCLUDED.sku, EXCLUDED.color, EXCLUDED.size, EXCLUDED.model, EXCLUDED.metadata, true)` : ''}
       RETURNING id, (xmax = 0) AS inserted`,
     values: [
       organizationId, storeId, provider, syncRunId,
@@ -155,6 +176,54 @@ function montarDesativacao(tabela, { organizationId, storeId, provider, syncRunI
         RETURNING id
       )
       SELECT count(*)::int AS n FROM alvo`,
+    values: [organizationId, storeId, provider, syncRunId],
+  };
+}
+
+// per_product · variantes ativas dos produtos desta página que NÃO vieram no payload dele. SÓ LEITURA:
+// vira tombstone em memória, aplicado no fim do run bem-sucedido.
+function montarBuscaDeSumidas({ organizationId, storeId, provider }, produtoIds, variantIds) {
+  return {
+    text: `
+      SELECT provider_variant_id FROM commerce_product_variants
+       WHERE organization_id = $1 AND store_id = $2 AND provider = $3
+         AND commerce_product_id = ANY($4::uuid[]) AND is_active
+         AND NOT (provider_variant_id = ANY($5::text[]))`,
+    values: [organizationId, storeId, provider, produtoIds, variantIds],
+  };
+}
+
+// per_product · aplica os tombstones (em lotes) — só chamado depois de TODAS as páginas com sucesso.
+function montarAplicacaoDeTombstones({ organizationId, storeId, provider }, variantIds) {
+  return {
+    text: `
+      WITH alvo AS (
+        UPDATE commerce_product_variants SET is_active = false, updated_at = now()
+         WHERE organization_id = $1 AND store_id = $2 AND provider = $3
+           AND provider_variant_id = ANY($4::text[]) AND is_active
+        RETURNING id
+      )
+      SELECT count(*)::int AS n FROM alvo`,
+    values: [organizationId, storeId, provider, variantIds],
+  };
+}
+
+// per_product · produtos que sumiram do provider (só depois de TODAS as páginas) + as variantes deles.
+function montarDesativacaoDeProdutosPorProduto({ organizationId, storeId, provider, syncRunId }) {
+  return {
+    text: `
+      WITH produtos AS (
+        UPDATE commerce_products SET is_active = false, updated_at = now()
+         WHERE organization_id = $1 AND store_id = $2 AND provider = $3
+           AND is_active = true AND last_seen_sync_id <> $4
+        RETURNING id
+      ), variantes AS (
+        UPDATE commerce_product_variants SET is_active = false, updated_at = now()
+         WHERE organization_id = $1 AND store_id = $2 AND provider = $3 AND is_active
+           AND commerce_product_id IN (SELECT id FROM produtos)
+        RETURNING id
+      )
+      SELECT (SELECT count(*)::int FROM produtos) AS produtos, (SELECT count(*)::int FROM variantes) AS variantes`,
     values: [organizationId, storeId, provider, syncRunId],
   };
 }
@@ -180,6 +249,20 @@ async function upsertPagina(pool, ctx, itens) {
     const upVariantes = montarUpsertVariantes(ctx, variantes);
     const { rows: linhasVariante } = await pool.query(upVariantes.text, upVariantes.values);
     for (const l of linhasVariante) (l.inserted ? contadores.variantsInserted++ : contadores.variantsUpdated++);
+  }
+  if (ctx.variantSweep === 'per_product') {
+    const idsDoPayload = variantes.map((v) => v.providerVariantId);
+    // Reaparecida em outra página/produto: cancela o tombstone (a última palavra é do payload).
+    for (const id of idsDoPayload) ctx.tombstones.delete(id);
+    // Roda também para página sem nenhuma variante: o payload diz que o produto não tem mais nenhuma.
+    const busca = montarBuscaDeSumidas(ctx, [...idPorProviderProductId.values()], idsDoPayload);
+    const { rows } = await pool.query(busca.text, busca.values);
+    for (const r of rows) {
+      if (ctx.tombstones.size >= LIMITE_DE_TOMBSTONES) {
+        throw Object.assign(new Error(`mais de ${LIMITE_DE_TOMBSTONES} variantes sumiram num único sync — recusado por segurança (rode uma vez com variantSweep=last_seen)`), { codigo: 'CATALOG_SYNC_TOO_MANY_REMOVALS' });
+      }
+      ctx.tombstones.add(r.provider_variant_id);
+    }
   }
   return contadores;
 }
@@ -279,7 +362,8 @@ async function cancelarCatalogSync({ pool, leases }, { organizationId, storeId, 
  * @param {{organizationId: string, storeId: string, provider: string}} alvo
  * @param {{ttlMs?: number}} [opcoes]
  */
-async function runCatalogSync({ pool, registry, leases = null, logger = console }, { organizationId, storeId, provider }, { ttlMs = ttlPara(0) } = {}) {
+async function runCatalogSync({ pool, registry, leases = null, logger = console }, { organizationId, storeId, provider }, { ttlMs = ttlPara(0), variantSweep = 'last_seen' } = {}) {
+  if (!VARREDURAS_DE_VARIANTE.includes(variantSweep)) throw new TypeError(`variantSweep inválido: ${JSON.stringify(variantSweep)} (permitidos: ${VARREDURAS_DE_VARIANTE.join(', ')})`);
   if (!pool) throw new Error('runCatalogSync exige pool');
   if (!registry) throw new Error('runCatalogSync exige registry');
   if (!organizationId || !storeId || !provider) throw new Error('runCatalogSync exige organizationId, storeId e provider');
@@ -294,7 +378,7 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
   }
 
   const syncRunId = crypto.randomUUID();
-  const ctx = { organizationId, storeId, provider, syncRunId };
+  const ctx = { organizationId, storeId, provider, syncRunId, variantSweep, tombstones: new Set() };
   let pages = 0;
   let contadores = contadoresVazios();
   try {
@@ -324,12 +408,26 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
     } while (cursor);
 
     // Só depois que TODAS as páginas terminaram com sucesso: o que não apareceu neste run vira inativo.
-    const desativarProdutos = montarDesativacao('commerce_products', ctx);
-    const { rows: [{ n: prodDesativados }] } = await pool.query(desativarProdutos.text, desativarProdutos.values);
-    const desativarVariantes = montarDesativacao('commerce_product_variants', ctx);
-    const { rows: [{ n: variantDesativados }] } = await pool.query(desativarVariantes.text, desativarVariantes.values);
-    contadores.productsDeactivated = prodDesativados;
-    contadores.variantsDeactivated = variantDesativados;
+    if (variantSweep === 'per_product') {
+      const sumidas = [...ctx.tombstones];
+      for (let i = 0; i < sumidas.length; i += LOTE_DE_TOMBSTONES) {
+        const ap = montarAplicacaoDeTombstones(ctx, sumidas.slice(i, i + LOTE_DE_TOMBSTONES));
+        // eslint-disable-next-line no-await-in-loop
+        const { rows: [{ n }] } = await pool.query(ap.text, ap.values);
+        contadores.variantsDeactivated += n;
+      }
+      const desativar = montarDesativacaoDeProdutosPorProduto(ctx);
+      const { rows: [{ produtos, variantes }] } = await pool.query(desativar.text, desativar.values);
+      contadores.productsDeactivated = produtos;
+      contadores.variantsDeactivated += variantes;
+    } else {
+      const desativarProdutos = montarDesativacao('commerce_products', ctx);
+      const { rows: [{ n: prodDesativados }] } = await pool.query(desativarProdutos.text, desativarProdutos.values);
+      const desativarVariantes = montarDesativacao('commerce_product_variants', ctx);
+      const { rows: [{ n: variantDesativados }] } = await pool.query(desativarVariantes.text, desativarVariantes.values);
+      contadores.productsDeactivated = prodDesativados;
+      contadores.variantsDeactivated = variantDesativados;
+    }
 
     await fecharLog(pool, ctx, { status: 'success', pagesProcessed: pages, contadores });
     return { status: 'success', syncRunId, pagesProcessed: pages, ...contadores };
@@ -349,5 +447,5 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
 
 module.exports = {
   runCatalogSync, cancelarCatalogSync, jobDoSync, contadoresVazios,
-  montarUpsertProdutos, montarUpsertVariantes, montarDesativacao,
+  montarUpsertProdutos, montarUpsertVariantes, montarDesativacao, VARREDURAS_DE_VARIANTE,
 };
