@@ -56,9 +56,17 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    // Uma única rota real (/admin/criativos); Gerar, Lotes, Histórico e Cadastros são abas da própria página.
+    // Cada seção do gerador é uma rota própria (/admin/criativos/:aba) — o menu leva direto a ela, em vez de uma página só com abas.
     label: 'Criativos',
-    items: [{ key: 'criativos', label: 'Gerador de criativos', href: '/admin/criativos' }],
+    items: [
+      { key: 'criativos-gerar', label: 'Gerar', href: '/admin/criativos/gerar' },
+      { key: 'criativos-lotes', label: 'Lotes', href: '/admin/criativos/lotes' },
+      { key: 'criativos-historico', label: 'Histórico', href: '/admin/criativos/historico' },
+      { key: 'criativos-produtos', label: 'Produtos', href: '/admin/criativos/produtos' },
+      { key: 'criativos-marca', label: 'Marca e nicho', href: '/admin/criativos/marca' },
+      { key: 'criativos-contextos', label: 'Contextos', href: '/admin/criativos/contextos' },
+      { key: 'criativos-personas', label: 'Personas', href: '/admin/criativos/personas' },
+    ],
   },
   {
     // Campanhas é deliberadamente separada de Automações (spec, Parte 2): automação é
@@ -157,7 +165,13 @@ export const PAGE_TITLES: Record<string, string> = {
   'jornada-compra': 'Jornada de compra',
   'meta-ads': 'Meta Ads',
   'google-ads': 'Google Ads',
-  criativos: 'Gerador de criativos',
+  'criativos-gerar': 'Gerar criativos',
+  'criativos-lotes': 'Lotes de criativos',
+  'criativos-historico': 'Histórico de criativos',
+  'criativos-produtos': 'Produtos para criativos',
+  'criativos-marca': 'Marca e nicho',
+  'criativos-contextos': 'Contextos',
+  'criativos-personas': 'Personas',
 };
 
 // Rotas que não são itens da sidebar (páginas filhas e páginas fora do menu): título da aba e
@@ -227,7 +241,13 @@ export const NAV_ICON_PATHS: Record<string, string> = {
   'google-ads': '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v9"/><path d="M8.2 9.7l7.6 4.6"/><path d="M15.8 9.7l-7.6 4.6"/>',
   'desempenho-produtos': '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>',
   'jornada-compra': '<circle cx="5" cy="6" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="7" cy="18" r="2"/><path d="M7 6h5a4 4 0 0 1 4 4v0"/><path d="M17 13.5c0 2.5-2 4.5-5 4.5H9"/>',
-  criativos: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/>',
+  'criativos-gerar': '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/>',
+  'criativos-lotes': '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
+  'criativos-historico': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  'criativos-produtos': '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+  'criativos-marca': '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6L3.3 9.3l6.1-.7L12 3z"/>',
+  'criativos-contextos': '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/>',
+  'criativos-personas': '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
   integracoes:
     '<path d="M9 2v4M15 2v4"/><path d="M7 6h10v4a5 5 0 0 1-10 0V6z"/><path d="M12 15v3"/><path d="M9 21h6"/>',
   configuracoes:
