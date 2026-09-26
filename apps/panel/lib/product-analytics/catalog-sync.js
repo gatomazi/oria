@@ -353,6 +353,60 @@ async function cancelarCatalogSync({ pool, leases }, { organizationId, storeId, 
   };
 }
 
+// ── Limite de taxa do provider (429) ─────────────────────────────────────────────────────────────
+//
+// O full sync são ~1.060 chamadas seguidas. A Ink limita por cota; o retry curto do client (400 ms e
+// 1,2 s) não basta e, sem isto, um único 429 derrubava o run inteiro (partial_failure às 120 páginas,
+// 2026-09-24). Aqui a MESMA página é repetida com backoff que respeita `Retry-After` (ou 2 s, 4 s, 8 s…
+// até 60 s), no máximo `tentativasDeLimite` vezes; esgotado, o erro sobe como sempre (partial_failure)
+// e o agendador só tenta de novo depois do cooldown — nunca em cima do limite.
+const ESPERA_MAXIMA_429_MS = 120 * 1000;
+
+function ehLimiteDeTaxa(err) {
+  return !!err && (err.status === 429 || err.codigo === 'INK_RATE_LIMITED');
+}
+
+async function comBackoffDeLimite(executar, { tentativas = 6, dormir = (ms) => new Promise((r) => setTimeout(r, ms)), logger = console, provider = '' } = {}) {
+  for (let i = 0; ; i += 1) {
+    try {
+      return await executar();
+    } catch (err) {
+      if (!ehLimiteDeTaxa(err) || i >= tentativas) throw err;
+      const espera = Math.min(ESPERA_MAXIMA_429_MS, Number.isFinite(err.retryAfterMs) ? err.retryAfterMs : Math.min(60000, 2000 * (2 ** i)));
+      logger.warn(`[CATALOG_SYNC] ${provider}: limite de taxa do provider — esperando ${Math.round(espera / 1000)}s antes de repetir a página (tentativa ${i + 1}/${tentativas})`);
+      await dormir(espera); // eslint-disable-line no-await-in-loop
+    }
+  }
+}
+
+// Posição do WAL (só para medir o custo do run; nunca quebra o sync).
+async function posicaoDoWal(pool) {
+  try {
+    const { rows } = await pool.query('SELECT pg_current_wal_lsn()::text AS lsn');
+    return rows && rows[0] ? rows[0].lsn : null;
+  } catch { return null; }
+}
+
+async function bytesDeWal(pool, inicio) {
+  if (!inicio) return null;
+  try {
+    const { rows } = await pool.query('SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), $1::pg_lsn)::bigint AS bytes', [inicio]);
+    return rows && rows[0] ? Number(rows[0].bytes) : null;
+  } catch { return null; }
+}
+
+// Com o lease em mãos ninguém mais roda este (Organization, Store, provider): qualquer linha `running`
+// é de um processo que caiu. Fecha como `failed`/ABANDONED — sem isso elas ficam `running` para sempre
+// e o "último run" que o agendador lê nunca é o real.
+async function fecharOrfaos(pool, { organizationId, storeId, provider, syncRunId }) {
+  const { rowCount } = await pool.query(
+    `UPDATE commerce_catalog_sync_logs SET status = 'failed', finished_at = now(), error_code = 'ABANDONED'
+      WHERE organization_id = $1 AND store_id = $2 AND provider = $3 AND status = 'running' AND sync_run_id <> $4`,
+    [organizationId, storeId, provider, syncRunId]
+  );
+  return rowCount;
+}
+
 /**
  * Full catalog sync de UMA Organization/Store/provider. `pool` é a fachada tenant-scoped
  * (lib/platform/tenant-runtime.js) — chamar de dentro de `comContexto`/`comOrganization` da
@@ -362,7 +416,7 @@ async function cancelarCatalogSync({ pool, leases }, { organizationId, storeId, 
  * @param {{organizationId: string, storeId: string, provider: string}} alvo
  * @param {{ttlMs?: number}} [opcoes]
  */
-async function runCatalogSync({ pool, registry, leases = null, logger = console }, { organizationId, storeId, provider }, { ttlMs = ttlPara(0), variantSweep = 'last_seen' } = {}) {
+async function runCatalogSync({ pool, registry, leases = null, logger = console }, { organizationId, storeId, provider }, { ttlMs = ttlPara(0), variantSweep = 'last_seen', tentativasDeLimite = 6, dormir, paceMs = 0 } = {}) {
   if (!VARREDURAS_DE_VARIANTE.includes(variantSweep)) throw new TypeError(`variantSweep inválido: ${JSON.stringify(variantSweep)} (permitidos: ${VARREDURAS_DE_VARIANTE.join(', ')})`);
   if (!pool) throw new Error('runCatalogSync exige pool');
   if (!registry) throw new Error('runCatalogSync exige registry');
@@ -383,6 +437,11 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
   let contadores = contadoresVazios();
   try {
     await abrirLog(pool, ctx);
+    if (leases) {
+      const orfaos = await fecharOrfaos(pool, ctx);
+      if (orfaos) logger.warn(`[CATALOG_SYNC] ${provider}: ${orfaos} run(s) anterior(es) ficaram 'running' sem processo — fechados como ABANDONED`);
+    }
+    const walInicio = await posicaoDoWal(pool);
 
     const resolvido = registry.resolve('commerce', provider, { organizationId, storeId });
     // Falha cedo, com código estável: nunca cai para 1 chamada de variantes por produto.
@@ -393,7 +452,10 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
     do {
       if (pages >= MAX_PAGINAS) throw Object.assign(new Error('paginação do catalog sync não terminou'), { codigo: 'CATALOG_SYNC_PAGINATION_RUNAWAY' });
       // eslint-disable-next-line no-await-in-loop
-      const pagina = await resolvido.connector.listProductsWithVariants({ cursor, limit: 100 });
+      const pagina = await comBackoffDeLimite(
+        () => resolvido.connector.listProductsWithVariants({ cursor, limit: 100 }),
+        { tentativas: tentativasDeLimite, dormir, logger, provider }
+      );
       pages += 1;
       if (Number.isInteger(pagina.totalPages) && pagina.totalPages > 0) pagesTotal = pagina.totalPages;
       // eslint-disable-next-line no-await-in-loop
@@ -405,6 +467,8 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
         return { status: 'cancelled', syncRunId, pagesProcessed: pages, ...contadores };
       }
       cursor = pagina.nextCursor;
+      // Ritmo mínimo entre páginas (0 = só o tempo da própria API): quem dorme aqui não segura conexão de banco.
+      if (cursor && paceMs > 0) await (dormir || ((ms) => new Promise((r) => setTimeout(r, ms))))(paceMs); // eslint-disable-line no-await-in-loop
     } while (cursor);
 
     // Só depois que TODAS as páginas terminaram com sucesso: o que não apareceu neste run vira inativo.
@@ -430,7 +494,9 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
     }
 
     await fecharLog(pool, ctx, { status: 'success', pagesProcessed: pages, contadores });
-    return { status: 'success', syncRunId, pagesProcessed: pages, ...contadores };
+    const walBytes = await bytesDeWal(pool, walInicio);
+    logger.log?.(`[CATALOG_SYNC] ${provider}: sucesso · ${pages} páginas · variantes vistas=${contadores.variantsSeen} gravadas=${contadores.variantsInserted + contadores.variantsUpdated} desativadas=${contadores.variantsDeactivated} · WAL≈${walBytes === null ? 'n/d' : `${(walBytes / 1048576).toFixed(0)}MB`} (medido no cluster inteiro, inclui outras escritas)`);
+    return { status: 'success', syncRunId, pagesProcessed: pages, walBytes, ...contadores };
   } catch (err) {
     const errorCode = codigoDeErro(err);
     await fecharLog(pool, ctx, { status: pages > 0 ? 'partial_failure' : 'failed', pagesProcessed: pages, contadores, errorCode })
@@ -447,5 +513,5 @@ async function runCatalogSync({ pool, registry, leases = null, logger = console 
 
 module.exports = {
   runCatalogSync, cancelarCatalogSync, jobDoSync, contadoresVazios,
-  montarUpsertProdutos, montarUpsertVariantes, montarDesativacao, VARREDURAS_DE_VARIANTE,
+  montarUpsertProdutos, montarUpsertVariantes, montarDesativacao, VARREDURAS_DE_VARIANTE, comBackoffDeLimite, ehLimiteDeTaxa,
 };

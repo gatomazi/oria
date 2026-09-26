@@ -193,6 +193,15 @@ const pgPool = pgPoolReal ? criarPoolTenant(pgPoolReal) : null;
 // erro no log — desligar a fila de campanhas/sync por engano seria silencioso demais).
 const JOBS_DE_FUNDO_DESLIGADOS = process.env.ORIA_JOBS_DE_FUNDO === 'off' && process.env.NODE_ENV !== 'production';
 if (process.env.ORIA_JOBS_DE_FUNDO === 'off' && !JOBS_DE_FUNDO_DESLIGADOS) console.error('[JOBS] ORIA_JOBS_DE_FUNDO=off IGNORADO em produção: os jobs continuam ligados');
+// Interruptor persistente dos varreduras do catálogo da Ink (canônica E legada agendada): existe para
+// janelas de manutenção do banco. Vale para o agendador, o boot e o disparo pós-conexão; não é um
+// bloqueio de segurança — o clique manual do legado continua funcionando.
+const CATALOG_SYNC_DISABLED = process.env.CATALOG_SYNC_DISABLED === '1';
+if (CATALOG_SYNC_DISABLED) console.warn('[CATALOG_SYNC] CATALOG_SYNC_DISABLED=1 — varreduras agendadas do catálogo da Ink DESLIGADAS neste processo');
+function envNumeroPositivo(nome) {
+  const n = Number(process.env[nome]);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 const JOBS = require('./lib/platform/jobs').createJobRunner({
   poolReal: pgPoolReal,
   leases: pgPoolReal ? require('./lib/platform/leases').createJobLeases({ poolReal: pgPoolReal }) : null,
@@ -2683,6 +2692,9 @@ async function gravarLoteCatalogo(produtos, sincronizadoEm) {
   );
 }
 
+const CATALOG_SCAN_LEASE = 'commerce-scan:reserva_ink'; // o MESMO nome que composition.js usa (COMMERCE_PROVIDER)
+const SCAN_LEASES = pgPoolReal ? require('./lib/platform/leases').createJobLeases({ poolReal: pgPoolReal }) : null;
+
 // Sincroniza o cache do catálogo da Store do contexto. A identidade é `store_id`; nada aqui exige a
 // chave legada. Linha ÓRFÃ de uma Store com chave legada (sem `store_id`) é reivindicada por
 // mapeamento explícito antes de escrever — o mesmo que o backfill da 0026 faz.
@@ -2692,6 +2704,12 @@ async function sincronizarCatalogoInk() {
   const storeId = storeDoContexto();
   const loja = lojaLegadaDoContextoOuNula();
   if (catalogoEmSincronizacao.has(storeId)) return { pulado: 'sincronização já em andamento' };
+  // Mesmo lease do sync canônico (composition.js): as duas varreduras leem o MESMO catálogo da Ink, então
+  // rodar juntas dobra o consumo de cota (origem dos 429). Quem chega depois desiste e o tick seguinte tenta.
+  const orgDaVarredura = orgDoContexto();
+  if (SCAN_LEASES && !(await SCAN_LEASES.adquirir(CATALOG_SCAN_LEASE, orgDaVarredura, 3 * 60 * 60 * 1000))) {
+    return { pulado: 'outra varredura do catálogo da Ink (canônica) já está em andamento' };
+  }
   catalogoEmSincronizacao.add(storeId);
 
   const inicio = new Date();
@@ -2759,11 +2777,13 @@ async function sincronizarCatalogoInk() {
     throw err;
   } finally {
     catalogoEmSincronizacao.delete(storeId);
+    if (SCAN_LEASES) await SCAN_LEASES.concluir(CATALOG_SCAN_LEASE, orgDaVarredura, 0).catch((e) => console.error(`[PRODUTOS_CACHE] falha ao liberar ${CATALOG_SCAN_LEASE}: ${e.message}`));
   }
 }
 
 async function sincronizarCatalogoInkDaOrganizacao({ apenasVencidos = false } = {}) {
   if (!pgPool) return;
+  if (CATALOG_SYNC_DISABLED && apenasVencidos) return; // tick/boot agendado; o clique manual (apenasVencidos=false) segue
   // A Store do contexto (canônica, com ou sem chave legada), se a Organization tem token Ink.
   for (const { storeId } of await storesInkDoContexto()) {
     if (apenasVencidos) {
@@ -17148,6 +17168,14 @@ const PRODUCT_ANALYTICS = pgPool
     // Rodada M · mesma proteção de concorrência que JOBS já usa (linha ~183) — instância própria,
     // segura de duplicar (o lease em si vive no Postgres, nunca em memória do processo).
     leases: pgPoolReal ? require('./lib/platform/leases').createJobLeases({ poolReal: pgPoolReal }) : null,
+    // Ausente = 'materialized' (comportamento de sempre). Valor inválido derruba o boot de propósito.
+    variantIdentityMode: process.env.PRODUCT_IDENTITY_VARIANT_MODE || undefined,
+    variantSweep: process.env.CATALOG_SYNC_VARIANT_SWEEP || undefined,
+    // Interruptor persistente (janela de manutenção): desliga agendador, boot, disparo pós-conexão e botão manual.
+    syncDisabled: CATALOG_SYNC_DISABLED,
+    catalogSyncRetryCooldownMs: envNumeroPositivo('CATALOG_SYNC_RETRY_COOLDOWN_HOURS') ? envNumeroPositivo('CATALOG_SYNC_RETRY_COOLDOWN_HOURS') * 3600 * 1000 : undefined,
+    catalogSyncPaceMs: envNumeroPositivo('CATALOG_SYNC_PAGE_DELAY_MS') || 0,
+    catalogSyncRateLimitRetries: envNumeroPositivo('CATALOG_SYNC_RATE_LIMIT_RETRIES') || undefined,
   })
   : null;
 if (PRODUCT_ANALYTICS) {
@@ -17209,6 +17237,25 @@ async function sincronizarCatalogoCanonicoDaOrganizacao({ apenasVencidos = false
 if (PRODUCT_ANALYTICS) {
   JOBS.agendar('catalogo-canonico', 60 * 60 * 1000, () => sincronizarCatalogoCanonicoDaOrganizacao({ apenasVencidos: true }));
   JOBS.agendarUmaVez('catalogo-canonico-boot', 5 * 60 * 1000, () => sincronizarCatalogoCanonicoDaOrganizacao({ apenasVencidos: true }));
+}
+
+// Vigia de armazenamento (lib/platform/storage-guard.js): aviso > 70 % e crítico > 80 % do volume
+// (`PG_VOLUME_CAPACITY_GB`), WAL alto, identities espelho de variante reaparecendo (modo derived) e runs órfãos do
+// catálogo. Só lê; loga em `[STORAGE_GUARD]`. O volume do banco não é visível daqui — é uma aproximação declarada.
+if (pgPool) {
+  const STORAGE_GUARD = require('./lib/platform/storage-guard').createStorageGuard({
+    pool: pgPool,
+    capacidadeBytes: envNumeroPositivo('PG_VOLUME_CAPACITY_GB') * 1024 ** 3,
+    modoVariante: process.env.PRODUCT_IDENTITY_VARIANT_MODE || 'materialized',
+  });
+  let ultimoVolumeEm = 0;
+  JOBS.agendar('storage-guard', 10 * 60 * 1000, async () => {
+    if (Date.now() - ultimoVolumeEm > 5 * 60 * 1000) { // global: uma vez por tick, não uma por Organization
+      ultimoVolumeEm = Date.now();
+      await STORAGE_GUARD.verificarVolume();
+    }
+    await STORAGE_GUARD.verificarTenant();
+  });
 }
 
 // Último middleware do app: todo erro que uma rota, um middleware ou uma promise rejeitada

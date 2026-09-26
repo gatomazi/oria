@@ -16,12 +16,23 @@ const { comRetryDeLeitura } = require('../../../ink/retry');
 
 const INK_API_BASE = 'https://api.reserva.ink';
 
+// `Retry-After` em segundos ou data HTTP → milissegundos (null quando ausente/ilegível).
+function lerRetryAfterMs(valor, agora = Date.now()) {
+  if (valor === null || valor === undefined || valor === '') return null;
+  const segundos = Number(valor);
+  if (Number.isFinite(segundos) && segundos >= 0) return Math.round(segundos * 1000);
+  const data = Date.parse(valor);
+  return Number.isNaN(data) ? null : Math.max(0, data - agora);
+}
+
 class InkApiError extends Error {
-  constructor(message, { status, details } = {}) {
+  constructor(message, { status, details, retryAfterMs } = {}) {
     super(message);
     this.name = 'InkApiError';
     this.status = status;
     if (details !== undefined) this.details = details;
+    // Só o valor numérico do cabeçalho — quem faz backoff (catalog-sync) o respeita; nada de segredo aqui.
+    if (retryAfterMs !== null && retryAfterMs !== undefined) this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -50,7 +61,11 @@ function createInkClient({ obterToken, baseUrl = INK_API_BASE, fetchImpl = globa
     if (!res.ok) {
       throw new InkApiError(
         (data.errors && data.errors.join('; ')) || data.error || `INK API respondeu ${res.status}`,
-        { status: res.status, details: metodo !== 'GET' ? data : undefined }
+        {
+          status: res.status,
+          details: metodo !== 'GET' ? data : undefined,
+          retryAfterMs: res.status === 429 && res.headers && typeof res.headers.get === 'function' ? lerRetryAfterMs(res.headers.get('retry-after')) : null,
+        }
       );
     }
     return data;
@@ -70,4 +85,4 @@ function createInkClient({ obterToken, baseUrl = INK_API_BASE, fetchImpl = globa
   });
 }
 
-module.exports = { createInkClient, InkApiError, INK_API_BASE };
+module.exports = { createInkClient, InkApiError, INK_API_BASE, lerRetryAfterMs };
