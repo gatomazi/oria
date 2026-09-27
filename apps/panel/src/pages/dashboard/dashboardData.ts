@@ -7,26 +7,9 @@ import { lookup, ORDER_STATUS_MAP } from '../../lib/statusMap';
 // devolve como dado real (pedidos da Ink, carrinhos abandonados, métricas de recuperação
 // persistidas) — nada é inventado/mockado.
 
-export type PeriodoId = 'hoje' | '7d' | '30d' | '90d';
-
-export interface PeriodoOpcao {
-  id: PeriodoId;
-  label: string;
-  dias: number;
-}
-
-export const PERIODOS: PeriodoOpcao[] = [
-  { id: 'hoje', label: 'Hoje', dias: 1 },
-  { id: '7d', label: 'Últimos 7 dias', dias: 7 },
-  { id: '30d', label: 'Últimos 30 dias', dias: 30 },
-  { id: '90d', label: 'Últimos 90 dias', dias: 90 },
-];
-
-export const PERIODO_PADRAO: PeriodoId = '30d';
-
-export function diasDoPeriodo(id: PeriodoId): number {
-  return PERIODOS.find((p) => p.id === id)?.dias ?? 30;
-}
+// PeriodoId/PERIODOS/PERIODO_PADRAO/diasDoPeriodo migraram pra src/lib/periodoGlobal.ts (rodada
+// "seletor de período global"): o período deixou de ser local desta tela — é compartilhado e
+// persistido entre Dashboard/Desempenho de Produtos/Jornada de Compra.
 
 // "Hoje" no fuso do navegador (mesmo padrão frouxo já usado por formatData/tempoDesde no resto do
 // admin — não tenta reproduzir com precisão o -03:00 que a Ink usa, só data-referência local).
@@ -52,10 +35,14 @@ export function valorNumerico(v: string | number | null | undefined): number {
 // Filtra pelo período selecionado — o backend já limita a busca a no máximo 90 dias (teto real
 // de per_page=100/loja da Ink dentro da janela pedida), isso aqui só recorta client-side pro
 // período exato escolhido no seletor.
-export function pedidosNoPeriodo(pedidos: DashboardPedido[], dias: number): DashboardPedido[] {
-  const hoje = hojeISO();
-  const limite = diasAtrasISO(hoje, dias - 1);
-  return pedidos.filter((p) => p.createdAt && p.createdAt.slice(0, 10) >= limite);
+// Rodada "seletor de período global": recebe startDate/endDate EXPLÍCITOS (o intervalo pode não
+// terminar hoje — um intervalo customizado no passado), nunca mais "dias contados a partir de
+// agora". Inclusive nas duas pontas.
+export function pedidosNoPeriodo(pedidos: DashboardPedido[], startDate: string, endDate: string): DashboardPedido[] {
+  return pedidos.filter((p) => {
+    const dia = p.createdAt?.slice(0, 10);
+    return !!dia && dia >= startDate && dia <= endDate;
+  });
 }
 
 export function pedidosDoDia(pedidos: DashboardPedido[], diaISO: string): DashboardPedido[] {
@@ -98,11 +85,12 @@ export interface DiaSerie {
   lucro?: number;
 }
 
-export function serieDiaria(pedidos: DashboardPedido[], dias: number): DiaSerie[] {
-  const hoje = hojeISO();
+// `fimISO`: âncora do fim da janela — default hoje (comportamento de sempre); um período
+// customizado que termina no passado passa o próprio fim escolhido, nunca "agora".
+export function serieDiaria(pedidos: DashboardPedido[], dias: number, fimISO: string = hojeISO()): DiaSerie[] {
   const porDia = new Map<string, DiaSerie>();
   for (let i = dias - 1; i >= 0; i--) {
-    const dia = diasAtrasISO(hoje, i);
+    const dia = diasAtrasISO(fimISO, i);
     porDia.set(dia, { data: dia, pedidos: 0, receita: 0 });
   }
   pedidos.forEach((p) => {
@@ -197,11 +185,10 @@ export function serieHorario(pedidos: DashboardPedido[]): HourPoint[] {
   return blocos;
 }
 
-export function serieRecuperacao(porDia: Record<string, number>, dias: number): { data: string; mensagens: number }[] {
-  const hoje = hojeISO();
+export function serieRecuperacao(porDia: Record<string, number>, dias: number, fimISO: string = hojeISO()): { data: string; mensagens: number }[] {
   const out: { data: string; mensagens: number }[] = [];
   for (let i = dias - 1; i >= 0; i--) {
-    const dia = diasAtrasISO(hoje, i);
+    const dia = diasAtrasISO(fimISO, i);
     out.push({ data: dia, mensagens: porDia[dia] || 0 });
   }
   return out;
@@ -264,11 +251,10 @@ export function resultadoFinanceiro(
 // Série diária do gráfico principal a partir do cache financeiro: pedidos pagos (sem troca),
 // faturamento e lucro operacional. Mesma fonte dos KPIs de resultado — não mistura com a lista da
 // API da Ink, que em loja grande só cobre parte do período.
-export function serieFinanceiraDiaria(linhas: FinanceiroDia[], dias: number): DiaSerie[] {
-  const hoje = hojeISO();
+export function serieFinanceiraDiaria(linhas: FinanceiroDia[], dias: number, fimISO: string = hojeISO()): DiaSerie[] {
   const porDia = new Map<string, DiaSerie>();
   for (let i = dias - 1; i >= 0; i--) {
-    const dia = diasAtrasISO(hoje, i);
+    const dia = diasAtrasISO(fimISO, i);
     porDia.set(dia, { data: dia, pedidos: 0, receita: 0, lucro: 0 });
   }
   linhas.forEach((l) => {
@@ -284,13 +270,12 @@ export function serieFinanceiraDiaria(linhas: FinanceiroDia[], dias: number): Di
 // A mídia entra dia a dia, e não como um desconto no fim: a sparkline fica embaixo do card de lucro
 // após mídia, então precisa ser a série DAQUELE número — senão a linha sobe num dia em que o gasto
 // comeu o resultado.
-export function serieLucroOperacional(linhas: FinanceiroDia[], dias: number, midia: MidiaDia[] = []): number[] {
-  const hoje = hojeISO();
+export function serieLucroOperacional(linhas: FinanceiroDia[], dias: number, midia: MidiaDia[] = [], fimISO: string = hojeISO()): number[] {
   const porDia = new Map<string, number>();
   linhas.forEach((l) => porDia.set(l.dia, (porDia.get(l.dia) || 0) + l.lucroOperacional));
   midia.forEach((m) => porDia.set(m.dia, (porDia.get(m.dia) || 0) - m.spend));
   const out: number[] = [];
-  for (let i = dias - 1; i >= 0; i--) out.push(porDia.get(diasAtrasISO(hoje, i)) || 0);
+  for (let i = dias - 1; i >= 0; i--) out.push(porDia.get(diasAtrasISO(fimISO, i)) || 0);
   return out;
 }
 

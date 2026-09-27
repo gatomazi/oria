@@ -341,6 +341,80 @@ test('Dashboard · lucro por produto: isolamento entre nativas e compatibilidade
   assert.equal(ra.json.pedidosSemItens, 1, 'o pedido 700202 de A não tem itens gravados: a tela avisa em vez de sub-reportar');
 });
 
+// ── Seletor de período global (startDate/endDate explícitos) ─────────────────────────────────────
+//
+// dogf-c tem 2 pedidos pagos: 700001 (hoje, total 100, lucro 40) e 700002 (ontem, total 50, lucro
+// 10). `startDate=endDate=HOJE` prova o corte no dia exato (nem o de ontem entra); os testes de
+// clamping/fallback provam que um intervalo maior que o suportado recorta o INÍCIO (nunca o fim
+// pedido) e que parâmetros inválidos caem no comportamento `dias` de sempre.
+
+const ONTEM = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(Date.now() - 86_400_000));
+const MUITO_ANTES = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(Date.now() - 400 * 86_400_000));
+
+test('Dashboard financeiro · startDate/endDate explícitos recortam o dia exato (endDate é um limite real, não só o início)', async () => {
+  const c = await navegador().entrar('dogf-c@teste.oria');
+  const soHoje = await c.req('GET', `/api/admin/dashboard/financeiro?startDate=${HOJE}&endDate=${HOJE}`);
+  assert.equal(soHoje.status, 200, soHoje.texto);
+  assert.equal(soHoje.json.startDate, HOJE);
+  assert.equal(soHoje.json.endDate, HOJE);
+  assert.equal(soHoje.json.dias, 1);
+  const faturamentoHoje = soHoje.json.linhas.reduce((acc, l) => acc + Number(l.faturamento), 0);
+  assert.equal(faturamentoHoje, 100, 'só o pedido 700001 (hoje); 700002 (ontem) fica de fora do endDate');
+
+  const doisDias = await c.req('GET', `/api/admin/dashboard/financeiro?startDate=${ONTEM}&endDate=${HOJE}`);
+  assert.equal(doisDias.status, 200, doisDias.texto);
+  const faturamentoDoisDias = doisDias.json.linhas.reduce((acc, l) => acc + Number(l.faturamento), 0);
+  assert.equal(faturamentoDoisDias, 150, 'os dois pedidos, igual ao `dias=30` de sempre');
+});
+
+test('Dashboard lucro-produtos · mesmo corte por startDate/endDate explícito', async () => {
+  const c = await navegador().entrar('dogf-c@teste.oria');
+  const soHoje = await c.req('GET', `/api/admin/dashboard/lucro-produtos?startDate=${HOJE}&endDate=${HOJE}&agrupar=produto`);
+  assert.equal(soHoje.status, 200, soHoje.texto);
+  assert.equal(soHoje.json.startDate, HOJE);
+  assert.equal(soHoje.json.endDate, HOJE);
+  assert.equal(soHoje.json.itens[0].lucroOperacional, 40, 'só o item do pedido de hoje (custo 60, valor 100)');
+});
+
+test('Dashboard financeiro · intervalo maior que o suportado recorta o INÍCIO, nunca o fim pedido', async () => {
+  const c = await navegador().entrar('dogf-c@teste.oria');
+  const r = await c.req('GET', `/api/admin/dashboard/financeiro?startDate=${MUITO_ANTES}&endDate=${HOJE}`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.endDate, HOJE, 'o fim pedido nunca muda');
+  assert.equal(r.json.dias, 180, 'clampado no teto do endpoint');
+  assert.notEqual(r.json.startDate, MUITO_ANTES, 'o início pedido (muito antigo) foi recortado');
+});
+
+test('Dashboard financeiro · startDate/endDate inválidos ou invertidos caem no `dias` legado, sem erro', async () => {
+  const c = await navegador().entrar('dogf-c@teste.oria');
+  const invalido = await c.req('GET', `/api/admin/dashboard/financeiro?startDate=lixo&endDate=2020-01-01&dias=2`);
+  assert.equal(invalido.status, 200, invalido.texto);
+  assert.equal(invalido.json.endDate, HOJE, 'ignora as datas malformadas e usa hoje, como o caminho de sempre');
+  assert.equal(invalido.json.dias, 2);
+
+  const invertido = await c.req('GET', `/api/admin/dashboard/financeiro?startDate=${HOJE}&endDate=${ONTEM}&dias=2`);
+  assert.equal(invertido.status, 200, invertido.texto);
+  assert.equal(invertido.json.endDate, HOJE, 'startDate > endDate: ignora os dois e usa `dias`');
+});
+
+test('Dashboard orders · end_date só vai pra Ink quando o intervalo é customizado (fim != hoje); no caminho de sempre fica igual a antes desta rodada', async () => {
+  const c = await navegador().entrar('dogf-c@teste.oria');
+  const antes = chamadasMock().length;
+  const padrao = await c.req('GET', '/api/admin/dashboard/orders?dias=30');
+  assert.equal(padrao.status, 200, padrao.texto);
+  const chamadaPadrao = chamadasMock().slice(antes).find((x) => x.caminho === '/v1/stores/orders');
+  assert.ok(chamadaPadrao, 'chamou a Ink');
+  assert.doesNotMatch(chamadaPadrao.query, /end_date=/, 'sem end_date quando o fim é hoje (comportamento de sempre)');
+
+  const antes2 = chamadasMock().length;
+  const custom = await c.req('GET', `/api/admin/dashboard/orders?startDate=${ONTEM}&endDate=${ONTEM}`);
+  assert.equal(custom.status, 200, custom.texto);
+  assert.equal(custom.json.endDate, ONTEM);
+  const chamadaCustom = chamadasMock().slice(antes2).find((x) => x.caminho === '/v1/stores/orders');
+  assert.ok(chamadaCustom, 'chamou a Ink');
+  assert.match(chamadaCustom.query, new RegExp(`end_date=${ONTEM}`), 'intervalo no passado: end_date explícito vai pra Ink');
+});
+
 test('Dashboard · recuperação via WhatsApp: Store nativa lê o próprio estado (registro sem `loja`)', async () => {
   const c = await navegador().entrar('dogf-c@teste.oria');
   const r = await c.req('GET', '/api/admin/dashboard/recuperacao-resumo');

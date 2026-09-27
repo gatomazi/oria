@@ -11,13 +11,12 @@ import {
 } from '../../api/journeyAnalytics';
 import { getCommerceCatalogSyncStatus, type CommerceCatalogSyncStatus } from '../../api/productAnalytics';
 import { STATUS_LABEL, statusTone, OPORTUNIDADE_TITULO, formatarEvidencia, EVIDENCIA_LABEL, evidenciaTone } from './formatadores';
+import { PeriodoGlobalSelect } from '../../components/PeriodoGlobalSelect';
+import { usePeriodoGlobal, intervaloDoPeriodo } from '../../lib/periodoGlobal';
 
 import '../../pedidos-central.css';
 import '../desempenho-produtos/desempenho-produtos.css';
 import './jornada-compra.css';
-
-const HOJE = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-const TRINTA_DIAS_ATRAS = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(Date.now() - 29 * 86_400_000));
 
 type Periodo = { startDate: string; endDate: string };
 
@@ -373,7 +372,9 @@ function QualidadeDosDados({ dados }: { dados: JourneyAnalyticsResponse }) {
 }
 
 export function JornadaCompraPage() {
-  const [periodo, setPeriodo] = useState<Periodo>({ startDate: TRINTA_DIAS_ATRAS, endDate: HOJE });
+  const [periodoGlobal, setPeriodoGlobal] = usePeriodoGlobal();
+  const { startDate, endDate } = intervaloDoPeriodo(periodoGlobal);
+  const periodo: Periodo = { startDate, endDate };
   const [dados, setDados] = useState<JourneyAnalyticsResponse | null>(null);
   const [erro, setErro] = useState('');
 
@@ -395,8 +396,7 @@ export function JornadaCompraPage() {
 
       <div className="ds-stack">
         <Toolbar label="Filtrar por período">
-          <Input type="date" aria-label="Início do período" value={periodo.startDate} max={periodo.endDate} onChange={(e) => setPeriodo((p) => ({ ...p, startDate: e.target.value }))} />
-          <Input type="date" aria-label="Fim do período" value={periodo.endDate} min={periodo.startDate} max={HOJE} onChange={(e) => setPeriodo((p) => ({ ...p, endDate: e.target.value }))} />
+          <PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />
         </Toolbar>
 
         {erro && <ErrorState description={erro} onRetry={carregar} />}

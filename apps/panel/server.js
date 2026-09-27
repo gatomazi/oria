@@ -1616,13 +1616,13 @@ function bucketPaymentStatusDashboard(statusBruto) {
 // pra descobrir `total_pages`, 2ª já pedindo a última página — 2 requests/loja, não N.
 // Mesma limitação existe em /api/admin/pedidos/central (loja=all) e no antigo endpoint do
 // Dashboard (sem begin_date algum) — fora do escopo desta tarefa, reportado ao usuário.
-async function fetchRecentOrdersDaStore(beginDate) {
+async function fetchRecentOrdersDaStore(beginDate, endDate = null) {
   const resultados = [];
   const erros = [];
   const lojasComLacuna = [];
   for (const { loja } of await storesInkDoContexto()) {
     try {
-      const query = `begin_date=${beginDate}&per_page=100`;
+      const query = `begin_date=${beginDate}${endDate ? `&end_date=${endDate}` : ''}&per_page=100`;
       const primeira = await inkApiRequest(loja, `/v1/stores/orders?${query}&page=1`);
       const totalPages = primeira.total_pages || 1;
       const data = totalPages > 1 ? await inkApiRequest(loja, `/v1/stores/orders?${query}&page=${totalPages}`) : primeira;
@@ -1637,22 +1637,51 @@ async function fetchRecentOrdersDaStore(beginDate) {
   return { resultados, erros, lojasComLacuna };
 }
 
-// Data no formato YYYY-MM-DD exigido pelo begin_date/end_date da Ink, N dias atrás (UTC).
-function isoDateDiasAtras(dias) {
-  const d = new Date();
+
+// N dias antes de uma data-âncora EXPLÍCITA (não "agora") — usado quando o período vem de
+// startDate/endDate escolhidos na tela, nunca de `dias` contado a partir de hoje.
+function isoDateAntesDe(ancoraISO, dias) {
+  const d = new Date(`${ancoraISO}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - dias);
   return d.toISOString().slice(0, 10);
 }
 
-// Visão geral de pedidos de todas as lojas: contagem por status + últimos pedidos. `dias` cobre
-// a janela pedida pelo seletor de período do Dashboard (mín. 2, pra sempre dar pra comparar
-// hoje x ontem mesmo com "Hoje" selecionado) — o frontend recorta o range exato client-side,
-// isso aqui só limita quanto pedir pra Ink (per_page=100/loja continua sendo o teto real da
-// API, não é "toda a história").
+// Rodada "seletor de período global" · resolve o período de um endpoint do Dashboard a partir da
+// query: aceita startDate/endDate explícitos (o novo seletor global, compartilhado entre Dashboard/
+// Desempenho de Produtos/Jornada de Compra — ver src/lib/periodoGlobal.ts) OU o `dias` legado
+// (contagem pra trás a partir de hoje — mesmo comportamento de sempre quando startDate/endDate não
+// vêm, byte a byte). startDate/endDate sempre vence quando os dois vierem válidos.
+//
+// `diasMax` sempre recorta o INÍCIO pra trás do fim pedido, nunca o fim: pedir um intervalo maior
+// que o suportado mostra exatamente o fim escolhido, só com menos dias pra trás do que foi pedido —
+// nunca um fim diferente do que a pessoa escolheu.
+// (DATA_ISO_RE já existe mais abaixo, junto de ORDERS_QUERY_PARAMS — reusado aqui via hoisting.)
+function resolverPeriodoDashboard(req, { diasPadrao, diasMax, diasMin = 1 }) {
+  const { startDate: qStart, endDate: qEnd } = req.query;
+  if (typeof qStart === 'string' && typeof qEnd === 'string' && DATA_ISO_RE.test(qStart) && DATA_ISO_RE.test(qEnd) && qStart <= qEnd) {
+    // `diasMin` NÃO se aplica aqui: ele existe só pra garantir janela suficiente pro `dias` legado
+    // (comparar hoje x ontem); a pessoa que escolhe startDate=endDate quer exatamente aquele 1 dia,
+    // não uma janela artificialmente maior que o que ela pediu.
+    const diasPedidos = Math.round((Date.parse(`${qEnd}T00:00:00Z`) - Date.parse(`${qStart}T00:00:00Z`)) / 86400000) + 1;
+    const dias = Math.min(diasPedidos, diasMax);
+    const startDate = dias < diasPedidos ? isoDateAntesDe(qEnd, dias - 1) : qStart;
+    return { startDate, endDate: qEnd, dias };
+  }
+  const dias = Math.max(diasMin, Math.min(Number.parseInt(req.query.dias, 10) || diasPadrao, diasMax));
+  const endDate = diaISOBrasil(0);
+  return { startDate: isoDateAntesDe(endDate, dias - 1), endDate, dias };
+}
+
+// Visão geral de pedidos de todas as lojas: contagem por status + últimos pedidos. `dias`/
+// `startDate`+`endDate` cobrem a janela pedida pelo seletor de período do Dashboard (mín. 2, pra
+// sempre dar pra comparar hoje x ontem mesmo com "Hoje" selecionado) — o frontend recorta o range
+// exato client-side, isso aqui só limita quanto pedir pra Ink (per_page=100/loja continua sendo o
+// teto real da API, não é "toda a história").
 app.get('/api/admin/dashboard/orders', requireAdmin, async (req, res) => {
-  const dias = Math.max(2, Math.min(Number.parseInt(req.query.dias, 10) || 90, 90));
-  const beginDate = isoDateDiasAtras(dias - 1);
-  const { resultados, erros, lojasComLacuna } = await fetchRecentOrdersDaStore(beginDate);
+  const { startDate: beginDate, endDate, dias } = resolverPeriodoDashboard(req, { diasPadrao: 90, diasMax: 90, diasMin: 2 });
+  // `end_date` só vai pra Ink quando é DIFERENTE de hoje (intervalo customizado no passado) — no
+  // caminho de sempre (fim = hoje) o comportamento fica byte a byte igual ao de antes desta rodada.
+  const { resultados, erros, lojasComLacuna } = await fetchRecentOrdersDaStore(beginDate, endDate === diaISOBrasil(0) ? null : endDate);
 
   const localPedidos = await readPedidos();
   const hotpageIdPorPedidoInk = {};
@@ -1682,7 +1711,7 @@ app.get('/api/admin/dashboard/orders', requireAdmin, async (req, res) => {
   const resumo = { aguardando: 0, pago: 0, problema: 0, desconhecido: 0, total: pedidos.length };
   pedidos.forEach((p) => { resumo[p.paymentBucket] += 1; });
 
-  res.json({ pedidos, resumo, erros, beginDate, lojasComLacuna });
+  res.json({ pedidos, resumo, erros, beginDate, endDate, dias, lojasComLacuna });
 });
 
 // Resultado financeiro por loja e dia (fuso da loja), a partir do cache pedidos_ink — não da API da
@@ -1702,14 +1731,14 @@ const LUCRO_AGRUPAMENTOS = {
 
 app.get('/api/admin/dashboard/lucro-produtos', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'lucro por produto exige Postgres configurado' });
-  const dias = Math.max(1, Math.min(Number.parseInt(req.query.dias, 10) || 30, 180));
+  const { startDate, endDate, dias } = resolverPeriodoDashboard(req, { diasPadrao: 30, diasMax: 180, diasMin: 1 });
   const agrupar = Object.prototype.hasOwnProperty.call(LUCRO_AGRUPAMENTOS, req.query.agrupar) ? req.query.agrupar : 'produto';
   const { chave, rotulo } = LUCRO_AGRUPAMENTOS[agrupar];
   // Identidade canônica: `organization_id + store_id` (a chave legada só entra como ramo de
   // compatibilidade quando a Store tem uma). O pedido é filtrado UMA vez, num CTE, e os itens
   // entram pela identidade do pedido — sem `loja` na junção, que é NULA na Store nativa.
-  const escopo = escopoDaStore(4);
-  const params = [orgDoContexto(), Array.from(RESUMO_PAGO), dias, ...escopo.params];
+  const escopo = escopoDaStore(5);
+  const params = [orgDoContexto(), Array.from(RESUMO_PAGO), startDate, endDate, ...escopo.params];
   const pedidosDoPeriodo = `WITH ped AS (
        SELECT store_id, loja, ink_order_id
        FROM pedidos_ink
@@ -1717,7 +1746,8 @@ app.get('/api/admin/dashboard/lucro-produtos', requireAdmin, async (req, res) =>
          AND ${escopo.sql}
          AND payment_status = ANY($2)
          AND is_troca IS NOT TRUE
-         AND criado_em >= ((now() AT TIME ZONE 'America/Sao_Paulo')::date - ($3::int - 1))::timestamp AT TIME ZONE 'America/Sao_Paulo'
+         AND criado_em >= $3::date AT TIME ZONE 'America/Sao_Paulo'
+         AND criado_em < ($4::date + 1) AT TIME ZONE 'America/Sao_Paulo'
      )`;
   const itemDoPedido = `i.organization_id = $1 AND i.ink_order_id = p.ink_order_id
          AND (i.store_id = p.store_id OR (i.store_id IS NULL AND i.loja = p.loja))`;
@@ -1747,6 +1777,8 @@ app.get('/api/admin/dashboard/lucro-produtos', requireAdmin, async (req, res) =>
     );
     res.json({
       dias,
+      startDate,
+      endDate,
       agrupar,
       pedidosSemItens: Number(cobertura[0].sem_itens),
       itens: rows.map((r) => ({
@@ -1767,7 +1799,7 @@ app.get('/api/admin/dashboard/lucro-produtos', requireAdmin, async (req, res) =>
 
 app.get('/api/admin/dashboard/financeiro', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'resultado financeiro exige Postgres configurado' });
-  const dias = Math.max(2, Math.min(Number.parseInt(req.query.dias, 10) || 90, 180));
+  const { startDate, endDate, dias } = resolverPeriodoDashboard(req, { diasPadrao: 90, diasMax: 180, diasMin: 2 });
   try {
     const { rows } = await pgPool.query(
       `SELECT loja,
@@ -1781,13 +1813,14 @@ app.get('/api/admin/dashboard/financeiro', requireAdmin, async (req, res) => {
               COALESCE(SUM(custo_producao), 0) AS custo_producao,
               COALESCE(SUM(lucro_operacional), 0) AS lucro_operacional
        FROM pedidos_ink
-       WHERE organization_id = $3
+       WHERE organization_id = $4
          AND payment_status = ANY($1)
          AND is_troca IS NOT TRUE
-         AND criado_em >= ((now() AT TIME ZONE 'America/Sao_Paulo')::date - ($2::int - 1))::timestamp AT TIME ZONE 'America/Sao_Paulo'
+         AND criado_em >= $2::date AT TIME ZONE 'America/Sao_Paulo'
+         AND criado_em < ($3::date + 1) AT TIME ZONE 'America/Sao_Paulo'
        GROUP BY loja, dia
        ORDER BY dia`,
-      [Array.from(RESUMO_PAGO), dias, orgDoContexto()]
+      [Array.from(RESUMO_PAGO), startDate, endDate, orgDoContexto()]
     );
     const { rows: syncs } = await pgPool.query(
       'SELECT MIN(ultimo_sync_em) AS sincronizado_em FROM sync_estado WHERE organization_id = $1', [orgDoContexto()]
@@ -1809,7 +1842,7 @@ app.get('/api/admin/dashboard/financeiro', requireAdmin, async (req, res) => {
     try {
       // Fonte única (lib/financeiro/midia.js): a mesma do consolidado. Recurso sem loja, ou de
       // outra loja, fica fora — não é somado na loja errada.
-      const r = await midiaDaOrganizacao(diaISOBrasil(dias - 1), diaISOBrasil(0));
+      const r = await midiaDaOrganizacao(startDate, endDate);
       midia = r.porDia;
       // Saúde da CONEXÃO (token/API), à parte de "tem conta atribuída": conta da loja com a conexão em
       // erro ou expirada é "com problema", não "gasto zero" nem "tudo bem".
@@ -1832,6 +1865,8 @@ app.get('/api/admin/dashboard/financeiro', requireAdmin, async (req, res) => {
       midiaFontes,
       midiaSinalizada,
       dias,
+      startDate,
+      endDate,
       sincronizadoEm: syncs[0] && syncs[0].sincronizado_em ? new Date(syncs[0].sincronizado_em).toISOString() : null,
       linhas: rows.map((r) => ({
         loja: r.loja,

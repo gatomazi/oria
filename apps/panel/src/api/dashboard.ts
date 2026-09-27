@@ -78,6 +78,8 @@ export interface FinanceiroDia {
 
 export interface DashboardFinanceiroData {
   dias: number;
+  startDate: string;
+  endDate: string;
   sincronizadoEm: string | null;
   linhas: FinanceiroDia[];
   // Gasto de mídia por loja × dia, vindo das contas de anúncio conectadas. Vazio quando nenhuma
@@ -89,8 +91,14 @@ export interface DashboardFinanceiroData {
   midiaSinalizada: { provider: string; recurso: string; motivo: string }[];
 }
 
-export function getDashboardFinanceiro(dias = 180) {
-  return api<DashboardFinanceiroData>(`/api/admin/dashboard/financeiro?dias=${dias}`);
+// `startDate`/`endDate` (o seletor de período global, ver src/lib/periodoGlobal.ts) sempre vencem
+// quando informados; `dias` fica só como fallback pra quem ainda não migrou. O servidor recorta o
+// INÍCIO se o intervalo pedido for maior que o suportado — nunca muda o fim escolhido.
+export function getDashboardFinanceiro({ startDate, endDate, dias }: { startDate?: string; endDate?: string; dias?: number } = {}) {
+  const params = new URLSearchParams();
+  if (startDate && endDate) { params.set('startDate', startDate); params.set('endDate', endDate); }
+  else params.set('dias', String(dias ?? 180));
+  return api<DashboardFinanceiroData>(`/api/admin/dashboard/financeiro?${params}`);
 }
 
 export type AgrupamentoLucro = 'produto' | 'modelo';
@@ -107,19 +115,26 @@ export interface LucroProdutoItem {
 
 export interface DashboardLucroProdutosData {
   dias: number;
+  startDate: string;
+  endDate: string;
   agrupar: AgrupamentoLucro;
   // Pedidos pagos do período cujos itens ainda não foram gravados (ficam fora do ranking).
   pedidosSemItens: number;
   itens: LucroProdutoItem[];
 }
 
-export function getDashboardLucroProdutos(dias: number, agrupar: AgrupamentoLucro) {
-  const params = new URLSearchParams({ dias: String(dias), agrupar });
+export function getDashboardLucroProdutos({ startDate, endDate, dias }: { startDate?: string; endDate?: string; dias?: number }, agrupar: AgrupamentoLucro) {
+  const params = new URLSearchParams({ agrupar });
+  if (startDate && endDate) { params.set('startDate', startDate); params.set('endDate', endDate); }
+  else params.set('dias', String(dias ?? 30));
   return api<DashboardLucroProdutosData>(`/api/admin/dashboard/lucro-produtos?${params}`);
 }
 
-export function getDashboardOrders(dias = 90) {
-  return api<DashboardOrdersData>(`/api/admin/dashboard/orders?dias=${dias}`);
+export function getDashboardOrders({ startDate, endDate, dias }: { startDate?: string; endDate?: string; dias?: number } = {}) {
+  const params = new URLSearchParams();
+  if (startDate && endDate) { params.set('startDate', startDate); params.set('endDate', endDate); }
+  else params.set('dias', String(dias ?? 90));
+  return api<DashboardOrdersData>(`/api/admin/dashboard/orders?${params}`);
 }
 
 export function getDashboardAbandonedCarts() {
