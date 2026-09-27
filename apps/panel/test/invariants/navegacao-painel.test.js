@@ -44,7 +44,7 @@ test('sidebar · Recuperação está em Comunicação e Simular frete em Operaç
   assert.ok(itensDe('Comunicação').includes('recuperacao'));
   assert.ok(!itensDe('Operação').includes('recuperacao'));
   assert.ok(itensDe('Operação').includes('simular-frete'));
-  assert.deepEqual(itensDe('Operação'), ['pedidos-central', 'clientes', 'trocas', 'estoque', 'simular-frete']);
+  assert.deepEqual(itensDe('Operação'), ['pedidos-central', 'clientes', 'trocas', 'simular-frete']);
   for (const k of ['whatsapp-visao-geral', 'recuperacao', 'pix-ferramenta', 'automacoes', 'templates']) assert.ok(itensDe('Comunicação').includes(k), k);
 });
 
@@ -228,7 +228,7 @@ test('conteúdo e ordem dos itens de cada grupo (recursos novos por função, se
   // Cada seção do gerador tem rota e item próprios (a página deixou de ser uma tela única com abas internas).
   assert.deepEqual(por['Criativos'], ['Gerar', 'Lotes', 'Histórico', 'Produtos', 'Marca e nicho', 'Contextos', 'Personas']);
   assert.deepEqual(por['Campanhas'], ['Todas as campanhas', 'Segmentos']);
-  assert.deepEqual(por['Operação'], ['Pedidos', 'Clientes', 'Trocas e devoluções', 'Estoque', 'Simular frete']);
+  assert.deepEqual(por['Operação'], ['Pedidos', 'Clientes', 'Trocas e devoluções', 'Simular frete']);
   assert.deepEqual(por['Financeiro'], ['Visão financeira', 'Despesas', 'Custos de API', 'Reembolsos']);
   assert.deepEqual(por['Catálogo'], ['Produtos', 'Categorias', 'Agrupamentos', 'Promoções']);
 });
