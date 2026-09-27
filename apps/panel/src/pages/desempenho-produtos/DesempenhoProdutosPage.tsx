@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Button, Callout, Checkbox, DataTable, EmptyState, ErrorState, Field, Icon, Input, KpiCard, KpiStrip, PageHeader, PageStack, Pagination, SearchInput, Select, Skeleton, StatusBadge, Tabs, Toolbar, type TableSort,
 } from '../../components/ds';
+import { PeriodoGlobalSelect } from '../../components/PeriodoGlobalSelect';
+import { usePeriodoGlobal, intervaloDoPeriodo } from '../../lib/periodoGlobal';
 import { formatValor, plural } from '../../lib/format';
 import { lookup, PRODUCT_STATUS_MAP } from '../../lib/statusMap';
 import {
@@ -20,8 +22,6 @@ import '../../pedidos-central.css';
 import '../../produtos.css';
 import './desempenho-produtos.css';
 
-const HOJE = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-const TRINTA_DIAS_ATRAS = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(Date.now() - 29 * 86_400_000));
 const LIMIT = 20;
 
 // Ordenação sempre feita no servidor, sobre o conjunto elegível INTEIRO da Store antes de paginar
@@ -464,7 +464,9 @@ function VisaoGeral({ periodo, onAbrirProduto }: { periodo: Periodo; onAbrirProd
 }
 
 export function DesempenhoProdutosPage() {
-  const [periodo, setPeriodo] = useState<Periodo>({ startDate: TRINTA_DIAS_ATRAS, endDate: HOJE });
+  const [periodoGlobal, setPeriodoGlobal] = usePeriodoGlobal();
+  const { startDate, endDate } = intervaloDoPeriodo(periodoGlobal);
+  const periodo: Periodo = { startDate, endDate };
   const [status, setStatus] = useState<ProductAnalyticsStatus | null>(null);
   const [statusErro, setStatusErro] = useState('');
   // Gate D ("Jornada de Valor"): CTA de "Prioridades de hoje" (Jornada de Compra) chega aqui como
@@ -498,8 +500,7 @@ export function DesempenhoProdutosPage() {
 
       <div className="ds-stack">
         <Toolbar label="Filtrar por período">
-          <Input type="date" aria-label="Início do período" value={periodo.startDate} max={periodo.endDate} onChange={(e) => setPeriodo((p) => ({ ...p, startDate: e.target.value }))} />
-          <Input type="date" aria-label="Fim do período" value={periodo.endDate} min={periodo.startDate} max={HOJE} onChange={(e) => setPeriodo((p) => ({ ...p, endDate: e.target.value }))} />
+          <PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />
         </Toolbar>
 
         {statusErro && <ErrorState description={statusErro} onRetry={() => window.location.reload()} />}

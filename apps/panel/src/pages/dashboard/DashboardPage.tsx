@@ -21,7 +21,8 @@ import {
 } from '../../api/dashboard';
 import { getIntegrations, type IntegrationsData } from '../../api/integracoes';
 import { lookup, ORDER_STATUS_MAP } from '../../lib/statusMap';
-import { DashboardPeriodSelect } from './DashboardPeriodSelect';
+import { PeriodoGlobalSelect } from '../../components/PeriodoGlobalSelect';
+import { usePeriodoGlobal, intervaloDoPeriodo, rotuloDoPeriodo } from '../../lib/periodoGlobal';
 import { LucroProdutosCard } from './LucroProdutosCard';
 import { OrdersRevenueChart } from './charts/OrdersRevenueChart';
 import { OrderStatusDonut } from './charts/OrderStatusDonut';
@@ -29,10 +30,8 @@ import { RecoveryChart } from './charts/RecoveryChart';
 import { WeekdayHourlyChart } from './charts/WeekdayHourlyChart';
 import {
   ESTAGIOS_PIPELINE,
-  PERIODO_PADRAO,
   calcularDelta,
   diasAtrasISO,
-  diasDoPeriodo,
   hojeISO,
   pedidosDoDia,
   pedidosDoDiaAteHora,
@@ -47,7 +46,6 @@ import {
   serieStatus,
   somaValor,
   tomDoEstagio,
-  type PeriodoId,
   type MidiaDia,
   formatDataHoraCurta,
 } from './dashboardData';
@@ -191,28 +189,33 @@ function ResultadoPeriodo({
   midia,
   midiaFontes,
   erro,
-  periodo,
+  startDate,
+  endDate,
   dias,
+  rotuloPeriodo,
 }: {
   linhas: FinanceiroDia[] | null;
   midia: MidiaDia[];
   midiaFontes: MidiaFonte[] | null;
   erro: string;
-  periodo: PeriodoId;
+  startDate: string;
+  endDate: string;
   dias: number;
+  rotuloPeriodo: string;
 }) {
-  const hoje = hojeISO();
   const atual = useMemo(
-    () => (linhas ? resultadoFinanceiro(linhas, diasAtrasISO(hoje, dias - 1), hoje, midia) : null),
-    [linhas, hoje, dias, midia]
+    () => (linhas ? resultadoFinanceiro(linhas, startDate, endDate, midia) : null),
+    [linhas, startDate, endDate, midia]
   );
+  // Período anterior de MESMO tamanho, imediatamente antes de startDate — nunca "hoje": um
+  // intervalo customizado no passado compara com o que veio antes DELE, não com ontem.
   const anterior = useMemo(
-    () => (linhas ? resultadoFinanceiro(linhas, diasAtrasISO(hoje, dias * 2 - 1), diasAtrasISO(hoje, dias), midia) : null),
-    [linhas, hoje, dias, midia]
+    () => (linhas ? resultadoFinanceiro(linhas, diasAtrasISO(startDate, dias), diasAtrasISO(startDate, 1), midia) : null),
+    [linhas, startDate, dias, midia]
   );
   const sparkline = useMemo(
-    () => (linhas ? serieLucroOperacional(linhas, Math.max(dias, 7), midia) : []),
-    [linhas, dias, midia]
+    () => (linhas ? serieLucroOperacional(linhas, Math.max(dias, 7), midia, endDate) : []),
+    [linhas, dias, midia, endDate]
   );
 
   if (erro) {
@@ -220,12 +223,12 @@ function ResultadoPeriodo({
   }
   if (!atual || !anterior) return <Skeleton rows={1} height="112px" />;
 
-  // Delta só contra um período anterior completo: "hoje" parcial x ontem inteiro sempre "cai", e
-  // período anterior com pedido ainda sem custo calculado daria uma variação que não existe.
-  const comparavel = periodo !== 'hoje' && anterior.semFinanceiro === 0;
+  // Delta só contra um período anterior completo: um único dia parcial (hoje, ou o próprio dia
+  // customizado escolhido) x um dia anterior inteiro sempre "cai", e período anterior com pedido
+  // ainda sem custo calculado daria uma variação que não existe.
+  const comparavel = dias > 1 && anterior.semFinanceiro === 0;
   const deltaFaturamento = comparavel ? calcularDelta(atual.faturamento, anterior.faturamento) : null;
   const deltaLucro = comparavel ? calcularDelta(atual.lucroAposMidia, anterior.lucroAposMidia) : null;
-  const rotuloPeriodo = periodo === 'hoje' ? 'hoje' : `${dias} dias`;
   // Margem sobre o FATURAMENTO, não sobre o lucro bruto: "margem de 51%" lida contra a receita é o
   // número que as pessoas comparam entre si, e é assim que a DRE do Meta Ads também calcula.
   const margem = formatPercentual(atual.lucroAposMidia, atual.faturamento);
@@ -521,21 +524,27 @@ function RecentOrdersTable({ pedidos, mostrarLoja, onVinculado }: { pedidos: Das
 
 export function DashboardPage() {
   const escopo = useLojaAtiva() ?? '';
-  const [periodo, setPeriodo] = useState<PeriodoId>(PERIODO_PADRAO);
+  // Seletor de período GLOBAL (src/lib/periodoGlobal.ts) — compartilhado e persistido entre
+  // Dashboard/Desempenho de Produtos/Jornada de Compra; startDate/endDate são explícitos e podem
+  // não terminar hoje (intervalo customizado no passado).
+  const [periodoGlobal, setPeriodoGlobal] = usePeriodoGlobal();
+  const { startDate, endDate, dias } = intervaloDoPeriodo(periodoGlobal);
+  const rotuloPeriodo = rotuloDoPeriodo(periodoGlobal).toLowerCase();
+
   const [pedidos, setPedidos] = useState<Fetched<DashboardOrdersData>>({ data: null, erro: '' });
+  // Pedidos do PERÍODO selecionado especificamente — separado do `pedidos` acima (sempre os
+  // últimos 90 dias terminando hoje, independente do período): "Últimos pedidos"/"Pedidos com
+  // atenção" são operacionais (sempre o mais recente), os gráficos abaixo são do período escolhido.
+  const [pedidosPeriodoFetch, setPedidosPeriodoFetch] = useState<Fetched<DashboardOrdersData>>({ data: null, erro: '' });
   const [carrinhos, setCarrinhos] = useState<Fetched<{ carrinhos: DashboardCarrinho[]; erros: { loja: string | null; error: string }[] }>>({ data: null, erro: '' });
   const [integracoes, setIntegracoes] = useState<IntegrationsData | null>(null);
   const [recuperacao, setRecuperacao] = useState<Fetched<RecuperacaoResumo>>({ data: null, erro: '' });
   const [financeiro, setFinanceiro] = useState<Fetched<DashboardFinanceiroData>>({ data: null, erro: '' });
 
   useEffect(() => {
-    getDashboardOrders(90)
+    getDashboardOrders({ dias: 90 })
       .then((data) => setPedidos({ data, erro: '' }))
       .catch((err: Error) => setPedidos({ data: null, erro: err.message }));
-    // 180 dias: cobre o maior período do seletor (90d) e o período anterior do mesmo tamanho.
-    getDashboardFinanceiro(180)
-      .then((data) => setFinanceiro({ data, erro: '' }))
-      .catch((err: Error) => setFinanceiro({ data: null, erro: err.message }));
     getDashboardAbandonedCarts()
       .then((data) => setCarrinhos({ data, erro: '' }))
       .catch((err: Error) => setCarrinhos({ data: null, erro: err.message }));
@@ -550,21 +559,38 @@ export function DashboardPage() {
       .catch((err: Error) => setRecuperacao({ data: null, erro: err.message }));
   }, [escopo]);
 
-  const dias = diasDoPeriodo(periodo);
+  // Refaz a cada troca de período (a pessoa pode escolher qualquer intervalo passado, não só os 4
+  // presets de sempre). O financeiro pede também o período ANTERIOR de mesmo tamanho, pro delta de
+  // "Resultado do período" — o servidor recorta o início se o total pedido passar do teto (180 dias).
+  useEffect(() => {
+    let ativo = true;
+    getDashboardOrders({ startDate, endDate })
+      .then((data) => { if (ativo) setPedidosPeriodoFetch({ data, erro: '' }); })
+      .catch((err: Error) => { if (ativo) setPedidosPeriodoFetch({ data: null, erro: err.message }); });
+    getDashboardFinanceiro({ startDate: diasAtrasISO(startDate, dias), endDate })
+      .then((data) => { if (ativo) setFinanceiro({ data, erro: '' }); })
+      .catch((err: Error) => { if (ativo) setFinanceiro({ data: null, erro: err.message }); });
+    return () => { ativo = false; };
+  }, [startDate, endDate, dias]);
 
   const todosPedidos = useMemo(() => porEscopo(pedidos.data?.pedidos || [], escopo), [pedidos.data, escopo]);
+  const pedidosPeriodoBruto = useMemo(() => porEscopo(pedidosPeriodoFetch.data?.pedidos || [], escopo), [pedidosPeriodoFetch.data, escopo]);
   const todosCarrinhos = useMemo(() => porEscopo(carrinhos.data?.carrinhos || [], escopo), [carrinhos.data, escopo]);
   const linhasFinanceiro = useMemo(() => (financeiro.data ? porEscopo(financeiro.data.linhas, escopo) : null), [financeiro.data, escopo]);
   // Mídia passa pelo MESMO filtro de loja do financeiro: filtrar o painel por uma loja e continuar
   // descontando a mídia de todas mostraria um prejuízo que não existe.
   const midiaFinanceiro = useMemo(() => porEscopo(financeiro.data?.midia || [], escopo), [financeiro.data, escopo]);
-  let erros = (pedidos.data?.erros || []).concat(carrinhos.data?.erros || []);
+  let erros = (pedidos.data?.erros || []).concat(pedidosPeriodoFetch.data?.erros || [], carrinhos.data?.erros || []);
   erros = erros.filter((e) => mesmaLoja(e.loja, escopo));
 
-  const pedidosPeriodo = useMemo(() => pedidosNoPeriodo(todosPedidos, dias), [todosPedidos, dias]);
+  // Defensivo: o servidor já devolve só o intervalo pedido, mas recorta de novo aqui — grátis e
+  // nunca deixa uma borda escapar (fuso do provider x fuso do navegador).
+  const pedidosPeriodo = useMemo(() => pedidosNoPeriodo(pedidosPeriodoBruto, startDate, endDate), [pedidosPeriodoBruto, startDate, endDate]);
   const hoje = hojeISO();
   const ontem = diasAtrasISO(hoje, 1);
   const agoraHM = new Date().toTimeString().slice(0, 5);
+  // "Indicadores de hoje" é sempre HOJE de verdade, nunca o período escolhido acima — mesmo
+  // navegando um mês inteiro no passado, esta seção continua respondendo "como estamos agora".
   const pedidosHoje = useMemo(() => pedidosDoDia(todosPedidos, hoje), [todosPedidos, hoje]);
   // "Ontem até agora" (mesma janela parcial de hoje), não o dia de ontem inteiro — ver
   // pedidosDoDiaAteHora: comparar hoje-parcial com ontem-inteiro é injusto (sempre "cai").
@@ -572,17 +598,17 @@ export function DashboardPage() {
   const pedidosProblema = useMemo(() => todosPedidos.filter((p) => p.paymentBucket === 'problema').length, [todosPedidos]);
 
   const serieDiariaCompleta = useMemo(() => serieDiaria(todosPedidos, Math.max(dias, 7)), [todosPedidos, dias]);
-  const seriePeriodo = useMemo(() => serieDiaria(pedidosPeriodo, dias), [pedidosPeriodo, dias]);
+  const seriePeriodo = useMemo(() => serieDiaria(pedidosPeriodo, dias, endDate), [pedidosPeriodo, dias, endDate]);
   // Com o cache financeiro disponível o gráfico principal lê dele (período completo, com lucro); sem
   // Postgres, cai pra série da lista da Ink, como sempre foi.
-  const serieFinanceira = useMemo(() => (linhasFinanceiro ? serieFinanceiraDiaria(linhasFinanceiro, dias) : null), [linhasFinanceiro, dias]);
+  const serieFinanceira = useMemo(() => (linhasFinanceiro ? serieFinanceiraDiaria(linhasFinanceiro, dias, endDate) : null), [linhasFinanceiro, dias, endDate]);
   const sparklinePedidos = useMemo(() => serieDiariaCompleta.slice(-7).map((d) => d.pedidos), [serieDiariaCompleta]);
   const sparklineReceita = useMemo(() => serieDiariaCompleta.slice(-7).map((d) => d.receita), [serieDiariaCompleta]);
 
   const statusPeriodo = useMemo(() => serieStatus(pedidosPeriodo), [pedidosPeriodo]);
   const weekdaySerie = useMemo(() => serieDiaSemana(pedidosPeriodo), [pedidosPeriodo]);
   const hourlySerie = useMemo(() => serieHorario(pedidosPeriodo), [pedidosPeriodo]);
-  const recoverySerie = useMemo(() => (recuperacao.data ? serieRecuperacao(recuperacao.data.porDia, dias) : []), [recuperacao.data, dias]);
+  const recoverySerie = useMemo(() => (recuperacao.data ? serieRecuperacao(recuperacao.data.porDia, dias, endDate) : []), [recuperacao.data, dias, endDate]);
 
   function marcarVinculado(indexNoEscopo: number, hotpageId: string) {
     const pedidoAlvo = todosPedidos[indexNoEscopo];
@@ -593,14 +619,15 @@ export function DashboardPage() {
   }
 
   const carregando = !pedidos.data && !pedidos.erro && !carrinhos.data && !carrinhos.erro;
-  const lacuna = pedidos.data?.lojasComLacuna || [];
+  // A lacuna do gráfico do período é a do fetch do PERÍODO (não a da lista "recente" de sempre).
+  const lacuna = pedidosPeriodoFetch.data?.lojasComLacuna || [];
 
   return (
     <PageStack>
       <PageHeader
         title="Visão geral"
         description="Resumo da operação da sua loja em tempo real."
-        actions={<DashboardPeriodSelect value={periodo} onChange={setPeriodo} />}
+        actions={<PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />}
       />
 
       {carregando && (
@@ -630,15 +657,14 @@ export function DashboardPage() {
             sparklineReceita={sparklineReceita}
           />
 
-          <ResultadoPeriodo linhas={linhasFinanceiro} midia={midiaFinanceiro} midiaFontes={financeiro.data?.midiaFontes ?? null} erro={financeiro.erro} periodo={periodo} dias={dias} />
+          <ResultadoPeriodo
+            linhas={linhasFinanceiro} midia={midiaFinanceiro} midiaFontes={financeiro.data?.midiaFontes ?? null} erro={financeiro.erro}
+            startDate={startDate} endDate={endDate} dias={dias} rotuloPeriodo={rotuloPeriodo}
+          />
 
           <div className="ad-analytic-grid">
             <Card
-              title={
-                serieFinanceira
-                  ? `Faturamento e lucro — ${dias === 1 ? 'hoje' : `últimos ${dias} dias`}`
-                  : `Pedidos e receita — ${dias === 1 ? 'hoje' : `últimos ${dias} dias`}`
-              }
+              title={serieFinanceira ? `Faturamento e lucro — ${rotuloPeriodo}` : `Pedidos e receita — ${rotuloPeriodo}`}
               className="ad-analytic-grid__principal"
               action={
                 <div className="ad-chart-legenda">
@@ -716,7 +742,7 @@ export function DashboardPage() {
             </Card>
           </div>
 
-          {!financeiro.erro && <LucroProdutosCard dias={dias} escopo={escopo} rotuloPeriodo={dias === 1 ? 'hoje' : `últimos ${dias} dias`} />}
+          {!financeiro.erro && <LucroProdutosCard startDate={startDate} endDate={endDate} escopo={escopo} rotuloPeriodo={rotuloPeriodo} />}
 
           <OrderFlow pedidos={pedidosPeriodo} />
 

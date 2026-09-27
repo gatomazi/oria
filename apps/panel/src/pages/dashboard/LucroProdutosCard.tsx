@@ -11,7 +11,7 @@ const VISIVEIS_INICIAL = 10;
 // Ranking de lucro operacional por produto ou por modelo de peça no período (pedidos pagos, sem
 // troca). Lista com barra e não DataTable: a comparação entre as linhas é a leitura principal. A
 // barra é relativa ao 1º colocado; o rótulo acessível diz a fatia do lucro total.
-export function LucroProdutosCard({ dias, escopo, rotuloPeriodo }: { dias: number; escopo: string; rotuloPeriodo: string }) {
+export function LucroProdutosCard({ startDate, endDate, escopo, rotuloPeriodo }: { startDate: string; endDate: string; escopo: string; rotuloPeriodo: string }) {
   const [agrupar, setAgrupar] = useState<AgrupamentoLucro>('produto');
   const [dados, setDados] = useState<DashboardLucroProdutosData | null>(null);
   const [erro, setErro] = useState('');
@@ -22,11 +22,11 @@ export function LucroProdutosCard({ dias, escopo, rotuloPeriodo }: { dias: numbe
     setDados(null);
     setErro('');
     setMostrarTodos(false);
-    getDashboardLucroProdutos(dias, agrupar)
+    getDashboardLucroProdutos({ startDate, endDate }, agrupar)
       .then((d) => { if (ativo) setDados(d); })
       .catch((err: Error) => { if (ativo) setErro(err.message); });
     return () => { ativo = false; };
-  }, [dias, escopo, agrupar]);
+  }, [startDate, endDate, escopo, agrupar]);
 
   const itens = dados?.itens || [];
   const lucroTotal = itens.reduce((acc, i) => acc + Math.max(i.lucroOperacional, 0), 0);
