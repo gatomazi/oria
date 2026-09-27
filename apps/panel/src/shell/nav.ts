@@ -93,7 +93,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'pedidos-central', label: 'Pedidos', href: '/admin/pedidos-central' },
       { key: 'clientes', label: 'Clientes', href: '/admin/clientes' },
       { key: 'trocas', label: 'Trocas e devoluções', href: '/admin/trocas' },
-      { key: 'estoque', label: 'Estoque', href: '/admin/estoque' },
+      // Estoque fora do menu por decisão do produto (2026-09-26): a tela não está funcionando e não há
+      // plano de ajuste. A rota /admin/estoque e a página continuam no código; basta recolocar o item aqui.
       { key: 'simular-frete', label: 'Simular frete', href: '/admin/simular-frete' },
     ],
   },

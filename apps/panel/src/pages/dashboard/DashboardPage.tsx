@@ -261,11 +261,22 @@ function ResultadoPeriodo({
           trend={deltaFaturamento?.trend}
           helper={`${plural(atual.pedidos, 'pedido pago', 'pedidos pagos')} · ${rotuloPeriodo}`}
         />
-        <KpiCard title="Lucro bruto" value={formatValor(atual.lucroBruto) || 'R$ 0,00'} helper="Sem frete, já com descontos" />
+        <KpiCard title="Receita líquida" value={formatValor(atual.lucroBruto) || 'R$ 0,00'} helper="Sem frete, já com descontos" />
         <KpiCard
           title="Custo de produção"
           value={formatValor(atual.custoProducao) || 'R$ 0,00'}
-          helper={pesoCusto ? `${pesoCusto} do lucro bruto` : 'Retido pela Reserva Ink'}
+          helper={pesoCusto ? `${pesoCusto} da receita líquida` : 'Retido pela Reserva Ink'}
+        />
+        {/* Lucro bruto = venda menos custo de produção, ANTES da mídia — o mesmo número que o painel
+            da Ink chama de "Lucro Bruto". Sem mídia conhecida ele é o resultado final do período, então
+            leva o delta e a sparkline; com mídia, quem fecha a linha é o "Lucro após mídia". */}
+        <KpiCard
+          title="Lucro bruto"
+          value={formatValor(atual.lucroOperacional) || 'R$ 0,00'}
+          delta={temMidia ? undefined : deltaLucro?.delta}
+          trend={temMidia ? undefined : deltaLucro?.trend}
+          helper={temMidia ? 'Venda menos custo de produção' : avisoMidia ? `Venda menos custo de produção · ${avisoMidia}` : 'Venda menos custo de produção'}
+          sparkline={temMidia ? undefined : sparkline.slice(-7)}
         />
         {/* Mídia só aparece quando existe conta de anúncios atribuída a alguma loja do escopo —
             um card zerado sugeriria que a operação não investe, o que é diferente de "o painel não
@@ -277,18 +288,16 @@ function ResultadoPeriodo({
             helper={avisoConexao || (atual.midia > 0 ? 'Gasto real nas plataformas' : 'Sem gasto registrado no período')}
           />
         )}
-        <KpiCard
-          title={temMidia ? 'Lucro após mídia' : 'Lucro do produto'}
-          value={formatValor(temMidia ? atual.lucroAposMidia : atual.lucroOperacional) || 'R$ 0,00'}
-          delta={deltaLucro?.delta}
-          trend={deltaLucro?.trend}
-          helper={
-            temMidia
-              ? (margem ? `Margem de ${margem} sobre o faturamento` : 'Lucro do produto − mídia')
-              : avisoMidia ? `Venda menos custo de produção · ${avisoMidia}` : 'Venda menos custo de produção'
-          }
-          sparkline={sparkline.slice(-7)}
-        />
+        {temMidia && (
+          <KpiCard
+            title="Lucro após mídia"
+            value={formatValor(atual.lucroAposMidia) || 'R$ 0,00'}
+            delta={deltaLucro?.delta}
+            trend={deltaLucro?.trend}
+            helper={margem ? `Margem de ${margem} sobre o faturamento` : 'Lucro bruto − mídia'}
+            sparkline={sparkline.slice(-7)}
+          />
+        )}
       </KpiStrip>
     </div>
   );
