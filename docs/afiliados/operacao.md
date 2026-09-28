@@ -23,15 +23,21 @@ Collabs · Vendas atribuídas · Revisões · Níveis e benefícios.
    - Cada mudança é uma **nova versão** (o histórico é imutável). Vendas passadas seguem a versão da data em que ocorreram.
    - Só o owner ativa/pausa/encerra contrato. Contrato em rascunho **não remunera**.
 
-## Cupom (promoção comum da INK)
+## Cupom (promoção `standard` da INK)
 
-1. Crie o cupom como **promoção comum no painel da INK**.
-2. No perfil: **Cadastrar cupom** (código, desconto, validade). Código repetido com vigência sobreposta é recusado. Fica *aguardando
-   validação*.
-3. **Verificar na INK** (1 consulta de leitura) confirma código/tipo/desconto/vigência ou mostra a divergência. **Prévia INK** mostra o
-   pedido que o Oria enviaria — a criação automática na INK está **desligada**; nada é enviado.
-4. **Ativar** (owner): vale só para pedidos **a partir de agora**. Pausar/encerrar fecha a vigência na hora; **Retomar** abre vigência nova
-   (o período pausado continua sem comissão).
+O Oria tem o **próprio programa de afiliados**: **não crie afiliado na INK**. A INK só aplica o desconto do cupom; comissão e tracking são do Oria.
+
+1. No perfil: **Cadastrar cupom** (código, desconto, validade). Código repetido com vigência sobreposta é recusado. Fica *Aguardando
+   criação/verificação na INK* — **não é "Ativo"**.
+2. Crie no painel da INK uma **promoção comum (standard)** com o **mesmo código**, o desconto do cliente e **sem valor/quantidade mínima**, sem
+   aplicação automática, sem exibir na vitrine/carrinho, sem limite de usos e sem restringir produtos.
+3. **Verificar na INK** (1 consulta de leitura) confirma código/tipo/desconto/vigência ou lista a divergência. **Prévia INK** mostra o pedido que o
+   Oria enviaria (escrita **desligada**: nada é enviado).
+4. **Ativar** (owner): o Oria confere a promoção na INK antes. Existente e compatível → vincula o ID e ativa (vale só para pedidos **a partir de
+   agora**). Divergente → **não ativa** e mostra o que difere. Inexistente com escrita desligada → **não ativa** e continua aguardando. Erro de
+   rede/permissão da INK → **não ativa** e mostra o erro.
+5. Pausar/encerrar fecha a vigência no Oria na hora (**a promoção na INK continua existindo** — ajuste/exclua lá se quiser); **Retomar** abre
+   vigência nova (o período pausado continua sem comissão).
 
 Códigos comuns sem parceiro não geram comissão. Parceiro que também tem afiliado **nativo da INK**: marque no cadastro — as vendas dele
 ficam bloqueadas até você conciliar (a API não permite detectar isso).

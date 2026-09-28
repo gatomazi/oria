@@ -1,7 +1,14 @@
 # Parcerias e Afiliados · arquitetura
 
-O **Oria é o livro-razão das comissões da loja**. A INK entra só como fonte de pedidos/catálogo e como provedora de **promoções comuns**
-(cupom). Nada aqui usa o programa de afiliados nativo da INK nem o `kickback_value` como base de repasse.
+O **Oria é o livro-razão das comissões da loja** e tem o **próprio programa de afiliados** (cadastro, contrato, nível, benefício, comissão,
+ledger, contas a pagar, pagamentos, collabs e tracking). A INK entra só como fonte de pedidos/catálogo e como **infraestrutura de
+cupom/desconto** (Promoções `standard`). Nada aqui usa o programa de afiliados nativo da INK nem o `kickback_value` como base de repasse.
+Promoção INK e comissão Oria são conceitos diferentes: o desconto do cliente (ex.: 10 %) vai para a INK; a comissão negociada (ex.: 15 % da
+base do contrato) **nunca** vai para a INK.
+
+```text
+Parceiro no Oria → contrato → promoção/cupom na INK → pedidos da INK → tracking e comissão no Oria → ledger → pagar
+```
 
 ## 1. Política 1:1 e isolamento
 
@@ -105,9 +112,23 @@ Peça nunca é grátis ao ingressar: exige vendas, período, atividade e saldo, 
 ## 7. Integração com a INK
 
 - Ingestão: o **mesmo** upsert de pedido do sync/webhook grava os campos novos (`lib/ink/afiliados-campos.js`). Zero chamada nova.
-- Cupom: cadastro **manual** (fallback integral) + adapter de criação/verificação (`lib/afiliados/ink-promotions.js`):
-  prévia sem envio, `Idempotency-Key` estável, conflito de código, checagem de escopo, leitura de volta. Escrita **desligada**; nenhum
-  cliente de escrita é injetado em `server.js`.
+- Cupom = **Promoção `standard` da INK** (`lib/afiliados/ink-promotions.js`, contrato oficial de Promoções): `GET /v1/stores/promotions?code=` e
+  `GET /{id}` (leitura), `POST /standard`, `PATCH /standard/{id}` e `DELETE /{id}` (escrita, `Idempotency-Key` obrigatório). Mapper Oria → INK:
+  `kind`, `list_type=all`, `apply_automatically=false`, `show_*=false`, `first_purchase=false`, `usage_limit=null`, vigência e
+  `discount_tier{discount}` **sem gatilho mínimo inventado**; nada de comissão/nível/benefício no corpo.
+- **Ativação fail-closed** (`registry.ativarCupom`): Rascunho → *Aguardando INK* → Verificado/Criado → **Ativo**. Só ativa depois de a INK
+  confirmar: (A) promoção existente e compatível (GET por código; vincula `ink_promotion_id`, registra a verificação e ativa); (B) inexistente
+  com escrita desligada → **sem POST**, fica aguardando; (C) inexistente com escrita habilitada → POST, e só após `201` válido + leitura de volta
+  persiste ID/snapshot (na auditoria) e ativa; (D) 401/403/409/422/429/5xx/timeout/envelope inesperado → **não ativa**, preserva o estado e
+  devolve erro compreensível (sem token). Divergência (código, tipo, desconto, gatilho, escopo, primeira compra, limite, vigência,
+  aplicação automática, exibição) **não ativa** e é listada; `available` é estado calculado pela INK, não configuração.
+- Idempotência: `Idempotency-Key` **determinística pela intenção** (`oria-aff-<create|update|delete>-<vínculo>[-<id>]-<hash do conteúdo>`): retry
+  reenvia a mesma chave, outra intenção/payload gera outra; só UUID interno e hash. Retry automático só para falha transitória (timeout/429/5xx).
+- Pausar/encerrar no Oria **fecham a vigência local e nunca chamam a INK**. `PATCH` (`ink-sync`) sincroniza só campos da promoção (ex.: fim da
+  vigência) e `DELETE` (`ink-delete`) é operação explícita de owner, com motivo e cupom inativo — nunca consequência de pausar.
+- Escrita **desligada** por padrão: exige flag `true` + cliente com `post/patch/delete` + escopo `store.promotions.write` declarado + rota de
+  owner. `server.js` só injeta `get`; a flag é fixa em `false`. Habilitar é mudança de código/release, nunca de configuração em runtime.
+- Não validado ponta a ponta contra credencial real da loja (ver `auditoria-integracao.md` §6–§7).
 
 ## 8. Segurança e privacidade (invariantes)
 

@@ -62,7 +62,7 @@ não apaga o que já se sabe.
 
 `GET /v1/stores/promotions?code=<CÓDIGO>&per_page=5` (leitura, 1 chamada, escopo `store.promotions.read`) para validar um cupom
 cadastrado à mão. Só depois, em ambiente de teste e com a flag ligada por release, o `POST /v1/stores/promotions/standard` com
-`Idempotency-Key` estável (`oria-affiliate-coupon-<id do vínculo>`).
+`Idempotency-Key` derivada da intenção (ver §7).
 
 ## 4. Riscos e lacunas conhecidos
 
@@ -114,3 +114,53 @@ O ambiente local não tem token da INK: não há variável `INK_*`, nem `.env`, 
 2. Confirmar o escopo/plano que habilita `store.promotions.write` e o comportamento de `Idempotency-Key`.
 3. Decidir a semântica de `free_quantity` e de cupom reaproveitável (`usage_limit`) — hoje viram revisão manual.
 4. Só depois: liberar escrita **por release** (mudança de código + cliente de escrita injetado + teste em loja de teste), nunca por configuração em runtime.
+
+## 7. Contrato oficial de Promoções × implementação (rodada de fechamento · 28/09/2026)
+
+Fonte de verdade: `developers.reserva.ink/referencia/#tag/promoções` (arquivo `referencia.md` do portal) e `/guias/promocoes`, lidas nesta rodada.
+**O Oria tem o próprio programa de afiliados; as Promoções da INK são infraestrutura de cupom/desconto; comissão e tracking ficam no Oria.**
+Arquitetura 1:1 (1 workspace = 1 loja): não existe agregador de lojas, comissão/afiliado/nível global nem consolidação de várias lojas.
+
+### Confirmado pela documentação oficial
+
+| Tema | O que a documentação diz |
+|---|---|
+| Endpoints | `POST /v1/stores/promotions/standard`, `GET /v1/stores/promotions` (filtros `type`, `code`, `page`, `per_page`), `GET /v1/stores/promotions/{id}`, `PATCH /v1/stores/promotions/standard/{id}`, `DELETE /v1/stores/promotions/{id}` |
+| Escopos | leitura `store.promotions.read`; escrita `store.promotions.write` |
+| Idempotência | `Idempotency-Key` (string, "única por operação") **obrigatório** em POST/PATCH/DELETE |
+| Corpo de escrita (`standard`) | só `code` é obrigatório no schema; `kind` `percentage\|value`; `list_type` `all\|products\|product_types\|collections` (+ `product_ids`/`product_type_ids`/`collection_ids`); `apply_automatically`, `first_purchase`, `show_on_product_page`/`show_in_cart` (guia), `usage_limit` (`integer\|null`), `starts_at`/`expires_at` (`date-time`); `discount_tier{discount:number, min_cart_value:number, min_cart_items:integer}`. `discount_tier` ausente → `422` |
+| Leitura | envelope `{promotions[], page, per_page, total_pages, total_count}` (`per_page` padrão 5, máx. 100); detalhe e escritas devolvem `{promotion}`. **Assimetria:** a leitura traz `discount_tiers` (array) com `discount`/`min_cart_value` como **string** (`"10.0"`) |
+| Filtro por código | exato, **sem diferenciar maiúsculas/minúsculas**; código único por loja |
+| `available` | **calculado** pela INK (não expirada, não agendada, sem estourar `usage_limit`); não é configuração |
+| Status | `201` criação, `200` PATCH (parcial, campos omitidos não mudam), `204` DELETE (soft delete; o código volta a ficar livre), `401`, `403` (escopo/plano), `404` (inexistente, outra loja, excluída ou subtipo errado), `422` (`code` duplicado, `discount_tier` ausente…) |
+| Subtipo | imutável; `PATCH` só no endpoint do próprio subtipo |
+
+### Confirmado por mocks/contract tests (INK falsa em memória, `test/helpers/ink-promotions-fake.js`)
+
+Mapper `standard` (sem comissão, sem gatilho inventado); GET por código (achado, não achado, case-insensitive, envelope inesperado = erro, mais de um
+resultado ou total maior que a página = ambíguo); GET por ID (sucesso e 404); POST (payload, `201`, ID persistido, leitura de volta,
+403/409/422/timeout, retry com a mesma chave sem duplicar); PATCH (parcial, endpoint, chave por patch, falha sem corromper estado local); DELETE
+(endpoint, chave, replay idempotente, 404); ativação fail-closed (existente compatível, divergente, inexistente com escrita desligada/ligada, falha
+de POST/GET); pausar/encerrar sem tocar na INK; zero POST/PATCH/DELETE com flag desligada, cliente só-leitura ou escopo não declarado.
+
+### Corrigido em relação ao mock anterior
+
+- O parser tratava qualquer resposta sem lista como "não encontrado" (e então tentaria criar). Agora envelope fora do contrato é **erro** (`INK_BAD_RESPONSE`).
+- `available=false` era divergência de configuração; agora é estado observado (só bloqueia se a promoção deveria estar valendo).
+- `Idempotency-Key` fixa por vínculo (`oria-affiliate-coupon-<id>`) reaproveitaria a chave com payload diferente; agora é derivada da intenção (operação + vínculo + hash do conteúdo).
+- **Ativar cupom não confirmava nada na INK** (cadastro manual virava "Ativo"): agora é fail-closed (ver `arquitetura.md` §7). O mock devolvia `discount` numérico; o contrato manda string.
+
+### Ainda **não** confirmado ponta a ponta (sem credencial real da loja)
+
+- Resposta real da conta e escopos efetivamente concedidos ao token; se o plano permite escrita.
+- Se a INK aceita `discount_tier` **sem** gatilho (`min_cart_value`/`min_cart_items`). O schema não os marca como obrigatórios e o Oria **não inventa** valor mínimo; se a conta exigir um, é decisão de produto.
+- Criação/edição/exclusão reais; comportamento real com cupom já existente; reuso do mesmo código em vários pedidos (`usage_limit` nulo); `show_on_product_page`/`show_in_cart` na escrita (documentados no guia e no schema de leitura, não listados no schema de escrita da referência); edge cases.
+
+Ressalva correta: **integração ainda não validada end-to-end contra uma credencial real da loja.**
+
+### Decisões antes de habilitar escrita
+
+1. Confirmar escopo/plano `store.promotions.write` e o comportamento do token com o dono da loja.
+2. Definir o gatilho mínimo aceito pela INK (se a conta o exigir) e se o Oria o configura por cupom.
+3. Habilitar escrita **por release** (cliente com `post/patch/delete` injetado + `inkScopes` + flag), primeiro numa loja de teste, nunca por configuração em runtime.
+4. Política para promoção existente divergente (hoje: não ativa; corrigir no Oria ou na INK e verificar de novo).
