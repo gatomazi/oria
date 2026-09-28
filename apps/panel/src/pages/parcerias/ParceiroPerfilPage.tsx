@@ -27,7 +27,12 @@ const ROTULOS_ACAO: Record<string, string> = {
   'coupon.end': 'Cupom encerrado', 'coupon.ink_verify': 'Cupom verificado na INK', 'payment.record': 'Pagamento registrado', 'payment.reverse': 'Pagamento estornado', 'ledger.due_at.change': 'Vencimento alterado',
   'ledger.manual': 'Lançamento manual', 'level.override': 'Nível alterado manualmente', 'level.proposal.approved': 'Proposta de nível aprovada', 'level.proposal.dismissed': 'Proposta de nível descartada',
   'benefit.grant': 'Peça concedida', 'benefit.guest_creator': 'Peça de criador convidado', 'benefit.reverse': 'Benefício revertido', 'collab.creator.add': 'Criador adicionado à collab', 'collab.creator.end': 'Criador removido da collab',
-  'review.assign': 'Item associado manualmente',
+  'review.assign': 'Item associado manualmente', 'review.dismiss': 'Item de revisão descartado', 'collab.create': 'Collab criada', 'collab.update': 'Collab atualizada',
+  'collab.product.add': 'Produto adicionado à collab', 'collab.product.add.retroactive': 'Produto adicionado à collab (retroativo)', 'collab.product.approve': 'Produto da collab aprovado',
+  'collab.product.approve.retroactive': 'Produto da collab aprovado (retroativo)', 'collab.product.reject': 'Produto da collab rejeitado', 'collab.product.remove': 'Produto removido da collab',
+  'collab.product.discovered': 'Produto novo encontrado no agrupamento', 'collab.product.auto_include': 'Produto incluído automaticamente na collab', 'coupon.ink_create': 'Cupom criado na INK',
+  'batch.create': 'Lote de fechamento criado', 'batch.approve': 'Lote aprovado', 'batch.void': 'Lote anulado', 'batch.due_at.change': 'Vencimento do lote alterado', 'settings.update': 'Configuração alterada',
+  'level_rules.create': 'Regras de nível alteradas',
 };
 
 function statusDeContrato(s: VersaoContrato['status']) {

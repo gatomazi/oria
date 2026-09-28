@@ -292,7 +292,7 @@ function criarDiretorio({ pool, relogio = () => new Date(), registry, payables, 
       },
       series: [...porDia.values()].sort((x, y) => x.date.localeCompare(y.date)),
       upcoming: proximos,
-      alerts: await alertas(ctx, { agora, tz, overdue: vencido, revisoes: rev[0].n, cuponsDivergentes: cup[0].n }),
+      alerts: await alertas(ctx, { agora, tz, alertDays: settings.alertDays, overdue: vencido, revisoes: rev[0].n, cuponsDivergentes: cup[0].n }),
     };
   }
 
@@ -303,16 +303,24 @@ function criarDiretorio({ pool, relogio = () => new Date(), registry, payables, 
   }
 
   // Pendências acionáveis, sempre in-app (nenhum envio externo nesta versão).
-  async function alertas(ctx, { agora, tz, overdue, revisoes, cuponsDivergentes }) {
+  async function alertas(ctx, { agora, tz, alertDays = [7, 3, 1], overdue, revisoes, cuponsDivergentes }) {
     const lista = [];
     const org = ctx.organizationId;
     if (overdue > 0) lista.push({ kind: 'overdue', severity: 'critical', message: 'Há comissões liberadas com vencimento passado.', href: '/admin/parcerias/a-pagar?status=vencido', cents: overdue });
-    const { rows: venc } = await pool.query(
-      `SELECT min(l.due_at) AS proximo, count(*)::int AS n FROM partner_commission_ledger l WHERE l.organization_id = $1 AND l.status IN ('released', 'held') AND l.due_at >= $2 AND l.due_at < $3
-         AND l.amount_cents - COALESCE((SELECT sum(a.amount_cents) FROM partner_payment_allocations a WHERE a.organization_id = l.organization_id AND a.ledger_id = l.id), 0) > 0`,
-      [org, hojeLocal(agora, tz), new Date(hojeLocal(agora, tz).getTime() + 7 * 86400000)]
-    );
-    if (venc[0].n > 0) lista.push({ kind: 'due_soon', severity: 'warning', message: `${venc[0].n} lançamento(s) vencem nos próximos 7 dias.`, href: '/admin/parcerias/a-pagar?dateType=due', count: venc[0].n });
+    // Avisos de vencimento iminente nos prazos configurados da loja (padrão 7/3/1 dias): uma faixa só aparece quando traz lançamentos novos.
+    const prazos = [...new Set(alertDays)].sort((a, b) => a - b);
+    let anterior = 0;
+    for (const dias of prazos) {
+      const { rows: venc } = await pool.query(
+        `SELECT count(*)::int AS n FROM partner_commission_ledger l WHERE l.organization_id = $1 AND l.status IN ('released', 'held') AND l.category = 'commission' AND l.due_at >= $2 AND l.due_at < $3
+           AND l.amount_cents - COALESCE((SELECT sum(a.amount_cents) FROM partner_payment_allocations a WHERE a.organization_id = l.organization_id AND a.ledger_id = l.id), 0) > 0`,
+        [org, hojeLocal(agora, tz), new Date(hojeLocal(agora, tz).getTime() + (dias + 1) * 86400000)]
+      );
+      if (venc[0].n > anterior) {
+        lista.push({ kind: 'due_soon', severity: dias <= 1 ? 'critical' : 'warning', message: `${venc[0].n === 1 ? '1 lançamento vence' : `${venc[0].n} lançamentos vencem`} em até ${dias === 0 ? 'hoje' : dias === 1 ? '1 dia' : `${dias} dias`}.`, href: '/admin/parcerias/a-pagar?dateType=due', count: venc[0].n });
+      }
+      anterior = Math.max(anterior, venc[0].n);
+    }
     if (revisoes > 0) lista.push({ kind: 'review_items', severity: 'warning', message: `${revisoes} item(ns) de pedido em revisão manual (produto ausente, dado incompleto ou ambíguo).`, href: '/admin/parcerias/revisoes', count: revisoes });
     if (cuponsDivergentes > 0) lista.push({ kind: 'coupon_divergent', severity: 'warning', message: `${cuponsDivergentes} cupom(ns) divergem do que está na INK.`, href: '/admin/parcerias/parceiros', count: cuponsDivergentes });
     const { rows: pend } = await pool.query(

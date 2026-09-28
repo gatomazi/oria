@@ -105,7 +105,7 @@ export interface VisaoGeral {
 export type StatusFinanceiro = 'previsto' | 'liberado' | 'vencido' | 'parcial' | 'quitado';
 export interface LinhaAPagar {
   partnerId: string; partnerName: string; competence: string; category: 'commission' | 'content_fee'; modalities: Modalidade[]; orderCount: number; units: number; baseCents: number; grossCents: number;
-  adjustmentsCents: number; releasedCents: number; paidCents: number; paidInPeriodCents: number | null; openCents: number; forecastCents: number; status: StatusFinanceiro; estimatedAt: string | null; dueAt: string | null;
+  adjustmentsCents: number; releasedCents: number; paidCents: number; paidInPeriodCents: number | null; openCents: number; overdueCents: number; forecastCents: number; status: StatusFinanceiro; estimatedAt: string | null; dueAt: string | null;
   lastPaidAt: string | null; daysOverdue: number; ledgerCount: number;
 }
 export interface RespostaAPagar {

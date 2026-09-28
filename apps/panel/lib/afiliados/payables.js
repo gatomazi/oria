@@ -67,7 +67,7 @@ function criarPayables({ pool, relogio = () => new Date(), registry }) {
     if (f.intervalo) {
       const ini = p(f.intervalo.inicio); const fim = p(f.intervalo.fim);
       if (f.dateType === 'sale') cond.push(`l.sale_at >= ${ini} AND l.sale_at < ${fim}`);
-      else if (f.dateType === 'competence') cond.push(`l.competence >= (${ini}::timestamptz AT TIME ZONE '${tz.replace(/'/g, '')}')::date AND l.competence < (${fim}::timestamptz AT TIME ZONE '${tz.replace(/'/g, '')}')::date`);
+      else if (f.dateType === 'competence') { const fuso = p(tz); cond.push(`l.competence >= (${ini}::timestamptz AT TIME ZONE ${fuso}::text)::date AND l.competence < (${fim}::timestamptz AT TIME ZONE ${fuso}::text)::date`); }
       else if (f.dateType === 'release') cond.push(`l.release_at >= ${ini} AND l.release_at < ${fim}`);
       else if (f.dateType === 'estimated') cond.push(`l.estimated_payment_at >= ${ini} AND l.estimated_payment_at < ${fim}`);
       else if (f.dateType === 'due') cond.push(`l.due_at >= ${ini} AND l.due_at < ${fim}`);
@@ -106,7 +106,7 @@ function criarPayables({ pool, relogio = () => new Date(), registry }) {
       if (!grupos.has(chave)) {
         grupos.set(chave, {
           partnerId: r.partner_id, competence: dataLocal(new Date(r.competence), 'UTC'), category: r.category, modalities: new Set(),
-          orders: new Set(), units: 0, baseCents: 0, grossCents: 0, adjustmentsCents: 0, releasedCents: 0, previstoCents: 0, paidCents: 0, paidInPeriodCents: 0, openReleasedCents: 0,
+          orders: new Set(), units: 0, baseCents: 0, grossCents: 0, adjustmentsCents: 0, releasedCents: 0, previstoCents: 0, paidCents: 0, paidInPeriodCents: 0, openReleasedCents: 0, overdueCents: 0, maxDiasAtraso: 0,
           estimatedAt: null, dueAt: null, lastPaidAt: null, ledgerIds: [], _atribuicoes: new Set(), _abertos: 0,
         });
       }
@@ -128,14 +128,19 @@ function criarPayables({ pool, relogio = () => new Date(), registry }) {
         g._abertos += 1;
         if (r.estimated_payment_at && (!g.estimatedAt || new Date(r.estimated_payment_at) < g.estimatedAt)) g.estimatedAt = new Date(r.estimated_payment_at);
         if (r.eff_status === 'released' && aberto > 0 && r.due_at && (!g.dueAt || new Date(r.due_at) < g.dueAt)) g.dueAt = new Date(r.due_at);
+        // Vencido é por LANÇAMENTO: só o saldo liberado cuja data de vencimento já passou (o resto do grupo ainda não venceu).
+        if (r.eff_status === 'released' && aberto > 0 && r.due_at) {
+          const atraso = diasEmAtraso(new Date(r.due_at), agora, tz);
+          if (atraso > 0) { g.overdueCents += aberto; g.maxDiasAtraso = Math.max(g.maxDiasAtraso, atraso); }
+        }
       }
       if (r.ultimo_pgto && (!g.lastPaidAt || new Date(r.ultimo_pgto) > g.lastPaidAt)) g.lastPaidAt = new Date(r.ultimo_pgto);
     }
     return [...grupos.values()].map((g) => {
-      const diasAtraso = g.dueAt && g.openReleasedCents > 0 ? diasEmAtraso(g.dueAt, agora, tz) : 0;
+      const diasAtraso = g.maxDiasAtraso;
       let status;
       if (g._abertos === 0) status = 'quitado';
-      else if (g.openReleasedCents > 0 && diasAtraso > 0) status = 'vencido';
+      else if (g.overdueCents > 0) status = 'vencido';
       else if (g.openReleasedCents > 0) status = g.paidCents !== 0 ? 'parcial' : 'liberado';
       else if (g.paidCents !== 0 && g.previstoCents === 0) status = 'parcial';
       else status = 'previsto';
@@ -143,7 +148,7 @@ function criarPayables({ pool, relogio = () => new Date(), registry }) {
         partnerId: g.partnerId, competence: g.competence, category: g.category, modalities: [...g.modalities],
         orderCount: g.orders.size, units: g.units, baseCents: g.baseCents, grossCents: g.grossCents, adjustmentsCents: g.adjustmentsCents,
         releasedCents: g.releasedCents, paidCents: g.paidCents, paidInPeriodCents: dateType === 'paid' ? g.paidInPeriodCents : null,
-        openCents: g.openReleasedCents, forecastCents: g.previstoCents, status, estimatedAt: g.estimatedAt, dueAt: g.dueAt, lastPaidAt: g.lastPaidAt, daysOverdue: diasAtraso,
+        openCents: g.openReleasedCents, overdueCents: g.overdueCents, forecastCents: g.previstoCents, status, estimatedAt: g.estimatedAt, dueAt: g.dueAt, lastPaidAt: g.lastPaidAt, daysOverdue: diasAtraso,
         ledgerIds: g.ledgerIds, today: hoje,
       };
     });

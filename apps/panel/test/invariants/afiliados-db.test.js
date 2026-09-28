@@ -277,6 +277,23 @@ test('"pago no período" usa a data EFETIVA do pagamento, não a do pedido nem a
   assert.equal(visao.period.criterio, 'data efetiva do pagamento');
 });
 
+test('cada tipo de data filtra pela SUA data: competência, liberação, previsão, vencimento e pedido dão respostas diferentes', async () => {
+  const q = (dateType, from, to) => emA(() => svc.payables.listarAPagar(ctxA, { dateType, from, to, partnerId: cen.p2.id }));
+  // Bruno: venda 10/09, liberada em 19/09, previsão/vencimento 12/10 (fim de semana → segunda).
+  assert.equal((await q('competence', '2026-09-01', '2026-09-30')).total, 1);
+  assert.equal((await q('competence', '2026-10-01', '2026-10-31')).total, 0);
+  assert.equal((await q('sale', '2026-09-10', '2026-09-10')).total, 1);
+  assert.equal((await q('sale', '2026-09-11', '2026-09-30')).total, 0);
+  assert.equal((await q('release', '2026-09-19', '2026-09-19')).total, 1);
+  assert.equal((await q('release', '2026-10-01', '2026-10-31')).total, 0);
+  assert.equal((await q('estimated', '2026-10-12', '2026-10-12')).total, 1);
+  assert.equal((await q('estimated', '2026-10-13', '2026-10-31')).total, 0);
+  assert.equal((await q('due', '2026-10-12', '2026-10-12')).total, 1);
+  assert.equal((await q('due', '2026-09-01', '2026-10-11')).total, 0);
+  await assert.rejects(emA(() => svc.payables.listarAPagar(ctxA, { dateType: 'due', from: '2026-10-01' })), (e) => e.status === 400);
+  await assert.rejects(emA(() => svc.payables.listarAPagar(ctxA, { dateType: 'inventada', from: '2026-10-01', to: '2026-10-02' })), (e) => e.status === 400);
+});
+
 test('estorno de pagamento: contralançamento auditável; o registro original continua visível e o saldo volta', async () => {
   const est = await emA(() => svc.payables.estornarPagamento(ctxA, cen.pg2.id, { motivo: 'Pix devolvido pelo banco' }));
   assert.equal(est.kind, 'reversal');
@@ -659,6 +676,26 @@ test('lista de parceiros: busca por cupom/nome, filtros e paginação server-sid
   const curinga = await emA(() => svc.diretorio.listarParceiros(ctxA, { q: "%'; DROP TABLE partnership_partners; --" }));
   assert.equal(curinga.total, 0);
   assert.equal(await contar('SELECT count(*)::int AS n FROM partnership_partners WHERE organization_id = $1', [ORG_A]) >= 3, true);
+});
+
+test('vencido é por LANÇAMENTO: num grupo com prazos diferentes só o saldo já vencido é atraso', async () => {
+  definirAgora('2026-11-10T12:00:00Z');
+  const p = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Prazos mistos' }, { aprovarDireto: true }));
+  await emA(() => svc.payables.lancarManual(ctxA, { partnerId: p.id, category: 'commission', amountCents: 1000, reason: 'já venceu', dueAt: '2026-11-01T12:00:00Z' }));
+  await emA(() => svc.payables.lancarManual(ctxA, { partnerId: p.id, category: 'commission', amountCents: 2500, reason: 'ainda vai vencer', dueAt: '2026-11-20T12:00:00Z' }));
+  const r = await emA(() => svc.payables.listarAPagar(ctxA, { dateType: 'sale', from: '2026-11-01', to: '2026-11-30', partnerId: p.id }));
+  assert.equal(r.total, 1);
+  const linha = r.itens[0];
+  assert.equal(linha.openCents, 3500);
+  assert.equal(linha.overdueCents, 1000);
+  assert.equal(linha.status, 'vencido');
+  assert.equal(linha.daysOverdue, 9);
+  const resumo = await emA(() => svc.payables.resumoDeAPagar(ctxA));
+  assert.ok(resumo.overdueCents >= 1000);
+  // Avisos de vencimento seguem os prazos configurados (padrão 7/3/1): o de 20/11 está a 10 dias, fora de todos.
+  definirAgora('2026-11-15T12:00:00Z');
+  const visao = await emA(() => svc.diretorio.visaoGeral(ctxA, { from: '2026-11-01', to: '2026-11-30', dateType: 'order' }));
+  assert.ok(visao.alerts.some((a) => a.kind === 'due_soon' && /7 dias/.test(a.message)), JSON.stringify(visao.alerts));
 });
 
 test('migrations 0044/0045 descem e sobem de novo num banco descartável', async () => {

@@ -81,3 +81,5 @@
   .pa-progresso__linha { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
   .pa-kv { grid-template-columns: minmax(0, 1fr); }
 }
+
+.pa-atraso { color: var(--danger); font-variant-numeric: tabular-nums; }

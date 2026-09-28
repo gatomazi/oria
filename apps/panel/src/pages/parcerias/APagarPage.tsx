@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Button, Callout, Card, Checkbox, DataTable, EmptyState, ErrorState, Field, Input, KpiCard, KpiStrip, Modal, PageHeader, PageStack, Pagination, Select, Skeleton, StatusBadge, TabList,
 } from '../../components/ds';
@@ -140,6 +140,7 @@ function AbaPagamentos({ tz }: { tz: string }) {
 // ── Página ──────────────────────────────────────────────────────────────────────────────────────
 export function APagarPage() {
   const { isOwner, tz } = useParcerias();
+  const navigate = useNavigate();
   const { valores, alterar, limpar, ativos } = useFiltrosUrl(PADRAO);
   const pagina = Math.max(1, Number.parseInt(valores.page, 10) || 1);
   const aba = (valores.aba || 'pendencias') as Aba;
@@ -241,7 +242,7 @@ export function APagarPage() {
                 <span>Paga: <strong>{brl(lista.dado.totais.paidCents)}</strong></span><span>Em aberto: <strong>{brl(lista.dado.totais.openCents)}</strong></span><span>Previsto: <strong>{brl(lista.dado.totais.forecastCents)}</strong></span>
               </p>
               <DataTable<LinhaAPagar>
-                label="Contas a pagar por parceiro e competência" rows={lista.dado.itens} rowKey={(l) => `${l.partnerId}-${l.competence}-${l.category}`}
+                compact onRowClick={(l) => navigate(`/admin/parcerias/parceiros/${l.partnerId}?aba=pagamentos`)} label="Contas a pagar por parceiro e competência" rows={lista.dado.itens} rowKey={(l) => `${l.partnerId}-${l.competence}-${l.category}`}
                 sortable sort={{ key: valores.sort, direction: valores.dir === 'desc' ? 'desc' : 'asc' }} onSortChange={(s) => alterar({ sort: s.key, dir: s.direction })}
                 columns={[
                   { key: 'partner', label: 'Parceiro', sortValue: (l) => l.partnerName, render: (l) => <Link className="pa-link" to={`/admin/parcerias/parceiros/${l.partnerId}`}>{l.partnerName}</Link> },
@@ -254,20 +255,21 @@ export function APagarPage() {
                   { key: 'l', label: 'Liberada', priority: 'low', align: 'right', render: (l) => brl(l.releasedCents) },
                   { key: 'pg', label: 'Já pago', priority: 'low', align: 'right', render: (l) => brl(l.paidCents) },
                   { key: 'open', label: 'Saldo aberto', align: 'right', sortValue: (l) => l.openCents, render: (l) => <strong>{brl(l.openCents)}</strong> },
+                  { key: 'over', label: 'Vencido', align: 'right', render: (l) => (l.overdueCents > 0 ? <span className="pa-atraso">{brl(l.overdueCents)}</span> : <span className="pa-muted">—</span>) },
                   { key: 's', label: 'Situação', render: (l) => <StatusBadge tone={TOM_STATUS_FINANCEIRO[l.status]} label={ROTULOS_STATUS_FINANCEIRO[l.status]} /> },
-                  { key: 'estimated', label: 'Data estimada', priority: 'low', align: 'right', sortValue: (l) => l.estimatedAt, render: (l) => dataCurta(l.estimatedAt, tz) },
-                  { key: 'due', label: 'Vencimento', align: 'right', sortValue: (l) => l.dueAt, render: (l) => (l.dueAt ? <span>{dataCurta(l.dueAt, tz)}{l.daysOverdue > 0 ? <span className="pa-muted"> · {l.daysOverdue}d em atraso</span> : null}</span> : '—') },
-                  { key: 'lastPaid', label: 'Último pagamento', priority: 'low', align: 'right', sortValue: (l) => l.lastPaidAt, render: (l) => dataCurta(l.lastPaidAt, tz) },
                   {
                     key: 'acoes', label: 'Ações', align: 'right',
                     render: (l) => (
-                      <span className="pa-badges">
+                      <span className="pa-badges" onClick={(e) => e.stopPropagation()} role="presentation">
                         {l.openCents > 0 && <Button size="sm" onClick={() => setPagar({ linha: l, partnerId: l.partnerId, nome: l.partnerName, lote: null })}>Registrar pagamento</Button>}
                         {l.openCents > 0 && <Button size="sm" variant="ghost" onClick={() => setFechar({ partnerId: l.partnerId, nome: l.partnerName })}>Fechar lote</Button>}
                         {l.openCents > 0 && <Button size="sm" variant="ghost" onClick={() => { setProrrogar(l); setNovaData(''); }}>Alterar vencimento</Button>}
                       </span>
                     ),
                   },
+                  { key: 'estimated', label: 'Data estimada', priority: 'low', align: 'right', sortValue: (l) => l.estimatedAt, render: (l) => dataCurta(l.estimatedAt, tz) },
+                  { key: 'due', label: 'Vencimento', align: 'right', sortValue: (l) => l.dueAt, render: (l) => (l.dueAt ? <span>{dataCurta(l.dueAt, tz)}{l.daysOverdue > 0 ? <span className="pa-muted"> · {plural(l.daysOverdue, 'dia', 'dias')} em atraso</span> : null}</span> : '—') },
+                  { key: 'lastPaid', label: 'Último pagamento', priority: 'low', align: 'right', sortValue: (l) => l.lastPaidAt, render: (l) => dataCurta(l.lastPaidAt, tz) },
                 ]}
               />
               <Pagination page={pagina} totalPages={totalPaginas} totalLabel={plural(total, 'linha')} onPrev={() => alterar({ page: String(pagina - 1) })} onNext={() => alterar({ page: String(pagina + 1) })} />
