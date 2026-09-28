@@ -12,7 +12,7 @@ import { useFiltrosUrl } from '../../lib/useFiltrosUrl';
 import { toast } from '../../lib/toast';
 import {
   ROTULOS_BASE_COMISSAO, ROTULOS_CANDIDATURA, ROTULOS_ESTADO_PEDIDO, ROTULOS_META, ROTULOS_METODO, ROTULOS_MODALIDADE, ROTULOS_MOTIVO_REVISAO, ROTULOS_ORIGEM,
-  ROTULOS_POLITICA_CONFLITO, ROTULOS_RETENCAO, ROTULOS_STATUS_LANCAMENTO, ROTULOS_SYNC_CUPOM, situacaoDoCupom, ROTULOS_VINCULO, TOM_VINCULO, brl, competenciaLabel, dataCurta, dataHora, mensagemDoErro, pct, plural,
+  ROTULOS_POLITICA_CONFLITO, ROTULOS_RETENCAO, ROTULOS_STATUS_LANCAMENTO, ROTULOS_SYNC_CUPOM, resumoInkDoFechamento, situacaoDoCupom, ROTULOS_VINCULO, TOM_VINCULO, brl, competenciaLabel, dataCurta, dataHora, mensagemDoErro, pct, plural,
 } from '../../lib/parcerias';
 import { Definicao, Saude } from './componentes';
 import { ContratoDialog, CupomDialog, MotivoDialog, PagamentoDialog } from './modais';
@@ -57,6 +57,7 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
   const [acaoCupom, setAcaoCupom] = useState<{ tipo: 'pausar' | 'retomar' | 'encerrar'; cupom: Cupom } | null>(null);
   const [previa, setPrevia] = useState<{ cupom: Cupom; texto: string } | null>(null);
   const [retro, setRetro] = useState<Cupom | null>(null);
+  const [excluir, setExcluir] = useState<Cupom | null>(null);
   const [resultadoAtivacao, setResultadoAtivacao] = useState<{ cupom: Cupom; r: ResultadoAtivacao } | null>(null);
   const { tz, cupons: capacidades } = useParcerias();
 
@@ -149,6 +150,7 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
                     <Button size="sm" variant="ghost" onClick={() => verificar(c)}>Verificar na INK</Button>
                     <Button size="sm" variant="ghost" onClick={() => previsualizar(c)}>Prévia INK</Button>
                     {isOwner && capacidades.update && c.syncStatus === 'divergent' && !!c.inkPromotionId && <Button size="sm" variant="secondary" onClick={() => sincronizar(c)}>Sincronizar com a INK</Button>}
+                    {isOwner && capacidades.delete && !!c.inkPromotionId && (c.status === 'paused' || c.status === 'ended') && <Button size="sm" variant="ghost" onClick={() => setExcluir(c)}>Excluir na INK</Button>}
                     {isOwner && (c.status === 'pending_validation' || c.status === 'planned') && <Button size="sm" onClick={() => setRetro(c)}>Ativar</Button>}
                     {isOwner && c.status === 'active' && <Button size="sm" variant="secondary" onClick={() => setAcaoCupom({ tipo: 'pausar', cupom: c })}>Pausar</Button>}
                     {isOwner && c.status === 'paused' && <Button size="sm" variant="secondary" onClick={() => setAcaoCupom({ tipo: 'retomar', cupom: c })}>Retomar</Button>}
@@ -165,16 +167,21 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
       <CupomDialog open={cupomDialog} onClose={() => setCupomDialog(false)} partnerId={perfil.partner.id} contratos={perfil.contracts} onSalvo={recarregar} />
       <MotivoDialog
         open={!!acaoCupom} onClose={() => setAcaoCupom(null)} titulo={`${acaoCupom?.tipo === 'pausar' ? 'Pausar' : acaoCupom?.tipo === 'retomar' ? 'Retomar' : 'Encerrar'} o cupom ${acaoCupom?.cupom.codeDisplay ?? ''}`}
-        descricao={acaoCupom?.tipo === 'retomar' ? 'Retomar cria uma nova vigência a partir de agora; o período pausado continua sem comissão.' : 'A vigência fecha agora: pedidos feitos depois não comissionam.'}
+        descricao={acaoCupom?.tipo === 'retomar' ? 'Retomar cria uma nova vigência a partir de agora, reabre o fim da promoção na INK; o período pausado continua sem comissão.' : 'A vigência fecha agora: pedidos feitos depois não comissionam, e o Oria encerra também o desconto na INK (a promoção não é apagada).'}
         confirmVariant={acaoCupom?.tipo === 'encerrar' ? 'danger-solid' : 'primary'}
         onConfirm={async (m) => {
           if (!acaoCupom) return;
-          if (acaoCupom.tipo === 'pausar') await afiliados.pausarCupom(acaoCupom.cupom.id, m);
-          else if (acaoCupom.tipo === 'retomar') await afiliados.retomarCupom(acaoCupom.cupom.id, m);
-          else await afiliados.encerrarCupom(acaoCupom.cupom.id, m);
-          toast('Cupom atualizado.', 'sucesso');
+          const r = acaoCupom.tipo === 'pausar' ? await afiliados.pausarCupom(acaoCupom.cupom.id, m)
+            : acaoCupom.tipo === 'retomar' ? await afiliados.retomarCupom(acaoCupom.cupom.id, m) : await afiliados.encerrarCupom(acaoCupom.cupom.id, m);
+          const ink = resumoInkDoFechamento(r.inkSync ? [r.inkSync] : []);
+          toast(ink.texto ? `Cupom atualizado · ${ink.texto}` : 'Cupom atualizado.', ink.ok ? 'sucesso' : 'erro');
           recarregar();
         }}
+      />
+      <MotivoDialog
+        open={!!excluir} onClose={() => setExcluir(null)} titulo={`Excluir a promoção ${excluir?.codeDisplay ?? ''} na INK`} confirmVariant="danger-solid"
+        descricao="Apaga a promoção na INK (o código fica livre para reuso). Não afeta o histórico de vendas e comissões no Oria. Só para cupons pausados ou encerrados."
+        onConfirm={async (m) => { if (!excluir) return; await afiliados.excluirPromocaoNaInk(excluir.id, m); toast('Promoção excluída na INK.', 'sucesso'); recarregar(); }}
       />
       <ConfirmDialog
         open={!!retro} onClose={() => setRetro(null)} title={`Ativar o cupom ${retro?.codeDisplay ?? ''}?`} confirmLabel="Ativar" confirmVariant="primary"
@@ -576,8 +583,14 @@ export function ParceiroPerfilPage() {
       />
       <MotivoDialog
         open={vinculo !== null} onClose={() => setVinculo(null)} titulo={vinculo === 'active' ? 'Ativar vínculo' : vinculo === 'paused' ? 'Pausar vínculo' : 'Encerrar vínculo'} confirmVariant={vinculo === 'ended' ? 'danger-solid' : 'primary'}
-        descricao="Vendas já capturadas continuam com as condições da data; o vínculo só afeta o que vem depois."
-        onConfirm={async (m) => { if (vinculo) { await afiliados.mudarVinculo(p.id, { status: vinculo, reason: m }); toast('Vínculo atualizado.', 'sucesso'); recarregar(); } }}
+        descricao={vinculo === 'ended' ? 'Encerrar o vínculo encerra os cupons abertos do parceiro e o desconto deles na INK (as promoções não são apagadas — exclua depois, se quiser). Vendas já capturadas continuam com as condições da data.' : 'Vendas já capturadas continuam com as condições da data; o vínculo só afeta o que vem depois.'}
+        onConfirm={async (m) => {
+          if (!vinculo) return;
+          const r = await afiliados.mudarVinculo(p.id, { status: vinculo, reason: m });
+          const ink = resumoInkDoFechamento(r.cupons?.ink ?? []);
+          toast(r.cupons ? `Vínculo encerrado · ${plural(r.cupons.encerrados, 'cupom encerrado', 'cupons encerrados')}${ink.texto ? ` · ${ink.texto}` : ''}.` : 'Vínculo atualizado.', ink.ok ? 'sucesso' : 'erro');
+          recarregar();
+        }}
       />
     </PageStack>
   );

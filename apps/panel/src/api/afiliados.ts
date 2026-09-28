@@ -49,6 +49,10 @@ export interface Cupom {
   operationalState: 'awaiting_ink' | 'active_verified' | 'active_unverified' | 'paused' | 'ended';
 }
 
+// Resultado do fechamento do desconto na INK quando o Oria encerra/pausa/retoma (melhor-esforço: o fechamento no Oria já valeu).
+export interface ResultadoInk { couponId: string; code: string; resultado: 'encerrado_na_ink' | 'ja_encerrado_na_ink' | 'sem_promocao_vinculada' | 'connector_sem_atualizacao' | 'erro_na_ink'; erro?: string }
+export interface EncerramentoDeCupons { encerrados: number; ink: ResultadoInk[] }
+
 export interface ResultadoAtivacao { coupon: Cupom; activated: boolean; outcome: 'already_active' | 'activated' | 'awaiting_ink' | 'divergent'; message: string; divergencias: string[] }
 
 export interface MetricasNivel { contarPor: string; vendasQualificadas: number; pedidosDistintos: number; unidades: number; margemCents: number; margemVerificada: boolean; mesesComVenda: number; vendasUltimos60d: number; vendasUltimos30d: number }
@@ -188,21 +192,22 @@ export const afiliados = {
   perfil: (id: string) => api<PerfilDoParceiro>(`${BASE}/partners/${id}`),
   atualizarParceiro: (id: string, b: Partial<Parceiro>) => patch<Parceiro>(`/partners/${id}`, b),
   decidirCandidatura: (id: string, b: { decision: 'approved' | 'rejected'; reason?: string; termsVersion?: string }) => post<Parceiro>(`/partners/${id}/application`, b),
-  mudarVinculo: (id: string, b: { status: Parceiro['relationshipStatus']; reason: string }) => post<Parceiro>(`/partners/${id}/relationship`, b),
+  mudarVinculo: (id: string, b: { status: Parceiro['relationshipStatus']; reason: string }) => post<Parceiro & { cupons?: EncerramentoDeCupons }>(`/partners/${id}/relationship`, b),
   vendasDoParceiro: (id: string, p: Record<string, string | number | undefined>) => api<{ total: number; itens: VendaAtribuida[] }>(`${BASE}/partners/${id}/sales${qs(p)}`),
   extrato: (id: string, p: Record<string, string | number | undefined> = {}) => api<{ totais: TotaisDoParceiro; itens: LancamentoDoExtrato[] }>(`${BASE}/partners/${id}/statement${qs(p)}`),
 
   simularContrato: (b: unknown) => post<SimulacaoContrato>('/contracts/simulate', b),
   criarContrato: (b: { partnerId: string; modality: Modalidade; title: string; status?: 'draft' | 'active'; reason: string; effectiveFrom?: string; terms: TermosDeContrato }) => post<{ contract: { id: string }; version: VersaoContrato }>('/contracts', b),
-  novaVersao: (id: string, b: { status?: VersaoContrato['status']; reason: string; terms?: Partial<TermosDeContrato>; effectiveFrom?: string }) => post<{ version: VersaoContrato }>(`/contracts/${id}/versions`, b),
+  novaVersao: (id: string, b: { status?: VersaoContrato['status']; reason: string; terms?: Partial<TermosDeContrato>; effectiveFrom?: string }) => post<{ version: VersaoContrato; cupons?: EncerramentoDeCupons }>(`/contracts/${id}/versions`, b),
 
   cupons: (partnerId?: string) => api<{ itens: Cupom[] }>(`${BASE}/coupons${qs({ partnerId })}`),
   criarCupom: (b: { partnerId: string; contractId: string; code: string; discountKind?: 'percentage' | 'value'; discountBps?: number; discountCents?: number; validFrom?: string; validUntil?: string }) => post<Cupom>('/coupons', b),
   sincronizarCupomNaInk: (id: string) => post<{ atualizado: boolean; campos: string[]; naoSincronizaveis: string[]; coupon: Cupom }>(`/coupons/${id}/ink-sync`, {}),
+  excluirPromocaoNaInk: (id: string, reason: string) => post<{ excluida: boolean; coupon: Cupom }>(`/coupons/${id}/ink-delete`, { reason }),
   ativarCupom: (id: string) => post<ResultadoAtivacao>(`/coupons/${id}/activate`, {}),
-  pausarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/pause`, { reason }),
-  retomarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/resume`, { reason }),
-  encerrarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/end`, { reason }),
+  pausarCupom: (id: string, reason: string) => post<Cupom & { inkSync?: ResultadoInk }>(`/coupons/${id}/pause`, { reason }),
+  retomarCupom: (id: string, reason: string) => post<Cupom & { inkSync?: ResultadoInk }>(`/coupons/${id}/resume`, { reason }),
+  encerrarCupom: (id: string, reason: string) => post<Cupom & { inkSync?: ResultadoInk }>(`/coupons/${id}/end`, { reason }),
   verificarCupom: (id: string) => post<{ coupon: Cupom; verificacao: { status: string; divergencias: string[] } }>(`/coupons/${id}/verify`, {}),
   previaCupomNaInk: (id: string) => api<{ ok: boolean; problemas: string[]; criacaoDisponivel: boolean; enviaria: boolean; request: { method: string; path: string; headers: Record<string, string>; body: unknown; escopoExigido: string } | null }>(`${BASE}/coupons/${id}/ink-preview`),
 

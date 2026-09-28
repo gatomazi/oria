@@ -180,3 +180,15 @@ export function mensagemDoErro(err: unknown): string {
 export function plural(n: number, singular: string, pluralForma?: string): string {
   return `${n.toLocaleString('pt-BR')} ${n === 1 ? singular : pluralForma ?? `${singular}s`}`;
 }
+
+// O que aconteceu com o desconto na INK quando o Oria fechou/reabriu a vigência de cupons (melhor-esforço; o Oria já fechou).
+const ROTULO_INK_FECHAMENTO = {
+  encerrado_na_ink: 'desconto encerrado na INK', ja_encerrado_na_ink: 'já estava encerrado na INK', sem_promocao_vinculada: 'sem promoção vinculada na INK',
+  connector_sem_atualizacao: 'o connector não atualiza promoções — ajuste na loja', erro_na_ink: 'a INK falhou — use "Sincronizar com a INK"',
+} as const;
+export function resumoInkDoFechamento(itens: { code: string; resultado: keyof typeof ROTULO_INK_FECHAMENTO }[]): { texto: string; ok: boolean } {
+  const problemas = itens.filter((i) => i.resultado === 'erro_na_ink' || i.resultado === 'connector_sem_atualizacao');
+  if (!itens.length) return { texto: '', ok: true };
+  if (!problemas.length) return { texto: itens.map((i) => `${i.code}: ${ROTULO_INK_FECHAMENTO[i.resultado]}`).join(' · '), ok: true };
+  return { texto: problemas.map((i) => `${i.code}: ${ROTULO_INK_FECHAMENTO[i.resultado]}`).join(' · '), ok: false };
+}

@@ -851,53 +851,143 @@ test('ativação INK · retry: resposta do POST perdida reenvia a MESMA Idempote
   assert.equal(ink.leituras().length, 1);
 });
 
-test('ciclo de vida · pausar no Oria NUNCA chama a INK (nada de DELETE/PATCH automático); excluir é operação explícita, com motivo e cupom inativo', async () => {
+const patchesDe = (ink) => ink.chamadas.filter((c) => c[0] === 'PATCH');
+const deletesDe = (ink) => ink.chamadas.filter((c) => c[0] === 'DELETE');
+async function novoParceiroComCupons(nome, codigos, svcAtivador) {
+  const p = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: nome }, { aprovarDireto: true }));
+  const k = (await emA(() => svc.registry.criarContrato(ctxA, { partnerId: p.id, modality: 'coupon', title: `Contrato ${nome}`, status: 'active', reason: 'teste', terms: { commissionBasis: 'verified_margin_percent', commissionBps: 1000 } }, { podeAtivar: true }))).contract.id;
+  const cupons = [];
+  for (const [codigo, ativar] of codigos) {
+    const c = await emA(() => svc.registry.criarCupom(ctxA, { partnerId: p.id, contractId: k, code: codigo, discountKind: 'percentage', discountBps: 1000 }));
+    if (ativar) await emA(() => svcAtivador.registry.ativarCupom(ctxA, c.id));
+    cupons.push(c);
+  }
+  return { p, k, cupons };
+}
+
+test('encerramento · pausar/encerrar o cupom fecha o fim da promoção na INK (PATCH só de expires_at) e NUNCA apaga; excluir segue explícito, com motivo e cupom inativo', async () => {
   definirAgora('2026-12-05T12:00:00Z');
   const ink = criarInkFalsa({ agora: relogio });
   const svcW = servicoComEscrita(ink);
   const cupom = await novoCupomDeCiclo('CICLO50');
   await emA(() => svcW.registry.ativarCupom(ctxA, cupom.id));
   const idInk = Number((await estadoDoCupom(cupom.id)).ink_promotion_id);
-  const antes = ink.chamadas.length;
   definirAgora('2026-12-06T12:00:00Z');
-  await emA(() => svcW.registry.pausarCupom(ctxA, cupom.id, 'campanha pausada'));
-  assert.equal(ink.chamadas.length, antes, 'pausar não fala com a INK');
+  const pausado = await emA(() => svcW.registry.pausarCupom(ctxA, cupom.id, 'campanha pausada'));
+  assert.equal(pausado.inkSync.resultado, 'encerrado_na_ink');
+  assert.equal(patchesDe(ink).length, 1);
+  assert.deepEqual(Object.keys(patchesDe(ink)[0][2]), ['expires_at']);
+  assert.equal(new Date(ink.promocao(idInk).expires_at).toISOString(), '2026-12-06T12:00:00.000Z');
+  assert.equal(deletesDe(ink).length, 0, 'pausar nunca apaga a promoção');
   assert.equal(ink.leituras().length, 1, 'a promoção continua existindo na INK');
+  assert.equal((await emA(() => svcW.registry.verificarCupomNaInk(ctxA, cupom.id))).verificacao.status, 'confirmed');
   const outro = await novoCupomDeCiclo('CICLO51');
   await emA(() => svcW.registry.ativarCupom(ctxA, outro.id));
   await assert.rejects(emA(() => svcW.registry.excluirPromocaoNaInk(ctxA, outro.id, { motivo: 'x' })), (e) => e.codigo === 'AFILIADOS_CUPOM_ATIVO');
   await assert.rejects(emA(() => svcW.registry.excluirPromocaoNaInk(ctxA, cupom.id, {})), (e) => e.status === 400);
   const r = await emA(() => svcW.registry.excluirPromocaoNaInk(ctxA, cupom.id, { motivo: 'campanha encerrada de vez' }));
   assert.equal(r.excluida, true);
-  assert.equal(ink.chamadas.filter((c) => c[0] === 'DELETE').length, 1);
-  assert.equal(ink.chamadas.find((c) => c[0] === 'DELETE')[1], `/v1/stores/promotions/${idInk}`);
+  assert.equal(deletesDe(ink).length, 1);
+  assert.equal(deletesDe(ink)[0][1], `/v1/stores/promotions/${idInk}`);
   const e = await estadoDoCupom(cupom.id);
   assert.deepEqual([e.status, e.sync_status, e.ink_promotion_id], ['paused', 'not_created', null]);
   await assert.rejects(emA(() => servicoSoLeitura(ink).registry.excluirPromocaoNaInk(ctxA, cupom.id, { motivo: 'x' })), (e2) => e2.status === 409);
-  assert.equal(ink.chamadas.filter((c) => c[0] === 'DELETE').length, 1);
+  assert.equal(deletesDe(ink).length, 1);
 });
 
-test('ciclo de vida · PATCH sincroniza só a vigência da promoção depois de pausar no Oria (sem comissão no corpo)', async () => {
+test('encerramento · connector sem atualização: fecha no Oria, avisa "connector_sem_atualizacao" e o owner sincroniza depois (PATCH só da vigência)', async () => {
   definirAgora('2026-12-10T12:00:00Z');
   const ink = criarInkFalsa({ agora: relogio });
   const svcW = servicoComEscrita(ink);
   const cupom = await novoCupomDeCiclo('CICLO60');
   await emA(() => svcW.registry.ativarCupom(ctxA, cupom.id));
   definirAgora('2026-12-11T12:00:00Z');
-  await emA(() => svcW.registry.pausarCupom(ctxA, cupom.id, 'pausa'));
+  const pausado = await emA(() => servicoSoLeitura(ink).registry.pausarCupom(ctxA, cupom.id, 'pausa'));
+  assert.equal(pausado.status, 'paused');
+  assert.equal(pausado.inkSync.resultado, 'connector_sem_atualizacao');
+  assert.equal(ink.escritas().length, 1, 'só o POST da criação; nenhuma escrita no fechamento');
   const v = await emA(() => svcW.registry.verificarCupomNaInk(ctxA, cupom.id));
   assert.equal(v.verificacao.status, 'divergent');
   assert.match(v.verificacao.divergencias.join(' '), /fim da vigência/);
   const s = await emA(() => svcW.registry.sincronizarCupomNaInk(ctxA, cupom.id));
   assert.equal(s.atualizado, true);
   assert.deepEqual(s.campos, ['expires_at']);
-  const patch = ink.chamadas.find((c) => c[0] === 'PATCH');
-  assert.deepEqual(Object.keys(patch[2]), ['expires_at']);
   assert.equal((await estadoDoCupom(cupom.id)).sync_status, 'confirmed');
-  const denovo = await emA(() => svcW.registry.sincronizarCupomNaInk(ctxA, cupom.id));
-  assert.equal(denovo.atualizado, false);
-  assert.equal(ink.chamadas.filter((c) => c[0] === 'PATCH').length, 1);
+  assert.equal((await emA(() => svcW.registry.sincronizarCupomNaInk(ctxA, cupom.id))).atualizado, false);
+  assert.equal(patchesDe(ink).length, 1);
   await assert.rejects(emA(() => servicoSoLeitura(ink).registry.sincronizarCupomNaInk(ctxA, cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_UNAVAILABLE');
+});
+
+test('encerramento · encerrar o PARCEIRO encerra os cupons abertos dele, com auditoria, e fecha o desconto na INK sem apagar nada', async () => {
+  definirAgora('2026-12-12T12:00:00Z');
+  const ink = criarInkFalsa({ agora: relogio });
+  const svcW = servicoComEscrita(ink);
+  const { p, cupons } = await novoParceiroComCupons('Parceiro Que Sai', [['SAI10', true], ['SAI20', false]], svcW);
+  definirAgora('2026-12-20T12:00:00Z');
+  const r = await emA(() => svcW.registry.mudarVinculo(ctxA, p.id, { status: 'ended', motivo: 'fim da parceria' }));
+  assert.equal(r.relationshipStatus, 'ended');
+  assert.equal(r.cupons.encerrados, 2);
+  assert.deepEqual(r.cupons.ink.map((x) => x.resultado).sort(), ['encerrado_na_ink', 'sem_promocao_vinculada']);
+  for (const c of cupons) assert.equal((await estadoDoCupom(c.id)).status, 'ended');
+  assert.equal(patchesDe(ink).length, 1);
+  assert.deepEqual(Object.keys(patchesDe(ink)[0][2]), ['expires_at']);
+  assert.equal(deletesDe(ink).length, 0);
+  const idInk = Number((await estadoDoCupom(cupons[0].id)).ink_promotion_id);
+  assert.equal(new Date(ink.promocao(idInk).expires_at).toISOString(), '2026-12-20T12:00:00.000Z');
+  assert.equal(await contar(`SELECT count(*)::int AS n FROM partnership_audit_events WHERE organization_id = $1 AND action = 'coupon.end.partner_ended' AND entity_id = ANY($2)`, [ORG_A, cupons.map((c) => c.id)]), 2);
+  // Pausar o vínculo NÃO mexe nos cupons (só encerrar).
+  const { p: p2, cupons: c2 } = await novoParceiroComCupons('Parceiro Pausado', [['PAUSADO10', true]], svcW);
+  await emA(() => svcW.registry.mudarVinculo(ctxA, p2.id, { status: 'paused', motivo: 'pausa' }));
+  assert.equal((await estadoDoCupom(c2[0].id)).status, 'active');
+});
+
+test('encerramento · falha da INK no fechamento NÃO trava o encerramento: parceiro e cupom encerram, o cupom fica com erro e dá para sincronizar depois', async () => {
+  definirAgora('2026-12-21T12:00:00Z');
+  const ink = criarInkFalsa({ agora: relogio });
+  const svcW = servicoComEscrita(ink);
+  const { p, cupons } = await novoParceiroComCupons('Parceiro INK Fora', [['FORA10', true]], svcW);
+  ink.falhas.patch.push(503, 503);
+  const r = await emA(() => svcW.registry.mudarVinculo(ctxA, p.id, { status: 'ended', motivo: 'fim' }));
+  assert.equal(r.relationshipStatus, 'ended');
+  assert.equal(r.cupons.ink[0].resultado, 'erro_na_ink');
+  const e = await estadoDoCupom(cupons[0].id);
+  assert.deepEqual([e.status, e.sync_status], ['ended', 'error']);
+  assert.doesNotMatch(String(e.sync_error), /Bearer|Authorization/i);
+  const s = await emA(() => svcW.registry.sincronizarCupomNaInk(ctxA, cupons[0].id));
+  assert.equal(s.atualizado, true);
+  assert.equal((await estadoDoCupom(cupons[0].id)).sync_status, 'confirmed');
+});
+
+test('encerramento · encerrar o CONTRATO encerra os cupons vinculados a ele e fecha o fim na INK', async () => {
+  definirAgora('2026-12-22T12:00:00Z');
+  const ink = criarInkFalsa({ agora: relogio });
+  const svcW = servicoComEscrita(ink);
+  const { k, cupons } = await novoParceiroComCupons('Parceiro Contrato Fim', [['CONTR10', true]], svcW);
+  definirAgora('2026-12-30T12:00:00Z');
+  const r = await emA(() => svcW.registry.novaVersaoDeContrato(ctxA, k, { status: 'ended', reason: 'contrato terminou' }, { podeAtivar: true }));
+  assert.equal(r.cupons.encerrados, 1);
+  assert.equal(r.cupons.ink[0].resultado, 'encerrado_na_ink');
+  assert.equal((await estadoDoCupom(cupons[0].id)).status, 'ended');
+  assert.equal(patchesDe(ink).length, 1);
+  assert.equal(deletesDe(ink).length, 0);
+});
+
+test('encerramento · retomar um cupom pausado reabre o fim da promoção na INK (nova vigência sem fim)', async () => {
+  definirAgora('2026-12-23T12:00:00Z');
+  const ink = criarInkFalsa({ agora: relogio });
+  const svcW = servicoComEscrita(ink);
+  const cupom = await novoCupomDeCiclo('RETOMA10');
+  await emA(() => svcW.registry.ativarCupom(ctxA, cupom.id));
+  const idInk = Number((await estadoDoCupom(cupom.id)).ink_promotion_id);
+  definirAgora('2026-12-24T12:00:00Z');
+  await emA(() => svcW.registry.pausarCupom(ctxA, cupom.id, 'pausa'));
+  assert.notEqual(ink.promocao(idInk).expires_at, null);
+  definirAgora('2026-12-25T12:00:00Z');
+  const retomado = await emA(() => svcW.registry.retomarCupom(ctxA, cupom.id, 'voltou'));
+  assert.equal(retomado.inkSync.resultado, 'encerrado_na_ink');
+  assert.equal(ink.promocao(idInk).expires_at, null);
+  assert.equal(retomado.syncStatus, 'confirmed');
+  assert.equal(deletesDe(ink).length, 0);
 });
 
 test('ativação INK · outra Organization não ativa nem dispara chamada à INK pelo cupom alheio', async () => {

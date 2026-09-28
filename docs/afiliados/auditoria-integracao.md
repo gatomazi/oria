@@ -179,3 +179,9 @@ manual: cria-se o cupom na loja e o Oria só vincula/verifica.
   da loja** (ver `operacao.md`), porque o fim gravado pela INK diferia em hora/fuso do que o Oria grava (23:59:59 -03:00).
 - Ainda em aberto (§7): se a INK aceita `discount_tier` sem gatilho mínimo (422 é mostrado ao owner e o cupom não é ativado), escopo efetivo do token
   e reuso do código em vários pedidos.
+
+### Encerramento (28/09/2026)
+
+Encerrar parceiro/contrato/cupom passa a fazer `PATCH expires_at` na INK (melhor-esforço, nunca `DELETE`); retomar reabre com `expires_at: null`.
+**Não validado com a INK real:** se a INK aceita `expires_at: null` no `PATCH` para remover o fim (a documentação diz "omita `expires_at` para não
+expirar" na criação); se recusar (422), o Oria mostra o erro no cupom e o owner corrige na INK.
