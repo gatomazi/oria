@@ -104,10 +104,24 @@ usa a data de observação do pagamento.
 
 ## 6. Níveis e benefícios
 
-Regras por loja, versionadas (padrão sugerido: Raiz/Voz/Referência/Embaixador). Metas simultâneas sobre vendas **elegíveis** (pagas,
-sem devolução; cupom + collab na mesma linha contam uma vez); meta de margem sem custo verificado fica "não verificada" e **não promove**.
-O sistema **propõe**; o lojista aprova. Nível altera elegibilidade e benefícios, nunca reescreve contrato em vigor nem comissão passada.
-Peça nunca é grátis ao ingressar: exige vendas, período, atividade e saldo, ou exceção "criador convidado" com entregáveis e aprovação.
+Regras **totalmente configuráveis pelo lojista** em Níveis e benefícios, versionadas por loja (`partnership_level_rule_sets`; cada
+gravação é uma versão nova, nunca reescreve vendas já capturadas). Vêm com um padrão sugerido (Raiz/Voz/Referência/Embaixador) que o
+lojista pode editar, reordenar, encurtar ou estender livremente — não são constantes de negócio no código.
+
+- **De 1 a 16 níveis** ("steps"). O nível de índice 0 é sempre a "base": todo parceiro aprovado começa nele e suas metas nunca são
+  avaliadas (só o teto de margem dele importa). `ordem` nunca vem do cliente: é sempre a posição no array — reordenar é só mudar a
+  posição (mover para cima/baixo na tela).
+- Por nível, editável: nome, chave interna, vendas qualificadas, margem verificada (R$), meses com venda, vendas em 60 dias, teto sobre
+  margem (%), janela de métricas (dias) e o benefício (sem peça, 1ª peça após N vendas, ou peça a cada N dias com exigência opcional de
+  atividade em 30 dias). `salvarRegrasDeNivel` valida e **reconstrói cada campo por whitelist** (mesma técnica de `lerTermos`/`lerPerfis`):
+  nada fora da lista é persistido, e o benefício só carrega os campos do seu próprio tipo.
+- Metas simultâneas sobre vendas **elegíveis** (pagas, sem devolução; cupom + collab na mesma linha contam uma vez); meta de margem sem
+  custo verificado fica "não verificada" e **não promove**. O sistema **propõe**; o lojista aprova. Nível altera elegibilidade e
+  benefícios, nunca reescreve contrato em vigor nem comissão passada.
+- Peça nunca é grátis ao ingressar: exige vendas, período, atividade e saldo, ou exceção "criador convidado" com entregáveis e aprovação.
+- **Remover ou renomear uma chave em uso** (parceiro ativo/pausado nela) não é bloqueado — o lojista tem controle total —, mas o salvar
+  **avisa** quantos parceiros seriam afetados e um exemplo; esses parceiros caem para o nível base até a próxima proposta ou override
+  manual gravar uma linha de histórico nova (o histórico nunca é reescrito).
 
 ## 7. Integração com a INK
 

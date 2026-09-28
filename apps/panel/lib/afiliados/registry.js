@@ -85,20 +85,42 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
     return { version: rows[0].version, regras: rows[0].rules, padrao: false, effectiveFrom: rows[0].effective_from, reason: rows[0].reason };
   }
 
-  async function salvarRegrasDeNivel(ctx, { regras, motivo }) {
-    try { validarRegras(regras); } catch (err) { throw entradaInvalida(err.message); }
+  // Nível cujo lojista deixou de existir na versão nova continua funcionando (a comissão não trava): o parceiro só cai para o nível base
+  // até a próxima proposta o recolocar onde as métricas reais indicam. Aqui só AVISAMOS quem seria afetado; nunca bloqueamos a gravação —
+  // a decisão de configurar o próprio sistema de níveis é do lojista.
+  async function niveisOrfaosNaTx(c, ctx, chavesNovas) {
+    const { rows } = await c.query(
+      `SELECT DISTINCT ON (h.partner_id) h.level_key, p.public_name FROM partner_level_history h
+         JOIN partnership_partners p ON p.id = h.partner_id AND p.organization_id = h.organization_id
+        WHERE h.organization_id = $1 AND p.relationship_status IN ('active', 'paused')
+        ORDER BY h.partner_id, h.effective_at DESC, h.created_at DESC`,
+      [ctx.organizationId]
+    );
+    const porChave = new Map();
+    for (const r of rows) {
+      if (chavesNovas.has(r.level_key)) continue;
+      if (!porChave.has(r.level_key)) porChave.set(r.level_key, { key: r.level_key, partners: 0, exemplo: r.public_name });
+      porChave.get(r.level_key).partners += 1;
+    }
+    return [...porChave.values()];
+  }
+
+  async function salvarRegrasDeNivel(ctx, { regras: regrasBrutas, motivo }) {
+    let regras;
+    try { regras = validarRegras(regrasBrutas); } catch (err) { throw entradaInvalida(err.message); }
     const m = textoObrigatorio(motivo, { max: 500, nome: 'motivo' });
     return db.tx(pool, async (c) => {
       await db.travarChave(c, ctx.organizationId, 'level-rules');
       const atual = await lerRegrasDeNivel(ctx, c);
       const versao = atual.version + 1;
+      const orfaos = await niveisOrfaosNaTx(c, ctx, new Set(regras.niveis.map((n) => n.key)));
       await c.query(
         `INSERT INTO partnership_level_rule_sets (organization_id, store_id, version, effective_from, rules, reason, approved_by)
          VALUES ($1,$2,$3,now(),$4,$5,$6)`,
         [ctx.organizationId, ctx.storeId, versao, JSON.stringify(regras), m, ctx.userId]
       );
       await db.auditar(c, ctx, { entidade: 'level_rules', entidadeId: versao, acao: 'level_rules.create', antes: atual.padrao ? null : atual.regras, depois: regras, motivo: m });
-      return { version: versao, regras, padrao: false };
+      return { version: versao, regras, padrao: false, avisos: { niveisOrfaos: orfaos } };
     });
   }
 
@@ -818,10 +840,10 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
         `UPDATE partner_coupon_links SET ink_promotion_id = NULL, sync_status = 'not_created', sync_error = NULL, last_synced_at = now(), updated_at = now() WHERE organization_id = $1 AND id = $2 RETURNING *`,
         [ctx.organizationId, cupom.id]
       );
-      await db.auditar(t, ctx, { entidade: 'coupon', entidadeId: cupom.id, acao: 'coupon.ink_delete', antes: { promotionId: cupom.inkPromotionId }, depois: { idempotencyKey: r.idempotencyKey }, motivo: m });
+      await db.auditar(t, ctx, { entidade: 'coupon', entidadeId: cupom.id, acao: 'coupon.ink_delete', antes: { promotionId: cupom.inkPromotionId }, depois: { idempotencyKey: r.idempotencyKey, jaEstavaExcluida: r.jaEstavaExcluida }, motivo: m });
       return rows[0];
     });
-    return { excluida: true, coupon: mapearCupom(linha) };
+    return { excluida: true, jaEstavaExcluida: r.jaEstavaExcluida === true, coupon: mapearCupom(linha) };
   }
 
   async function listarCupons(ctx, { partnerId = null } = {}) {
