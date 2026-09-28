@@ -20,7 +20,7 @@ function servicoDuble() {
   const registrar = (nome, retorno = {}) => async (...args) => { chamadas.push([nome, ...args]); return typeof retorno === 'function' ? retorno(...args) : retorno; };
   const s = {
     chamadas,
-    flags: { inkPromotionWritesEnabled: false },
+    inkPromotions: { capacidades: () => ({ provider: 'ink', read: true, create: false, update: false, delete: false }) },
     registry: {
       lerConfig: registrar('lerConfig', { timezone: 'America/Sao_Paulo' }), salvarConfig: registrar('salvarConfig'), lerRegrasDeNivel: registrar('lerRegras'), salvarRegrasDeNivel: registrar('salvarRegras'),
       criarParceiro: registrar('criarParceiro', { id: UUID }), atualizarParceiro: registrar('atualizarParceiro'), decidirCandidatura: registrar('decidirCandidatura'), mudarVinculo: registrar('mudarVinculo'),
@@ -28,7 +28,7 @@ function servicoDuble() {
       listarCupons: registrar('listarCupons', []), criarCupom: registrar('criarCupom', {}), ativarCupom: registrar('ativarCupom'), pausarCupom: registrar('pausarCupom'), retomarCupom: registrar('retomarCupom'),
       encerrarCupom: registrar('encerrarCupom'), verificarCupomNaInk: registrar('verificarCupomNaInk'), previsualizarCriacaoNaInk: registrar('previsualizar'),
       sincronizarCupomNaInk: registrar('sincronizarCupomNaInk'), excluirPromocaoNaInk: registrar('excluirPromocaoNaInk'),
-      criarCupomNaInk: async () => { throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita desligada'); },
+      criarCupomNaInk: async () => { throw erro(409, 'INK_PROMOTION_WRITES_UNAVAILABLE', 'connector sem criação'); },
     },
     collabs: {
       listarCollabs: registrar('listarCollabs', []), criarCollab: registrar('criarCollab', {}), detalharCollab: registrar('detalharCollab'), atualizarCollab: registrar('atualizarCollab'),
@@ -99,7 +99,7 @@ test('feature flag desligada: tudo 404, exceto /status que diz enabled:false', a
     const st = await chamar('GET', '/status');
     assert.equal(st.status, 200);
     assert.equal(st.json.enabled, false);
-    assert.equal(st.json.inkPromotionWritesEnabled, false);
+    assert.deepEqual(st.json.couponCreation, { provider: 'ink', read: true, create: false, update: false, delete: false });
     for (const [m, c, b] of [['GET', '/partners'], ['POST', '/partners', { publicName: 'x' }], ['GET', '/payables'], ['GET', '/overview']]) {
       const r = await chamar(m, c, b);
       assert.equal(r.status, 404, `${m} ${c}`);
@@ -198,12 +198,12 @@ test('nenhuma rota lê organização/loja do request: o serviço recebe SEMPRE o
   } finally { await fechar(); }
 });
 
-test('escrita remota de promoção: 409 com código estável (nada é enviado)', async () => {
+test('criação remota de promoção indisponível no connector: 409 com código estável', async () => {
   const { chamar, fechar } = await subir({ papel: 'owner' });
   try {
     const r = await chamar('POST', `/coupons/${UUID}/ink-create`, {});
     assert.equal(r.status, 409);
-    assert.equal(r.json.codigo, 'INK_PROMOTION_WRITES_DISABLED');
+    assert.equal(r.json.codigo, 'INK_PROMOTION_WRITES_UNAVAILABLE');
   } finally { await fechar(); }
 });
 

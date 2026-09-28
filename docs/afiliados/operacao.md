@@ -29,13 +29,15 @@ O Oria tem o **próprio programa de afiliados**: **não crie afiliado na INK**. 
 
 1. No perfil: **Cadastrar cupom** (código, desconto, validade). Código repetido com vigência sobreposta é recusado. Fica *Aguardando
    criação/verificação na INK* — **não é "Ativo"**.
-2. Crie no painel da INK uma **promoção comum (standard)** com o **mesmo código**, o desconto do cliente e **sem valor/quantidade mínima**, sem
-   aplicação automática, sem exibir na vitrine/carrinho, sem limite de usos e sem restringir produtos.
-3. **Verificar na INK** (1 consulta de leitura) confirma código/tipo/desconto/vigência ou lista a divergência. **Prévia INK** mostra o pedido que o
-   Oria enviaria (escrita **desligada**: nada é enviado).
-4. **Ativar** (owner): o Oria confere a promoção na INK antes. Existente e compatível → vincula o ID e ativa (vale só para pedidos **a partir de
-   agora**). Divergente → **não ativa** e mostra o que difere. Inexistente com escrita desligada → **não ativa** e continua aguardando. Erro de
-   rede/permissão da INK → **não ativa** e mostra o erro.
+2. **Ativar** (owner). O Oria consulta a INK pelo código:
+   - promoção **existe e é compatível** → vincula o ID e ativa (vale só para pedidos **a partir de agora**);
+   - **não existe** → o Oria **cria a promoção standard na INK** (desconto do cliente, sem valor mínimo, sem aplicação automática, sem exibir
+     na vitrine/carrinho, sem limite de usos, toda a loja), confere por leitura e só então ativa;
+   - **diverge** (desconto, vigência, alcance…) → **não ativa** e lista o que difere; corrija no Oria ou use **Sincronizar com a INK**;
+   - **erro** da INK (permissão, validação, rede) → **não ativa**, mostra o erro e mantém o estado.
+3. **Prévia INK** mostra o pedido que o Oria enviaria; **Verificar na INK** só lê. Em um connector **sem criação de cupom**, crie a promoção
+   na loja e use Verificar/Ativar para vincular.
+4. A vigência é comparada **por dia** no fuso da loja. INK terminando em dia posterior (ou sem fim) diverge; até 1 dia antes é tolerado.
 5. Pausar/encerrar fecha a vigência no Oria na hora (**a promoção na INK continua existindo** — ajuste/exclua lá se quiser); **Retomar** abre
    vigência nova (o período pausado continua sem comissão).
 

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { afiliados, type StatusModulo } from '../api/afiliados';
 import { useAuth } from '../auth/AuthContext';
 
-const DESLIGADO: StatusModulo = { enabled: false, inkPromotionWritesEnabled: false, papel: null };
+const SEM_CAPACIDADE = { provider: 'ink', read: false, create: false, update: false, delete: false };
+const DESLIGADO: StatusModulo = { enabled: false, couponCreation: SEM_CAPACIDADE, papel: null };
 
 let cache: { organizacaoId: string | null; status: StatusModulo } | null = null;
 let pendente: Promise<StatusModulo> | null = null;
@@ -15,7 +16,7 @@ export function carregarStatusAfiliados(organizacaoId: string | null): Promise<S
   pendente = afiliados
     .status()
     .then((s) => {
-      cache = { organizacaoId, status: { enabled: s.enabled === true, inkPromotionWritesEnabled: s.inkPromotionWritesEnabled === true, papel: s.papel === 'owner' || s.papel === 'member' ? s.papel : null } };
+      cache = { organizacaoId, status: { enabled: s.enabled === true, couponCreation: s.couponCreation ?? SEM_CAPACIDADE, papel: s.papel === 'owner' || s.papel === 'member' ? s.papel : null } };
       return cache.status;
     })
     .catch(() => DESLIGADO)

@@ -14,8 +14,9 @@ const LINK = { id: 'link-1', codeDisplay: 'Amanda10', codeNormalized: 'AMANDA10'
 const ESCRITA = ['store.promotions.read', 'store.promotions.write'];
 const semEspera = { esperar: async () => {}, relogio: () => AGORA };
 
-const adaptador = (ink, { escrita = true, scopes = ESCRITA, client = ink.client, ...resto } = {}) =>
-  inkPromo.createInkPromotionsAdapter({ client, flags: { inkPromotionWritesEnabled: escrita }, scopes, ...semEspera, ...resto });
+// `escrita:false` = connector sem integração de escrita (cliente só com `get`); a escrita é capacidade do connector, não flag.
+const adaptador = (ink, { escrita = true, scopes = ESCRITA, client = escrita ? ink.client : ink.somenteLeitura, ...resto } = {}) =>
+  inkPromo.createInkPromotionsAdapter({ client, scopes, ...semEspera, ...resto });
 const promocaoCompativel = (extra = {}) => ({ code: 'AMANDA10', kind: 'percentage', discount_tier: { discount: 10 }, starts_at: '2026-10-01T03:00:00.000Z', ...extra });
 
 // ── Mapper Oria → INK ──────────────────────────────────────────────────────────────────────────
@@ -44,12 +45,12 @@ test('mapper standard: valor fixo em reais, vigência com fim e recusa de pedido
   assert.ok(ruim.problemas.length >= 2);
 });
 
-test('preview não faz chamada alguma e informa se enviaria (escrita desligada → não enviaria)', () => {
+test('preview não faz chamada alguma e informa se enviaria (connector sem criação → modo manual, não enviaria)', () => {
   const ink = criarInkFalsa();
   const off = adaptador(ink, { escrita: false }).previsualizarCriacao(LINK);
   assert.equal(off.ok, true);
   assert.equal(off.enviaria, false);
-  assert.equal(off.bloqueio, 'INK_PROMOTION_WRITES_DISABLED');
+  assert.equal(off.bloqueio, 'INK_PROMOTION_WRITES_UNAVAILABLE');
   const on = adaptador(ink).previsualizarCriacao(LINK);
   assert.equal(on.enviaria, true);
   assert.equal(ink.chamadas.length, 0);
@@ -69,36 +70,40 @@ test('Idempotency-Key: mesma intenção → mesma chave (mesmo em outra instânc
 });
 
 // ── Fail-closed de escrita ─────────────────────────────────────────────────────────────────────
-test('escrita desligada: ZERO POST/PATCH/DELETE mesmo com cliente completo e escopo declarado', async () => {
+test('connector sem escrita (cliente só com get): ZERO POST/PATCH/DELETE, e o preview marca o modo manual', async () => {
   const ink = criarInkFalsa();
   const id = ink.semear(promocaoCompativel());
   const ad = adaptador(ink, { escrita: false });
-  await assert.rejects(() => ad.criarPromocao({ ...LINK, codeNormalized: 'NOVO10', codeDisplay: 'novo10' }), inkPromo.PromotionWritesDisabledError);
-  await assert.rejects(() => ad.atualizarPromocao(LINK, id), inkPromo.PromotionWritesDisabledError);
-  await assert.rejects(() => ad.excluirPromocao(LINK.id, id), inkPromo.PromotionWritesDisabledError);
+  await assert.rejects(() => ad.criarPromocao({ ...LINK, codeNormalized: 'NOVO10', codeDisplay: 'novo10' }), inkPromo.PromotionWritesUnavailableError);
+  await assert.rejects(() => ad.atualizarPromocao(LINK, id), inkPromo.PromotionWritesUnavailableError);
+  await assert.rejects(() => ad.excluirPromocao(LINK.id, id), inkPromo.PromotionWritesUnavailableError);
   assert.equal(ink.chamadas.length, 0);
 });
 
-test('escrita ligada mas sem método de escrita no cliente (só GET): nada é enviado', async () => {
+test('capacidades do connector: cada escrita depende do seu método; sem `post` a criação é indisponível mas o PATCH/DELETE existentes seguem', async () => {
   const ink = criarInkFalsa();
   const id = ink.semear(promocaoCompativel());
-  const ad = adaptador(ink, { client: ink.somenteLeitura });
-  await assert.rejects(() => ad.criarPromocao(LINK), inkPromo.PromotionWritesDisabledError);
-  await assert.rejects(() => ad.atualizarPromocao(LINK, id), inkPromo.PromotionWritesDisabledError);
-  await assert.rejects(() => ad.excluirPromocao(LINK.id, id), inkPromo.PromotionWritesDisabledError);
-  assert.equal(ink.escritas().length, 0);
+  const semPost = { get: ink.client.get, patch: ink.client.patch, delete: ink.client.delete };
+  const ad = adaptador(ink, { client: semPost });
+  assert.deepEqual(ad.capacidades(), { provider: 'ink', read: true, create: false, update: true, delete: true });
+  await assert.rejects(() => ad.criarPromocao({ ...LINK, codeNormalized: 'NOVO10', codeDisplay: 'novo10' }), inkPromo.PromotionWritesUnavailableError);
+  assert.equal((await ad.excluirPromocao(LINK.id, id)).excluida, true);
+  assert.deepEqual(adaptador(ink, { escrita: false }).capacidades(), { provider: 'ink', read: true, create: false, update: false, delete: false });
+  assert.deepEqual(inkPromo.createInkPromotionsAdapter({}).capacidades(), { provider: 'ink', read: false, create: false, update: false, delete: false });
 });
 
-test('escopo de escrita ausente ou não declarado: recusa antes de qualquer chamada', async () => {
+test('escopo de escrita declarado sem `store.promotions.write`: recusa antes de qualquer chamada; escopo não declarado tenta (a INK responde 403 se faltar)', async () => {
   const ink = criarInkFalsa();
   const id = ink.semear(promocaoCompativel());
-  for (const scopes of [['store.promotions.read'], null]) {
-    const ad = adaptador(ink, { scopes });
-    await assert.rejects(() => ad.criarPromocao({ ...LINK, codeNormalized: 'NOVO10', codeDisplay: 'novo10' }), inkPromo.PromotionPermissionError);
-    await assert.rejects(() => ad.atualizarPromocao(LINK, id), inkPromo.PromotionPermissionError);
-    await assert.rejects(() => ad.excluirPromocao(LINK.id, id), inkPromo.PromotionPermissionError);
-  }
+  const ad = adaptador(ink, { scopes: ['store.promotions.read'] });
+  await assert.rejects(() => ad.criarPromocao({ ...LINK, codeNormalized: 'NOVO10', codeDisplay: 'novo10' }), inkPromo.PromotionPermissionError);
+  await assert.rejects(() => ad.atualizarPromocao(LINK, id), inkPromo.PromotionPermissionError);
+  await assert.rejects(() => ad.excluirPromocao(LINK.id, id), inkPromo.PromotionPermissionError);
   assert.equal(ink.chamadas.length, 0);
+  const semDeclaracao = adaptador(ink, { scopes: null });
+  ink.falhas.post.push(403);
+  await assert.rejects(() => semDeclaracao.criarPromocao({ ...LINK, codeNormalized: 'NOVO10', codeDisplay: 'novo10' }), (e) => e.codigo === 'INK_FORBIDDEN');
+  assert.equal(ink.chamadas.filter((c) => c[0] === 'POST').length, 1);
 });
 
 // ── GET por código ─────────────────────────────────────────────────────────────────────────────
@@ -309,7 +314,29 @@ test('exclusão: DELETE /promotions/{id} com Idempotency-Key estável; soft dele
   assert.equal(r.excluida, true);
   assert.equal(ink.leituras().length, 0);
   assert.equal((await adaptador(ink).verificarCupom(LINK)).status, 'not_found');
+  // (vigência por dia: ver os dois testes ao final do arquivo)
   // mesma intenção (mesma chave) = replay idempotente; outra intenção sobre promoção já excluída = 404
   assert.equal((await adaptador(ink).excluirPromocao(LINK.id, id)).excluida, true);
   await assert.rejects(() => adaptador(ink).excluirPromocao('link-2', id), (e) => e.codigo === 'INK_NOT_FOUND');
+});
+
+// ── Vigência comparada por dia no fuso da loja (caso real: fim 10/10 no Oria × INK gravando o fim do dia em outro fuso) ──────────────
+test('vigência: mesmo dia de fim no fuso da loja é compatível, ainda que a hora/fuso gravados pela INK difiram', async () => {
+  const link = { ...LINK, validUntil: new Date('2026-10-11T02:59:59Z'), timezone: 'America/Sao_Paulo' }; // 10/10 23:59:59 -03:00 (o que o formulário do Oria grava)
+  for (const expires_at of ['2026-10-10T23:59:59.000Z', '2026-10-11T02:59:59.000Z', '2026-10-10T03:00:00.000Z', '2026-10-10T00:00:00.000Z']) {
+    const ink = criarInkFalsa();
+    ink.semear(promocaoCompativel({ expires_at }));
+    assert.equal((await adaptador(ink).verificarCupom(link)).status, 'confirmed', expires_at);
+  }
+});
+
+test('vigência: INK terminando em dia posterior (ou sem fim), ou mais de 1 dia antes, diverge e a mensagem mostra as datas', async () => {
+  const link = { ...LINK, validUntil: new Date('2026-10-11T02:59:59Z'), timezone: 'America/Sao_Paulo' };
+  for (const [expires_at, msg] of [['2026-10-12T15:00:00.000Z', /INK 12\/10\/2026 × Oria 10\/10\/2026/], ['2026-10-08T23:59:59.000Z', /INK 08\/10\/2026 × Oria 10\/10\/2026/], [undefined, /a INK não tem fim e o Oria termina em 10\/10\/2026/]]) {
+    const ink = criarInkFalsa();
+    ink.semear(promocaoCompativel(expires_at ? { expires_at } : {}));
+    const r = await adaptador(ink).verificarCupom(link);
+    assert.equal(r.status, 'divergent', String(expires_at));
+    assert.match(r.divergencias.join(' '), msg);
+  }
 });

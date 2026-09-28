@@ -164,3 +164,18 @@ Ressalva correta: **integração ainda não validada end-to-end contra uma crede
 2. Definir o gatilho mínimo aceito pela INK (se a conta o exigir) e se o Oria o configura por cupom.
 3. Habilitar escrita **por release** (cliente com `post/patch/delete` injetado + `inkScopes` + flag), primeiro numa loja de teste, nunca por configuração em runtime.
 4. Política para promoção existente divergente (hoje: não ativa; corrigir no Oria ou na INK e verificar de novo).
+
+## 8. Escrita como funcionalidade do connector (decisão do produto · 28/09/2026)
+
+Substitui as menções anteriores a "escrita desligada por flag": **não existe flag**. A criação/atualização/exclusão de promoções é funcionalidade
+do painel sempre que o connector da INK está presente (o `server.js` injeta `get/post/patch/delete`). Continua exigindo ação explícita de owner,
+`Idempotency-Key` e confirmação por leitura antes de ativar. Sem `post` no connector (outro connector futuro sem integração de cupom), o fluxo é
+manual: cria-se o cupom na loja e o Oria só vincula/verifica.
+
+- Consequência: agora **o Oria pode criar promoções reais na INK** quando o owner clica em Ativar num cupom ainda inexistente lá. Isso só foi
+  exercido contra a INK falsa e o mock do `server.js` (POST com `Idempotency-Key`, sem comissão no corpo, leitura de volta); **a primeira criação
+  real ainda não foi observada** — recomenda-se fazê-la com um cupom de teste.
+- Leitura real já observada (ativação do `GABRIEL10`, promoção `#84122`): funcionou; a comparação de vigência foi corrigida para **por dia no fuso
+  da loja** (ver `operacao.md`), porque o fim gravado pela INK diferia em hora/fuso do que o Oria grava (23:59:59 -03:00).
+- Ainda em aberto (§7): se a INK aceita `discount_tier` sem gatilho mínimo (422 é mostrado ao owner e o cupom não é ativado), escopo efetivo do token
+  e reuso do código em vários pedidos.

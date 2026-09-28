@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Callout, EmptyState, PageHeader, PageStack, Skeleton, TabList } from '../../components/ds';
-import { afiliados, type Papel } from '../../api/afiliados';
+import { afiliados, type CapacidadesCupom, type Papel } from '../../api/afiliados';
 import { useStatusAfiliados } from '../../state/afiliadosModulo';
 import { TZ_PADRAO } from '../../lib/parcerias';
 
@@ -9,7 +9,7 @@ import '../../parcerias.css';
 
 // Casca do módulo: confere a flag do servidor, expõe papel/fuso da loja às telas filhas e desenha a navegação interna.
 // Nada aqui é autorização — o servidor recusa a rota mesmo que a aba apareça; a aba só evita mostrar o que o papel não pode usar.
-export interface ContextoParcerias { papel: Papel; isOwner: boolean; tz: string }
+export interface ContextoParcerias { papel: Papel; isOwner: boolean; tz: string; cupons: CapacidadesCupom }
 const Ctx = createContext<ContextoParcerias | null>(null);
 
 export function useParcerias(): ContextoParcerias {
@@ -42,7 +42,7 @@ export function ParceriasLayout() {
     afiliados.config().then((c) => setTz(c.timezone)).catch(() => undefined);
   }, [status]);
 
-  const contexto = useMemo<ContextoParcerias | null>(() => (status && status.papel ? { papel: status.papel, isOwner: status.papel === 'owner', tz } : null), [status, tz]);
+  const contexto = useMemo<ContextoParcerias | null>(() => (status && status.papel ? { papel: status.papel, isOwner: status.papel === 'owner', tz, cupons: status.couponCreation } : null), [status, tz]);
 
   if (status === null) {
     return (

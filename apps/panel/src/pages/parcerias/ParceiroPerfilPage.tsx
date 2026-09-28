@@ -58,7 +58,7 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
   const [previa, setPrevia] = useState<{ cupom: Cupom; texto: string } | null>(null);
   const [retro, setRetro] = useState<Cupom | null>(null);
   const [resultadoAtivacao, setResultadoAtivacao] = useState<{ cupom: Cupom; r: ResultadoAtivacao } | null>(null);
-  const { tz } = useParcerias();
+  const { tz, cupons: capacidades } = useParcerias();
 
   async function verificar(c: Cupom) {
     try {
@@ -73,9 +73,16 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
       setPrevia({
         cupom: c,
         texto: r.ok && r.request
-          ? `Pré-visualização (nada foi enviado): ${r.request.method} ${r.request.path} · escopo ${r.request.escopoExigido} · Idempotency-Key ${r.request.headers['Idempotency-Key']}. Escrita na INK: ${r.escritaHabilitada ? 'habilitada' : 'DESLIGADA nesta versão — cadastre o cupom no painel da INK e use "Verificar na INK".'}`
+          ? `Pré-visualização (nada foi enviado): ${r.request.method} ${r.request.path} · escopo ${r.request.escopoExigido} · Idempotency-Key ${r.request.headers['Idempotency-Key']}. ${r.criacaoDisponivel ? 'Ao ativar o cupom, o Oria cria esta promoção na INK (se ela ainda não existir) e só ativa depois de confirmar.' : 'Este connector não cria cupons: crie a promoção na loja e use "Verificar na INK".'}`
           : `Problemas: ${r.problemas.join('; ')}`,
       });
+    } catch (e) { toast(mensagemDoErro(e)); }
+  }
+  async function sincronizar(c: Cupom) {
+    try {
+      const r = await afiliados.sincronizarCupomNaInk(c.id);
+      toast(r.atualizado ? `Promoção atualizada na INK (${r.campos.join(', ')}).` : (r.naoSincronizaveis.length ? `Nada a sincronizar; ajuste na INK: ${r.naoSincronizaveis.join('; ')}` : 'Já está igual na INK.'), r.atualizado ? 'sucesso' : 'erro');
+      recarregar();
     } catch (e) { toast(mensagemDoErro(e)); }
   }
   async function ativar(c: Cupom) {
@@ -124,8 +131,8 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
         })}
       </Card>
 
-      <Card title="Cupons" description="O cupom só fica ativo depois que a promoção standard com este código for confirmada na INK; o código só comissiona ativo, dentro da vigência e com contrato ativo. Comissão e tracking são do Oria — a INK só aplica o desconto." action={<Button size="sm" variant="secondary" onClick={() => setCupomDialog(true)}>Cadastrar cupom</Button>}>
-        {!perfil.coupons.length && <EmptyState title="Nenhum cupom" description="Cadastre o código aqui e crie a promoção comum (standard) com o mesmo código no painel da INK; depois use Verificar na INK e Ativar. Não use o programa de afiliados da INK." />}
+      <Card title="Cupons" description="O cupom só fica ativo depois que a promoção standard com este código for confirmada na INK (o Oria a cria lá quando o connector permite); o código só comissiona ativo, dentro da vigência e com contrato ativo. Comissão e tracking são do Oria — a INK só aplica o desconto." action={<Button size="sm" variant="secondary" onClick={() => setCupomDialog(true)}>Cadastrar cupom</Button>}>
+        {!perfil.coupons.length && <EmptyState title="Nenhum cupom" description="Cadastre o código aqui e clique em Ativar: o Oria cria a promoção comum (standard) na INK e ativa depois de confirmar. Se a promoção já existir na INK, use Verificar na INK. Não use o programa de afiliados da INK." />}
         {perfil.coupons.length > 0 && (
           <DataTable<Cupom>
             label="Cupons do parceiro" rows={perfil.coupons} rowKey={(c) => c.id}
@@ -141,6 +148,7 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
                   <span className="pa-badges">
                     <Button size="sm" variant="ghost" onClick={() => verificar(c)}>Verificar na INK</Button>
                     <Button size="sm" variant="ghost" onClick={() => previsualizar(c)}>Prévia INK</Button>
+                    {isOwner && capacidades.update && c.syncStatus === 'divergent' && !!c.inkPromotionId && <Button size="sm" variant="secondary" onClick={() => sincronizar(c)}>Sincronizar com a INK</Button>}
                     {isOwner && (c.status === 'pending_validation' || c.status === 'planned') && <Button size="sm" onClick={() => setRetro(c)}>Ativar</Button>}
                     {isOwner && c.status === 'active' && <Button size="sm" variant="secondary" onClick={() => setAcaoCupom({ tipo: 'pausar', cupom: c })}>Pausar</Button>}
                     {isOwner && c.status === 'paused' && <Button size="sm" variant="secondary" onClick={() => setAcaoCupom({ tipo: 'retomar', cupom: c })}>Retomar</Button>}
@@ -170,7 +178,7 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
       />
       <ConfirmDialog
         open={!!retro} onClose={() => setRetro(null)} title={`Ativar o cupom ${retro?.codeDisplay ?? ''}?`} confirmLabel="Ativar" confirmVariant="primary"
-        description="O Oria confere a promoção na INK antes de ativar: se ela não existir ou divergir, o cupom continua aguardando. A ativação NÃO é retroativa: só pedidos feitos a partir de agora podem comissionar. O contrato precisa estar ativo."
+        description="O Oria confere a promoção na INK e, se ela não existir, cria (connector com criação); se divergir ou a INK falhar, o cupom continua aguardando. A ativação NÃO é retroativa: só pedidos feitos a partir de agora podem comissionar. O contrato precisa estar ativo."
         onConfirm={async () => { if (retro) await ativar(retro); }}
       />
       <Modal open={!!resultadoAtivacao} onClose={() => setResultadoAtivacao(null)} title={`Cupom ${resultadoAtivacao?.cupom.codeDisplay ?? ''} não foi ativado`} maxWidth={620}>

@@ -118,7 +118,7 @@ Peça nunca é grátis ao ingressar: exige vendas, período, atividade e saldo, 
   `discount_tier{discount}` **sem gatilho mínimo inventado**; nada de comissão/nível/benefício no corpo.
 - **Ativação fail-closed** (`registry.ativarCupom`): Rascunho → *Aguardando INK* → Verificado/Criado → **Ativo**. Só ativa depois de a INK
   confirmar: (A) promoção existente e compatível (GET por código; vincula `ink_promotion_id`, registra a verificação e ativa); (B) inexistente
-  com escrita desligada → **sem POST**, fica aguardando; (C) inexistente com escrita habilitada → POST, e só após `201` válido + leitura de volta
+  com connector **sem criação** (modo manual) → **sem POST**, fica aguardando o vínculo; (C) inexistente com connector que cria → POST, e só após `201` válido + leitura de volta
   persiste ID/snapshot (na auditoria) e ativa; (D) 401/403/409/422/429/5xx/timeout/envelope inesperado → **não ativa**, preserva o estado e
   devolve erro compreensível (sem token). Divergência (código, tipo, desconto, gatilho, escopo, primeira compra, limite, vigência,
   aplicação automática, exibição) **não ativa** e é listada; `available` é estado calculado pela INK, não configuração.
@@ -126,8 +126,14 @@ Peça nunca é grátis ao ingressar: exige vendas, período, atividade e saldo, 
   reenvia a mesma chave, outra intenção/payload gera outra; só UUID interno e hash. Retry automático só para falha transitória (timeout/429/5xx).
 - Pausar/encerrar no Oria **fecham a vigência local e nunca chamam a INK**. `PATCH` (`ink-sync`) sincroniza só campos da promoção (ex.: fim da
   vigência) e `DELETE` (`ink-delete`) é operação explícita de owner, com motivo e cupom inativo — nunca consequência de pausar.
-- Escrita **desligada** por padrão: exige flag `true` + cliente com `post/patch/delete` + escopo `store.promotions.write` declarado + rota de
-  owner. `server.js` só injeta `get`; a flag é fixa em `false`. Habilitar é mudança de código/release, nunca de configuração em runtime.
+- **Escrita é funcionalidade do painel, sem flag**, determinada pela **capacidade do connector**: o `server.js` injeta o cliente da INK com
+  `get/post/patch/delete` (credencial da Organization do contexto). Só ocorre por ação explícita de owner (Ativar, `ink-create`, `ink-sync`,
+  `ink-delete`), com `Idempotency-Key`, e nada é ativado sem `201` válido + leitura de volta. `/status` expõe `couponCreation`
+  (`{provider, read, create, update, delete}`); a UI e o fluxo se adaptam a isso.
+- **Outros connectors (futuro):** cada connector de loja implementa a mesma interface de cupom (`verificarCupom`, `criarPromocao`,
+  `atualizarPromocao`, `excluirPromocao`, `capacidades`, `bloqueioDeEscrita`). Se o connector tem integração de criação de cupom → **fluxo
+  idêntico** (só muda o contrato/mapper do connector). Se não tem → **modo manual**, como antes: cria-se o cupom na loja e o Oria só cria o
+  vínculo (`Verificar`/`Ativar` confirmam por leitura, se o connector ao menos lê; sem leitura, o vínculo fica aguardando).
 - Não validado ponta a ponta contra credencial real da loja (ver `auditoria-integracao.md` §6–§7).
 
 ## 8. Segurança e privacidade (invariantes)
@@ -143,7 +149,6 @@ Peça nunca é grátis ao ingressar: exige vendas, período, atividade e saldo, 
 | Flag / job | Padrão | Efeito |
 |---|---|---|
 | `AFILIADOS_MODULE_ENABLED=true` | **desligada** | Sem ela: rotas 404 (menos `/status`), menu escondido, job inerte |
-| `ink_promotion_writes_enabled` | **false, fixa em código** | Escrita de promoções na INK indisponível |
 | job `afiliados-reconciliar` (30 min, lease por Organization) | ativo só com a flag e só para quem tem parceiro | Lê o cache local, reavalia pedidos alterados/em aberto, libera carências vencidas, propõe níveis |
 | `POST /reconcile` (owner) | manual | Mesma rotina sob demanda; `completo:true` reprocessa tudo |
 

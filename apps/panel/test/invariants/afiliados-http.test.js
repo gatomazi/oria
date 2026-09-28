@@ -150,7 +150,7 @@ test('sem sessão: 401; com a flag desligada: /status diz enabled:false e todo o
 test('flag ligada: status por papel; escrita exige CSRF; tenant nunca vem do request', async () => {
   const owner = await A().entrar('a-owner');
   const st = await owner.req('GET', '/api/admin/afiliados/status');
-  assert.deepEqual([st.json.enabled, st.json.papel, st.json.inkPromotionWritesEnabled], [true, 'owner', false]);
+  assert.deepEqual([st.json.enabled, st.json.papel, st.json.couponCreation.provider, st.json.couponCreation.create], [true, 'owner', 'ink', true]);
   const member = await A().entrar('a-member');
   assert.equal((await member.req('GET', '/api/admin/afiliados/status')).json.papel, 'member');
 
@@ -245,14 +245,15 @@ test('caminho completo pelo HTTP: pedido da INK com cupom → upsert com campos 
   assert.equal(k.status, 201, k.texto);
   const cupom = await owner.req('POST', '/api/admin/afiliados/coupons', { corpo: { partnerId: p.json.id, contractId: k.json.contract.id, code: 'mockcupom', discountKind: 'percentage', discountBps: 500 } });
   assert.equal(cupom.status, 201, cupom.texto);
-  // Fail-closed: um cupom que a INK (mock) não conhece NÃO ativa — 200 com activated=false, sem POST, e continua aguardando a INK.
-  const desconhecido = await owner.req('POST', '/api/admin/afiliados/coupons', { corpo: { partnerId: p.json.id, contractId: k.json.contract.id, code: 'semink', discountKind: 'percentage', discountBps: 500 } });
-  const bloqueado = await owner.req('POST', `/api/admin/afiliados/coupons/${desconhecido.json.id}/activate`, { corpo: {} });
-  assert.equal(bloqueado.status, 200, bloqueado.texto);
-  assert.equal(bloqueado.json.activated, false);
-  assert.equal(bloqueado.json.outcome, 'awaiting_ink');
-  assert.equal(bloqueado.json.coupon.status, 'pending_validation');
-  assert.equal(bloqueado.json.coupon.operationalState, 'awaiting_ink');
+  // Connector da INK com criação: cupom que a INK (mock) ainda não conhece → o Oria CRIA a promoção standard (POST com Idempotency-Key), lê de volta
+  // por ID e só então ativa. (O `mockcupom` abaixo já existe na INK do mock: é vinculado sem POST.)
+  const novo = await owner.req('POST', '/api/admin/afiliados/coupons', { corpo: { partnerId: p.json.id, contractId: k.json.contract.id, code: 'semink', discountKind: 'percentage', discountBps: 500 } });
+  const criado = await owner.req('POST', `/api/admin/afiliados/coupons/${novo.json.id}/activate`, { corpo: {} });
+  assert.equal(criado.status, 200, criado.texto);
+  assert.equal(criado.json.activated, true);
+  assert.equal(criado.json.coupon.operationalState, 'active_verified');
+  assert.equal(criado.json.coupon.syncMode, 'ink_managed');
+  assert.ok(Number(criado.json.coupon.inkPromotionId) > 0);
   // Já o cupom que a INK confirma (GET por código, contrato oficial) é vinculado pelo ID e ativado.
   const ativo = await owner.req('POST', `/api/admin/afiliados/coupons/${cupom.json.id}/activate`, { corpo: {} });
   assert.equal(ativo.status, 200, ativo.texto);
@@ -297,14 +298,22 @@ test('caminho completo pelo HTTP: pedido da INK com cupom → upsert com campos 
   assert.equal(resumo.json.availableCents, 0);
   assert.equal(resumo.json.overdueCents, 0);
 
-  // A criação de cupom na INK está desligada: prévia sem envio, criação recusada e NENHUM POST de promoção no log do mock.
+  // Criação na INK: prévia diz que enviaria; criar de novo um código que já existe na INK é conflito (nada duplicado). O log do mock prova que houve
+  // EXATAMENTE 1 POST de promoção (o do `semink`), com Idempotency-Key, sem comissão no corpo, e nenhum PATCH/DELETE.
   const previa = await owner.req('GET', `/api/admin/afiliados/coupons/${cupom.json.id}/ink-preview`);
-  assert.equal(previa.json.enviaria, false);
-  const criar = await owner.req('POST', `/api/admin/afiliados/coupons/${cupom.json.id}/ink-create`, { corpo: {} });
-  assert.equal(criar.status, 409);
-  assert.equal(criar.json.codigo, 'INK_PROMOTION_WRITES_DISABLED');
+  assert.equal(previa.json.enviaria, true);
+  const duplicado = await owner.req('POST', `/api/admin/afiliados/coupons/${cupom.json.id}/ink-create`, { corpo: {} });
+  assert.equal(duplicado.status, 409);
+  assert.equal(duplicado.json.codigo, 'INK_PROMOTION_CONFLICT');
   const chamadas = fs.existsSync(mockLog) ? fs.readFileSync(mockLog, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
-  assert.equal(chamadas.filter((c) => /\/v1\/stores\/promotions/.test(c.caminho || c.path || '') && String(c.metodo || c.method).toUpperCase() !== 'GET').length, 0);
+  const escritas = chamadas.filter((c) => /\/v1\/stores\/promotions/.test(c.caminho) && c.metodo !== 'GET');
+  assert.equal(escritas.length, 1);
+  assert.deepEqual([escritas[0].metodo, escritas[0].caminho], ['POST', '/v1/stores/promotions/standard']);
+  assert.match(escritas[0].idempotencyKey, /^oria-aff-create-[0-9a-f-]{36}-[0-9a-f]{16}$/);
+  const enviado = JSON.parse(escritas[0].corpo);
+  assert.equal(enviado.code, 'SEMINK');
+  assert.deepEqual(enviado.discount_tier, { discount: 5 });
+  assert.doesNotMatch(escritas[0].corpo, /commission|comiss|bps|1500/i);
 
   // B não enxerga nada disso (nem o pedido de A, nem a comissão).
   const b = await A().entrar('b-owner');
