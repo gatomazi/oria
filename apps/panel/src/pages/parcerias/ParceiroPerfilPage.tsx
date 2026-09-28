@@ -5,14 +5,14 @@ import {
   TabList, Textarea,
 } from '../../components/ds';
 import {
-  afiliados, type Contrato, type Cupom, type LancamentoDoExtrato, type PerfilDoParceiro, type VendaAtribuida, type VersaoContrato,
+  afiliados, type Contrato, type Cupom, type ResultadoAtivacao, type LancamentoDoExtrato, type PerfilDoParceiro, type VendaAtribuida, type VersaoContrato,
 } from '../../api/afiliados';
 import { useAsync } from '../../lib/useAsync';
 import { useFiltrosUrl } from '../../lib/useFiltrosUrl';
 import { toast } from '../../lib/toast';
 import {
-  ROTULOS_BASE_COMISSAO, ROTULOS_CANDIDATURA, ROTULOS_CUPOM, ROTULOS_ESTADO_PEDIDO, ROTULOS_META, ROTULOS_METODO, ROTULOS_MODALIDADE, ROTULOS_MOTIVO_REVISAO, ROTULOS_ORIGEM,
-  ROTULOS_POLITICA_CONFLITO, ROTULOS_RETENCAO, ROTULOS_STATUS_LANCAMENTO, ROTULOS_SYNC_CUPOM, ROTULOS_VINCULO, TOM_VINCULO, brl, competenciaLabel, dataCurta, dataHora, mensagemDoErro, pct, plural,
+  ROTULOS_BASE_COMISSAO, ROTULOS_CANDIDATURA, ROTULOS_ESTADO_PEDIDO, ROTULOS_META, ROTULOS_METODO, ROTULOS_MODALIDADE, ROTULOS_MOTIVO_REVISAO, ROTULOS_ORIGEM,
+  ROTULOS_POLITICA_CONFLITO, ROTULOS_RETENCAO, ROTULOS_STATUS_LANCAMENTO, ROTULOS_SYNC_CUPOM, situacaoDoCupom, ROTULOS_VINCULO, TOM_VINCULO, brl, competenciaLabel, dataCurta, dataHora, mensagemDoErro, pct, plural,
 } from '../../lib/parcerias';
 import { Definicao, Saude } from './componentes';
 import { ContratoDialog, CupomDialog, MotivoDialog, PagamentoDialog } from './modais';
@@ -57,6 +57,7 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
   const [acaoCupom, setAcaoCupom] = useState<{ tipo: 'pausar' | 'retomar' | 'encerrar'; cupom: Cupom } | null>(null);
   const [previa, setPrevia] = useState<{ cupom: Cupom; texto: string } | null>(null);
   const [retro, setRetro] = useState<Cupom | null>(null);
+  const [resultadoAtivacao, setResultadoAtivacao] = useState<{ cupom: Cupom; r: ResultadoAtivacao } | null>(null);
   const { tz } = useParcerias();
 
   async function verificar(c: Cupom) {
@@ -78,8 +79,10 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
     } catch (e) { toast(mensagemDoErro(e)); }
   }
   async function ativar(c: Cupom) {
-    await afiliados.ativarCupom(c.id);
-    toast('Cupom ativado. Só pedidos a partir de agora comissionam.', 'sucesso');
+    // Fail-closed: o servidor só ativa depois de a INK confirmar a promoção. Sem isso, explica o que falta em vez de mostrar "ativo".
+    const r = await afiliados.ativarCupom(c.id);
+    if (r.activated) toast('Promoção verificada na INK e cupom ativado. Só pedidos a partir de agora comissionam.', 'sucesso');
+    else setResultadoAtivacao({ cupom: c, r });
     recarregar();
   }
 
@@ -121,17 +124,17 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
         })}
       </Card>
 
-      <Card title="Cupons" description="O código só comissiona quando está ativo, dentro da vigência e vinculado a um contrato ativo." action={<Button size="sm" variant="secondary" onClick={() => setCupomDialog(true)}>Cadastrar cupom</Button>}>
-        {!perfil.coupons.length && <EmptyState title="Nenhum cupom" description="Crie o cupom como promoção comum no painel da INK e cadastre o código aqui." />}
+      <Card title="Cupons" description="O cupom só fica ativo depois que a promoção standard com este código for confirmada na INK; o código só comissiona ativo, dentro da vigência e com contrato ativo. Comissão e tracking são do Oria — a INK só aplica o desconto." action={<Button size="sm" variant="secondary" onClick={() => setCupomDialog(true)}>Cadastrar cupom</Button>}>
+        {!perfil.coupons.length && <EmptyState title="Nenhum cupom" description="Cadastre o código aqui e crie a promoção comum (standard) com o mesmo código no painel da INK; depois use Verificar na INK e Ativar. Não use o programa de afiliados da INK." />}
         {perfil.coupons.length > 0 && (
           <DataTable<Cupom>
             label="Cupons do parceiro" rows={perfil.coupons} rowKey={(c) => c.id}
             columns={[
               { key: 'c', label: 'Código', render: (c) => <strong>{c.codeDisplay}</strong> },
-              { key: 's', label: 'Situação', render: (c) => <StatusBadge tone={c.status === 'active' ? 'success' : c.status === 'paused' ? 'warning' : 'neutral'} label={ROTULOS_CUPOM[c.status]} /> },
+              { key: 's', label: 'Situação', render: (c) => { const s = situacaoDoCupom(c); return <StatusBadge tone={s.tone} label={s.label} />; } },
               { key: 'd', label: 'Desconto', priority: 'low', render: (c) => (c.discountKind === 'percentage' ? pct(c.discountBps) : c.discountKind === 'value' ? brl(c.discountCents) : '—') },
               { key: 'v', label: 'Vigência', priority: 'low', render: (c) => `${dataCurta(c.validFrom, tz)} → ${c.validUntil ? dataCurta(c.validUntil, tz) : 'sem fim'}` },
-              { key: 'i', label: 'INK', render: (c) => <span title={c.syncError ?? undefined}>{ROTULOS_SYNC_CUPOM[c.syncStatus]}</span> },
+              { key: 'i', label: 'Promoção na INK', render: (c) => <span title={c.syncError ?? undefined}>{ROTULOS_SYNC_CUPOM[c.syncStatus]}{c.inkPromotionId ? ` · #${c.inkPromotionId}` : ''}</span> },
               {
                 key: 'a', label: 'Ações', align: 'right',
                 render: (c) => (
@@ -167,9 +170,13 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
       />
       <ConfirmDialog
         open={!!retro} onClose={() => setRetro(null)} title={`Ativar o cupom ${retro?.codeDisplay ?? ''}?`} confirmLabel="Ativar" confirmVariant="primary"
-        description="A ativação NÃO é retroativa: só pedidos feitos a partir de agora podem comissionar. O contrato precisa estar ativo."
+        description="O Oria confere a promoção na INK antes de ativar: se ela não existir ou divergir, o cupom continua aguardando. A ativação NÃO é retroativa: só pedidos feitos a partir de agora podem comissionar. O contrato precisa estar ativo."
         onConfirm={async () => { if (retro) await ativar(retro); }}
       />
+      <Modal open={!!resultadoAtivacao} onClose={() => setResultadoAtivacao(null)} title={`Cupom ${resultadoAtivacao?.cupom.codeDisplay ?? ''} não foi ativado`} maxWidth={620}>
+        <p className="pa-aviso">{resultadoAtivacao?.r.message}</p>
+        {!!resultadoAtivacao?.r.divergencias.length && <ul className="pa-lista">{resultadoAtivacao.r.divergencias.map((d) => <li key={d}>{d}</li>)}</ul>}
+      </Modal>
       <Modal open={!!previa} onClose={() => setPrevia(null)} title={`Prévia · ${previa?.cupom.codeDisplay ?? ''}`} maxWidth={620}><p className="pa-aviso">{previa?.texto}</p></Modal>
     </div>
   );

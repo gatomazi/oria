@@ -140,6 +140,7 @@ function createAfiliadosRouter({ service, enabled = () => false, logger = consol
   router.post('/coupons/:id/activate', wrap(async (req, res) => {
     exigirOwner(req);
     const b = corpo(req, 'couponActivate');
+    // Fail-closed: 200 com `activated=false` (aguardando INK / divergente) NÃO é erro nem ativação; falha da INK vira 4xx/5xx.
     res.json(await s.registry.ativarCupom(contexto(req), req.params.id, { retroativo: b.retroactive === true, motivo: b.reason }));
   }));
   router.post('/coupons/:id/pause', wrap(async (req, res) => { exigirOwner(req); res.json(await s.registry.pausarCupom(contexto(req), req.params.id, corpo(req, 'reasonOnly').reason)); }));
@@ -147,6 +148,8 @@ function createAfiliadosRouter({ service, enabled = () => false, logger = consol
   router.post('/coupons/:id/end', wrap(async (req, res) => { exigirOwner(req); res.json(await s.registry.encerrarCupom(contexto(req), req.params.id, corpo(req, 'reasonOnly').reason)); }));
   router.post('/coupons/:id/verify', wrap(async (req, res) => res.json(await s.registry.verificarCupomNaInk(contexto(req), req.params.id))));
   router.get('/coupons/:id/ink-preview', wrap(async (req, res) => res.json(await s.registry.previsualizarCriacaoNaInk(contexto(req), req.params.id))));
+  router.post('/coupons/:id/ink-sync', wrap(async (req, res) => { exigirOwner(req); res.json(await s.registry.sincronizarCupomNaInk(contexto(req), req.params.id)); }));
+  router.post('/coupons/:id/ink-delete', wrap(async (req, res) => { exigirOwner(req); res.json(await s.registry.excluirPromocaoNaInk(contexto(req), req.params.id, { motivo: corpo(req, 'reasonOnly').reason })); }));
   router.post('/coupons/:id/ink-create', wrap(async (req, res) => { exigirOwner(req); res.status(201).json(await s.registry.criarCupomNaInk(contexto(req), req.params.id)); }));
 
   // Collabs

@@ -22,6 +22,14 @@ const ROTULO_BASE = Object.freeze({
   fixed_per_unit: 'valor fixo por unidade',
 });
 
+// awaiting_ink → cupom cadastrado no Oria, ainda sem promoção confirmada na INK · active_verified → ativo e confirmado ·
+// active_unverified → ativo, mas a última verificação NÃO confirmou (divergente/erro/ausente): exige atenção · demais: o próprio status.
+function estadoOperacional(r) {
+  if (r.status === 'planned' || r.status === 'pending_validation') return 'awaiting_ink';
+  if (r.status === 'active') return r.sync_status === 'confirmed' ? 'active_verified' : 'active_unverified';
+  return r.status;
+}
+
 function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null }) {
   // ── Configuração da loja ────────────────────────────────────────────────────────────────────────
   const CONFIG_PADRAO = Object.freeze({
@@ -474,6 +482,8 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
     discountKind: r.discount_kind, discountBps: r.discount_bps, discountCents: r.discount_cents === null ? null : Number(r.discount_cents),
     validFrom: r.valid_from, validUntil: r.valid_until, status: r.status, syncMode: r.sync_mode, syncStatus: r.sync_status, inkPromotionId: r.ink_promotion_id === null ? null : Number(r.ink_promotion_id),
     lastSyncedAt: r.last_synced_at, syncError: r.sync_error, createdAt: r.created_at,
+    // Estado OPERACIONAL derivado: "ativo" só é verificado quando a INK confirmou a promoção; nunca inferido do cadastro manual.
+    operationalState: estadoOperacional(r),
   });
 
   async function obterCupom(c, ctx, id, { travar = false } = {}) {
@@ -516,25 +526,119 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
     });
   }
 
-  async function ativarCupom(ctx, id, { retroativo = false, motivo = null } = {}) {
+  // ── Integração com Promoções da INK (fail-closed) ───────────────────────────────────────────────
+  // Nada aqui deixa um cupom "ativo" sem a INK ter confirmado a promoção. Falha de rede/permissão nunca vira sucesso, e o estado anterior é preservado.
+  const MSG_AGUARDANDO = 'Aguardando criação/verificação na INK: cadastre a promoção standard com este código no painel da INK (ou habilite a criação automática) e verifique de novo.';
+
+  const STATUS_HTTP_INK = Object.freeze({
+    INK_NOT_CONFIGURED: 409, INK_PROMOTION_CONFLICT: 409, INK_PROMOTION_INVALID: 409, INK_PROMOTION_WRITES_DISABLED: 409, INK_PROMOTION_SCOPE_MISSING: 409,
+    INK_VALIDATION: 422, INK_CONFLICT: 422, INK_NOT_FOUND: 409,
+  });
+
+  // Erro da INK → erro HTTP compreensível, sem token/cabeçalho/corpo bruto (a mensagem já vem sanitizada do adapter).
+  function erroDeInk(err) {
+    if (err instanceof db.AfiliadosError) return err;
+    const codigo = (err && err.codigo) || 'INK_ERROR';
+    return erro(STATUS_HTTP_INK[codigo] || 502, codigo, String((err && err.message) || 'falha ao falar com a INK').slice(0, 300), err && err.problemas ? { problemas: err.problemas } : undefined);
+  }
+
+  // Registra o resultado da conversa com a INK sem alterar o estado operacional do cupom (só sync_*; 'planned' vira 'pending_validation').
+  async function gravarSincronia(ctx, id, { syncStatus, erroTexto = null, promotionId = null, syncMode = null, acao, detalhes = {} }) {
+    return db.tx(pool, async (t) => {
+      const { rows } = await t.query(
+        `UPDATE partner_coupon_links SET sync_status = $3, sync_error = $4, ink_promotion_id = COALESCE($5, ink_promotion_id), sync_mode = COALESCE($6, sync_mode), last_synced_at = now(),
+                status = CASE WHEN status = 'planned' THEN 'pending_validation' ELSE status END, updated_at = now()
+          WHERE organization_id = $1 AND id = $2 RETURNING *`,
+        [ctx.organizationId, id, syncStatus, erroTexto ? String(erroTexto).slice(0, 500) : null, promotionId, syncMode]
+      );
+      await db.auditar(t, ctx, { entidade: 'coupon', entidadeId: id, acao, depois: { syncStatus, promotionId, ...detalhes } });
+      return rows[0];
+    });
+  }
+
+  // Ativa DENTRO da transação, com o cupom travado e o vínculo à INK já confirmado. Reaplica as regras de estado/contrato.
+  async function ativarConfirmado(ctx, id, { retroativo, motivo, promotionId, snapshot, via }) {
     const agora = relogio();
     return db.tx(pool, async (c) => {
       const cupom = await obterCupom(c, ctx, id, { travar: true });
-      if (cupom.status === 'active') return mapearCupom(cupom);
+      if (cupom.status === 'active') return cupom;
       if (!['planned', 'pending_validation'].includes(cupom.status)) throw conflito('AFILIADOS_TRANSICAO_INVALIDA', `cupom ${cupom.status} não pode ser ativado; crie um novo vínculo`);
       const versao = await ultimaVersao(c, ctx, cupom.contract_id);
       if (versao.status !== 'active') throw erro(422, 'AFILIADOS_CONTRATO_INATIVO', 'ative o contrato antes de ativar o cupom');
-      if (retroativo && !textoOpcional(motivo, { max: 500, nome: 'motivo' })) throw entradaInvalida('ativação retroativa exige motivo');
       // Nunca retroativo por padrão: pedidos anteriores à ativação não passam a comissionar.
       const validFrom = retroativo ? new Date(cupom.valid_from) : new Date(Math.max(new Date(cupom.valid_from).getTime(), agora.getTime()));
       try {
         const { rows } = await c.query(
-          `UPDATE partner_coupon_links SET status = 'active', valid_from = $3, updated_at = now() WHERE organization_id = $1 AND id = $2 RETURNING *`, [ctx.organizationId, cupom.id, validFrom]
+          `UPDATE partner_coupon_links SET status = 'active', valid_from = $3, ink_promotion_id = $4, sync_mode = 'ink_managed', sync_status = 'confirmed', sync_error = NULL, last_synced_at = now(), updated_at = now()
+            WHERE organization_id = $1 AND id = $2 RETURNING *`, [ctx.organizationId, cupom.id, validFrom, promotionId]
         );
-        await db.auditar(c, ctx, { entidade: 'coupon', entidadeId: cupom.id, acao: retroativo ? 'coupon.activate.retroactive' : 'coupon.activate', antes: { status: cupom.status, validFrom: cupom.valid_from }, depois: { status: 'active', validFrom }, motivo });
-        return mapearCupom(rows[0]);
+        await db.auditar(c, ctx, {
+          entidade: 'coupon', entidadeId: cupom.id, acao: retroativo ? 'coupon.activate.retroactive' : 'coupon.activate',
+          antes: { status: cupom.status, validFrom: cupom.valid_from, syncStatus: cupom.sync_status }, depois: { status: 'active', validFrom, syncStatus: 'confirmed', promotionId, via, inkSnapshot: snapshot || null }, motivo,
+        });
+        return rows[0];
       } catch (err) { throw erroDeSobreposicao(err); }
     });
+  }
+
+  /**
+   * Ativação FAIL-CLOSED. Só chega em `active` depois de a INK confirmar a promoção (existente e compatível, ou criada agora com 201 válido).
+   * Devolve { coupon, activated, outcome, message, divergencias }; erros de rede/permissão/validação da INK viram erro HTTP (502/409/422).
+   *  outcome: already_active | activated | awaiting_ink | divergent
+   */
+  async function ativarCupom(ctx, id, { retroativo = false, motivo = null } = {}) {
+    const c0 = await pool.connect();
+    let cupom;
+    let versaoDoContrato;
+    try {
+      cupom = await obterCupom(c0, ctx, id);
+      if (cupom.status === 'active') return { coupon: mapearCupom(cupom), activated: true, outcome: 'already_active', message: 'O cupom já está ativo.', divergencias: [] };
+      if (!['planned', 'pending_validation'].includes(cupom.status)) throw conflito('AFILIADOS_TRANSICAO_INVALIDA', `cupom ${cupom.status} não pode ser ativado; crie um novo vínculo`);
+      versaoDoContrato = await ultimaVersao(c0, ctx, cupom.contract_id);
+    } finally { c0.release(); }
+    if (versaoDoContrato.status !== 'active') throw erro(422, 'AFILIADOS_CONTRATO_INATIVO', 'ative o contrato antes de ativar o cupom');
+    if (retroativo && !textoOpcional(motivo, { max: 500, nome: 'motivo' })) throw entradaInvalida('ativação retroativa exige motivo');
+    const link = mapearCupom(cupom);
+
+    const aguardando = async (motivoInterno) => {
+      const r = await gravarSincronia(ctx, cupom.id, { syncStatus: 'not_created', acao: 'coupon.activate.blocked', detalhes: { motivo: motivoInterno } });
+      return { coupon: mapearCupom(r), activated: false, outcome: 'awaiting_ink', message: MSG_AGUARDANDO, divergencias: [] };
+    };
+    if (!inkPromotions) return aguardando('ink_indisponivel');
+
+    let v;
+    try { v = await inkPromotions.verificarCupom(link); } catch (err) {
+      const e = erroDeInk(err);
+      await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.activate.error', detalhes: { codigo: e.codigo } });
+      throw e;
+    }
+    if (v.status === 'unavailable') return aguardando('ink_indisponivel');
+    if (v.status === 'divergent' || v.status === 'ambiguous') {
+      const r = await gravarSincronia(ctx, cupom.id, { syncStatus: 'divergent', erroTexto: v.divergencias.join('; '), promotionId: v.promotionId ?? null, acao: 'coupon.activate.divergent', detalhes: { divergencias: v.divergencias, inkSnapshot: v.observada || null } });
+      return { coupon: mapearCupom(r), activated: false, outcome: 'divergent', message: 'A promoção da INK diverge do cupom no Oria: corrija um dos lados e verifique de novo. O cupom não foi ativado.', divergencias: v.divergencias };
+    }
+    if (v.status === 'confirmed') {
+      const ativo = await ativarConfirmado(ctx, cupom.id, { retroativo, motivo, promotionId: v.promotionId, snapshot: v.observada, via: 'existing' });
+      return { coupon: mapearCupom(ativo), activated: true, outcome: 'activated', message: 'Promoção verificada na INK; cupom ativado.', divergencias: [] };
+    }
+    // not_found: só cria se TODAS as condições de escrita valerem; senão fica aguardando (sem POST).
+    if (inkPromotions.bloqueioDeEscrita('post')) return aguardando('promocao_inexistente_escrita_desligada');
+    let criada;
+    try { criada = await inkPromotions.criarPromocao(link); } catch (err) {
+      const e = erroDeInk(err);
+      await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_create.error', detalhes: { codigo: e.codigo } });
+      throw e;
+    }
+    if (criada.confirmacao.status !== 'confirmed') {
+      const divergente = criada.confirmacao.status === 'divergent';
+      const r = await gravarSincronia(ctx, cupom.id, {
+        syncStatus: divergente ? 'divergent' : 'pending', erroTexto: (criada.confirmacao.divergencias || []).join('; ') || 'promoção criada na INK, mas ainda não confirmada por leitura',
+        promotionId: criada.promotionId, syncMode: 'ink_managed', acao: 'coupon.ink_create', detalhes: { inkSnapshot: criada.snapshot, idempotencyKey: criada.idempotencyKey, confirmacao: criada.confirmacao.status },
+      });
+      return { coupon: mapearCupom(r), activated: false, outcome: divergente ? 'divergent' : 'awaiting_ink', message: 'A promoção foi criada na INK, mas a confirmação por leitura não fechou; verifique de novo antes de ativar.', divergencias: criada.confirmacao.divergencias || [] };
+    }
+    const ativo = await ativarConfirmado(ctx, cupom.id, { retroativo, motivo, promotionId: criada.promotionId, snapshot: criada.snapshot, via: 'created' });
+    return { coupon: mapearCupom(ativo), activated: true, outcome: 'activated', message: 'Promoção criada na INK, confirmada; cupom ativado.', divergencias: [] };
   }
 
   // Pausar/encerrar fecha a vigência AGORA: vendas durante a pausa nunca serão remuneradas por reprocessamento posterior.
@@ -578,59 +682,96 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
     });
   }
 
+  async function lerCupomLink(ctx, id) {
+    const c = await pool.connect();
+    try { return mapearCupom(await obterCupom(c, ctx, id)); } finally { c.release(); }
+  }
+
   async function previsualizarCriacaoNaInk(ctx, id) {
-    const c = await pool.connect();
-    try {
-      const cupom = mapearCupom(await obterCupom(c, ctx, id));
-      const adapter = inkPromotions;
-      if (!adapter) return { ok: false, problemas: ['adaptador da INK indisponível'], escritaHabilitada: false, enviaria: false, request: null };
-      return adapter.previsualizarCriacao(cupom);
-    } finally { c.release(); }
+    const cupom = await lerCupomLink(ctx, id);
+    if (!inkPromotions) return { ok: false, problemas: ['adaptador da INK indisponível'], escritaHabilitada: false, enviaria: false, bloqueio: 'INK_PROMOTION_WRITES_DISABLED', request: null };
+    return inkPromotions.previsualizarCriacao(cupom);
   }
 
+  // Criação explícita da promoção (rota de owner). NÃO ativa o cupom: depois de criada e confirmada, a ativação passa pela verificação de novo.
   async function criarCupomNaInk(ctx, id) {
-    const c = await pool.connect();
-    let cupom;
-    try { cupom = mapearCupom(await obterCupom(c, ctx, id)); } finally { c.release(); }
-    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita de promoções na INK está desligada; cadastre o cupom no painel da INK e use o cadastro manual');
-    try {
-      const r = await inkPromotions.criarPromocao(cupom);
-      await db.tx(pool, async (t) => {
-        await t.query(
-          `UPDATE partner_coupon_links SET ink_promotion_id = $3, sync_mode = 'ink_managed', sync_status = $4, last_synced_at = now(), sync_error = NULL, updated_at = now() WHERE organization_id = $1 AND id = $2`,
-          [ctx.organizationId, cupom.id, r.promotionId, r.confirmacao.status === 'confirmed' ? 'confirmed' : 'divergent']
-        );
-        await db.auditar(t, ctx, { entidade: 'coupon', entidadeId: cupom.id, acao: 'coupon.ink_create', depois: { promotionId: r.promotionId, status: r.confirmacao.status } });
-      });
-      return r;
-    } catch (err) {
-      if (err && err.codigo && String(err.codigo).startsWith('INK_')) throw erro(409, err.codigo, err.message);
-      throw err;
+    const cupom = await lerCupomLink(ctx, id);
+    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita de promoções na INK está desligada; cadastre a promoção no painel da INK e use "Verificar na INK"');
+    let r;
+    try { r = await inkPromotions.criarPromocao(cupom); } catch (err) {
+      const e = erroDeInk(err);
+      if (e.codigo !== 'INK_PROMOTION_WRITES_DISABLED') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_create.error', detalhes: { codigo: e.codigo } });
+      throw e;
     }
+    const ok = r.confirmacao.status === 'confirmed';
+    await gravarSincronia(ctx, cupom.id, {
+      syncStatus: ok ? 'confirmed' : (r.confirmacao.status === 'divergent' ? 'divergent' : 'pending'), erroTexto: ok ? null : ((r.confirmacao.divergencias || []).join('; ') || 'ainda não confirmada por leitura'),
+      promotionId: r.promotionId, syncMode: 'ink_managed', acao: 'coupon.ink_create', detalhes: { inkSnapshot: r.snapshot, idempotencyKey: r.idempotencyKey, confirmacao: r.confirmacao.status },
+    });
+    return { promotionId: r.promotionId, confirmacao: r.confirmacao, snapshot: r.snapshot };
   }
 
+  // Leitura (GET por código): registra a verificação. Não ativa e não escreve na INK.
   async function verificarCupomNaInk(ctx, id) {
-    const c = await pool.connect();
-    let cupom;
-    try { cupom = mapearCupom(await obterCupom(c, ctx, id)); } finally { c.release(); }
+    const cupom = await lerCupomLink(ctx, id);
     if (!inkPromotions) throw erro(409, 'INK_LEITURA_INDISPONIVEL', 'a INK não está conectada para verificação');
     let r;
     try { r = await inkPromotions.verificarCupom(cupom); } catch (err) {
-      await db.tx(pool, (t) => t.query(`UPDATE partner_coupon_links SET sync_status = 'error', sync_error = $3, last_synced_at = now(), updated_at = now() WHERE organization_id = $1 AND id = $2`,
-        [ctx.organizationId, cupom.id, String(err.message || 'falha na leitura').slice(0, 500)]));
-      throw erro(502, 'INK_LEITURA_FALHOU', 'não foi possível ler as promoções da INK agora');
+      const e = erroDeInk(err);
+      await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_verify.error', detalhes: { codigo: e.codigo } });
+      throw erro(e.codigo === 'INK_NOT_CONFIGURED' ? 409 : 502, 'INK_LEITURA_FALHOU', e.message);
     }
     if (r.status === 'unavailable') throw erro(409, 'INK_LEITURA_INDISPONIVEL', 'a INK não está conectada para verificação');
-    const syncStatus = r.status === 'confirmed' ? 'confirmed' : (r.status === 'divergent' ? 'divergent' : 'not_created');
-    return db.tx(pool, async (t) => {
-      const { rows } = await t.query(
-        `UPDATE partner_coupon_links SET sync_status = $3, ink_promotion_id = COALESCE($4, ink_promotion_id), last_synced_at = now(), sync_error = $5, updated_at = now()
-          WHERE organization_id = $1 AND id = $2 RETURNING *`,
-        [ctx.organizationId, cupom.id, syncStatus, r.promotionId ?? null, r.divergencias.length ? r.divergencias.join('; ').slice(0, 500) : null]
-      );
-      await db.auditar(t, ctx, { entidade: 'coupon', entidadeId: cupom.id, acao: 'coupon.ink_verify', depois: { status: r.status, divergencias: r.divergencias } });
-      return { coupon: mapearCupom(rows[0]), verificacao: r };
+    const syncStatus = r.status === 'confirmed' ? 'confirmed' : (r.status === 'not_found' ? 'not_created' : 'divergent');
+    const linha = await gravarSincronia(ctx, cupom.id, {
+      syncStatus, erroTexto: r.divergencias.length ? r.divergencias.join('; ') : null, promotionId: r.status === 'confirmed' || r.status === 'divergent' ? (r.promotionId ?? null) : null,
+      acao: 'coupon.ink_verify', detalhes: { status: r.status, divergencias: r.divergencias, inkSnapshot: r.observada || null },
     });
+    return { coupon: mapearCupom(linha), verificacao: r };
+  }
+
+  // PATCH parcial da promoção standard (rota de owner). Só campos da promoção; sem diferença patchável não envia nada.
+  async function sincronizarCupomNaInk(ctx, id) {
+    const cupom = await lerCupomLink(ctx, id);
+    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita de promoções na INK está desligada');
+    if (!cupom.inkPromotionId) throw conflito('AFILIADOS_CUPOM_SEM_PROMOCAO_INK', 'este cupom ainda não está vinculado a uma promoção da INK; verifique-o primeiro');
+    let r;
+    try { r = await inkPromotions.atualizarPromocao(cupom, cupom.inkPromotionId); } catch (err) {
+      const e = erroDeInk(err);
+      if (e.codigo !== 'INK_PROMOTION_WRITES_DISABLED' && e.codigo !== 'INK_PROMOTION_SCOPE_MISSING') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_update.error', detalhes: { codigo: e.codigo } });
+      throw e;
+    }
+    if (!r.atualizado) return { atualizado: false, campos: [], naoSincronizaveis: r.naoSincronizaveis, coupon: cupom };
+    const ok = r.confirmacao.status === 'confirmed';
+    const linha = await gravarSincronia(ctx, cupom.id, {
+      syncStatus: ok ? 'confirmed' : 'divergent', erroTexto: ok ? null : r.confirmacao.divergencias.join('; '), acao: 'coupon.ink_update',
+      detalhes: { campos: r.campos, idempotencyKey: r.idempotencyKey, inkSnapshot: r.snapshot },
+    });
+    return { atualizado: true, campos: r.campos, naoSincronizaveis: r.naoSincronizaveis, coupon: mapearCupom(linha) };
+  }
+
+  // DELETE da promoção na INK: operação explícita e separada de pausar/encerrar (que só fecham a vigência no Oria e NUNCA chamam a INK).
+  async function excluirPromocaoNaInk(ctx, id, { motivo } = {}) {
+    const m = textoObrigatorio(motivo, { max: 500, nome: 'motivo' });
+    const cupom = await lerCupomLink(ctx, id);
+    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita de promoções na INK está desligada');
+    if (cupom.status === 'active') throw conflito('AFILIADOS_CUPOM_ATIVO', 'pause ou encerre o cupom antes de excluir a promoção na INK');
+    if (!cupom.inkPromotionId) throw conflito('AFILIADOS_CUPOM_SEM_PROMOCAO_INK', 'este cupom não está vinculado a uma promoção da INK');
+    let r;
+    try { r = await inkPromotions.excluirPromocao(cupom.id, cupom.inkPromotionId); } catch (err) {
+      const e = erroDeInk(err);
+      if (e.codigo !== 'INK_PROMOTION_WRITES_DISABLED' && e.codigo !== 'INK_PROMOTION_SCOPE_MISSING') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_delete.error', detalhes: { codigo: e.codigo } });
+      throw e;
+    }
+    const linha = await db.tx(pool, async (t) => {
+      const { rows } = await t.query(
+        `UPDATE partner_coupon_links SET ink_promotion_id = NULL, sync_status = 'not_created', sync_error = NULL, last_synced_at = now(), updated_at = now() WHERE organization_id = $1 AND id = $2 RETURNING *`,
+        [ctx.organizationId, cupom.id]
+      );
+      await db.auditar(t, ctx, { entidade: 'coupon', entidadeId: cupom.id, acao: 'coupon.ink_delete', antes: { promotionId: cupom.inkPromotionId }, depois: { idempotencyKey: r.idempotencyKey }, motivo: m });
+      return rows[0];
+    });
+    return { excluida: true, coupon: mapearCupom(linha) };
   }
 
   async function listarCupons(ctx, { partnerId = null } = {}) {
@@ -645,7 +786,7 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
     lerConfig, salvarConfig, lerRegrasDeNivel, salvarRegrasDeNivel, nivelAtualDoParceiro,
     criarParceiro, atualizarParceiro, decidirCandidatura, mudarVinculo, obterParceiroBasico, mapearParceiro,
     criarContrato, novaVersaoDeContrato, listarContratosDoParceiro, simularContrato, avaliarTeto,
-    criarCupom, ativarCupom, pausarCupom, retomarCupom, encerrarCupom, previsualizarCriacaoNaInk, criarCupomNaInk, verificarCupomNaInk, listarCupons, mapearCupom,
+    criarCupom, ativarCupom, pausarCupom, retomarCupom, encerrarCupom, previsualizarCriacaoNaInk, criarCupomNaInk, verificarCupomNaInk, sincronizarCupomNaInk, excluirPromocaoNaInk, listarCupons, mapearCupom,
     constantes: { BASES, ROTULO_BASE },
   };
 }

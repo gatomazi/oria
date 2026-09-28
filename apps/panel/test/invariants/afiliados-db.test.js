@@ -14,6 +14,7 @@ const { sqlProvisionarAppRole } = h.sujeito('lib/platform/app-role.js');
 const manifesto = h.sujeito('lib/platform/tenancy-manifest.js');
 const runtime = h.sujeito('lib/platform/tenant-runtime.js');
 const { criarAfiliados } = h.sujeito('lib/afiliados/index.js');
+const { criarInkFalsa } = require('../helpers/ink-promotions-fake');
 
 const ORG_A = 'af000000-0000-4000-8000-00000000000a';
 const ORG_B = 'af000000-0000-4000-8000-00000000000b';
@@ -31,6 +32,17 @@ let db;
 let sup;
 let appPoolReal;
 let svc;
+// INK falsa em memória (contrato oficial de Promoções). O serviço padrão só LÊ dela — como o server.js; os testes de escrita montam outro serviço.
+const inkFalsa = criarInkFalsa({ agora: () => new Date(agora) });
+const ESCOPOS_INK = ['store.promotions.read', 'store.promotions.write'];
+// "O lojista criou a promoção no painel da INK": semeia a INK falsa com o que o cupom pede e ativa pelo fluxo fail-closed.
+async function ativarComInk(ctx, cupom, servico = null) {
+  const alvo = servico || svc;
+  inkFalsa.semear({ code: cupom.codeDisplay, kind: 'percentage', discount_tier: { discount: cupom.discountBps / 100 } });
+  const r = await em(ctx, () => alvo.registry.ativarCupom(ctx, cupom.id));
+  assert.equal(r.activated, true, JSON.stringify(r));
+  return r.coupon;
+}
 let agora = new Date('2026-09-01T12:00:00Z');
 const relogio = () => new Date(agora);
 const definirAgora = (iso) => { agora = new Date(iso); };
@@ -51,7 +63,7 @@ test.before(async () => {
     await sup.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [org, nome]);
     await sup.query('INSERT INTO stores (id, organization_id, nome, loja_legada) VALUES ($1, $2, $3, NULL)', [store, org, nome]);
   }
-  svc = criarAfiliados({ pool: pool(), relogio, flags: { inkPromotionWritesEnabled: false } });
+  svc = criarAfiliados({ pool: pool(), relogio, inkClient: inkFalsa.somenteLeitura, flags: { inkPromotionWritesEnabled: false } });
 });
 
 test.after(async () => {
@@ -129,7 +141,7 @@ test('cadastro: parceiros, contratos versionados, cupom manual e collab com prod
     assert.equal(cupom.codeNormalized, 'BRUNO10');
     assert.equal(cupom.syncStatus, 'manual_unverified');
     assert.equal(cupom.status, 'pending_validation');
-    cen.cupom = await svc.registry.ativarCupom(ctxA, cupom.id);
+    cen.cupom = await ativarComInk(ctxA, cupom);
     assert.equal(cen.cupom.status, 'active');
   });
   assert.equal(await contar(`SELECT count(*)::int AS n FROM partnership_audit_events WHERE organization_id = $1`, [ORG_A]) >= 8, true);
@@ -602,15 +614,19 @@ test('escrita remota de promoções está desligada: preview monta o pedido, cri
   const preview = await emA(() => svc.registry.previsualizarCriacaoNaInk(ctxA, cen.cupom.id));
   assert.equal(preview.ok, true);
   assert.equal(preview.enviaria, false);
-  assert.equal(preview.request.headers['Idempotency-Key'], `oria-affiliate-coupon-${cen.cupom.id}`);
+  assert.match(preview.request.headers['Idempotency-Key'], new RegExp(`^oria-aff-create-${cen.cupom.id}-[0-9a-f]{16}$`));
   await assert.rejects(emA(() => svc.registry.criarCupomNaInk(ctxA, cen.cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_DISABLED');
-  await assert.rejects(emA(() => svc.registry.verificarCupomNaInk(ctxA, cen.cupom.id)), (e) => e.codigo === 'INK_LEITURA_INDISPONIVEL');
+  await assert.rejects(emA(() => svc.registry.sincronizarCupomNaInk(ctxA, cen.cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_DISABLED');
+  await assert.rejects(emA(() => svc.registry.excluirPromocaoNaInk(ctxA, cen.cupom.id, { motivo: 'x' })), (e) => ['INK_PROMOTION_WRITES_DISABLED', 'AFILIADOS_CUPOM_ATIVO'].includes(e.codigo));
+  const v = await emA(() => svc.registry.verificarCupomNaInk(ctxA, cen.cupom.id));
+  assert.equal(v.verificacao.status, 'confirmed');
+  assert.equal(inkFalsa.escritas().length, 0);
 });
 
 test('cupom pausado fecha a vigência: venda durante a pausa não remunera nem depois de retomado', async () => {
   definirAgora('2026-11-01T12:00:00Z');
   const cupom = await emA(() => svc.registry.criarCupom(ctxA, { partnerId: cen.p2.id, contractId: cen.k2, code: 'PAUSA10', discountKind: 'percentage', discountBps: 1000 }));
-  await emA(() => svc.registry.ativarCupom(ctxA, cupom.id));
+  await ativarComInk(ctxA, cupom);
   definirAgora('2026-11-02T12:00:00Z');
   const pausado = await emA(() => svc.registry.pausarCupom(ctxA, cupom.id, 'campanha suspensa'));
   assert.equal(pausado.status, 'paused');
@@ -629,7 +645,7 @@ test('parceiro com afiliado nativo da INK declarado: atribuição bloqueada e se
   const p = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Legado INK', legacyInkAffiliate: true }, { aprovarDireto: true }));
   const k = await emA(() => svc.registry.criarContrato(ctxA, { partnerId: p.id, modality: 'coupon', title: 'Legado', status: 'active', reason: 'teste', terms: { commissionBasis: 'verified_margin_percent', commissionBps: 1000 } }, { podeAtivar: true }));
   const cupom = await emA(() => svc.registry.criarCupom(ctxA, { partnerId: p.id, contractId: k.contract.id, code: 'LEGADO10', discountKind: 'percentage', discountBps: 1000 }));
-  await emA(() => svc.registry.ativarCupom(ctxA, cupom.id));
+  await ativarComInk(ctxA, cupom);
   definirAgora('2026-11-06T12:00:00Z');
   await semearPedido(ctxA, { id: 7100, criadoEm: '2026-11-06T10:00:00Z', cupom: 'LEGADO10', itens: [{ itemId: 9800, produtoId: 777 }] });
   await emA(() => svc.reconciliarTudo(ctxA, { pedidos: ['7100'] }));
@@ -713,4 +729,181 @@ test('migrations 0044/0045 descem e sobem de novo num banco descartável', async
     } finally { await p.end(); }
     assert.equal(h.migrar(d.url).status, 0);
   } finally { await d.destruir(); }
+});
+
+// ── Promoções da INK: ativação fail-closed e ciclo de vida (INK falsa em memória, contrato oficial) ──────────────────────────────
+const cicloInk = {};
+const servicoComEscrita = (ink) => criarAfiliados({ pool: pool(), relogio, inkClient: ink.client, inkScopes: ESCOPOS_INK, flags: { inkPromotionWritesEnabled: true } });
+const servicoSoLeitura = (ink) => criarAfiliados({ pool: pool(), relogio, inkClient: ink.somenteLeitura, flags: { inkPromotionWritesEnabled: false } });
+const estadoDoCupom = async (id) => (await sup.query('SELECT status, sync_status, sync_mode, ink_promotion_id, sync_error, valid_until FROM partner_coupon_links WHERE organization_id = $1 AND id = $2', [ORG_A, id])).rows[0];
+
+async function novoCupomDeCiclo(codigo, bps = 1000) {
+  if (!cicloInk.p) {
+    cicloInk.p = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Parceira Ciclo INK' }, { aprovarDireto: true }));
+    cicloInk.k = (await emA(() => svc.registry.criarContrato(ctxA, { partnerId: cicloInk.p.id, modality: 'coupon', title: 'Ciclo INK', status: 'active', reason: 'teste', terms: { commissionBasis: 'verified_margin_percent', commissionBps: 1000 } }, { podeAtivar: true }))).contract.id;
+  }
+  return emA(() => svc.registry.criarCupom(ctxA, { partnerId: cicloInk.p.id, contractId: cicloInk.k, code: codigo, discountKind: 'percentage', discountBps: bps }));
+}
+const semAtivar = (r, esperado) => { assert.equal(r.activated, false, JSON.stringify(r)); assert.equal(r.outcome, esperado); };
+const auditoriaDeAtivacao = async (id) => (await sup.query(`SELECT after_state AS depois FROM partnership_audit_events WHERE organization_id = $1 AND entity_id = $2 AND entity_type = 'coupon' AND action = 'coupon.activate'`, [ORG_A, id])).rows[0];
+
+test('ativação INK · existente e compatível: GET encontra, vincula o ID, registra verificação e SÓ então ativa', async () => {
+  definirAgora('2026-12-01T12:00:00Z');
+  const ink = criarInkFalsa({ agora: relogio });
+  const id = ink.semear({ code: 'ciclo10', kind: 'percentage', discount_tier: { discount: 10 } });
+  const cupom = await novoCupomDeCiclo('CICLO10');
+  assert.equal(cupom.operationalState, 'awaiting_ink');
+  const r = await emA(() => servicoSoLeitura(ink).registry.ativarCupom(ctxA, cupom.id));
+  assert.equal(r.activated, true);
+  assert.equal(r.outcome, 'activated');
+  assert.equal(r.coupon.operationalState, 'active_verified');
+  const e = await estadoDoCupom(cupom.id);
+  assert.deepEqual([e.status, e.sync_status, Number(e.ink_promotion_id)], ['active', 'confirmed', id]);
+  const audit = await auditoriaDeAtivacao(cupom.id);
+  assert.equal(audit.depois.promotionId, id);
+  assert.equal(audit.depois.inkSnapshot.type, 'standard');
+  assert.equal(ink.escritas().length, 0);
+});
+
+test('ativação INK · existente e divergente: NÃO ativa, mostra a divergência e preserva o estado', async () => {
+  const ink = criarInkFalsa({ agora: relogio });
+  ink.semear({ code: 'CICLO20', kind: 'percentage', discount_tier: { discount: 35 }, apply_automatically: true });
+  const cupom = await novoCupomDeCiclo('CICLO20', 2000);
+  const r = await emA(() => servicoSoLeitura(ink).registry.ativarCupom(ctxA, cupom.id));
+  semAtivar(r, 'divergent');
+  assert.match(r.divergencias.join(' | '), /valor do desconto/);
+  assert.match(r.divergencias.join(' | '), /aplicação automática/);
+  const e = await estadoDoCupom(cupom.id);
+  assert.deepEqual([e.status, e.sync_status], ['pending_validation', 'divergent']);
+  assert.equal(r.coupon.operationalState, 'awaiting_ink');
+  assert.equal(ink.escritas().length, 0);
+});
+
+test('ativação INK · inexistente com escrita desligada: sem POST, sem ativar, fica aguardando a INK', async () => {
+  const ink = criarInkFalsa({ agora: relogio });
+  const cupom = await novoCupomDeCiclo('CICLO30');
+  const r = await emA(() => servicoSoLeitura(ink).registry.ativarCupom(ctxA, cupom.id));
+  semAtivar(r, 'awaiting_ink');
+  assert.match(r.message, /Aguardando criação\/verificação na INK/);
+  const e = await estadoDoCupom(cupom.id);
+  assert.deepEqual([e.status, e.sync_status, e.ink_promotion_id], ['pending_validation', 'not_created', null]);
+  assert.equal(ink.escritas().length, 0);
+  assert.equal(ink.leituras().length, 0);
+  // Sem nenhuma INK conectada: mesmo resultado.
+  const svcSemInk = criarAfiliados({ pool: pool(), relogio, flags: { inkPromotionWritesEnabled: false } });
+  assert.equal((await emA(() => svcSemInk.registry.ativarCupom(ctxA, cupom.id))).outcome, 'awaiting_ink');
+});
+
+test('ativação INK · inexistente com escrita habilitada (mock): GET vazio → POST 201 → persiste ID e snapshot → ativa', async () => {
+  const ink = criarInkFalsa({ agora: relogio });
+  const cupom = await novoCupomDeCiclo('CICLO40', 1500);
+  const r = await emA(() => servicoComEscrita(ink).registry.ativarCupom(ctxA, cupom.id));
+  assert.equal(r.activated, true);
+  assert.equal(r.outcome, 'activated');
+  const posts = ink.chamadas.filter((c) => c[0] === 'POST');
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0][1], '/v1/stores/promotions/standard');
+  assert.deepEqual(posts[0][2].discount_tier, { discount: 15 });
+  assert.doesNotMatch(JSON.stringify(posts[0][2]), /commission|comiss|1000|bps/i);
+  const e = await estadoDoCupom(cupom.id);
+  assert.deepEqual([e.status, e.sync_status, e.sync_mode, Number(e.ink_promotion_id)], ['active', 'confirmed', 'ink_managed', 101]);
+  const audit = await auditoriaDeAtivacao(cupom.id);
+  assert.equal(audit.depois.via, 'created');
+  assert.equal(audit.depois.inkSnapshot.discount, 15);
+});
+
+test('ativação INK · POST falha (403/409/422/timeout): NÃO ativa, erro compreensível, estado anterior preservado e sem token no diagnóstico', async () => {
+  for (const [falha, codigo, http] of [[403, 'INK_FORBIDDEN', 502], [422, 'INK_VALIDATION', 422], [409, 'INK_CONFLICT', 422], ['timeout', 'INK_TIMEOUT', 502]]) {
+    const ink = criarInkFalsa({ agora: relogio });
+    ink.falhas.post.push(falha);
+    if (falha === 'timeout') ink.falhas.post.push(falha);
+    const cupom = await novoCupomDeCiclo(`FALHA${String(falha).slice(0, 3).toUpperCase()}`);
+    await assert.rejects(emA(() => servicoComEscrita(ink).registry.ativarCupom(ctxA, cupom.id)), (e) => e.codigo === codigo && e.status === http && !/Bearer/i.test(e.message));
+    const e = await estadoDoCupom(cupom.id);
+    assert.equal(e.status, 'pending_validation', String(falha));
+    assert.equal(e.sync_status, 'error');
+    assert.equal(e.ink_promotion_id, null);
+    assert.doesNotMatch(String(e.sync_error), /Bearer|Authorization/i);
+  }
+});
+
+test('ativação INK · falha na LEITURA (401/403/timeout) também não ativa nem assume sucesso', async () => {
+  for (const falha of [401, 403, 'timeout']) {
+    const ink = criarInkFalsa({ agora: relogio });
+    const codigo = `LEITURA${String(falha).slice(0, 3).toUpperCase()}`;
+    ink.semear({ code: codigo, kind: 'percentage', discount_tier: { discount: 10 } });
+    ink.falhas.get.push(falha);
+    const cupom = await novoCupomDeCiclo(codigo);
+    await assert.rejects(emA(() => servicoSoLeitura(ink).registry.ativarCupom(ctxA, cupom.id)), (e) => e.status === 502 || e.status === 409);
+    assert.equal((await estadoDoCupom(cupom.id)).status, 'pending_validation');
+  }
+});
+
+test('ativação INK · retry: resposta do POST perdida reenvia a MESMA Idempotency-Key e a promoção não duplica', async () => {
+  const ink = criarInkFalsa({ agora: relogio });
+  ink.perderProximaRespostaDePost(1);
+  const cupom = await novoCupomDeCiclo('RETRY10');
+  const r = await emA(() => servicoComEscrita(ink).registry.ativarCupom(ctxA, cupom.id));
+  assert.equal(r.activated, true);
+  const posts = ink.chamadas.filter((c) => c[0] === 'POST');
+  assert.equal(posts.length, 2);
+  assert.equal(posts[0][3]['Idempotency-Key'], posts[1][3]['Idempotency-Key']);
+  assert.equal(ink.leituras().length, 1);
+});
+
+test('ciclo de vida · pausar no Oria NUNCA chama a INK (nada de DELETE/PATCH automático); excluir é operação explícita, com motivo e cupom inativo', async () => {
+  definirAgora('2026-12-05T12:00:00Z');
+  const ink = criarInkFalsa({ agora: relogio });
+  const svcW = servicoComEscrita(ink);
+  const cupom = await novoCupomDeCiclo('CICLO50');
+  await emA(() => svcW.registry.ativarCupom(ctxA, cupom.id));
+  const idInk = Number((await estadoDoCupom(cupom.id)).ink_promotion_id);
+  const antes = ink.chamadas.length;
+  definirAgora('2026-12-06T12:00:00Z');
+  await emA(() => svcW.registry.pausarCupom(ctxA, cupom.id, 'campanha pausada'));
+  assert.equal(ink.chamadas.length, antes, 'pausar não fala com a INK');
+  assert.equal(ink.leituras().length, 1, 'a promoção continua existindo na INK');
+  const outro = await novoCupomDeCiclo('CICLO51');
+  await emA(() => svcW.registry.ativarCupom(ctxA, outro.id));
+  await assert.rejects(emA(() => svcW.registry.excluirPromocaoNaInk(ctxA, outro.id, { motivo: 'x' })), (e) => e.codigo === 'AFILIADOS_CUPOM_ATIVO');
+  await assert.rejects(emA(() => svcW.registry.excluirPromocaoNaInk(ctxA, cupom.id, {})), (e) => e.status === 400);
+  const r = await emA(() => svcW.registry.excluirPromocaoNaInk(ctxA, cupom.id, { motivo: 'campanha encerrada de vez' }));
+  assert.equal(r.excluida, true);
+  assert.equal(ink.chamadas.filter((c) => c[0] === 'DELETE').length, 1);
+  assert.equal(ink.chamadas.find((c) => c[0] === 'DELETE')[1], `/v1/stores/promotions/${idInk}`);
+  const e = await estadoDoCupom(cupom.id);
+  assert.deepEqual([e.status, e.sync_status, e.ink_promotion_id], ['paused', 'not_created', null]);
+  await assert.rejects(emA(() => servicoSoLeitura(ink).registry.excluirPromocaoNaInk(ctxA, cupom.id, { motivo: 'x' })), (e2) => e2.status === 409);
+  assert.equal(ink.chamadas.filter((c) => c[0] === 'DELETE').length, 1);
+});
+
+test('ciclo de vida · PATCH sincroniza só a vigência da promoção depois de pausar no Oria (sem comissão no corpo)', async () => {
+  definirAgora('2026-12-10T12:00:00Z');
+  const ink = criarInkFalsa({ agora: relogio });
+  const svcW = servicoComEscrita(ink);
+  const cupom = await novoCupomDeCiclo('CICLO60');
+  await emA(() => svcW.registry.ativarCupom(ctxA, cupom.id));
+  definirAgora('2026-12-11T12:00:00Z');
+  await emA(() => svcW.registry.pausarCupom(ctxA, cupom.id, 'pausa'));
+  const v = await emA(() => svcW.registry.verificarCupomNaInk(ctxA, cupom.id));
+  assert.equal(v.verificacao.status, 'divergent');
+  assert.match(v.verificacao.divergencias.join(' '), /fim da vigência/);
+  const s = await emA(() => svcW.registry.sincronizarCupomNaInk(ctxA, cupom.id));
+  assert.equal(s.atualizado, true);
+  assert.deepEqual(s.campos, ['expires_at']);
+  const patch = ink.chamadas.find((c) => c[0] === 'PATCH');
+  assert.deepEqual(Object.keys(patch[2]), ['expires_at']);
+  assert.equal((await estadoDoCupom(cupom.id)).sync_status, 'confirmed');
+  const denovo = await emA(() => svcW.registry.sincronizarCupomNaInk(ctxA, cupom.id));
+  assert.equal(denovo.atualizado, false);
+  assert.equal(ink.chamadas.filter((c) => c[0] === 'PATCH').length, 1);
+  await assert.rejects(emA(() => servicoSoLeitura(ink).registry.sincronizarCupomNaInk(ctxA, cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_DISABLED');
+});
+
+test('ativação INK · outra Organization não ativa nem dispara chamada à INK pelo cupom alheio', async () => {
+  const ink = criarInkFalsa({ agora: relogio });
+  const cupom = await novoCupomDeCiclo('CICLO70');
+  await assert.rejects(emB(() => servicoComEscrita(ink).registry.ativarCupom(ctxB, cupom.id)), (e) => e.status === 404);
+  assert.equal(ink.chamadas.length, 0);
+  assert.equal((await estadoDoCupom(cupom.id)).status, 'pending_validation');
 });

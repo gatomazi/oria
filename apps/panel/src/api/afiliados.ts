@@ -43,7 +43,11 @@ export interface Cupom {
   id: string; partnerId: string; contractId: string; codeDisplay: string; codeNormalized: string; discountKind: 'percentage' | 'value' | null; discountBps: number | null; discountCents: number | null;
   validFrom: string; validUntil: string | null; status: 'planned' | 'pending_validation' | 'active' | 'paused' | 'ended'; syncMode: 'manual' | 'ink_managed';
   syncStatus: 'manual_unverified' | 'not_created' | 'pending' | 'confirmed' | 'divergent' | 'error'; inkPromotionId: number | null; lastSyncedAt: string | null; syncError: string | null;
+  // Estado operacional derivado pelo servidor: "ativo" só é `active_verified` quando a INK confirmou a promoção.
+  operationalState: 'awaiting_ink' | 'active_verified' | 'active_unverified' | 'paused' | 'ended';
 }
+
+export interface ResultadoAtivacao { coupon: Cupom; activated: boolean; outcome: 'already_active' | 'activated' | 'awaiting_ink' | 'divergent'; message: string; divergencias: string[] }
 
 export interface MetricasNivel { contarPor: string; vendasQualificadas: number; pedidosDistintos: number; unidades: number; margemCents: number; margemVerificada: boolean; mesesComVenda: number; vendasUltimos60d: number; vendasUltimos30d: number }
 export interface MetaDeNivel { meta: string; exigido: number; atual: number | null; ok: boolean; naoVerificada?: boolean }
@@ -192,7 +196,7 @@ export const afiliados = {
 
   cupons: (partnerId?: string) => api<{ itens: Cupom[] }>(`${BASE}/coupons${qs({ partnerId })}`),
   criarCupom: (b: { partnerId: string; contractId: string; code: string; discountKind?: 'percentage' | 'value'; discountBps?: number; discountCents?: number; validFrom?: string; validUntil?: string }) => post<Cupom>('/coupons', b),
-  ativarCupom: (id: string) => post<Cupom>(`/coupons/${id}/activate`, {}),
+  ativarCupom: (id: string) => post<ResultadoAtivacao>(`/coupons/${id}/activate`, {}),
   pausarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/pause`, { reason }),
   retomarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/resume`, { reason }),
   encerrarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/end`, { reason }),

@@ -2,8 +2,9 @@
 
 // Composição do módulo de afiliados. Um objeto por processo: as dependências entram aqui e nada é global.
 //   pool     fachada de tenant (criarPoolTenant): a Organization vem do contexto da request/job.
-//   inkClient  { get(path) } de LEITURA da INK (verificação de cupom). Escrita NÃO é injetada nesta versão.
-//   flags    { inkPromotionWritesEnabled: false } — escrita remota de promoções fica desligada.
+//   inkClient  { get(path) } de LEITURA da INK (verificar/ativar cupom). `post`/`patch`/`delete` só existem em testes com mock: o server.js NÃO os injeta.
+//   inkScopes  escopos DECLARADOS do connector; sem `store.promotions.write` nenhuma escrita sai (mesmo com a flag ligada).
+//   flags    { inkPromotionWritesEnabled: false } — escrita remota de promoções fica desligada por padrão.
 
 const { createInkPromotionsAdapter } = require('./ink-promotions');
 const { criarRegistry } = require('./registry');
@@ -13,9 +14,9 @@ const { criarPayables } = require('./payables');
 const { criarProgressao } = require('./progression');
 const { criarDiretorio } = require('./directory');
 
-function criarAfiliados({ pool, relogio = () => new Date(), inkClient = null, flags = {} }) {
+function criarAfiliados({ pool, relogio = () => new Date(), inkClient = null, inkScopes = null, flags = {} }) {
   if (!pool || typeof pool.query !== 'function' || typeof pool.connect !== 'function') throw new Error('criarAfiliados exige um pool');
-  const inkPromotions = createInkPromotionsAdapter({ client: inkClient, flags: { inkPromotionWritesEnabled: flags.inkPromotionWritesEnabled === true } });
+  const inkPromotions = createInkPromotionsAdapter({ client: inkClient, scopes: inkScopes, relogio, flags: { inkPromotionWritesEnabled: flags.inkPromotionWritesEnabled === true } });
   const registry = criarRegistry({ pool, relogio, inkPromotions });
   const collabs = criarCollabs({ pool, relogio, registry });
   const reconciliador = criarReconciliador({ pool, relogio, registry });

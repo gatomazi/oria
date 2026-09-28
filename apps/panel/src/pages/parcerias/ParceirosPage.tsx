@@ -69,7 +69,7 @@ function NovoParceiroDrawer({ open, onClose, isOwner, onCriado }: { open: boolea
           <Field label="Comunidade / região" optional><Input value={regiao} maxLength={120} onChange={(e) => setRegiao(e.target.value)} /></Field>
         </div>
         <Field label="Observações internas" optional><Textarea rows={3} value={notas} maxLength={4000} onChange={(e) => setNotas(e.target.value)} /></Field>
-        <Checkbox label="Este parceiro também tem afiliado nativo na INK" description="A API da INK não informa isso. Marcado, as vendas dele ficam bloqueadas para não pagar em dobro até você conciliar." checked={legado} onChange={(e) => setLegado(e.target.checked)} />
+        <Checkbox label="Legado: este parceiro já tinha afiliado nativo na INK" description="O Oria tem o próprio programa de afiliados e não usa o da INK — não crie afiliado lá. Marque só se ele já existia (conta antiga): a API da INK não informa isso e, marcado, as vendas dele ficam bloqueadas para não pagar em dobro até você conciliar." checked={legado} onChange={(e) => setLegado(e.target.checked)} />
         {isOwner && <Checkbox label="Aprovar já (sem passar por candidato)" description="Aprovar não dá comissão nem peça grátis: falta contrato ativo." checked={aprovar} onChange={(e) => setAprovar(e.target.checked)} />}
         {erro && <Callout tone="danger" role="alert">{erro}</Callout>}
       </div>

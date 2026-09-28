@@ -115,8 +115,17 @@ export const ROTULOS_SAUDE: Record<string, { label: string; tone: Tone }> = {
 export const ROTULOS_CANDIDATURA = { candidate: 'Candidato', approved: 'Aprovado', rejected: 'Reprovado' } as const;
 export const ROTULOS_VINCULO = { draft: 'Rascunho', active: 'Ativo', paused: 'Pausado', ended: 'Encerrado' } as const;
 export const TOM_VINCULO = { draft: 'neutral', active: 'success', paused: 'warning', ended: 'neutral' } as const;
-export const ROTULOS_CUPOM = { planned: 'Planejado', pending_validation: 'Aguardando validação', active: 'Ativo', paused: 'Pausado', ended: 'Encerrado' } as const;
-export const ROTULOS_SYNC_CUPOM = { manual_unverified: 'Cadastro manual · não verificado na INK', not_created: 'Não criado na INK', pending: 'Pendente', confirmed: 'Confirmado na INK', divergent: 'Divergente da INK', error: 'Erro ao verificar' } as const;
+// Promoção na INK (o que a última leitura/escrita confirmou) — distinto do estado do cupom no Oria e do afiliado no programa.
+export const ROTULOS_SYNC_CUPOM = { manual_unverified: 'Ainda não verificada na INK', not_created: 'Não encontrada na INK', pending: 'Criada, confirmação pendente', confirmed: 'Confirmada na INK', divergent: 'Divergente da INK', error: 'Erro ao verificar' } as const;
+
+// "Ativo" só aparece quando a INK confirmou a promoção; sem isso, o cupom está aguardando a INK (nunca "ativo" por cadastro manual).
+export function situacaoDoCupom(c: { status: string; operationalState: string; syncStatus: string }): { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' } {
+  if (c.operationalState === 'active_verified') return { label: 'Ativo · verificado na INK', tone: 'success' };
+  if (c.operationalState === 'active_unverified') return { label: 'Ativo · sem confirmação da INK', tone: 'warning' };
+  if (c.operationalState === 'awaiting_ink') return c.syncStatus === 'divergent' ? { label: 'Divergente da INK · não ativo', tone: 'danger' } : { label: 'Aguardando criação/verificação na INK', tone: 'warning' };
+  if (c.status === 'paused') return { label: 'Pausado', tone: 'warning' };
+  return { label: 'Encerrado', tone: 'neutral' };
+}
 export const ROTULOS_BASE_COMISSAO = {
   net_item_revenue_percent: '% da receita líquida do item', verified_margin_percent: '% da margem de produção verificada', fixed_per_unit: 'Valor fixo por unidade',
 } as const;

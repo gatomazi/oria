@@ -245,8 +245,20 @@ test('caminho completo pelo HTTP: pedido da INK com cupom → upsert com campos 
   assert.equal(k.status, 201, k.texto);
   const cupom = await owner.req('POST', '/api/admin/afiliados/coupons', { corpo: { partnerId: p.json.id, contractId: k.json.contract.id, code: 'mockcupom', discountKind: 'percentage', discountBps: 500 } });
   assert.equal(cupom.status, 201, cupom.texto);
+  // Fail-closed: um cupom que a INK (mock) não conhece NÃO ativa — 200 com activated=false, sem POST, e continua aguardando a INK.
+  const desconhecido = await owner.req('POST', '/api/admin/afiliados/coupons', { corpo: { partnerId: p.json.id, contractId: k.json.contract.id, code: 'semink', discountKind: 'percentage', discountBps: 500 } });
+  const bloqueado = await owner.req('POST', `/api/admin/afiliados/coupons/${desconhecido.json.id}/activate`, { corpo: {} });
+  assert.equal(bloqueado.status, 200, bloqueado.texto);
+  assert.equal(bloqueado.json.activated, false);
+  assert.equal(bloqueado.json.outcome, 'awaiting_ink');
+  assert.equal(bloqueado.json.coupon.status, 'pending_validation');
+  assert.equal(bloqueado.json.coupon.operationalState, 'awaiting_ink');
+  // Já o cupom que a INK confirma (GET por código, contrato oficial) é vinculado pelo ID e ativado.
   const ativo = await owner.req('POST', `/api/admin/afiliados/coupons/${cupom.json.id}/activate`, { corpo: {} });
   assert.equal(ativo.status, 200, ativo.texto);
+  assert.equal(ativo.json.activated, true);
+  assert.equal(ativo.json.coupon.operationalState, 'active_verified');
+  assert.ok(Number(ativo.json.coupon.inkPromotionId) > 0);
 
   // O pedido entra pelo backfill (mesmo upsert do sync/webhook), lido do mock da INK — sem rede.
   const bf = await owner.req('POST', '/api/admin/pedidos/backfill-historico', { corpo: {} });

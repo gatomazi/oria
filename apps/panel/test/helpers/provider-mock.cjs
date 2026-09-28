@@ -142,7 +142,17 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     if (metodo === 'POST') return json({ refund: { id: base + 801, value: 10 } }, 201);
     return json({ refunds: [{ id: base + 800, value: 10 }] });
   }
-  if (p === '/v1/stores/promotions' && metodo === 'GET') return json({ promotions: [{ id: base + 900, code: `PROMO${tag}`, type: 'standard' }] });
+  if (p === '/v1/stores/promotions' && metodo === 'GET') {
+    // Com `code` segue o contrato oficial (filtro exato, case-insensitive; envelope paginado; `discount_tiers` com discount STRING). Só a loja `F`
+    // conhece o cupom de afiliado de teste (MockCupom, 5% em toda a loja); qualquer outro código volta vazio. Sem `code`, o payload legado de sempre.
+    const code = url && url.searchParams ? url.searchParams.get('code') : null;
+    if (code) {
+      const achou = tag === 'F' && code.toUpperCase() === 'MOCKCUPOM';
+      const promocao = { id: base + 902, type: 'standard', code: 'MockCupom', kind: 'percentage', apply_automatically: false, list_type: 'all', progress_kind: null, usage_limit: null, first_purchase: false, show_on_product_page: false, show_in_cart: false, starts_at: null, expires_at: null, available: true, discount_tiers: [{ min_cart_value: null, min_cart_items: null, discount: '5.0' }], product_ids: [], product_type_ids: [], collection_ids: [], created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
+      return json({ promotions: achou ? [promocao] : [], page: 1, per_page: 5, total_pages: 1, total_count: achou ? 1 : 0 });
+    }
+    return json({ promotions: [{ id: base + 900, code: `PROMO${tag}`, type: 'standard' }] });
+  }
   if ((m = p.match(/^\/v1\/stores\/promotions\/(standard|progressive|unit_free)$/)) && metodo === 'POST') {
     return json({ promotion: { id: base + 901, type: m[1], code: JSON.parse(corpo || '{}').code } }, 201);
   }

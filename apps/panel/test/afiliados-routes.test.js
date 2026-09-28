@@ -27,6 +27,7 @@ function servicoDuble() {
       simularContrato: registrar('simularContrato'), criarContrato: registrar('criarContrato', { contract: {} }), novaVersaoDeContrato: registrar('novaVersaoDeContrato', {}),
       listarCupons: registrar('listarCupons', []), criarCupom: registrar('criarCupom', {}), ativarCupom: registrar('ativarCupom'), pausarCupom: registrar('pausarCupom'), retomarCupom: registrar('retomarCupom'),
       encerrarCupom: registrar('encerrarCupom'), verificarCupomNaInk: registrar('verificarCupomNaInk'), previsualizarCriacaoNaInk: registrar('previsualizar'),
+      sincronizarCupomNaInk: registrar('sincronizarCupomNaInk'), excluirPromocaoNaInk: registrar('excluirPromocaoNaInk'),
       criarCupomNaInk: async () => { throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita desligada'); },
     },
     collabs: {
@@ -81,7 +82,7 @@ const ROTAS_SO_OWNER = [
   ['GET', `/partners/${UUID}/statement`], ['POST', `/partners/${UUID}/level`, { level: 'voz', reason: 'x' }], ['POST', `/partners/${UUID}/benefits/grant`, { productionCostCents: 1, description: 'x' }],
   ['POST', `/benefits/${UUID}/reverse`, { reason: 'x' }],
   ['POST', `/coupons/${UUID}/activate`, {}], ['POST', `/coupons/${UUID}/pause`, { reason: 'x' }], ['POST', `/coupons/${UUID}/resume`, { reason: 'x' }], ['POST', `/coupons/${UUID}/end`, { reason: 'x' }],
-  ['POST', `/coupons/${UUID}/ink-create`, {}],
+  ['POST', `/coupons/${UUID}/ink-create`, {}], ['POST', `/coupons/${UUID}/ink-sync`, {}], ['POST', `/coupons/${UUID}/ink-delete`, { reason: 'x' }],
   ['POST', `/collabs/${UUID}/creators`, { partnerId: UUID, contractId: UUID }], ['POST', `/collabs/${UUID}/creators/${UUID}/end`, { reason: 'x' }],
   ['POST', `/collabs/${UUID}/products`, { products: [] }], ['POST', `/collabs/${UUID}/products/discover`, {}], ['POST', `/collabs/${UUID}/products/${UUID}/approve`, {}],
   ['POST', `/collabs/${UUID}/products/${UUID}/reject`, { reason: 'x' }], ['POST', `/collabs/${UUID}/products/${UUID}/remove`, { reason: 'x' }],

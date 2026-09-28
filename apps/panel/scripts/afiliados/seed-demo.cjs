@@ -12,6 +12,7 @@
 // Depois: AFILIADOS_MODULE_ENABLED=true npm start  →  /admin/parcerias  (login: demo-owner@local.oria / a senha acima).
 
 const crypto = require('node:crypto');
+const assert = require('node:assert/strict');
 const path = require('node:path');
 const pg = require('pg');
 
@@ -19,6 +20,9 @@ const RAIZ = path.resolve(__dirname, '..', '..');
 const { gerarHash } = require(path.join(RAIZ, 'lib/auth/password.js'));
 const runtime = require(path.join(RAIZ, 'lib/platform/tenant-runtime.js'));
 const { criarAfiliados } = require(path.join(RAIZ, 'lib/afiliados/index.js'));
+// INK FALSA em memória (contrato oficial de Promoções): representa "promoções que o lojista criou no painel da INK" só para a demonstração local.
+// A ativação de cupom é fail-closed — sem a INK confirmar, o cupom fica aguardando. Nada aqui fala com a INK real.
+const { criarInkFalsa } = require(path.join(RAIZ, 'test/helpers/ink-promotions-fake.js'));
 
 function recusar(msg) { console.error(`seed-demo: ${msg}`); process.exit(2); }
 
@@ -72,7 +76,11 @@ async function main() {
     }
 
     const ctx = { organizationId: ORG, storeId, userId: donoId };
-    const svc = criarAfiliados({ pool: runtime.criarPoolTenant(real), relogio, flags: { inkPromotionWritesEnabled: false } });
+    const inkDemo = criarInkFalsa({ agora: relogio });
+    inkDemo.semear({ code: 'BRUNO10', kind: 'percentage', discount_tier: { discount: 10 } });
+    inkDemo.semear({ code: 'CARLA15', kind: 'percentage', discount_tier: { discount: 15 } });
+    // CARLA20 fica de fora de propósito: mostra o estado "Aguardando criação/verificação na INK".
+    const svc = criarAfiliados({ pool: runtime.criarPoolTenant(real), relogio, inkClient: inkDemo.somenteLeitura, flags: { inkPromotionWritesEnabled: false } });
     const em = (fn) => runtime.comContexto({ organizationId: ORG, storeId, origem: 'seed-demo' }, fn);
     let proximoItem = 5000;
 
@@ -108,9 +116,9 @@ async function main() {
       await svc.collabs.adicionarProdutos(ctx, collab.id, { products: [{ inkProductId: '111', productName: 'Camiseta Praia do Rosa' }, { inkProductId: '112', productName: 'Caneca Praia do Rosa' }] });
       await svc.collabs.atualizarCollab(ctx, collab.id, { status: 'active' });
       const c1 = await svc.registry.criarCupom(ctx, { partnerId: bruno.id, contractId: kBruno, code: 'BRUNO10', discountKind: 'percentage', discountBps: 1000 });
-      await svc.registry.ativarCupom(ctx, c1.id);
+      assert.equal((await svc.registry.ativarCupom(ctx, c1.id)).activated, true);
       const c2 = await svc.registry.criarCupom(ctx, { partnerId: carla.id, contractId: kCarla, code: 'CARLA15', discountKind: 'percentage', discountBps: 1500 });
-      await svc.registry.ativarCupom(ctx, c2.id);
+      assert.equal((await svc.registry.ativarCupom(ctx, c2.id)).activated, true);
       const c3 = await svc.registry.criarCupom(ctx, { partnerId: carla.id, contractId: kCarla, code: 'CARLA20', discountKind: 'percentage', discountBps: 2000 });
       void c3; // fica "aguardando validação": ainda não comissiona
       await svc.collabs.adicionarProdutos(ctx, (await svc.collabs.criarCollab(ctx, { name: 'Carla · Serra' })).id, { products: [{ inkProductId: '222', productName: 'Camiseta Serra' }] });
