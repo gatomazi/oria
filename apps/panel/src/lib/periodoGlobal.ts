@@ -6,17 +6,25 @@ import { useCallback, useEffect, useState } from 'react';
 // escolhido numa tela nunca aparecia nas outras, e sumia ao navegar). Persistido no localStorage —
 // é uma conveniência por navegador, nunca dado de servidor: não precisa de tabela nem de RLS.
 
-export type PeriodoPresetId = 'hoje' | '7d' | '30d' | '90d';
+// Rodada "período global nas telas de mídia": os mesmos ids que o Meta Ads já usava (lib/meta.ts
+// `PeriodoMeta`) — 'ontem' e '14d' entraram aqui pra não perder nenhum preset que o Meta já tinha
+// ao ligar as duas telas no mesmo valor.
+export type PeriodoPresetId = 'hoje' | 'ontem' | '7d' | '14d' | '30d' | '90d';
 
 export interface PeriodoPreset {
   id: PeriodoPresetId;
   label: string;
   dias: number;
+  // Dias entre o fim da janela e hoje — 0 pros presets de sempre (janela termina hoje), 1 só pra
+  // "Ontem" (janela de 1 dia terminando ontem, não hoje).
+  fimOffsetDias?: number;
 }
 
 export const PERIODO_PRESETS: PeriodoPreset[] = [
   { id: 'hoje', label: 'Hoje', dias: 1 },
+  { id: 'ontem', label: 'Ontem', dias: 1, fimOffsetDias: 1 },
   { id: '7d', label: 'Últimos 7 dias', dias: 7 },
+  { id: '14d', label: 'Últimos 14 dias', dias: 14 },
   { id: '30d', label: 'Últimos 30 dias', dias: 30 },
   { id: '90d', label: 'Últimos 90 dias', dias: 90 },
 ];
@@ -50,7 +58,7 @@ export function diasAtrasISO(dataISO: string, n: number): string {
 }
 
 function presetPorId(id: PeriodoPresetId): PeriodoPreset {
-  return PERIODO_PRESETS.find((p) => p.id === id) ?? PERIODO_PRESETS[2];
+  return PERIODO_PRESETS.find((p) => p.id === id) ?? PERIODO_PRESETS.find((p) => p.id === '30d')!;
 }
 
 export function rotuloDoPreset(id: PeriodoPresetId): string {
@@ -66,7 +74,7 @@ export function intervaloDoPeriodo(p: PeriodoGlobal): { startDate: string; endDa
     return { startDate: p.startDate, endDate: p.endDate, dias };
   }
   const preset = presetPorId(p.id);
-  const endDate = hojeISO();
+  const endDate = diasAtrasISO(hojeISO(), preset.fimOffsetDias ?? 0);
   return { startDate: diasAtrasISO(endDate, preset.dias - 1), endDate, dias: preset.dias };
 }
 

@@ -40,6 +40,8 @@ export interface TotalCusto {
 
 export interface CustosApiData {
   dias: number;
+  startDate: string;
+  endDate: string;
   conferidoEm: string;
   provider: 'meta_api' | 'whatsapp_web';
   whatsapp: TotalCusto & { semCustoDeApi: number; porOrigem: Record<string, number> };
@@ -52,8 +54,11 @@ export interface PrecosResposta {
   conferidoEm: string;
 }
 
-export function getCustosApi(dias: number) {
-  return api<CustosApiData>(`/api/admin/financeiro/custos-api?dias=${dias}`);
+export function getCustosApi({ startDate, endDate, dias }: { startDate?: string; endDate?: string; dias?: number }) {
+  const params = new URLSearchParams();
+  if (startDate && endDate) { params.set('startDate', startDate); params.set('endDate', endDate); }
+  else params.set('dias', String(dias ?? 30));
+  return api<CustosApiData>(`/api/admin/financeiro/custos-api?${params}`);
 }
 
 export function getPrecosApi() {

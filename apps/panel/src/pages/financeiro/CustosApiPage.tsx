@@ -9,14 +9,10 @@ import {
   restaurarPrecoApi, salvarPrecoApi,
   type CustosApiData, type LinhaCusto, type PrecoApi, type TotalCusto,
 } from '../../api/custosApi';
+import { PeriodoGlobalSelect } from '../../components/PeriodoGlobalSelect';
+import { usePeriodoGlobal, intervaloDoPeriodo } from '../../lib/periodoGlobal';
 
 import '../../pedidos-central.css';
-
-const PERIODOS = [
-  { dias: 7, label: 'Últimos 7 dias' },
-  { dias: 30, label: 'Últimos 30 dias' },
-  { dias: 90, label: 'Últimos 90 dias' },
-];
 
 // Um total pode ser exibido? Só quando não mistura moedas — somar USD com BRL dá um número que não
 // significa nada, e exibi-lo seria pior do que não exibir.
@@ -35,7 +31,8 @@ function ajudaDoTotal(t: TotalCusto, sufixo: string): string {
 // variante de modelo que a OpenAI usa não é conhecida pelo painel — então um número aqui que se
 // apresentasse como exato induziria o cliente a planejar gasto errado.
 export function CustosApiPage() {
-  const [dias, setDias] = useState(30);
+  const [periodoGlobal, setPeriodoGlobal] = usePeriodoGlobal();
+  const { startDate, endDate } = intervaloDoPeriodo(periodoGlobal);
   const [dados, setDados] = useState<CustosApiData | null>(null);
   const [erro, setErro] = useState('');
   const [precos, setPrecos] = useState<PrecoApi[] | null>(null);
@@ -46,12 +43,12 @@ export function CustosApiPage() {
   function carregar() {
     setErro('');
     setDados(null);
-    getCustosApi(dias)
+    getCustosApi({ startDate, endDate })
       .then(setDados)
       .catch((err: Error) => setErro(err.message));
   }
 
-  useEffect(carregar, [dias]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(carregar, [startDate, endDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     getPrecosApi()
@@ -178,14 +175,7 @@ export function CustosApiPage() {
       <PageHeader
         title="Custos de API"
         description="O que a operação gasta em mensagens de WhatsApp e em geração de criativos — separado da mídia."
-        actions={
-          <Select
-            aria-label="Período" value={String(dias)}
-            onChange={(e) => setDias(Number(e.target.value))}
-          >
-            {PERIODOS.map((p) => <option key={p.dias} value={p.dias}>{p.label}</option>)}
-          </Select>
-        }
+        actions={<PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />}
       />
 
       {/* Primeiro aviso da tela, e não uma nota de rodapé: quem lê o total precisa saber, ANTES de
