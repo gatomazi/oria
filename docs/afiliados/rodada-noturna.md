@@ -194,3 +194,47 @@ Observações (não são defeitos):
 **APTO PARA PR COM RESSALVAS**
 
 Motivos: checklist manual 10/10 PASS, 211/211 no wrapper `app-role` (subconjunto que cobre a branch), nenhum bug de código, invariantes de segurança confirmados (flag off, sem escrita na INK, RLS 20/20, append-only, member sem dinheiro, 1 workspace = 1 loja), sem colisão de migrations. Ressalvas: (1) o contrato real da INK **não foi validado** por falta de credencial local — a integração de promoções segue só com mock e a escrita permanece desligada; (2) o `npm run test:app-role` completo e a suíte inteira não foram concluídos nesta máquina e devem rodar no CI antes do merge; (3) `main` avançou (sem migrations), exigindo reexecução após a integração.
+
+---
+
+# Fechamento da integração de Promoções INK (rodada 3 · 28/09/2026)
+
+Local até o push da branch para o PR. **Nenhum POST/PATCH/DELETE real na INK; `ink_promotion_writes_enabled=false` por padrão (fixa em código) e o `server.js` só injeta um cliente `get`.**
+
+## Git
+
+- Commits desta rodada: `2ce7836` (provider de Promoções), `74d36a9` (ativação fail-closed + UI + rotas `ink-sync`/`ink-delete`), `d71b204` (docs), mais este relatório.
+- Base: `origin/main` = `b32e25b` (PR #44, sem migrations). **O merge de `origin/main` na feature não foi feito por esta sessão** (bloqueado pelo classificador de permissões). `git merge-tree` indica merge **sem conflitos**. Migrations finais: só `0044` e `0045` (nenhum schema novo: `partner_coupon_links` já tinha `ink_promotion_id`, `sync_*`; o snapshot fica na auditoria append-only).
+
+## O que mudou no fluxo de Promoções
+
+- Provider `standard` conforme a referência oficial (GET por código/ID, POST, PATCH parcial, DELETE), `Idempotency-Key` derivada da intenção, retry só de falha transitória com a mesma chave.
+- Ativação fail-closed: só ativa após a INK confirmar (existente e compatível, ou POST `201` + leitura de volta, este último só com escrita habilitada). Divergente, inexistente com escrita desligada e qualquer erro da INK **não ativam**. UI mostra "Aguardando criação/verificação na INK".
+- Pausar/encerrar não chamam a INK; excluir a promoção é operação explícita de owner.
+- Corrigido: envelope fora do contrato era tratado como "não encontrado"; `available` tratado como configuração; chave de idempotência fixa por vínculo.
+
+## Testes
+
+| Suíte | Passou | Falhou | Pulou |
+|---|---|---|---|
+| Puros do módulo (`money-schedule`, `engine`, `adapters`, `ink-promocoes`, `routes`) | 93 | 0 | 0 |
+| Wrapper `app-role`: `app-role-suite`, `afiliados-db` (41), `afiliados-http` (6), `migrations`, `tenancy-*`, `td001`, `inv-td003`, `navegacao-painel` | 278 | 0 | 0 |
+| `npm run typecheck` / `npm run build` | limpos | — | — |
+| `npm run test:app-role` completo | **em execução quando o push foi pedido — resultado não incluído aqui** | | |
+
+Smoke visual (1440 e 390 px, owner e member): sem overflow horizontal; únicos logs de console são o 403 preexistente de `/api/admin/whatsapp-web/config` e um ícone de extensão do Chrome de teste.
+
+## INK
+
+- **Documentação oficial:** endpoints, escopos, corpo/leitura (assimetria `discount_tier` × `discount_tiers`), `Idempotency-Key`, soft delete, `available` calculado (ver `auditoria-integracao.md` §7).
+- **Mock/contract tests:** mapper, provider, ativação, divergência, retry, zero escrita com flag desligada.
+- **API real:** não executada (sem credencial local). **Integração ainda não validada end-to-end contra uma credencial real da loja.**
+
+## Ressalvas que permanecem
+
+1. Validação real da INK (formato da conta, escopos, se `discount_tier` sem gatilho é aceito).
+2. Merge de `origin/main` e suíte completa `test:app-role` a confirmar (CI/PR) depois dele.
+
+## Recomendação
+
+**APTO PARA PR COM RESSALVAS** — código, testes do módulo, tenancy e invariants verdes; ressalvas acima.
