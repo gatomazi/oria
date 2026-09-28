@@ -1,12 +1,11 @@
 'use strict';
 
-// CSV seguro, adaptador de promoções da INK (contract tests com fake, sem chamada real) e níveis.
+// CSV seguro e níveis.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { gerarCsv, celula } = require('../lib/afiliados/csv');
-const inkPromo = require('../lib/afiliados/ink-promotions');
 const levels = require('../lib/afiliados/levels');
 
 // ── CSV ────────────────────────────────────────────────────────────────────────────────────────
@@ -27,91 +26,7 @@ test('CSV só emite as colunas declaradas (não vaza campo extra da linha)', () 
   assert.doesNotMatch(csv, /segredo|x@y\.com/);
 });
 
-// ── INK: promoções ─────────────────────────────────────────────────────────────────────────────
-const LINK = { id: 'link-1', codeDisplay: 'Amanda10', codeNormalized: 'AMANDA10', discountKind: 'percentage', discountBps: 1000, validFrom: new Date('2026-10-01T03:00:00Z'), validUntil: null };
-
-function clienteFalso({ existentes = [], criada = { promotion: { id: 77, code: 'AMANDA10', type: 'standard', kind: 'percentage', available: true, discount_tiers: [{ discount: '10.0' }], starts_at: '2026-10-01T03:00:00.000Z' } } } = {}) {
-  const chamadas = [];
-  return {
-    chamadas,
-    async get(path) { chamadas.push(['GET', path]); return { promotions: existentes }; },
-    async post(path, body, headers) { chamadas.push(['POST', path, body, headers]); return criada; },
-  };
-}
-
-test('escrita desligada: nenhum POST é feito mesmo com cliente injetado', async () => {
-  const cliente = clienteFalso();
-  const adapter = inkPromo.createInkPromotionsAdapter({ client: cliente, flags: { inkPromotionWritesEnabled: false } });
-  await assert.rejects(() => adapter.criarPromocao(LINK), inkPromo.PromotionWritesDisabledError);
-  assert.equal(cliente.chamadas.length, 0);
-});
-
-test('escrita ligada mas sem cliente de escrita: também falha fechado', async () => {
-  const adapter = inkPromo.createInkPromotionsAdapter({ client: { get: async () => ({ promotions: [] }) }, flags: { inkPromotionWritesEnabled: true } });
-  await assert.rejects(() => adapter.criarPromocao(LINK), inkPromo.PromotionWritesDisabledError);
-});
-
-test('preview monta o pedido com Idempotency-Key estável e não faz nenhuma chamada', () => {
-  const cliente = clienteFalso();
-  const adapter = inkPromo.createInkPromotionsAdapter({ client: cliente, flags: {} });
-  const a = adapter.previsualizarCriacao(LINK);
-  const b = adapter.previsualizarCriacao(LINK);
-  assert.equal(a.ok, true);
-  assert.equal(a.enviaria, false);
-  assert.equal(a.request.method, 'POST');
-  assert.equal(a.request.path, '/v1/stores/promotions/standard');
-  assert.equal(a.request.headers['Idempotency-Key'], 'oria-affiliate-coupon-link-1');
-  assert.equal(a.request.headers['Idempotency-Key'], b.request.headers['Idempotency-Key']);
-  assert.equal(a.request.escopoExigido, 'store.promotions.write');
-  assert.deepEqual(a.request.body.discount_tier, { discount: 10 });
-  assert.equal(a.request.body.code, 'AMANDA10');
-  assert.equal(cliente.chamadas.length, 0);
-});
-
-test('preview aponta problemas de validação em vez de montar pedido inválido', () => {
-  const adapter = inkPromo.createInkPromotionsAdapter({});
-  const r = adapter.previsualizarCriacao({ ...LINK, codeDisplay: 'a b', codeNormalized: 'A B', discountKind: null });
-  assert.equal(r.ok, false);
-  assert.ok(r.problemas.length >= 2);
-});
-
-test('criação (só com fake e flag ligada): checa conflito, cria com Idempotency-Key e lê de volta', async () => {
-  const cliente = clienteFalso();
-  const adapter = inkPromo.createInkPromotionsAdapter({ client: cliente, flags: { inkPromotionWritesEnabled: true }, scopes: ['store.promotions.write', 'store.promotions.read'] });
-  const r = await adapter.criarPromocao(LINK);
-  assert.equal(r.promotionId, 77);
-  const post = cliente.chamadas.find((c) => c[0] === 'POST');
-  assert.equal(post[3]['Idempotency-Key'], 'oria-affiliate-coupon-link-1');
-  // GET de conflito antes do POST e GET de leitura de volta depois.
-  assert.equal(cliente.chamadas[0][0], 'GET');
-  assert.equal(cliente.chamadas.filter((c) => c[0] === 'GET').length, 2);
-});
-
-test('conflito: código já existente na INK não é sobrescrito', async () => {
-  const cliente = clienteFalso({ existentes: [{ id: 5, code: 'amanda10', type: 'standard' }] });
-  const adapter = inkPromo.createInkPromotionsAdapter({ client: cliente, flags: { inkPromotionWritesEnabled: true } });
-  await assert.rejects(() => adapter.criarPromocao(LINK), inkPromo.PromotionConflictError);
-  assert.equal(cliente.chamadas.some((c) => c[0] === 'POST'), false);
-});
-
-test('token sem escopo de escrita: recusa antes de qualquer chamada', async () => {
-  const cliente = clienteFalso();
-  const adapter = inkPromo.createInkPromotionsAdapter({ client: cliente, flags: { inkPromotionWritesEnabled: true }, scopes: ['store.promotions.read'] });
-  await assert.rejects(() => adapter.criarPromocao(LINK), inkPromo.PromotionPermissionError);
-  assert.equal(cliente.chamadas.length, 0);
-});
-
-test('verificação de cupom manual: confirmado, divergente e não encontrado', async () => {
-  const ok = clienteFalso({ existentes: [{ id: 9, code: 'AMANDA10', type: 'standard', kind: 'percentage', available: true, discount_tiers: [{ discount: '10.00' }] }] });
-  assert.equal((await inkPromo.createInkPromotionsAdapter({ client: ok }).verificarCupom(LINK)).status, 'confirmed');
-  const dif = clienteFalso({ existentes: [{ id: 9, code: 'AMANDA10', type: 'standard', kind: 'percentage', available: true, discount_tiers: [{ discount: '25.00' }] }] });
-  const r = await inkPromo.createInkPromotionsAdapter({ client: dif }).verificarCupom(LINK);
-  assert.equal(r.status, 'divergent');
-  assert.match(r.divergencias.join(' '), /valor do desconto/);
-  const nada = clienteFalso({ existentes: [] });
-  assert.equal((await inkPromo.createInkPromotionsAdapter({ client: nada }).verificarCupom(LINK)).status, 'not_found');
-  assert.equal((await inkPromo.createInkPromotionsAdapter({ client: null }).verificarCupom(LINK)).status, 'unavailable');
-});
+// Promoções da INK (mapper, GET/POST/PATCH/DELETE, idempotência, fail-closed): test/afiliados-ink-promocoes.test.js.
 
 // ── Níveis ─────────────────────────────────────────────────────────────────────────────────────
 const AGORA = new Date('2026-10-20T12:00:00Z');
