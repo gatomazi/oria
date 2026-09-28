@@ -35,13 +35,16 @@ O Oria tem o **próprio programa de afiliados**: **não crie afiliado na INK**. 
      na vitrine/carrinho, sem limite de usos, toda a loja), confere por leitura e só então ativa;
    - **diverge** (desconto, vigência, alcance…) → **não ativa** e lista o que difere; corrija no Oria ou use **Sincronizar com a INK**;
    - **erro** da INK (permissão, validação, rede) → **não ativa**, mostra o erro e mantém o estado.
-3. **Prévia INK** mostra o pedido que o Oria enviaria; **Verificar na INK** só lê. Em um connector **sem criação de cupom**, crie a promoção
-   na loja e use Verificar/Ativar para vincular.
+3. **Verificar na INK** confere por leitura a qualquer momento (só aparece se o connector lê promoções). Em um connector **sem criação de
+   cupom**, crie a promoção na loja e use Verificar/Ativar para vincular. (A prévia do pedido que seria enviado existe só via API, para
+   suporte/depuração — não aparece mais no painel: o botão Ativar já mostra o resultado real.)
 4. A vigência é comparada **por dia** no fuso da loja. INK terminando em dia posterior (ou sem fim) diverge; até 1 dia antes é tolerado.
 5. **Encerrar** o parceiro, o contrato ou o cupom (e **pausar** o cupom) fecha a vigência no Oria na hora **e encerra o desconto na INK**
    (a promoção **não é apagada**; o código só para de funcionar). Se a INK falhar, o encerramento vale e o cupom fica com erro: use
    **Sincronizar com a INK**. **Retomar** abre vigência nova (o período pausado continua sem comissão) e reabre o fim da promoção. Para apagar a
    promoção, use **Excluir na INK** (cupom pausado/encerrado, com motivo). Pausar só o vínculo do parceiro não mexe nos cupons.
+6. **Excluir na INK** é idempotente: se a promoção já tiver sido apagada direto no painel da INK, o Oria trata o 404 como sucesso e limpa o
+   vínculo local (nunca fica travado esperando um DELETE que sempre vai dar 404).
 
 Códigos comuns sem parceiro não geram comissão. Parceiro que também tem afiliado **nativo da INK**: marque no cadastro — as vendas dele
 ficam bloqueadas até você conciliar (a API não permite detectar isso).
@@ -79,6 +82,12 @@ O owner **associa** o item a uma collab/cupom ou **descarta**, sempre com motivo
 
 ## Níveis e benefícios
 
+- **Configure os níveis do seu jeito** em Níveis e benefícios: adicione ou remova "steps" (1 a 16), reordene com ↑/↓, edite nome, chave,
+  metas (vendas, margem verificada, meses com venda, vendas em 60 dias), janela de métricas, teto sobre margem e o benefício (sem peça,
+  1ª peça após N vendas, ou peça a cada N dias). O nível de índice 0 é sempre a base (todo parceiro aprovado começa nele; metas não se
+  aplicam). Cada gravação exige um motivo e vira uma versão nova.
+- Se você remover ou renomear uma chave em uso, o salvamento **não é bloqueado**, mas avisa quantos parceiros seriam afetados: eles caem
+  para o nível base até a próxima proposta (ou um override manual) recolocá-los.
 - O sistema calcula elegibilidade (metas simultâneas, só vendas elegíveis) e **propõe**; você aprova em **Níveis e benefícios**. Meta de
   margem sem custo verificado aparece como *não verificada* e não promove. O nível nunca reescreve um contrato em vigor.
 - **Carteira de benefícios**: crédito de até 25% da contribuição pós-parceria positiva e verificada de vendas **entregues**. **Conceder

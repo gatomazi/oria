@@ -403,8 +403,16 @@ function createInkPromotionsAdapter({ client = null, scopes = null, relogio = ()
     exigirEscrita('delete');
     if (!Number.isInteger(Number(promotionId)) || Number(promotionId) < 1) throw new PromotionApiError('INK_INVALID_ID', 'ID de promoção inválido');
     const chave = chaveDeExclusao(linkId, promotionId);
-    await escrever(() => client.delete(`/v1/stores/promotions/${Number(promotionId)}`, { 'Idempotency-Key': chave }));
-    return { excluida: true, promotionId: Number(promotionId), idempotencyKey: chave };
+    try {
+      await escrever(() => client.delete(`/v1/stores/promotions/${Number(promotionId)}`, { 'Idempotency-Key': chave }));
+    } catch (err) {
+      // A exclusão já É idempotente pela Idempotency-Key (retry da MESMA tentativa não repete o DELETE); mas se a promoção foi apagada
+      // por outro caminho (painel da INK, outra integração), este é o PRIMEIRO delete com esta chave e a INK responde 404 — não é falha,
+      // é o estado que já queríamos. Sem isso o vínculo local ficaria travado, exigindo o mesmo DELETE que nunca vai deixar de dar 404.
+      if (err instanceof PromotionApiError && err.codigo === 'INK_NOT_FOUND') return { excluida: true, jaEstavaExcluida: true, promotionId: Number(promotionId), idempotencyKey: chave };
+      throw err;
+    }
+    return { excluida: true, jaEstavaExcluida: false, promotionId: Number(promotionId), idempotencyKey: chave };
   }
 
   return { previsualizarCriacao, buscarPorCodigo, buscarPorId, verificarCupom, verificarPorId, criarPromocao, atualizarPromocao, excluirPromocao, bloqueioDeEscrita, capacidades };

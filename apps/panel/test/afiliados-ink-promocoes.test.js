@@ -312,12 +312,28 @@ test('exclusão: DELETE /promotions/{id} com Idempotency-Key estável; soft dele
   assert.deepEqual(ink.chamadas[0].slice(0, 2), ['DELETE', `/v1/stores/promotions/${id}`]);
   assert.equal(ink.chamadas[0][2]['Idempotency-Key'], `oria-aff-delete-link-1-${id}`);
   assert.equal(r.excluida, true);
+  assert.equal(r.jaEstavaExcluida, false);
   assert.equal(ink.leituras().length, 0);
   assert.equal((await adaptador(ink).verificarCupom(LINK)).status, 'not_found');
   // (vigência por dia: ver os dois testes ao final do arquivo)
-  // mesma intenção (mesma chave) = replay idempotente; outra intenção sobre promoção já excluída = 404
+  // mesma intenção (mesma chave) = replay idempotente
   assert.equal((await adaptador(ink).excluirPromocao(LINK.id, id)).excluida, true);
-  await assert.rejects(() => adaptador(ink).excluirPromocao('link-2', id), (e) => e.codigo === 'INK_NOT_FOUND');
+});
+
+test('exclusão: já apagada na INK por outro caminho (painel da INK) — o 404 da PRIMEIRA tentativa com esta chave é sucesso, não trava o vínculo', async () => {
+  const ink = criarInkFalsa();
+  const id = ink.semear(promocaoCompativel());
+  ink.promocao(id).excluida = true; // simula exclusão feita direto no painel da INK, fora do Oria
+  const r = await adaptador(ink).excluirPromocao('link-2', id); // primeira tentativa do Oria com esta intenção → chave nova, DELETE real → 404
+  assert.equal(r.excluida, true);
+  assert.equal(r.jaEstavaExcluida, true);
+  assert.equal(r.promotionId, id);
+  // idempotente: repetir a mesma intenção continua sucesso
+  assert.equal((await adaptador(ink).excluirPromocao('link-2', id)).excluida, true);
+  // ID que nunca existiu: mesmo comportamento (idempotente-sucesso, não é diferenciável de "já excluída" do ponto de vista do Oria)
+  const r2 = await adaptador(ink).excluirPromocao('link-3', 999999);
+  assert.equal(r2.excluida, true);
+  assert.equal(r2.jaEstavaExcluida, true);
 });
 
 // ── Vigência comparada por dia no fuso da loja (caso real: fim 10/10 no Oria × INK gravando o fim do dia em outro fuso) ──────────────

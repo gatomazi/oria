@@ -55,7 +55,6 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
   const [contratoDialog, setContratoDialog] = useState<{ aberto: boolean; contrato: Contrato | null }>({ aberto: false, contrato: null });
   const [cupomDialog, setCupomDialog] = useState(false);
   const [acaoCupom, setAcaoCupom] = useState<{ tipo: 'pausar' | 'retomar' | 'encerrar'; cupom: Cupom } | null>(null);
-  const [previa, setPrevia] = useState<{ cupom: Cupom; texto: string } | null>(null);
   const [retro, setRetro] = useState<Cupom | null>(null);
   const [excluir, setExcluir] = useState<Cupom | null>(null);
   const [resultadoAtivacao, setResultadoAtivacao] = useState<{ cupom: Cupom; r: ResultadoAtivacao } | null>(null);
@@ -66,17 +65,6 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
       const r = await afiliados.verificarCupom(c.id);
       toast(r.verificacao.status === 'confirmed' ? 'Cupom confirmado na INK.' : r.verificacao.divergencias.join('; ') || 'Cupom não encontrado na INK.', r.verificacao.status === 'confirmed' ? 'sucesso' : 'erro');
       recarregar();
-    } catch (e) { toast(mensagemDoErro(e)); }
-  }
-  async function previsualizar(c: Cupom) {
-    try {
-      const r = await afiliados.previaCupomNaInk(c.id);
-      setPrevia({
-        cupom: c,
-        texto: r.ok && r.request
-          ? `Pré-visualização (nada foi enviado): ${r.request.method} ${r.request.path} · escopo ${r.request.escopoExigido} · Idempotency-Key ${r.request.headers['Idempotency-Key']}. ${r.criacaoDisponivel ? 'Ao ativar o cupom, o Oria cria esta promoção na INK (se ela ainda não existir) e só ativa depois de confirmar.' : 'Este connector não cria cupons: crie a promoção na loja e use "Verificar na INK".'}`
-          : `Problemas: ${r.problemas.join('; ')}`,
-      });
     } catch (e) { toast(mensagemDoErro(e)); }
   }
   async function sincronizar(c: Cupom) {
@@ -147,8 +135,7 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
                 key: 'a', label: 'Ações', align: 'right',
                 render: (c) => (
                   <span className="pa-badges">
-                    <Button size="sm" variant="ghost" onClick={() => verificar(c)}>Verificar na INK</Button>
-                    <Button size="sm" variant="ghost" onClick={() => previsualizar(c)}>Prévia INK</Button>
+                    {capacidades.read && <Button size="sm" variant="ghost" onClick={() => verificar(c)}>Verificar na INK</Button>}
                     {isOwner && capacidades.update && c.syncStatus === 'divergent' && !!c.inkPromotionId && <Button size="sm" variant="secondary" onClick={() => sincronizar(c)}>Sincronizar com a INK</Button>}
                     {isOwner && capacidades.delete && !!c.inkPromotionId && (c.status === 'paused' || c.status === 'ended') && <Button size="sm" variant="ghost" onClick={() => setExcluir(c)}>Excluir na INK</Button>}
                     {isOwner && (c.status === 'pending_validation' || c.status === 'planned') && <Button size="sm" onClick={() => setRetro(c)}>Ativar</Button>}
@@ -181,7 +168,7 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
       <MotivoDialog
         open={!!excluir} onClose={() => setExcluir(null)} titulo={`Excluir a promoção ${excluir?.codeDisplay ?? ''} na INK`} confirmVariant="danger-solid"
         descricao="Apaga a promoção na INK (o código fica livre para reuso). Não afeta o histórico de vendas e comissões no Oria. Só para cupons pausados ou encerrados."
-        onConfirm={async (m) => { if (!excluir) return; await afiliados.excluirPromocaoNaInk(excluir.id, m); toast('Promoção excluída na INK.', 'sucesso'); recarregar(); }}
+        onConfirm={async (m) => { if (!excluir) return; const r = await afiliados.excluirPromocaoNaInk(excluir.id, m); toast(r.jaEstavaExcluida ? 'Já estava excluída na INK; vínculo limpo no Oria.' : 'Promoção excluída na INK.', 'sucesso'); recarregar(); }}
       />
       <ConfirmDialog
         open={!!retro} onClose={() => setRetro(null)} title={`Ativar o cupom ${retro?.codeDisplay ?? ''}?`} confirmLabel="Ativar" confirmVariant="primary"
@@ -192,7 +179,6 @@ function AbaContratos({ perfil, isOwner, recarregar }: { perfil: PerfilDoParceir
         <p className="pa-aviso">{resultadoAtivacao?.r.message}</p>
         {!!resultadoAtivacao?.r.divergencias.length && <ul className="pa-lista">{resultadoAtivacao.r.divergencias.map((d) => <li key={d}>{d}</li>)}</ul>}
       </Modal>
-      <Modal open={!!previa} onClose={() => setPrevia(null)} title={`Prévia · ${previa?.cupom.codeDisplay ?? ''}`} maxWidth={620}><p className="pa-aviso">{previa?.texto}</p></Modal>
     </div>
   );
 }

@@ -664,6 +664,65 @@ test('regras de nível são versionadas por loja e a de outra Organization não 
   assert.equal((await emB(() => svc.registry.lerRegrasDeNivel(ctxB))).padrao, true);
 });
 
+test('regras de nível: totalmente configuráveis pelo lojista — mais "steps", campos livres, whitelist ao persistir', async () => {
+  definirAgora('2027-01-05T12:00:00Z');
+  const niveis = [
+    { key: 'inicio', label: 'Início', tetoMargemBps: 1200, beneficio: { tipo: 'nenhum' } },
+    { key: 'bronze', label: 'Bronze', vendasQualificadas: 3, margemCents: 5000, mesesComVenda: 0, vendasUltimos60d: 0, tetoMargemBps: 1600, janelaDias: 60, beneficio: { tipo: 'primeira_peca', aPartirDeVendas: 5 } },
+    { key: 'prata', label: 'Prata', vendasQualificadas: 10, margemCents: 20000, mesesComVenda: 1, vendasUltimos60d: 0, tetoMargemBps: 2000, beneficio: { tipo: 'nenhum' } },
+    { key: 'ouro', label: 'Ouro', vendasQualificadas: 25, margemCents: 50000, mesesComVenda: 3, vendasUltimos60d: 5, tetoMargemBps: 2600, beneficio: { tipo: 'peca_periodica', aCadaDias: 45, exigeVendasUltimos30d: 8 } },
+    { key: 'platina', label: 'Platina', vendasQualificadas: 50, margemCents: 100000, mesesComVenda: 6, vendasUltimos60d: 15, tetoMargemBps: 3200, beneficio: { tipo: 'peca_periodica', aCadaDias: 30 } },
+    { key: 'lenda', label: 'Lenda', vendasQualificadas: 100, margemCents: 250000, mesesComVenda: 9, vendasUltimos60d: 30, tetoMargemBps: 4000, camposEstranhos: 'nunca deveriam persistir', beneficio: { tipo: 'primeira_peca', aPartirDeVendas: 999, aCadaDias: 'nao pertence a este tipo' } },
+  ];
+  const r = await emA(() => svc.registry.salvarRegrasDeNivel(ctxA, { regras: { niveis }, motivo: '6 níveis, configuração própria da loja' }));
+  assert.equal(r.regras.niveis.length, 6);
+  assert.deepEqual(r.regras.niveis.map((n) => n.ordem), [0, 1, 2, 3, 4, 5]); // ordem = posição, nunca o que veio do cliente (aqui nem foi enviado)
+  assert.deepEqual(r.regras.niveis[5].beneficio, { tipo: 'primeira_peca', aPartirDeVendas: 999 }); // aCadaDias (de outro tipo) não sobrevive
+  assert.equal('camposEstranhos' in r.regras.niveis[5], false);
+  const relido = await emA(() => svc.registry.lerRegrasDeNivel(ctxA));
+  assert.equal(relido.regras.niveis.length, 6);
+  assert.deepEqual(relido.regras.niveis.map((n) => n.key), ['inicio', 'bronze', 'prata', 'ouro', 'platina', 'lenda']);
+});
+
+test('regras de nível: reordenar é só mudar a posição no array — a `ordem` gravada segue a nova posição', async () => {
+  const atual = (await emA(() => svc.registry.lerRegrasDeNivel(ctxA))).regras;
+  const reordenado = { niveis: [atual.niveis[0], atual.niveis[2], atual.niveis[1], ...atual.niveis.slice(3)] };
+  const r = await emA(() => svc.registry.salvarRegrasDeNivel(ctxA, { regras: reordenado, motivo: 'trocar bronze e prata de posição' }));
+  assert.deepEqual(r.regras.niveis.map((n) => n.key), ['inicio', 'prata', 'bronze', 'ouro', 'platina', 'lenda']);
+  assert.deepEqual(r.regras.niveis.map((n) => n.ordem), [0, 1, 2, 3, 4, 5]);
+});
+
+test('regras de nível: remover uma chave em uso avisa (não bloqueia) quantos parceiros seriam afetados', async () => {
+  definirAgora('2027-01-06T12:00:00Z');
+  // Só entram no aviso parceiros REALMENTE em atividade (relationship_status active/paused) — 'draft' (sem contrato ativo) não conta, por
+  // isso a parceira precisa de um contrato ativo para o cenário ficar realista.
+  const nova = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Parceira Nível Bronze' }, { aprovarDireto: true }));
+  await emA(() => svc.registry.criarContrato(ctxA, { partnerId: nova.id, modality: 'coupon', title: 'Contrato Bronze', status: 'active', reason: 'teste', terms: { commissionBasis: 'verified_margin_percent', commissionBps: 1000 } }, { podeAtivar: true }));
+  await emA(() => svc.progressao.definirNivelManual(ctxA, nova.id, { level: 'bronze', reason: 'seed do teste' }));
+  const atual = (await emA(() => svc.registry.lerRegrasDeNivel(ctxA))).regras;
+  const semBronze = { niveis: atual.niveis.filter((n) => n.key !== 'bronze') };
+  const r = await emA(() => svc.registry.salvarRegrasDeNivel(ctxA, { regras: semBronze, motivo: 'remover o nível bronze' }));
+  // Este arquivo compartilha a Organization entre testes: outros parceiros de testes anteriores podem legitimamente estar órfãos de
+  // 'raiz'/'voz' (o ruleset padrão foi inteiramente substituído acima) — o que importa aqui é que 'bronze' aparece, com a parceira certa.
+  const doBronze = r.avisos.niveisOrfaos.find((a) => a.key === 'bronze');
+  assert.ok(doBronze, JSON.stringify(r.avisos.niveisOrfaos));
+  assert.deepEqual([doBronze.key, doBronze.partners, doBronze.exemplo], ['bronze', 1, 'Parceira Nível Bronze']);
+  // Não bloqueou: a versão nova foi gravada mesmo assim, e a parceira volta ao nível base (não trava, não derruba o sistema).
+  assert.equal(r.regras.niveis.some((n) => n.key === 'bronze'), false);
+  // O aviso NÃO some sozinho ao regravar: o histórico da parceira continua apontando 'bronze' até uma NOVA decisão de nível (proposta
+  // aprovada ou override manual) gravar uma linha nova — resalvar a mesma configuração não reescreve o passado.
+  const r2 = await emA(() => svc.registry.salvarRegrasDeNivel(ctxA, { regras: r.regras, motivo: 'gravar de novo sem mudar nada' }));
+  assert.ok(r2.avisos.niveisOrfaos.some((a) => a.key === 'bronze'));
+  await emA(() => svc.progressao.definirNivelManual(ctxA, nova.id, { level: 'prata', reason: 'realocar depois da remoção do bronze' }));
+  const r3 = await emA(() => svc.registry.salvarRegrasDeNivel(ctxA, { regras: r.regras, motivo: 'gravar de novo após realocar a parceira' }));
+  assert.equal(r3.avisos.niveisOrfaos.some((a) => a.key === 'bronze'), false); // agora sim: ela tem uma linha de histórico nova
+});
+
+test('regras de nível: número de níveis fora de 1–16 é rejeitado no registry (mesma validação do levels.js)', async () => {
+  await assert.rejects(emA(() => svc.registry.salvarRegrasDeNivel(ctxA, { regras: { niveis: [] }, motivo: 'x' })), (e) => e.codigo === 'AFILIADOS_ENTRADA_INVALIDA');
+});
+
+
 test('visão geral: KPIs com período e tipo de data explícitos, sem chamar receita atribuída de incremental', async () => {
   definirAgora('2026-11-10T12:00:00Z');
   const v = await emA(() => svc.diretorio.visaoGeral(ctxA, { from: '2026-09-01', to: '2026-09-30', dateType: 'order' }));
@@ -988,6 +1047,24 @@ test('encerramento · retomar um cupom pausado reabre o fim da promoção na INK
   assert.equal(ink.promocao(idInk).expires_at, null);
   assert.equal(retomado.syncStatus, 'confirmed');
   assert.equal(deletesDe(ink).length, 0);
+});
+
+test('encerramento · promoção já apagada direto no painel da INK: "Excluir na INK" não trava — trata o 404 como já excluído e limpa o vínculo', async () => {
+  definirAgora('2026-12-26T12:00:00Z');
+  const ink = criarInkFalsa({ agora: relogio });
+  const svcW = servicoComEscrita(ink);
+  const cupom = await novoCupomDeCiclo('SUMIU10');
+  await emA(() => svcW.registry.ativarCupom(ctxA, cupom.id));
+  await emA(() => svcW.registry.pausarCupom(ctxA, cupom.id, 'pausa'));
+  const idInk = Number((await estadoDoCupom(cupom.id)).ink_promotion_id);
+  ink.promocao(idInk).excluida = true; // owner apagou direto no painel da INK, antes de mandar excluir pelo Oria
+  const r = await emA(() => svcW.registry.excluirPromocaoNaInk(ctxA, cupom.id, { motivo: 'limpeza' }));
+  assert.equal(r.excluida, true);
+  assert.equal(r.jaEstavaExcluida, true);
+  const e = await estadoDoCupom(cupom.id);
+  assert.deepEqual([e.status, e.sync_status, e.ink_promotion_id, e.sync_error], ['paused', 'not_created', null, null]);
+  const audit = (await sup.query(`SELECT after_state FROM partnership_audit_events WHERE organization_id = $1 AND entity_id = $2 AND action = 'coupon.ink_delete' ORDER BY created_at DESC LIMIT 1`, [ORG_A, cupom.id])).rows[0];
+  assert.equal(audit.after_state.jaEstavaExcluida, true);
 });
 
 test('ativação INK · outra Organization não ativa nem dispara chamada à INK pelo cupom alheio', async () => {

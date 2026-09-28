@@ -150,10 +150,16 @@ export interface DetalheDaCollab {
 export interface ProdutoDoCatalogo { inkProductId: string; name: string; imageUrl: string | null; clusterId: string | null; collabId: string | null }
 
 export interface RegrasDeNivel { version: number; regras: { niveis: NivelDeRegra[] }; padrao: boolean; effectiveFrom: string | null }
+// `ordem` não é enviada ao salvar: o servidor sempre a recalcula pela posição no array (reordenar É mudar a posição).
+export type TipoDeBeneficio = 'nenhum' | 'primeira_peca' | 'peca_periodica';
+export interface BeneficioDoNivel { tipo: TipoDeBeneficio; aPartirDeVendas?: number; aCadaDias?: number; exigeVendasUltimos30d?: number }
 export interface NivelDeRegra {
   key: string; label: string; ordem: number; janelaDias: number | null; vendasQualificadas: number; margemCents: number; mesesComVenda: number; vendasUltimos60d: number; tetoMargemBps: number;
-  beneficio: { tipo: string; aPartirDeVendas?: number; aCadaDias?: number; exigeVendasUltimos30d?: number }; revisaoAposDias?: number;
+  beneficio: BeneficioDoNivel;
 }
+// Nível que deixou de existir na versão salva mas ainda é o nível atual de algum parceiro ativo/pausado (não bloqueia; o parceiro só
+// cai para o nível base até a próxima proposta recolocá-lo onde as métricas reais indicam).
+export interface NivelOrfao { key: string; partners: number; exemplo: string }
 export interface PropostaDeNivel {
   id: string; partnerId: string; partnerName: string; fromLevel: string; toLevel: string; direction: 'upgrade' | 'downgrade'; observed: MetricasNivel; status: string; createdAt: string;
   economicEffect: { newMarginCapBps: number | null; contractRewrite: boolean; note: string };
@@ -203,7 +209,7 @@ export const afiliados = {
   cupons: (partnerId?: string) => api<{ itens: Cupom[] }>(`${BASE}/coupons${qs({ partnerId })}`),
   criarCupom: (b: { partnerId: string; contractId: string; code: string; discountKind?: 'percentage' | 'value'; discountBps?: number; discountCents?: number; validFrom?: string; validUntil?: string }) => post<Cupom>('/coupons', b),
   sincronizarCupomNaInk: (id: string) => post<{ atualizado: boolean; campos: string[]; naoSincronizaveis: string[]; coupon: Cupom }>(`/coupons/${id}/ink-sync`, {}),
-  excluirPromocaoNaInk: (id: string, reason: string) => post<{ excluida: boolean; coupon: Cupom }>(`/coupons/${id}/ink-delete`, { reason }),
+  excluirPromocaoNaInk: (id: string, reason: string) => post<{ excluida: boolean; jaEstavaExcluida: boolean; coupon: Cupom }>(`/coupons/${id}/ink-delete`, { reason }),
   ativarCupom: (id: string) => post<ResultadoAtivacao>(`/coupons/${id}/activate`, {}),
   pausarCupom: (id: string, reason: string) => post<Cupom & { inkSync?: ResultadoInk }>(`/coupons/${id}/pause`, { reason }),
   retomarCupom: (id: string, reason: string) => post<Cupom & { inkSync?: ResultadoInk }>(`/coupons/${id}/resume`, { reason }),
@@ -244,7 +250,7 @@ export const afiliados = {
   lancarManual: (b: { partnerId: string; category: 'commission' | 'content_fee'; amountCents: number; reason: string; dueAt?: string }) => post<{ id: string }>('/ledger/manual', b),
 
   regrasDeNivel: () => api<RegrasDeNivel>(`${BASE}/levels/rules`),
-  salvarRegrasDeNivel: (regras: RegrasDeNivel['regras'], motivo: string) => put<RegrasDeNivel>('/levels/rules', { regras, motivo }),
+  salvarRegrasDeNivel: (regras: RegrasDeNivel['regras'], motivo: string) => put<RegrasDeNivel & { avisos: { niveisOrfaos: NivelOrfao[] } }>('/levels/rules', { regras, motivo }),
   propostasDeNivel: (status = 'pending') => api<{ itens: PropostaDeNivel[] }>(`${BASE}/levels/proposals${qs({ status })}`),
   avaliarNiveis: () => post<{ propostasCriadas: number }>('/levels/evaluate', {}),
   decidirProposta: (id: string, b: { decision: 'approve' | 'dismiss'; reason?: string }) => post<{ status: string; level: string }>(`/levels/proposals/${id}/decide`, b),

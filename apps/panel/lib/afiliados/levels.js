@@ -10,7 +10,7 @@ const REGRAS_PADRAO = Object.freeze({
   niveis: Object.freeze([
     Object.freeze({
       key: 'raiz', label: 'Raiz', ordem: 0, janelaDias: null, vendasQualificadas: 0, margemCents: 0, mesesComVenda: 0, vendasUltimos60d: 0,
-      tetoMargemBps: 1500, beneficio: Object.freeze({ tipo: 'nenhum' }), revisaoAposDias: 60,
+      tetoMargemBps: 1500, beneficio: Object.freeze({ tipo: 'nenhum' }),
     }),
     Object.freeze({
       key: 'voz', label: 'Voz', ordem: 1, janelaDias: 90, vendasQualificadas: 5, margemCents: 15000, mesesComVenda: 0, vendasUltimos60d: 0,
@@ -27,23 +27,62 @@ const REGRAS_PADRAO = Object.freeze({
   ]),
 });
 
-function validarRegras(regras) {
-  if (!regras || !Array.isArray(regras.niveis) || regras.niveis.length === 0) throw new TypeError('regras de nível inválidas');
-  const chaves = new Set();
-  let ultimaOrdem = -1;
-  for (const n of regras.niveis) {
-    if (!n || typeof n.key !== 'string' || !/^[a-z][a-z0-9_]{1,30}$/.test(n.key)) throw new TypeError('nível com chave inválida');
-    if (chaves.has(n.key)) throw new TypeError(`nível duplicado: ${n.key}`);
-    chaves.add(n.key);
-    if (!Number.isInteger(n.ordem) || n.ordem <= ultimaOrdem) throw new TypeError('níveis devem estar em ordem crescente');
-    ultimaOrdem = n.ordem;
-    for (const campo of ['vendasQualificadas', 'margemCents', 'mesesComVenda', 'vendasUltimos60d', 'tetoMargemBps']) {
-      if (!Number.isInteger(n[campo]) || n[campo] < 0) throw new TypeError(`${n.key}.${campo} deve ser inteiro >= 0`);
-    }
-    if (n.tetoMargemBps > 10000) throw new TypeError(`${n.key}.tetoMargemBps acima de 100%`);
-    if (n.janelaDias !== null && (!Number.isInteger(n.janelaDias) || n.janelaDias < 1)) throw new TypeError(`${n.key}.janelaDias inválida`);
+const MIN_NIVEIS = 1;
+const MAX_NIVEIS = 16; // "mais steps" é livre para o lojista dentro de um teto sensato (payload de auditoria, tabela na UI).
+const TIPOS_BENEFICIO = ['nenhum', 'primeira_peca', 'peca_periodica'];
+
+function inteiroEm(valor, { min, max, nome }) {
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n < min || n > max) throw new TypeError(`${nome} deve ser um inteiro entre ${min} e ${max}`);
+  return n;
+}
+
+// Reconstrói o benefício SÓ com os campos que o tipo escolhido usa (mesma técnica de whitelist de `lerTermos`/`lerPerfis`
+// no registry): um campo desconhecido ou de outro tipo nunca é persistido, nunca influencia o sistema.
+function normalizarBeneficio(b, contexto) {
+  if (!b || typeof b !== 'object' || !TIPOS_BENEFICIO.includes(b.tipo)) throw new TypeError(`${contexto}.beneficio.tipo inválido (use nenhum, primeira_peca ou peca_periodica)`);
+  if (b.tipo === 'nenhum') return { tipo: 'nenhum' };
+  if (b.tipo === 'primeira_peca') return { tipo: 'primeira_peca', aPartirDeVendas: inteiroEm(b.aPartirDeVendas, { min: 0, max: 1000000, nome: `${contexto}.beneficio.aPartirDeVendas` }) };
+  const beneficio = { tipo: 'peca_periodica', aCadaDias: inteiroEm(b.aCadaDias, { min: 1, max: 3650, nome: `${contexto}.beneficio.aCadaDias` }) };
+  if (b.exigeVendasUltimos30d !== undefined && b.exigeVendasUltimos30d !== null && b.exigeVendasUltimos30d !== '') {
+    beneficio.exigeVendasUltimos30d = inteiroEm(b.exigeVendasUltimos30d, { min: 0, max: 1000000, nome: `${contexto}.beneficio.exigeVendasUltimos30d` });
   }
-  return regras;
+  return beneficio;
+}
+
+// Reconstrói UM nível campo a campo (whitelist): nada que não esteja listado aqui chega a ser persistido. `ordem` NÃO é
+// entrada do usuário — é sempre a posição do nível no array (índice), o que elimina buraco/duplicata/ordem incoerente
+// como classe de erro; reordenar é reordenar o array. O nível de índice 0 é a "base": suas metas nunca são avaliadas
+// (`avaliarNivel` trata `ordem === 0` como sempre alcançado), então os limiares dele são sempre zerados aqui.
+function normalizarNivel(n, indice, chavesVistas) {
+  if (!n || typeof n !== 'object') throw new TypeError(`nível #${indice + 1} inválido`);
+  if (typeof n.key !== 'string' || !/^[a-z][a-z0-9_]{1,30}$/.test(n.key)) throw new TypeError(`nível #${indice + 1}: chave inválida (a-z, 0-9, _; começa com letra; até 31 caracteres)`);
+  if (chavesVistas.has(n.key)) throw new TypeError(`chave de nível duplicada: ${n.key}`);
+  chavesVistas.add(n.key);
+  const label = typeof n.label === 'string' ? n.label.trim() : '';
+  if (!label || label.length > 60) throw new TypeError(`${n.key}.label deve ter de 1 a 60 caracteres`);
+  const contexto = n.key;
+  const base = indice === 0;
+  const zeroSeBase = (valor, min, max, nome) => (base ? 0 : inteiroEm(valor, { min, max, nome: `${contexto}.${nome}` }));
+  return {
+    key: n.key, label, ordem: indice,
+    janelaDias: n.janelaDias === null || n.janelaDias === undefined ? null : inteiroEm(n.janelaDias, { min: 1, max: 3650, nome: `${contexto}.janelaDias` }),
+    vendasQualificadas: zeroSeBase(n.vendasQualificadas, 0, 1000000, 'vendasQualificadas'),
+    margemCents: zeroSeBase(n.margemCents, 0, 100000000000, 'margemCents'),
+    mesesComVenda: zeroSeBase(n.mesesComVenda, 0, 120, 'mesesComVenda'),
+    vendasUltimos60d: zeroSeBase(n.vendasUltimos60d, 0, 1000000, 'vendasUltimos60d'),
+    tetoMargemBps: inteiroEm(n.tetoMargemBps, { min: 0, max: 10000, nome: `${contexto}.tetoMargemBps` }),
+    beneficio: normalizarBeneficio(n.beneficio, contexto),
+  };
+}
+
+// Valida E normaliza: devolve sempre um objeto NOVO, só com os campos whitelisted (nunca o `regras` bruto de entrada).
+function validarRegras(regras) {
+  if (!regras || typeof regras !== 'object' || !Array.isArray(regras.niveis)) throw new TypeError('regras de nível inválidas');
+  if (regras.niveis.length < MIN_NIVEIS || regras.niveis.length > MAX_NIVEIS) throw new TypeError(`use de ${MIN_NIVEIS} a ${MAX_NIVEIS} níveis`);
+  const chaves = new Set();
+  const niveis = regras.niveis.map((n, i) => normalizarNivel(n, i, chaves));
+  return { niveis };
 }
 
 const nivelDe = (regras, key) => regras.niveis.find((n) => n.key === key) || null;
@@ -133,4 +172,4 @@ function elegibilidadeDePeca({ nivel, metricas, saldoBeneficioCents, custoPecaCe
   return { elegivel: true, motivo: null };
 }
 
-module.exports = { REGRAS_PADRAO, validarRegras, nivelDe, metricasDaJanela, avaliarNivel, elegibilidadeDePeca };
+module.exports = { REGRAS_PADRAO, validarRegras, nivelDe, metricasDaJanela, avaliarNivel, elegibilidadeDePeca, MIN_NIVEIS, MAX_NIVEIS, TIPOS_BENEFICIO };

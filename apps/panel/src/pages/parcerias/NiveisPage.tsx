@@ -10,47 +10,136 @@ import { useParcerias } from './ParceriasLayout';
 
 function texto(v: number | null | undefined): string { return v === null || v === undefined ? '' : String(v); }
 
+const CHAVE_VALIDA = /^[a-z][a-z0-9_]{1,30}$/;
+const MIN_NIVEIS = 1;
+const MAX_NIVEIS = 16;
+
+// Sugestão de chave a partir do nome (só para o botão "Adicionar nível" pré-preencher algo razoável); o campo continua
+// livre para o lojista editar — a chave é a identidade do nível entre versões, então ele decide o quanto mexe nela.
+function sugerirChave(label: string, emUso: Set<string>): string {
+  const base = label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/^[0-9_]+/, '');
+  const raiz = base.length >= 2 ? base.slice(0, 31) : 'nivel';
+  if (!emUso.has(raiz)) return raiz;
+  for (let i = 2; i < 1000; i += 1) { const tentativa = `${raiz.slice(0, 27)}_${i}`; if (!emUso.has(tentativa)) return tentativa; }
+  return `${raiz.slice(0, 20)}_${Date.now().toString(36)}`;
+}
+
+function descreverBeneficio(b: NivelDeRegra['beneficio']): string {
+  if (b.tipo === 'nenhum') return 'Sem peça';
+  if (b.tipo === 'primeira_peca') return `1ª peça após ${plural(b.aPartirDeVendas ?? 0, 'venda')}`;
+  return `Peça a cada ${plural(b.aCadaDias ?? 0, 'dia')}${b.exigeVendasUltimos30d ? ` · exige ${b.exigeVendasUltimos30d}+ vendas em 30 dias` : ''}`;
+}
+
 function EditorDeRegras({ niveis, isOwner, onSalvo }: { niveis: NivelDeRegra[]; isOwner: boolean; onSalvo: () => void }) {
   const [linhas, setLinhas] = useState<NivelDeRegra[]>(niveis);
   const [motivo, setMotivo] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
+  const [avisoOrfaos, setAvisoOrfaos] = useState<{ key: string; partners: number; exemplo: string }[]>([]);
   useEffect(() => setLinhas(niveis), [niveis]);
-  const alterado = JSON.stringify(linhas) !== JSON.stringify(niveis);
+  const alterado = JSON.stringify(linhas.map(({ ordem: _ordem, ...resto }) => resto)) !== JSON.stringify(niveis.map(({ ordem: _ordem, ...resto }) => resto));
 
-  const set = (i: number, campo: keyof NivelDeRegra, valor: number) => setLinhas((l) => l.map((n, j) => (j === i ? { ...n, [campo]: valor } : n)));
+  const reindexar = (ls: NivelDeRegra[]) => ls.map((n, i) => ({ ...n, ordem: i }));
+  const atualizar = (i: number, patch: Partial<NivelDeRegra>) => setLinhas((ls) => reindexar(ls.map((n, j) => (j === i ? { ...n, ...patch } : n))));
+  const atualizarBeneficio = (i: number, b: NivelDeRegra['beneficio']) => atualizar(i, { beneficio: b });
+
+  function adicionar() {
+    const emUso = new Set(linhas.map((n) => n.key));
+    const label = `Nível ${linhas.length + 1}`;
+    const ultimo = linhas[linhas.length - 1];
+    setLinhas((ls) => reindexar([...ls, {
+      key: sugerirChave(label, emUso), label, ordem: ls.length, janelaDias: 90,
+      vendasQualificadas: ultimo.vendasQualificadas + 10, margemCents: ultimo.margemCents + 15000, mesesComVenda: 0, vendasUltimos60d: 0,
+      tetoMargemBps: Math.min(10000, ultimo.tetoMargemBps + 500), beneficio: { tipo: 'nenhum' },
+    }]));
+  }
+  function remover(i: number) { if (i > 0 && linhas.length > MIN_NIVEIS) setLinhas((ls) => reindexar(ls.filter((_, j) => j !== i))); }
+  function mover(i: number, delta: number) {
+    const j = i + delta;
+    if (i === 0 || j <= 0 || j >= linhas.length) return;
+    setLinhas((ls) => { const copia = [...ls]; [copia[i], copia[j]] = [copia[j], copia[i]]; return reindexar(copia); });
+  }
+
+  const chaves = new Set(linhas.map((n) => n.key));
+  const problemas: string[] = [];
+  if (linhas.length < MIN_NIVEIS || linhas.length > MAX_NIVEIS) problemas.push(`use de ${MIN_NIVEIS} a ${MAX_NIVEIS} níveis (hoje: ${linhas.length})`);
+  if (chaves.size !== linhas.length) problemas.push('há chaves de nível repetidas');
+  linhas.forEach((n, i) => {
+    if (!CHAVE_VALIDA.test(n.key)) problemas.push(`nível ${i + 1}: chave inválida (a-z, 0-9, _; começa com letra; 2 a 31 caracteres)`);
+    if (!n.label.trim()) problemas.push(`nível ${i + 1}: nome é obrigatório`);
+  });
+
   async function salvar() {
-    setEnviando(true); setErro('');
-    try { await afiliados.salvarRegrasDeNivel({ niveis: linhas }, motivo.trim()); toast('Regras de nível salvas em nova versão.', 'sucesso'); setMotivo(''); onSalvo(); }
-    catch (e) { setErro(mensagemDoErro(e)); } finally { setEnviando(false); }
+    setEnviando(true); setErro(''); setAvisoOrfaos([]);
+    try {
+      const r = await afiliados.salvarRegrasDeNivel({ niveis: linhas }, motivo.trim());
+      toast('Regras de nível salvas em nova versão.', 'sucesso'); setMotivo(''); setAvisoOrfaos(r.avisos.niveisOrfaos); onSalvo();
+    } catch (e) { setErro(mensagemDoErro(e)); } finally { setEnviando(false); }
   }
 
   return (
     <div className="pa-form">
-      <div className="ds-table-wrap">
-        <table className="ds-table" aria-label="Regras de nível">
-          <thead><tr><th>Nível</th><th className="pa-right">Vendas qualificadas</th><th className="pa-right">Margem verificada (R$)</th><th className="pa-right">Meses com venda</th><th className="pa-right">Vendas em 60 dias</th><th className="pa-right">Teto sobre margem (%)</th><th>Benefício</th></tr></thead>
-          <tbody>
-            {linhas.map((n, i) => (
-              <tr key={n.key}>
-                <td><strong>{n.label}</strong></td>
-                <td className="pa-right"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: vendas qualificadas`} value={texto(n.vendasQualificadas)} disabled={!isOwner || n.ordem === 0} onChange={(e) => set(i, 'vendasQualificadas', Number(e.target.value))} /></td>
-                <td className="pa-right"><Input inputMode="decimal" controlSize="sm" aria-label={`${n.label}: margem`} value={(n.margemCents / 100).toFixed(2).replace('.', ',')} disabled={!isOwner || n.ordem === 0} onChange={(e) => set(i, 'margemCents', centavosDeTexto(e.target.value) ?? 0)} /></td>
-                <td className="pa-right"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: meses`} value={texto(n.mesesComVenda)} disabled={!isOwner || n.ordem === 0} onChange={(e) => set(i, 'mesesComVenda', Number(e.target.value))} /></td>
-                <td className="pa-right"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: vendas em 60 dias`} value={texto(n.vendasUltimos60d)} disabled={!isOwner || n.ordem === 0} onChange={(e) => set(i, 'vendasUltimos60d', Number(e.target.value))} /></td>
-                <td className="pa-right"><Input inputMode="decimal" controlSize="sm" aria-label={`${n.label}: teto`} value={(n.tetoMargemBps / 100).toString().replace('.', ',')} disabled={!isOwner} onChange={(e) => set(i, 'tetoMargemBps', Math.round((Number(e.target.value.replace(',', '.')) || 0) * 100))} /></td>
-                <td>{n.beneficio.tipo === 'nenhum' ? 'Sem peça' : n.beneficio.tipo === 'primeira_peca' ? `1ª peça após ${plural(n.beneficio.aPartirDeVendas ?? 0, 'venda')}` : `Peça a cada ${plural(n.beneficio.aCadaDias ?? 0, 'dia')}${n.beneficio.exigeVendasUltimos30d ? ` com ${n.beneficio.exigeVendasUltimos30d}+ vendas em 30 dias` : ''}`}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="pa-aviso">As metas são simultâneas e as regras ficam versionadas por loja. Os números acima são o padrão sugerido para o piloto — não uma promessa de percentual. O nível nunca reescreve um contrato em vigor.</p>
+      {linhas.map((n, i) => (
+        <div key={i} className="pa-shell pa-mb-5">
+          <div className="ds-toolbar">
+            <Field label="Nome do nível"><Input value={n.label} disabled={!isOwner} maxLength={60} onChange={(e) => atualizar(i, { label: e.target.value })} style={{ minWidth: 180 }} /></Field>
+            <Field label="Chave interna" hint="Identifica o nível entre versões; parceiros já neste nível avisam se ela sumir."><Input value={n.key} disabled={!isOwner} onChange={(e) => atualizar(i, { key: e.target.value.trim().toLowerCase() })} style={{ minWidth: 140 }} /></Field>
+            {i === 0 && <span className="pa-aviso">Nível base — todo parceiro aprovado começa aqui; metas não se aplicam.</span>}
+            {isOwner && (
+              <div className="ds-toolbar__end">
+                <Button size="sm" variant="ghost" disabled={i <= 1} onClick={() => mover(i, -1)} aria-label={`Mover ${n.label} para cima`}>↑</Button>
+                <Button size="sm" variant="ghost" disabled={i === 0 || i === linhas.length - 1} onClick={() => mover(i, 1)} aria-label={`Mover ${n.label} para baixo`}>↓</Button>
+                <Button size="sm" variant="ghost" disabled={i === 0 || linhas.length <= MIN_NIVEIS} onClick={() => remover(i)}>Remover</Button>
+              </div>
+            )}
+          </div>
+          {i > 0 && (
+            <div className="pa-form__linha">
+              <Field label="Vendas qualificadas"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: vendas qualificadas`} value={texto(n.vendasQualificadas)} disabled={!isOwner} onChange={(e) => atualizar(i, { vendasQualificadas: Number(e.target.value) })} /></Field>
+              <Field label="Margem verificada (R$)"><Input inputMode="decimal" controlSize="sm" aria-label={`${n.label}: margem`} value={(n.margemCents / 100).toFixed(2).replace('.', ',')} disabled={!isOwner} onChange={(e) => atualizar(i, { margemCents: centavosDeTexto(e.target.value) ?? 0 })} /></Field>
+              <Field label="Meses com venda"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: meses`} value={texto(n.mesesComVenda)} disabled={!isOwner} onChange={(e) => atualizar(i, { mesesComVenda: Number(e.target.value) })} /></Field>
+              <Field label="Vendas em 60 dias"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: vendas em 60 dias`} value={texto(n.vendasUltimos60d)} disabled={!isOwner} onChange={(e) => atualizar(i, { vendasUltimos60d: Number(e.target.value) })} /></Field>
+              <Field label="Janela (dias)" hint="O maior valor entre os níveis define até quando o sistema olha vendas para trás (mínimo 90 dias)."><Input type="number" min={1} controlSize="sm" placeholder="90" value={texto(n.janelaDias)} disabled={!isOwner} onChange={(e) => atualizar(i, { janelaDias: e.target.value ? Number(e.target.value) : null })} /></Field>
+            </div>
+          )}
+          <div className="pa-form__linha">
+            <Field label="Teto sobre margem (%)"><Input inputMode="decimal" controlSize="sm" aria-label={`${n.label}: teto`} value={(n.tetoMargemBps / 100).toString().replace('.', ',')} disabled={!isOwner} onChange={(e) => atualizar(i, { tetoMargemBps: Math.round((Number(e.target.value.replace(',', '.')) || 0) * 100) })} /></Field>
+            <Field label="Peça / benefício">
+              <Select controlSize="sm" value={n.beneficio.tipo} disabled={!isOwner} onChange={(e) => {
+                const tipo = e.target.value as NivelDeRegra['beneficio']['tipo'];
+                atualizarBeneficio(i, tipo === 'nenhum' ? { tipo } : tipo === 'primeira_peca' ? { tipo, aPartirDeVendas: 10 } : { tipo, aCadaDias: 90 });
+              }}>
+                <option value="nenhum">Sem peça</option>
+                <option value="primeira_peca">1ª peça após N vendas</option>
+                <option value="peca_periodica">Peça a cada N dias</option>
+              </Select>
+            </Field>
+            {n.beneficio.tipo === 'primeira_peca' && (
+              <Field label="A partir de quantas vendas"><Input type="number" min={0} controlSize="sm" value={texto(n.beneficio.aPartirDeVendas)} disabled={!isOwner} onChange={(e) => atualizarBeneficio(i, { tipo: 'primeira_peca', aPartirDeVendas: Number(e.target.value) })} /></Field>
+            )}
+            {n.beneficio.tipo === 'peca_periodica' && (
+              <>
+                <Field label="A cada quantos dias"><Input type="number" min={1} controlSize="sm" value={texto(n.beneficio.aCadaDias)} disabled={!isOwner} onChange={(e) => atualizarBeneficio(i, { ...n.beneficio, tipo: 'peca_periodica', aCadaDias: Number(e.target.value) })} /></Field>
+                <Field label="Exige vendas nos últimos 30 dias" hint="Opcional; deixe em branco para não exigir."><Input type="number" min={0} controlSize="sm" placeholder="—" value={texto(n.beneficio.exigeVendasUltimos30d)} disabled={!isOwner} onChange={(e) => atualizarBeneficio(i, { ...n.beneficio, tipo: 'peca_periodica', exigeVendasUltimos30d: e.target.value ? Number(e.target.value) : undefined })} /></Field>
+              </>
+            )}
+          </div>
+          <p className="pa-aviso">{descreverBeneficio(n.beneficio)}</p>
+        </div>
+      ))}
+      {isOwner && linhas.length < MAX_NIVEIS && <div><Button variant="secondary" onClick={adicionar}>+ Adicionar nível</Button></div>}
+      <p className="pa-aviso">As metas de cada nível (menos o base) são simultâneas. As regras ficam versionadas por loja: cada gravação é uma versão nova, nunca reescreve vendas já capturadas. O nível nunca reescreve um contrato em vigor — quem decide muda-lo é você, aqui.</p>
       {isOwner && (
         <>
+          {problemas.length > 0 && <Callout tone="danger" role="alert"><ul className="pa-lista">{problemas.map((p) => <li key={p}>{p}</li>)}</ul></Callout>}
+          {avisoOrfaos.length > 0 && (
+            <Callout tone="warning">
+              <ul className="pa-lista">{avisoOrfaos.map((a) => <li key={a.key}>{plural(a.partners, 'parceiro está', 'parceiros estão')} no nível "{a.key}" (ex.: {a.exemplo}), que não existe mais nesta versão — {a.partners === 1 ? 'ele' : 'eles'} volta{a.partners === 1 ? '' : 'm'} para o nível base até a próxima proposta.</li>)}</ul>
+            </Callout>
+          )}
           <Field label="Motivo da alteração" hint="Obrigatório para gravar uma nova versão das regras."><Textarea rows={2} value={motivo} maxLength={500} onChange={(e) => setMotivo(e.target.value)} /></Field>
           {erro && <Callout tone="danger" role="alert">{erro}</Callout>}
-          <div><Button onClick={salvar} disabled={enviando || !alterado || !motivo.trim()}>{enviando ? 'Aguarde…' : 'Salvar nova versão das regras'}</Button></div>
+          <div><Button onClick={salvar} disabled={enviando || !alterado || !motivo.trim() || problemas.length > 0}>{enviando ? 'Aguarde…' : 'Salvar nova versão das regras'}</Button></div>
         </>
       )}
     </div>
