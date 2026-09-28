@@ -40,14 +40,17 @@ Flags: `AFILIADOS_MODULE_ENABLED` (**desligada** por padrão); `ink_promotion_wr
 | `invariants/afiliados-http.test.js` (processo real do `server.js`, provider mock) | **6 passam / 0 falham** |
 | Tenancy/migrations: `migrations`, `tenancy-schema`, `tenancy-isolation` (matriz das 20 tabelas novas), `td001-rls-contract`, `inv-td003`, `tenancy-migrations`, `tenancy-db-negative-controls` | **168 / 168** (run com `INVARIANTS_APP_DATABASE_URL`) |
 | `navegacao-painel` (após ajuste do regex da sidebar) | **29 / 29** |
-| Suíte completa (`test/*.test.js` + `test/invariants/*.test.js`, `--test-concurrency=1`) | Parcial no fechamento deste documento: **1741 `✔`** e **3 `✖`** no log até o momento. Duas são **de ambiente** (ver abaixo) e a terceira (`navegacao-painel`) **foi corrigida** e passa isolada. A suíte ainda estava nos negative controls; o resultado final não foi observado |
+| Suíte completa (`test/*.test.js` + `test/invariants/*.test.js`, `--test-concurrency=1`, run único antes das correções abaixo) | **2517 testes: 2500 passam, 4 falham, 13 pulados** (os pulados já existiam). Depois das correções, as 4 falhas ficaram assim: 2 corrigidas (2 e 3 abaixo) e 2 de ambiente (1 e 4) |
 | `npm run typecheck` / `npm run build` | limpos |
 
-Falhas na suíte completa, com causa:
+Falhas da suíte completa, com causa e situação atual:
 
-1. `app-role · com TEST_APP_ROLE=1…` — o run não usou `TEST_APP_ROLE=1` (o wrapper oficial `npm run test:app-role` o define). **Não é regressão**; não foi reexecutado por causa da carga da máquina.
-2. `boot · dev sem DATABASE_URL e sem modo declarado → exit ≠ 0` — estourou 20 s com load médio ~330 na máquina (outras sessões). **Preexistente/ambiental**, não reexecutado.
-3. `navegacao-painel · ocultar por plano/canal só filtra…` — **causada por esta rodada** (a sidebar agora parte de `gruposBase`); regex do teste ajustado para o novo formato **preservando a intenção** (só `map`+`filter`, sem reordenar, item de Parcerias no fim de Comunicação e só com o módulo liberado). Passa (29/29).
+1. `app-role · com TEST_APP_ROLE=1…` — depende das variáveis que só o wrapper oficial (`npm run test:app-role` / `npm test`) exporta (`DATABASE_URL` da role da aplicação, `TEST_OWNER_DATABASE_URL`…); no meu run manual elas não existiam. **Ambiental, não é regressão**; não roda de forma significativa fora do wrapper.
+2. `boot · dev sem DATABASE_URL e sem modo declarado → exit ≠ 0` — estourou 20 s com load médio ~330. **Reexecutado depois: passa** (junto com os outros 18 de `boot-exit-code`).
+3. `navegacao-painel · ocultar por plano/canal só filtra…` — **causada por esta rodada** (a sidebar agora parte de `gruposBase`); regex ajustado preservando a intenção (só `map`+`filter`, sem reordenar, item de Parcerias no fim de Comunicação e só com o módulo liberado). **Passa (29/29)**.
+4. `tenancy-upsert · todo ON CONFLICT com alvo em tabela tenant-owned começa por organization_id` — **causada por esta rodada**: o contador de alvos `ON CONFLICT` subiu de 41 para 48 com o código novo. Todos os 7 novos começam por `organization_id` (a asserção `ruins` passa); atualizei o contador esperado com comentário. **Passa (30/30)** com `INVARIANTS_DATABASE_URL`.
+
+Nenhuma rodada final única da suíte inteira foi feita depois das correções (a suíte leva mais de uma hora sob a carga desta máquina); os arquivos corrigidos foram reexecutados isoladamente.
 
 Verificação visual: screenshots headless do Chrome em 1440/768/390 px das 9 telas, owner e member, contra o cenário sintético — sem overflow horizontal e sem erro de console
 das telas do módulo (o único log de erro é um 403 preexistente de `/api/admin/whatsapp-web/config`, porque a Organization de demonstração não tem plano de WhatsApp). O diálogo de pagamento foi aberto e renderizado. A extensão de Chrome travou; por isso o Chrome foi dirigido direto por CDP (script fora do repositório).
