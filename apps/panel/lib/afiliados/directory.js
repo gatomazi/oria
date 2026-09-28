@@ -13,6 +13,7 @@ const RE_DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 function criarDiretorio({ pool, relogio = () => new Date(), registry, payables, progressao }) {
   const numero = (v) => Number(v);
+  const pl = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
   const hojeLocal = (agora, tz) => inicioDoDiaLocal(...dataLocal(agora, tz).split('-').map(Number), tz);
 
   async function saldosPorParceiro(ctx, ids, agora, tz, executor = pool) {
@@ -321,13 +322,13 @@ function criarDiretorio({ pool, relogio = () => new Date(), registry, payables, 
       }
       anterior = Math.max(anterior, venc[0].n);
     }
-    if (revisoes > 0) lista.push({ kind: 'review_items', severity: 'warning', message: `${revisoes} item(ns) de pedido em revisão manual (produto ausente, dado incompleto ou ambíguo).`, href: '/admin/parcerias/revisoes', count: revisoes });
-    if (cuponsDivergentes > 0) lista.push({ kind: 'coupon_divergent', severity: 'warning', message: `${cuponsDivergentes} cupom(ns) divergem do que está na INK.`, href: '/admin/parcerias/parceiros', count: cuponsDivergentes });
+    if (revisoes > 0) lista.push({ kind: 'review_items', severity: 'warning', message: `${pl(revisoes, 'item de pedido está', 'itens de pedido estão')} em revisão manual (produto ausente, dado incompleto ou ambíguo).`, href: '/admin/parcerias/revisoes', count: revisoes });
+    if (cuponsDivergentes > 0) lista.push({ kind: 'coupon_divergent', severity: 'warning', message: `${pl(cuponsDivergentes, 'cupom diverge', 'cupons divergem')} do que está na INK.`, href: '/admin/parcerias/parceiros', count: cuponsDivergentes });
     const { rows: pend } = await pool.query(
       `SELECT k.id, k.name, count(*)::int AS n FROM partner_collab_product_memberships m JOIN partner_collabs k ON k.id = m.collab_id AND k.organization_id = m.organization_id
         WHERE m.organization_id = $1 AND m.status = 'pending_approval' GROUP BY k.id, k.name ORDER BY n DESC LIMIT 5`, [org]
     );
-    for (const k of pend) lista.push({ kind: 'collab_new_products', severity: 'info', message: `Collab "${k.name}": ${k.n} novo(s) produto(s) do agrupamento aguardam aprovação.`, href: `/admin/parcerias/collabs/${k.id}`, count: k.n });
+    for (const k of pend) lista.push({ kind: 'collab_new_products', severity: 'info', message: `Collab "${k.name}": ${pl(k.n, 'produto novo do agrupamento aguarda', 'produtos novos do agrupamento aguardam')} aprovação.`, href: `/admin/parcerias/collabs/${k.id}`, count: k.n });
     const { rows: semCriador } = await pool.query(
       `SELECT k.id, k.name FROM partner_collabs k WHERE k.organization_id = $1 AND k.status = 'active'
           AND NOT EXISTS (SELECT 1 FROM partner_collab_creators cc WHERE cc.organization_id = k.organization_id AND cc.collab_id = k.id AND cc.valid_to IS NULL) LIMIT 5`, [org]
@@ -336,15 +337,15 @@ function criarDiretorio({ pool, relogio = () => new Date(), registry, payables, 
     const { rows: naoVerif } = await pool.query(
       `SELECT count(*)::int AS n FROM partner_coupon_links WHERE organization_id = $1 AND status = 'active' AND sync_status = 'manual_unverified'`, [org]
     );
-    if (naoVerif[0].n > 0) lista.push({ kind: 'coupon_unverified', severity: 'info', message: `${naoVerif[0].n} cupom(ns) ativo(s) cadastrado(s) à mão ainda não verificados na INK.`, href: '/admin/parcerias/parceiros', count: naoVerif[0].n });
+    if (naoVerif[0].n > 0) lista.push({ kind: 'coupon_unverified', severity: 'info', message: `${pl(naoVerif[0].n, 'cupom ativo cadastrado à mão ainda não foi verificado', 'cupons ativos cadastrados à mão ainda não foram verificados')} na INK.`, href: '/admin/parcerias/parceiros', count: naoVerif[0].n });
     const { rows: prop } = await pool.query(`SELECT count(*)::int AS n FROM partner_level_proposals WHERE organization_id = $1 AND status = 'pending'`, [org]);
-    if (prop[0].n > 0) lista.push({ kind: 'level_proposals', severity: 'info', message: `${prop[0].n} proposta(s) de mudança de nível aguardam decisão.`, href: '/admin/parcerias/niveis', count: prop[0].n });
+    if (prop[0].n > 0) lista.push({ kind: 'level_proposals', severity: 'info', message: `${pl(prop[0].n, 'proposta de mudança de nível aguarda', 'propostas de mudança de nível aguardam')} decisão.`, href: '/admin/parcerias/niveis', count: prop[0].n });
     const { rows: margem } = await pool.query(
       `SELECT count(*)::int AS n FROM partnership_attributions WHERE organization_id = $1 AND status = 'calculated' AND (current_state->>'marginAlert')::boolean IS TRUE AND current_state->>'orderState' IN ('paid', 'delivered')`, [org]
     );
-    if (margem[0].n > 0) lista.push({ kind: 'margin_alert', severity: 'warning', message: `${margem[0].n} venda(s) com contribuição abaixo do mínimo após a comissão (o pedido não é bloqueado).`, href: '/admin/parcerias/vendas?margem=alerta', count: margem[0].n });
+    if (margem[0].n > 0) lista.push({ kind: 'margin_alert', severity: 'warning', message: `${pl(margem[0].n, 'venda com contribuição abaixo', 'vendas com contribuição abaixo')} do mínimo após a comissão (o pedido não é bloqueado).`, href: '/admin/parcerias/vendas?margem=alerta', count: margem[0].n });
     const { rows: semCusto } = await pool.query(`SELECT count(*)::int AS n FROM partnership_attributions WHERE organization_id = $1 AND status = 'manual_review' AND review_reason = 'cost_unknown'`, [org]);
-    if (semCusto[0].n > 0) lista.push({ kind: 'cost_unknown', severity: 'warning', message: `${semCusto[0].n} venda(s) sem custo verificado (base em margem): comissão não liberada.`, href: '/admin/parcerias/vendas?status=manual_review', count: semCusto[0].n });
+    if (semCusto[0].n > 0) lista.push({ kind: 'cost_unknown', severity: 'warning', message: `${pl(semCusto[0].n, 'venda sem custo verificado', 'vendas sem custo verificado')} (base em margem): comissão não liberada.`, href: '/admin/parcerias/vendas?status=manual_review', count: semCusto[0].n });
     return lista;
   }
 

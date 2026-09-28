@@ -77,7 +77,7 @@ export function ParceriasLayout() {
         <TabList<Aba> label="Seções de Parcerias e Afiliados" items={itens} value={abaAtual(pathname)} onChange={(a) => navigate(CAMINHOS[a])} />
         {!contexto.isOwner && (
           <Callout tone="info" title="Acesso de acompanhamento">
-            Seu papel permite cadastrar e acompanhar parceiros, collabs e cupons. Valores a pagar, pagamentos, níveis e benefícios são do owner da loja.
+            Seu papel permite cadastrar e acompanhar parceiros, collabs e cupons. Valores a pagar e pagamentos são do owner da loja; níveis e benefícios ficam em leitura.
           </Callout>
         )}
         <Outlet />

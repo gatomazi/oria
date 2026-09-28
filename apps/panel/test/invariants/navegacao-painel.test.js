@@ -243,7 +243,9 @@ test('Conexões, Sistema e Webhooks e logs não existem na sidebar; a administra
 
 test('ocultar por plano/canal só filtra: a ordem dos grupos e dos itens vem da fonte única, sem reordenar', () => {
   const shell = ler('shell/AppShell.tsx');
-  assert.match(shell, /const grupos = \[\.\.\.NAV_GROUPS,[\s\S]*?\]\s*\.map\(\(g\) => \(\{ \.\.\.g, items: g\.items\.filter\(itemVisivel\)/, 'só map + filter sobre NAV_GROUPS');
+  // `gruposBase` = NAV_GROUPS + (só com o módulo Parcerias liberado pelo servidor) o item de Parcerias no fim de Comunicação; nada é reordenado.
+  assert.match(shell, /const grupos = \[\.\.\.gruposBase,[\s\S]*?\]\s*\.map\(\(g\) => \(\{ \.\.\.g, items: g\.items\.filter\(itemVisivel\)/, 'só map + filter sobre NAV_GROUPS (via gruposBase)');
+  assert.match(shell, /liberado \? NAV_GROUPS\.map\(\(g\) => \(g\.label === NAV_GRUPO_DO_ITEM_PARCERIAS \? \{ \.\.\.g, items: \[\.\.\.g\.items, NAV_ITEM_PARCERIAS\] \} : g\)\) : NAV_GROUPS/, 'o item entra no FIM de Comunicação e só com o módulo liberado');
   assert.doesNotMatch(shell, /NAV_GROUPS[^;]*\.sort\(|grupos\.sort\(|\.reverse\(\)/, 'nenhuma reordenação no componente');
   // Canal: Templates só na API da Meta; Mensagens e Fila só no WhatsApp Web (regras de exibição preservadas).
   const com = nav.NAV_GROUPS.find((g) => g.label === 'Comunicação').items;
