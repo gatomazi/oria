@@ -152,6 +152,8 @@ test('TD-003 · o banco de teste realmente tem o schema das migrations', async (
       // 1790001900000 independentemente; renumerada pra depois de tudo que já estava em main.
       '1790002700000_catalog-sync-observabilidade',
       '1790002800000_segments-rfm', // Clientes/RFM (renumerada na integração: depois das migrations do Gerador de Criativos e do catalog sync)
+      '1790002900000_partnerships', // Parcerias, Afiliados e Collabs (módulo de afiliados próprio)
+      '1790003000000_pedidos-ink-afiliados-campos', // campos de cupom/devolução/entrega do pedido para a apuração de comissões
     ]);
   } finally {
     await pool.end();
