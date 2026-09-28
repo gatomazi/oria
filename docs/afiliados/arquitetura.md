@@ -124,8 +124,12 @@ Peça nunca é grátis ao ingressar: exige vendas, período, atividade e saldo, 
   aplicação automática, exibição) **não ativa** e é listada; `available` é estado calculado pela INK, não configuração.
 - Idempotência: `Idempotency-Key` **determinística pela intenção** (`oria-aff-<create|update|delete>-<vínculo>[-<id>]-<hash do conteúdo>`): retry
   reenvia a mesma chave, outra intenção/payload gera outra; só UUID interno e hash. Retry automático só para falha transitória (timeout/429/5xx).
-- Pausar/encerrar no Oria **fecham a vigência local e nunca chamam a INK**. `PATCH` (`ink-sync`) sincroniza só campos da promoção (ex.: fim da
-  vigência) e `DELETE` (`ink-delete`) é operação explícita de owner, com motivo e cupom inativo — nunca consequência de pausar.
+- **Encerramento fecha o desconto na INK sem apagar a promoção.** Encerrar o **parceiro** (vínculo `ended`), encerrar o **contrato** ou pausar/encerrar o
+  **cupom** fecham a vigência no Oria (mesma transação, com auditoria por cupom: `coupon.end.partner_ended`, `coupon.end.contract_ended`) e,
+  depois do commit, fazem `PATCH` só de `expires_at` na INK quando o connector atualiza (melhor-esforço: se a INK falhar, o encerramento vale, o cupom
+  fica com `sync_status=error` e o owner usa "Sincronizar com a INK"; a resposta traz `inkSync`/`cupons.ink`). **Retomar** reabre o fim da
+  promoção (`expires_at: null`). Pausar o vínculo do parceiro não mexe nos cupons. `DELETE` (`ink-delete`, botão "Excluir na INK") continua
+  operação explícita de owner, com motivo e cupom pausado/encerrado — nunca consequência de encerrar.
 - **Escrita é funcionalidade do painel, sem flag**, determinada pela **capacidade do connector**: o `server.js` injeta o cliente da INK com
   `get/post/patch/delete` (credencial da Organization do contexto). Só ocorre por ação explícita de owner (Ativar, `ink-create`, `ink-sync`,
   `ink-delete`), com `Idempotency-Key`, e nada é ativado sem `201` válido + leitura de volta. `/status` expõe `couponCreation`

@@ -6,7 +6,7 @@ import {
 } from '../../api/afiliados';
 import { toast } from '../../lib/toast';
 import {
-  ROTULOS_BASE_COMISSAO, ROTULOS_METODO, ROTULOS_POLITICA_CONFLITO, bpsDeTexto, brl, centavosDeTexto, dataCurta, hojeNoFuso, mensagemDoErro, novaChave, pct, plural,
+  ROTULOS_BASE_COMISSAO, ROTULOS_METODO, ROTULOS_POLITICA_CONFLITO, bpsDeTexto, brl, centavosDeTexto, dataCurta, hojeNoFuso, mensagemDoErro, novaChave, pct, plural, resumoInkDoFechamento,
 } from '../../lib/parcerias';
 
 // Diálogos de ação do módulo. Nada é dado como feito antes de a API responder com sucesso: o botão fica "Aguarde…" e erros voltam na própria tela.
@@ -131,7 +131,8 @@ export function ContratoDialog({
   async function salvar() {
     const ok = await executar(async () => {
       if (nova && contrato) {
-        await afiliados.novaVersao(contrato.id, { status, reason: motivo.trim(), terms: termos });
+        const r = await afiliados.novaVersao(contrato.id, { status, reason: motivo.trim(), terms: termos });
+        if (r.cupons) toast(`Contrato encerrado · ${plural(r.cupons.encerrados, 'cupom vinculado encerrado', 'cupons vinculados encerrados')}${resumoInkDoFechamento(r.cupons.ink).texto ? ` · ${resumoInkDoFechamento(r.cupons.ink).texto}` : ''}.`, resumoInkDoFechamento(r.cupons.ink).ok ? 'sucesso' : 'erro');
       } else {
         await afiliados.criarContrato({ partnerId, modality: modalidade, title: titulo.trim(), status: status === 'active' ? 'active' : 'draft', reason: motivo.trim(), terms: termos });
       }

@@ -38,8 +38,10 @@ O Oria tem o **próprio programa de afiliados**: **não crie afiliado na INK**. 
 3. **Prévia INK** mostra o pedido que o Oria enviaria; **Verificar na INK** só lê. Em um connector **sem criação de cupom**, crie a promoção
    na loja e use Verificar/Ativar para vincular.
 4. A vigência é comparada **por dia** no fuso da loja. INK terminando em dia posterior (ou sem fim) diverge; até 1 dia antes é tolerado.
-5. Pausar/encerrar fecha a vigência no Oria na hora (**a promoção na INK continua existindo** — ajuste/exclua lá se quiser); **Retomar** abre
-   vigência nova (o período pausado continua sem comissão).
+5. **Encerrar** o parceiro, o contrato ou o cupom (e **pausar** o cupom) fecha a vigência no Oria na hora **e encerra o desconto na INK**
+   (a promoção **não é apagada**; o código só para de funcionar). Se a INK falhar, o encerramento vale e o cupom fica com erro: use
+   **Sincronizar com a INK**. **Retomar** abre vigência nova (o período pausado continua sem comissão) e reabre o fim da promoção. Para apagar a
+   promoção, use **Excluir na INK** (cupom pausado/encerrado, com motivo). Pausar só o vínculo do parceiro não mexe nos cupons.
 
 Códigos comuns sem parceiro não geram comissão. Parceiro que também tem afiliado **nativo da INK**: marque no cadastro — as vendas dele
 ficam bloqueadas até você conciliar (a API não permite detectar isso).

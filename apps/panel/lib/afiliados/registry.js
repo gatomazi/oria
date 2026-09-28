@@ -238,15 +238,20 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
   async function mudarVinculo(ctx, id, { status, motivo }) {
     const novo = opcao(status, ['draft', 'active', 'paused', 'ended'], { nome: 'status' });
     const m = textoObrigatorio(motivo, { max: 500, nome: 'motivo' });
-    return db.tx(pool, async (c) => {
+    let cuponsFechados = [];
+    const parceiro = await db.tx(pool, async (c) => {
       const antes = await obterParceiroBasico(c, ctx, id, { travar: true });
       if (antes.relationship_status === novo) return mapearParceiro(antes);
       if (!TRANSICOES_VINCULO[antes.relationship_status].includes(novo)) throw conflito('AFILIADOS_TRANSICAO_INVALIDA', `vínculo não pode ir de ${antes.relationship_status} para ${novo}`);
       if (novo === 'active' && antes.application_status !== 'approved') throw conflito('AFILIADOS_PARCEIRO_NAO_APROVADO', 'aprove a candidatura antes de ativar o vínculo');
       const { rows } = await c.query('UPDATE partnership_partners SET relationship_status = $3, updated_at = now() WHERE organization_id = $1 AND id = $2 RETURNING *', [ctx.organizationId, antes.id, novo]);
       await db.auditar(c, ctx, { entidade: 'partner', entidadeId: antes.id, acao: 'partner.relationship', antes: { relationshipStatus: antes.relationship_status }, depois: { relationshipStatus: novo }, motivo: m });
+      // Encerrar o parceiro encerra os cupons dele (o desconto para junto com a comissão) — na mesma transação, com auditoria por cupom.
+      if (novo === 'ended') cuponsFechados = await encerrarCuponsAbertosNaTx(c, ctx, 'partner_id', antes.id, `vínculo do parceiro encerrado: ${m}`, 'coupon.end.partner_ended');
       return mapearParceiro(rows[0]);
     });
+    if (!cuponsFechados.length) return parceiro;
+    return { ...parceiro, cupons: { encerrados: cuponsFechados.length, ink: await sincronizarVigenciaNaInk(ctx, cuponsFechados) } };
   }
 
   // ── Contratos ───────────────────────────────────────────────────────────────────────────────────
@@ -431,7 +436,7 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
   async function novaVersaoDeContrato(ctx, contractId, entrada, { podeAtivar = false } = {}) {
     const agora = relogio();
     const motivo = textoObrigatorio(entrada.reason, { max: 500, nome: 'motivo' });
-    return db.tx(pool, async (c) => {
+    const resultado = await db.tx(pool, async (c) => {
       const atual = await ultimaVersao(c, ctx, contractId, { travar: true });
       const status = opcao(entrada.status, ['draft', 'active', 'paused', 'ended'], { nome: 'status', padrao: atual.status });
       if (!TRANSICOES_CONTRATO[atual.status].includes(status)) throw conflito('AFILIADOS_TRANSICAO_INVALIDA', `contrato não pode ir de ${atual.status} para ${status}`);
@@ -457,8 +462,12 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
         entidade: 'contract', entidadeId: atual.contract_id, acao: 'contract.version',
         antes: { version: atual.version, status: atual.status, ...termosDaVersao(atual) }, depois: { version: v.version, status, ...termos }, motivo,
       });
-      return { version: mapearVersao(v), teto };
+      // Contrato encerrado: os cupons vinculados a ele também encerram (sem contrato ativo não há comissão; o desconto na INK não deve continuar).
+      const cupons = status === 'ended' && atual.status !== 'ended' ? await encerrarCuponsAbertosNaTx(c, ctx, 'contract_id', atual.contract_id, `contrato encerrado: ${motivo}`, 'coupon.end.contract_ended') : [];
+      return { version: mapearVersao(v), teto, cupons };
     });
+    if (resultado.cupons.length) return { version: resultado.version, teto: resultado.teto, cupons: { encerrados: resultado.cupons.length, ink: await sincronizarVigenciaNaInk(ctx, resultado.cupons) } };
+    return { version: resultado.version, teto: resultado.teto };
   }
 
   async function listarContratosDoParceiro(ctx, partnerId, executor = pool) {
@@ -641,20 +650,58 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
     return { coupon: mapearCupom(ativo), activated: true, outcome: 'activated', message: 'Promoção criada na INK, confirmada; cupom ativado.', divergencias: [] };
   }
 
-  // Pausar/encerrar fecha a vigência AGORA: vendas durante a pausa nunca serão remuneradas por reprocessamento posterior.
-  async function encerrarVigenciaDoCupom(ctx, id, novoStatus, motivo) {
+  // Fecha a vigência de UM cupom dentro da transação aberta (pausar/encerrar do cupom, encerramento do parceiro ou do contrato).
+  // Vendas depois do fechamento nunca serão remuneradas por reprocessamento posterior.
+  async function fecharVigenciaNaTx(c, ctx, cupom, novoStatus, motivo, acao) {
     const agora = relogio();
+    const fim = cupom.valid_until && new Date(cupom.valid_until) < agora ? new Date(cupom.valid_until) : (agora > new Date(cupom.valid_from) ? agora : new Date(new Date(cupom.valid_from).getTime() + 1000));
+    const { rows } = await c.query(
+      `UPDATE partner_coupon_links SET status = $3, valid_until = $4, updated_at = now() WHERE organization_id = $1 AND id = $2 RETURNING *`, [ctx.organizationId, cupom.id, novoStatus, fim]
+    );
+    await db.auditar(c, ctx, { entidade: 'coupon', entidadeId: cupom.id, acao, antes: { status: cupom.status, validUntil: cupom.valid_until }, depois: { status: novoStatus, validUntil: fim }, motivo });
+    return rows[0];
+  }
+
+  // Depois de fechar a vigência no Oria, o desconto também PARA na INK (PATCH só de `expires_at`), quando o connector permite. É melhor-esforço:
+  // o fechamento no Oria já foi confirmado; se a INK falhar, o cupom fica com sync_status=error e o owner corrige por "Sincronizar com a INK".
+  // NUNCA apaga a promoção (DELETE é ação explícita à parte).
+  async function sincronizarVigenciaNaInk(ctx, cupons) {
+    const resultados = [];
+    for (const cupom of cupons) {
+      const item = { couponId: cupom.id, code: cupom.code_display };
+      if (!cupom.ink_promotion_id) { resultados.push({ ...item, resultado: 'sem_promocao_vinculada' }); continue; }
+      if (!inkPromotions || !inkPromotions.capacidades().update) { resultados.push({ ...item, resultado: 'connector_sem_atualizacao' }); continue; }
+      try {
+        const r = await sincronizarCupomNaInk(ctx, cupom.id, { campos: ['expires_at'] });
+        resultados.push({ ...item, resultado: r.atualizado ? 'encerrado_na_ink' : 'ja_encerrado_na_ink' });
+      } catch (err) {
+        resultados.push({ ...item, resultado: 'erro_na_ink', erro: String((err && err.message) || 'falha ao falar com a INK').slice(0, 200) });
+      }
+    }
+    return resultados;
+  }
+
+  const CUPONS_ABERTOS = ['planned', 'pending_validation', 'active', 'paused'];
+  // Encerra (dentro da transação) todos os cupons ainda abertos do filtro dado. `coluna` é constante interna, nunca entrada do usuário.
+  async function encerrarCuponsAbertosNaTx(c, ctx, coluna, valor, motivo, acao) {
+    const { rows } = await c.query(
+      `SELECT * FROM partner_coupon_links WHERE organization_id = $1 AND ${coluna === 'contract_id' ? 'contract_id' : 'partner_id'} = $2 AND status = ANY($3) FOR UPDATE`,
+      [ctx.organizationId, valor, CUPONS_ABERTOS]
+    );
+    const fechados = [];
+    for (const cupom of rows) fechados.push(await fecharVigenciaNaTx(c, ctx, cupom, 'ended', motivo, acao));
+    return fechados;
+  }
+
+  async function encerrarVigenciaDoCupom(ctx, id, novoStatus, motivo) {
     const m = textoObrigatorio(motivo, { max: 500, nome: 'motivo' });
-    return db.tx(pool, async (c) => {
+    const fechado = await db.tx(pool, async (c) => {
       const cupom = await obterCupom(c, ctx, id, { travar: true });
       if (!['active', 'pending_validation', 'planned'].includes(cupom.status) && !(novoStatus === 'ended' && cupom.status === 'paused')) throw conflito('AFILIADOS_TRANSICAO_INVALIDA', `cupom ${cupom.status} não pode ir para ${novoStatus}`);
-      const fim = cupom.valid_until && new Date(cupom.valid_until) < agora ? new Date(cupom.valid_until) : (agora > new Date(cupom.valid_from) ? agora : new Date(new Date(cupom.valid_from).getTime() + 1000));
-      const { rows } = await c.query(
-        `UPDATE partner_coupon_links SET status = $3, valid_until = $4, updated_at = now() WHERE organization_id = $1 AND id = $2 RETURNING *`, [ctx.organizationId, cupom.id, novoStatus, fim]
-      );
-      await db.auditar(c, ctx, { entidade: 'coupon', entidadeId: cupom.id, acao: `coupon.${novoStatus === 'paused' ? 'pause' : 'end'}`, antes: { status: cupom.status, validUntil: cupom.valid_until }, depois: { status: novoStatus, validUntil: fim }, motivo: m });
-      return mapearCupom(rows[0]);
+      return fecharVigenciaNaTx(c, ctx, cupom, novoStatus, m, `coupon.${novoStatus === 'paused' ? 'pause' : 'end'}`);
     });
+    const [inkSync] = await sincronizarVigenciaNaInk(ctx, [fechado]);
+    return { ...(await lerCupomLink(ctx, id)), inkSync };
   }
   const pausarCupom = (ctx, id, motivo) => encerrarVigenciaDoCupom(ctx, id, 'paused', motivo);
   const encerrarCupom = (ctx, id, motivo) => encerrarVigenciaDoCupom(ctx, id, 'ended', motivo);
@@ -663,7 +710,7 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
   async function retomarCupom(ctx, id, motivo) {
     const agora = relogio();
     const m = textoObrigatorio(motivo, { max: 500, nome: 'motivo' });
-    return db.tx(pool, async (c) => {
+    const retomado = await db.tx(pool, async (c) => {
       const cupom = await obterCupom(c, ctx, id, { travar: true });
       if (cupom.status !== 'paused') throw conflito('AFILIADOS_TRANSICAO_INVALIDA', 'só cupom pausado pode ser retomado');
       const versao = await ultimaVersao(c, ctx, cupom.contract_id);
@@ -680,6 +727,9 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
         return mapearCupom(rows[0]);
       } catch (err) { throw erroDeSobreposicao(err); }
     });
+    // A pausa tinha fechado o fim da promoção na INK; a nova vigência (sem fim) precisa ser reaberta lá, senão o código continuaria expirado.
+    const [inkSync] = retomado.inkPromotionId ? await sincronizarVigenciaNaInk(ctx, [{ id: retomado.id, code_display: retomado.codeDisplay, ink_promotion_id: retomado.inkPromotionId }]) : [null];
+    return inkSync ? { ...(await lerCupomLink(ctx, retomado.id)), inkSync } : retomado;
   }
 
   async function lerCupomLink(ctx, id) {
@@ -731,12 +781,12 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
   }
 
   // PATCH parcial da promoção standard (rota de owner). Só campos da promoção; sem diferença patchável não envia nada.
-  async function sincronizarCupomNaInk(ctx, id) {
+  async function sincronizarCupomNaInk(ctx, id, opcoes = {}) {
     const cupom = await lerCupomLink(ctx, id);
     if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_UNAVAILABLE', 'este connector não suporta alterar promoções');
     if (!cupom.inkPromotionId) throw conflito('AFILIADOS_CUPOM_SEM_PROMOCAO_INK', 'este cupom ainda não está vinculado a uma promoção da INK; verifique-o primeiro');
     let r;
-    try { r = await inkPromotions.atualizarPromocao(cupom, cupom.inkPromotionId); } catch (err) {
+    try { r = await inkPromotions.atualizarPromocao(cupom, cupom.inkPromotionId, { campos: opcoes.campos || null }); } catch (err) {
       const e = erroDeInk(err);
       if (e.codigo !== 'INK_PROMOTION_WRITES_UNAVAILABLE' && e.codigo !== 'INK_PROMOTION_SCOPE_MISSING') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_update.error', detalhes: { codigo: e.codigo } });
       throw e;

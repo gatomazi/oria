@@ -380,11 +380,16 @@ function createInkPromotionsAdapter({ client = null, scopes = null, relogio = ()
   }
 
   // PATCH standard (parcial). Sem diferença patchável = não envia nada.
-  async function atualizarPromocao(link, promotionId) {
+  // `campos` (opcional) restringe o PATCH a esses campos (ex.: só `expires_at` ao encerrar); o resto do que divergir é só reportado.
+  async function atualizarPromocao(link, promotionId, { campos = null } = {}) {
     exigirEscrita('patch');
     const atual = await buscarPorId(promotionId);
     if (!atual.disponivel || !atual.promocao) throw new PromotionApiError('INK_NOT_FOUND', 'promoção não encontrada na INK (404)', { status: 404 });
     const plano = montarAtualizacao(link, atual.promocao, relogio());
+    if (Array.isArray(campos)) {
+      plano.patch = Object.fromEntries(Object.entries(plano.patch).filter(([k]) => campos.includes(k)));
+      plano.campos = plano.campos.filter((k) => campos.includes(k));
+    }
     if (Object.keys(plano.patch).length === 0) return { atualizado: false, campos: [], naoSincronizaveis: plano.naoSincronizaveis, promotionId: Number(promotionId) };
     const chave = chaveDeAtualizacao(link.id, promotionId, plano.patch);
     const r = await escrever(() => client.patch(`/v1/stores/promotions/standard/${Number(promotionId)}`, plano.patch, { 'Idempotency-Key': chave }));
@@ -393,7 +398,7 @@ function createInkPromotionsAdapter({ client = null, scopes = null, relogio = ()
     return { atualizado: true, campos: plano.campos, naoSincronizaveis: plano.naoSincronizaveis, promotionId: Number(promotionId), snapshot: instantaneo(promocao), confirmacao: avaliar(link, promocao), idempotencyKey: chave };
   }
 
-  // DELETE (soft delete; libera o código). Operação explícita — nunca é consequência de pausar/encerrar no Oria.
+  // DELETE (soft delete; libera o código). Operação explícita — nunca é consequência de pausar/encerrar no Oria (isso só encerra a vigência via PATCH).
   async function excluirPromocao(linkId, promotionId) {
     exigirEscrita('delete');
     if (!Number.isInteger(Number(promotionId)) || Number(promotionId) < 1) throw new PromotionApiError('INK_INVALID_ID', 'ID de promoção inválido');
