@@ -1,0 +1,83 @@
+/* ═══════════════════════════════════════════════════════════════════
+   /admin/parcerias/* — Parcerias, Afiliados e Collabs. Só o que não é componente do DS:
+   casca, período ativo, listas chave/valor, grades e a barra de saldo. Tokens canônicos, sem cor nova.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pa-shell { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.pa-shell > * { min-width: 0; }
+
+.pa-muted { color: var(--text-muted); }
+.pa-mt-2 { margin-top: var(--space-2); }
+.pa-mt-3 { margin-top: var(--space-3); }
+.pa-mt-4 { margin-top: var(--space-4); }
+.pa-mt-5 { margin-top: var(--space-5); }
+.pa-mb-5 { margin-bottom: var(--space-5); }
+.pa-num { font-variant-numeric: tabular-nums; }
+.pa-right { text-align: right; }
+.pa-badges { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.pa-link { color: var(--info); text-decoration: none; }
+.pa-link:hover, .pa-link:focus-visible { text-decoration: underline; }
+
+/* Período ativo (sempre visível sob os filtros) */
+.pa-filtros { display: flex; flex-direction: column; gap: var(--space-2); }
+.pa-periodo { margin: 0; font: var(--type-caption); color: var(--text-secondary); }
+.pa-periodo strong { color: var(--text-primary); font-weight: 600; }
+
+/* Grades */
+.pa-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.pa-grid > * { min-width: 0; }
+@media (min-width: 900px) {
+  .pa-grid--2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .pa-grid--7-5 { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+}
+
+/* Lista chave/valor */
+.pa-kv { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3) var(--space-5); }
+.pa-kv__item { min-width: 0; }
+.pa-kv dt { font: var(--type-label); color: var(--text-muted); margin: 0 0 2px; }
+.pa-kv dd { margin: 0; font: var(--type-body-dense); color: var(--text-primary); overflow-wrap: anywhere; }
+
+/* Séries e barras */
+.pa-serie { display: flex; align-items: flex-end; gap: 3px; height: 120px; padding-top: var(--space-2); }
+.pa-serie__col { flex: 1 1 0; min-width: 2px; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.pa-serie__bar { width: 100%; border-radius: 2px 2px 0 0; background: var(--chart-neutral); min-height: 2px; }
+.pa-serie__bar--collab { background: var(--premium); }
+.pa-serie__bar--coupon { background: var(--info); }
+.pa-legenda { display: flex; gap: var(--space-4); font: var(--type-caption); color: var(--text-secondary); flex-wrap: wrap; }
+.pa-legenda__item::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: var(--space-1-5); vertical-align: -1px; }
+.pa-legenda__item--collab::before { background: var(--premium); }
+.pa-legenda__item--coupon::before { background: var(--info); }
+
+.pa-progresso { display: flex; flex-direction: column; gap: var(--space-2); }
+.pa-progresso__linha { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) auto; gap: var(--space-3); align-items: center; font: var(--type-body-dense); }
+.pa-progresso__linha > :first-child { color: var(--text-secondary); }
+
+/* Alertas acionáveis */
+.pa-alertas { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.pa-alertas__item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-2); font: var(--type-body-dense); }
+.pa-alertas__item--critical { border-color: var(--danger); background: var(--danger-tint); }
+.pa-alertas__item--warning { border-color: var(--warning); background: var(--warning-tint); }
+
+/* Formulários em modal/drawer */
+.pa-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.pa-form__linha { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
+.pa-aviso { font: var(--type-caption); color: var(--text-secondary); margin: 0; }
+.pa-aviso--forte { color: var(--warning); }
+
+/* Tabela: alvo de clique e linhas destacadas */
+.pa-linha-vencida td { background: var(--danger-tint); }
+.pa-total { font: var(--type-label); color: var(--text-secondary); display: flex; gap: var(--space-4); flex-wrap: wrap; }
+
+/* Cartão de produto (collab) */
+.pa-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3); }
+.pa-produto { display: flex; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-2); min-width: 0; }
+.pa-produto--pendente { border-color: var(--warning); background: var(--warning-tint); }
+.pa-produto--removido { opacity: .6; }
+.pa-produto img { width: 48px; height: 48px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; background: var(--surface-3); }
+.pa-produto__nome { font: var(--type-body-dense); color: var(--text-primary); overflow-wrap: anywhere; }
+.pa-produto__meta { font: var(--type-caption); color: var(--text-muted); }
+
+@media (max-width: 599px) {
+  .pa-progresso__linha { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+  .pa-kv { grid-template-columns: minmax(0, 1fr); }
+}

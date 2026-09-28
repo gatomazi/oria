@@ -58,6 +58,17 @@ const JornadaCompraPage = tela(() => import('./pages/jornada-compra/JornadaCompr
 const MetaAdsPage = tela(() => import('./pages/meta/MetaAdsPage'), 'MetaAdsPage');
 const GoogleAdsPage = tela(() => import('./pages/google-ads/GoogleAdsPage'), 'GoogleAdsPage');
 const CriativosPage = tela(() => import('./pages/criativos/CriativosPage'), 'CriativosPage');
+// Parcerias, Afiliados e Collabs: módulo atrás de flag do servidor (o layout confere e mostra "não liberado").
+const ParceriasLayout = tela(() => import('./pages/parcerias/ParceriasLayout'), 'ParceriasLayout');
+const ParceriasVisaoGeralPage = tela(() => import('./pages/parcerias/VisaoGeralPage'), 'VisaoGeralPage');
+const ParceriasParceirosPage = tela(() => import('./pages/parcerias/ParceirosPage'), 'ParceirosPage');
+const ParceriasPerfilPage = tela(() => import('./pages/parcerias/ParceiroPerfilPage'), 'ParceiroPerfilPage');
+const ParceriasAPagarPage = tela(() => import('./pages/parcerias/APagarPage'), 'APagarPage');
+const ParceriasCollabsPage = tela(() => import('./pages/parcerias/CollabsPage'), 'CollabsPage');
+const ParceriasCollabDetalhePage = tela(() => import('./pages/parcerias/CollabsPage'), 'CollabDetalhePage');
+const ParceriasVendasPage = tela(() => import('./pages/parcerias/VendasRevisoesPage'), 'VendasPage');
+const ParceriasRevisoesPage = tela(() => import('./pages/parcerias/VendasRevisoesPage'), 'RevisoesPage');
+const ParceriasNiveisPage = tela(() => import('./pages/parcerias/NiveisPage'), 'NiveisPage');
 // Aceite de convite: rota ANÔNIMA (fora do ProtectedRoute e fora do AppShell). Quem abre ainda
 // pode não ter conta — é o passo em que a conta nasce.
 const AceitarConvitePage = tela(() => import('./pages/convite/AceitarConvitePage'), 'AceitarConvitePage');
@@ -151,6 +162,17 @@ export function App() {
             {/* Uma rota por seção do gerador; o mesmo elemento fica montado ao trocar de seção (catálogo, lote selecionado e dados copiados persistem). */}
             <Route path="/admin/criativos" element={<Navigate to="/admin/criativos/gerar" replace />} />
             <Route path="/admin/criativos/:aba" element={<CriativosPage />} />
+            <Route path="/admin/parcerias" element={<ParceriasLayout />}>
+              <Route index element={<ParceriasVisaoGeralPage />} />
+              <Route path="parceiros" element={<ParceriasParceirosPage />} />
+              <Route path="parceiros/:id" element={<ParceriasPerfilPage />} />
+              <Route path="a-pagar" element={<ParceriasAPagarPage />} />
+              <Route path="collabs" element={<ParceriasCollabsPage />} />
+              <Route path="collabs/:id" element={<ParceriasCollabDetalhePage />} />
+              <Route path="vendas" element={<ParceriasVendasPage />} />
+              <Route path="revisoes" element={<ParceriasRevisoesPage />} />
+              <Route path="niveis" element={<ParceriasNiveisPage />} />
+            </Route>
             <Route path="/admin/pedidos" element={<PedidoAdminPage />} />
             <Route path="/admin/pedidos/novo" element={<PedidoNovoPage />} />
             <Route path="/admin/pedidos/vincular" element={<PedidoVincularPage />} />

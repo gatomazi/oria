@@ -24,6 +24,11 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+// Parcerias e Afiliados fica na seção Comunicação, mas só aparece quando o servidor libera o módulo (AFILIADOS_MODULE_ENABLED): o item é
+// injetado pelo AppShell (useItemParcerias), não listado em NAV_GROUPS, para nunca aparecer em loja sem o módulo.
+export const NAV_ITEM_PARCERIAS: NavItem = { key: 'parcerias', label: 'Parcerias e Afiliados', href: '/admin/parcerias' };
+export const NAV_GRUPO_DO_ITEM_PARCERIAS = 'Comunicação';
+
 export const NAV_TOP: NavItem[] = [{ key: 'visao-geral', label: 'Visão geral', href: '/admin/dashboard' }];
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -173,6 +178,7 @@ export const PAGE_TITLES: Record<string, string> = {
   'criativos-marca': 'Marca e nicho',
   'criativos-contextos': 'Contextos',
   'criativos-personas': 'Personas',
+  parcerias: 'Parcerias e Afiliados',
 };
 
 // Rotas que não são itens da sidebar (páginas filhas e páginas fora do menu): título da aba e
@@ -199,6 +205,14 @@ export const ROUTE_CONTEXT: RouteContext[] = [
   { match: /^\/admin\/pedidos\/vincular\/?$/, title: 'Vincular pedido', parentKey: 'pix-ferramenta' },
   { match: /^\/admin\/pedidos\/?$/, title: 'Pedidos PIX', parentKey: 'pix-ferramenta' },
   { match: /^\/admin\/playground\/?$/, title: 'Playground' },
+  { match: /^\/admin\/parcerias\/parceiros\/?$/, title: 'Parceiros', parentKey: 'parcerias' },
+  { match: /^\/admin\/parcerias\/parceiros\/[^/]+\/?$/, title: 'Perfil do parceiro', parentKey: 'parcerias' },
+  { match: /^\/admin\/parcerias\/a-pagar\/?$/, title: 'A pagar', parentKey: 'parcerias' },
+  { match: /^\/admin\/parcerias\/collabs\/?$/, title: 'Collabs', parentKey: 'parcerias' },
+  { match: /^\/admin\/parcerias\/collabs\/[^/]+\/?$/, title: 'Detalhe da collab', parentKey: 'parcerias' },
+  { match: /^\/admin\/parcerias\/vendas\/?$/, title: 'Vendas atribuídas', parentKey: 'parcerias' },
+  { match: /^\/admin\/parcerias\/revisoes\/?$/, title: 'Revisões', parentKey: 'parcerias' },
+  { match: /^\/admin\/parcerias\/niveis\/?$/, title: 'Níveis e benefícios', parentKey: 'parcerias' },
 ];
 
 export const NAV_ICON_PATHS: Record<string, string> = {
@@ -249,6 +263,7 @@ export const NAV_ICON_PATHS: Record<string, string> = {
   'criativos-marca': '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6L3.3 9.3l6.1-.7L12 3z"/>',
   'criativos-contextos': '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/>',
   'criativos-personas': '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
+  parcerias: '<path d="M8 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M2.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5l3 3-3 3"/><path d="M19 8.5h-5"/><path d="M14 17h6"/>',
   integracoes:
     '<path d="M9 2v4M15 2v4"/><path d="M7 6h10v4a5 5 0 0 1-10 0V6z"/><path d="M12 15v3"/><path d="M9 21h6"/>',
   configuracoes:

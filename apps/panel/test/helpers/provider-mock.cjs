@@ -24,7 +24,7 @@ const json = (corpo, status = 200) => new Response(JSON.stringify(corpo), { stat
 // Catálogo/pedidos da Ink por "loja de teste": a 4ª letra do token Bearer (`inkC…`, `inkD…`, `inkA…`)
 // escolhe uma faixa de ids própria. Assim um teste prova que cada Organization leu o catálogo da
 // SUA credencial (e que nada de outra apareceu), sem o mock saber nada de Organization.
-const FAIXA_INK = { A: 3000, C: 1000, D: 2000 };
+const FAIXA_INK = { A: 3000, C: 1000, D: 2000, F: 6000 };
 function tagInk(auth) {
   return String(auth || '').replace(/^Bearer /, '')[3] || 'X';
 }
@@ -38,6 +38,20 @@ function produtoInk(tag, i) {
 }
 function pedidoInk(id, tag) {
   const base = FAIXA_INK[tag] || 9000;
+  // Loja de teste `F` (parcerias/afiliados): pedido com cupom e os campos que o módulo de comissões lê — só ela ganha estes campos,
+  // os demais testes continuam vendo exatamente o payload de sempre.
+  if (tag === 'F') {
+    return {
+      id, rsv_factory_id: null, payment_status: 'paid', order_status: 'awaiting_production', total_value: '85.00', shipping_value: '10.00', promotion_code: 'MockCupom', promotion_value: '5.00',
+      payment_discount_value: '0.00', freight_value_difference: '0.00', kickback_value: '45.00', is_exchange: false, created_at: new Date().toISOString(),
+      buyer: { first_name: 'Cliente', last_name: tag, phone: '11999990000', document: '12345678901', email: `c${tag}@exemplo.com`, accepts_marketing: true },
+      shipping_address: { state: 'SP' },
+      items: [{
+        id: id * 10 + 1, quantity: 1, unit_value: '90.00', total_value: '90.00', unit_ink_base_price: '40.00', unit_additional_service_price: '0.00', free_quantity: 0, refunded_quantity: 0, sku: 'SKU-F1',
+        product_variant: { id: base + 11 }, product_v2: { id: base + 1, name: `Produto ${tag}1`, product_cluster_id: null },
+      }],
+    };
+  }
   return {
     id, rsv_factory_id: null, payment_status: 'paid', order_status: 'awaiting_production', total_value: 100, shipping_value: 10,
     created_at: new Date().toISOString(),
