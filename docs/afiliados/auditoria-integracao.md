@@ -83,3 +83,34 @@ O documento de execução fala em `owner/admin/finance/marketing/operacao`. O sc
 rascunho, cupons planejados, contratos em rascunho) e **não vê nem altera dinheiro** (contas a pagar, pagamentos, lotes, exportação,
 extrato, KPIs financeiros da visão geral). Níveis e benefícios: leitura para os dois, decisões/concessões só do owner. Cada rota confere o papel no backend e há teste chamando os endpoints direto. Papéis
 mais finos exigem migration de `organization_members` e decisão de produto (fora do escopo).
+
+## 6. Validação real da INK · rodada de validação (28/09/2026) — **NÃO EXECUTADA: credencial indisponível localmente**
+
+### Inspeção do connector (feita, somente leitura de código)
+
+- Caminho da chamada: `criarAfiliados({ inkClient: { get } })` (`server.js`, junto do `app.use('/api/admin/afiliados', …)`) → `inkApiRequestDaStore(caminho)` → `inkFetchDaStore('GET', caminho)`.
+  O método HTTP está **fixo em `'GET'`** nessa função; o cliente injetado só tem `get` (nenhum `post`/`put`/`patch`/`delete`).
+- O adapter (`lib/afiliados/ink-promotions.js`) usa `client.get` em **um único** ponto (`verificarCupom`: `GET /v1/stores/promotions?code=<code>&per_page=5`) e recusa `criarCupom` com `PromotionWritesDisabledError` quando `client.post` não existe ou a flag é `false` (fixa em `false` no código). Nenhum fluxo dispara POST/PATCH/PUT/DELETE por efeito colateral.
+  Provado também em execução: com o painel local, `POST …/coupons/:id/ink-create` responde `409 INK_PROMOTION_WRITES_DISABLED` e a prévia informa `enviaria: false`.
+- Credencial: token da INK por Organization, cifrado, lido via `comTokenInkDaStore` → `usarSegredo('ink', 'api_token')`; escopo necessário para a leitura: `store.promotions.read`.
+  O request não escolhe a credencial. Só existe se a Organization tiver a integração da INK configurada.
+
+### Por que a chamada real não foi feita
+
+O ambiente local não tem token da INK: não há variável `INK_*`, nem `.env`, e a Organization de demonstração (dados 100 % sintéticos) não tem o segredo `ink/api_token` — a verificação responde `502 INK_LEITURA_FALHOU` (o connector devolve 503 "organization não tem a integração… configurada"). O token real vive só nos bancos de produção/staging, que esta rodada **não** deve acessar, e por regra da rodada não se inventa nem se pede segredo. **Etapa interrompida aqui; nada foi enviado à INK.**
+
+### Situação após esta rodada (inalterada em relação ao §3)
+
+| Item | Estado |
+|---|---|
+| Formato real da resposta de `GET /v1/stores/promotions?code=` (campos, `free_quantity`, `usage_limit`/reuso, paginação) | **não observado** — só mock/contrato |
+| Escopo mínimo de leitura | `store.promotions.read` **declarado**, não confirmado contra a API |
+| Escrita de promoções (POST `/standard`) | **mock-only**, desligada |
+| Diferenças mock × produção | **desconhecidas**; o parser do adapter é tolerante (`data`/`promotions`/array) e o cupom sem retorno vira "não encontrado", nunca é criado |
+
+### Decisões e passos antes de qualquer escrita futura
+
+1. O dono da loja executa (ou autoriza) o `GET` numa Organization real com token INK e cupom seguro; comparar o payload com o mock (`test/helpers/provider-mock.cjs`) e ajustar o parser/`montarPedidoDeCriacao` se houver divergência.
+2. Confirmar o escopo/plano que habilita `store.promotions.write` e o comportamento de `Idempotency-Key`.
+3. Decidir a semântica de `free_quantity` e de cupom reaproveitável (`usage_limit`) — hoje viram revisão manual.
+4. Só depois: liberar escrita **por release** (mudança de código + cliente de escrita injetado + teste em loja de teste), nunca por configuração em runtime.

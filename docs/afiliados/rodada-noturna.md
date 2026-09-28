@@ -103,3 +103,94 @@ node --test test/afiliados-*.test.js
 node --test test/invariants/afiliados-db.test.js test/invariants/afiliados-http.test.js
 node --test --test-concurrency=1 test/invariants/tenancy-*.test.js test/invariants/migrations.test.js
 ```
+
+---
+
+# Validação da branch (rodada 2 · 28/09/2026)
+
+Somente local. **Nenhum push, PR, merge/rebase, deploy, migration fora de bancos descartáveis, escrita na INK, pagamento real ou contato com parceiro.**
+Nenhum código de produto foi alterado nesta rodada (nenhum bug encontrado); só documentação.
+
+## Git
+
+- Branch `feature/oria-parcerias-afiliados`, worktree `/Users/gtomazi/projects/oria-afiliados`, árvore limpa no início. Commits existentes: `9ccd099`, `a247c75`, `b5c6939`, `67a395f`, `770d34a`.
+- `git fetch`: `origin/main` = `b32e25b`, dois commits além da base `8dfe5a8` (PR #44 "filtro de data/intervalo" e `3e28cb7` "período global em Google Ads, Custos de API, GA4 e Meta Ads"). `git diff 8dfe5a8 origin/main -- apps/panel/migrations` **vazio**: sem migration nova.
+- **Migrations sem colisão** (`1790002900000_partnerships`/`0044`, `1790003000000_pedidos-ink-afiliados-campos`/`0045`); nada renumerado. O merge com `main` não foi feito (regra da rodada); a verificação anterior indicou que é textualmente limpo.
+- Commits novos: 1 (docs desta validação). Árvore final limpa.
+
+## Testes
+
+**Incidente de ambiente.** O Docker/Colima caiu no meio do primeiro run do `app-role` (VM parada, hostagent preso): o run foi **invalidado** (o banco sumiu durante o teste) e descartado. Recuperação: `colima stop -f` + `colima start`, container `oria-afil-pg` recriado (porta 53954) e banco de demonstração recriado/semeado. Causa: infraestrutura da máquina (carga muito alta com várias sessões), não código.
+
+**`app-role` pelo wrapper oficial.** Comando (mesmo wrapper de `npm run test:app-role`: `TEST_APP_ROLE=1` + `scripts/test-db.mjs run`, que exporta `DB_ENFORCE_APP_ROLE`, `DATABASE_URL` da role da aplicação e `TEST_OWNER_DATABASE_URL`):
+
+```
+TEST_APP_ROLE=1 TEST_PG_CONTAINER=oria-afil-pg TEST_PG_KEEP=1 node scripts/test-db.mjs run -- node --test --test-concurrency=1 \
+  test/invariants/app-role-suite.test.js test/invariants/afiliados-db.test.js test/invariants/afiliados-http.test.js \
+  test/invariants/tenancy-isolation.test.js test/invariants/tenancy-upsert.test.js test/invariants/navegacao-painel.test.js test/invariants/td001-rls-contract.test.js
+```
+
+Resultado: **211 / 211 passam, 0 falham** (exit 0, ~49 s). A falha do run manual anterior era ambiental (faltavam as variáveis do wrapper), confirmada. **Não foi executado o `npm run test:app-role` inteiro** (`test/*.test.js` + `test/invariants/*.test.js`, mais de 1 h sob esta carga): o `app-role` e tudo que a branch toca foram rodados como subconjunto pelo mesmo wrapper.
+
+**Checklist manual, 10 itens** (painel real do `server.js` na porta 48123, `AFILIADOS_MODULE_ENABLED=true`, jobs de fundo desligados, sem credencial INK, dados sintéticos; scripts de verificação fora do repositório: API + banco + Chrome headless por CDP):
+
+| # | Item | Resultado | Evidência |
+|---|---|---|---|
+| 1 | Subir local (seed + painel) | **PASS** | seed: 20 pedidos, 17 atribuições, 2 revisões, 2 propostas de nível, 1 pagamento parcial |
+| 2 | Collab sem cupom | **PASS** | pedido 90001: base `collab`, sem cupom, R$ 6,00 |
+| 3 | Pedido misto | **PASS** | 90003: 2 atribuições (1 por item); collab → Amanda R$ 4,50; comum → Bruno via `BRUNO10` R$ 9,00; cupom no item da collab só como evidência (`paidOnThisLine=false`) |
+| 4 | Devolução parcial | **PASS** | 90007 (2 un., 1 devolvida): R$ 6,00 sobre a unidade elegível, snapshot original (`qtdPaga=2`) preservado. 90009 com devolução simulada de 1 de 2 un. depois da liberação (UPDATE só no banco descartável): ajuste `−700` sobre `1400`; lançamento original intacto; reprocessar não duplica |
+| 5 | Cancelado / troca / sem custo / sem snapshot / sem produto | **PASS** | 90008 e 90012 sem atribuição; 90013 `manual_review/cost_unknown` sem lançamento; 90014 `order_data_incomplete`; 90015 `item_without_product_id`; 90019 provisionado (aguarda entrega); 90020 provisionado (aguardando pagamento) |
+| 6 | Pagamento parcial | **PASS** | pagar R$ 4,50 de R$ 9,00 → aceito, restante R$ 4,50; mesma `idempotencyKey` → 200 `deduplicated`; pagar acima do saldo → 422 "excede o saldo em aberto", nada gravado; estorno → 201, **contralançamento novo** (`kind=reversal`), pagamento original preservado, saldo volta; segundo estorno → 409; `UPDATE` direto no pagamento recusado (append-only) e `DELETE` recusado |
+| 7 | Filtros de data e vencido por lançamento | **PASS** | "pagamento efetivo" no dia do pagamento acha a linha; o mesmo dia como "vencimento" não; KPI "pago no período" segue `paid_at` (262 / 0). Grupo ago/2026 da Amanda com vencimentos 10/09 e 12/10: aberto 1575, **vencido 975** (só a parcela vencida) |
+| 8 | Permissões (member) | **PASS** | 8 endpoints financeiros/aprovação → 403; visão geral sem valores ("Sem acesso a valores"); sem aba "A pagar" (screenshot); `/a-pagar` direto mostra "Área do owner"; 0 pagamentos criados pelo member |
+| 9 | Cupom/INK: prévia | **PASS** | "Prévia INK" de `CARLA20` (screenshot): `POST /v1/stores/promotions/standard`, escopo `store.promotions.write`, `Idempotency-Key` estável, "Escrita na INK: DESLIGADA"; `POST …/ink-create` → 409 `INK_PROMOTION_WRITES_DISABLED`; `inkPromotionWritesEnabled=false` |
+| 10 | Cupom/INK: verificar (leitura) | **PASS (limitação esperada)** | sem token INK local: 502 `INK_LEITURA_FALHOU` explícito, sem escrita e sem efeito |
+
+(A lista tem 10 linhas: a linha 1 é o setup e o item 10 do relatório da rodada 1 foi dividido em prévia e verificação; os itens 2–9 do relatório correspondem às linhas 2–8 e 9–10 acima, na mesma ordem.)
+
+Placar: **10/10 PASS** — 24 verificações de API/banco (itens 2–5, 7, 8, 10), 11 do fluxo de pagamento (item 6) e 3 telas por screenshot.
+
+**Testes isolados, typecheck e build:** não reexecutados (nenhum código foi alterado); a evidência da rodada 1 continua válida (77 puros, 31 `afiliados-db`, 6 `afiliados-http`, 168 tenancy/migrations, 29 `navegacao-painel`, typecheck/build limpos), somada aos 211 do wrapper acima. **Suíte completa: não realizada** nesta rodada.
+
+## INK real
+
+**Chamada GET real: NÃO realizada.** Endpoint previsto: `GET /v1/stores/promotions?code=<CÓDIGO>&per_page=5` (`store.promotions.read`). Motivo: o ambiente local não tem token da INK (nenhuma variável `INK_*`, nenhum `.env`; a Organization de demonstração não tem o segredo `ink/api_token`); o token real só existe nos bancos de produção/staging, fora do alcance desta rodada, e a regra é não inventar nem pedir segredo. Etapa interrompida sem nenhuma chamada à INK.
+
+Confirmado por inspeção do código: o cliente injetado só tem `get`; `inkFetchDaStore('GET', …)` fixa o método; `criarCupom` sem `client.post` lança `PromotionWritesDisabledError`; nenhum caminho dispara POST/PATCH/PUT/DELETE. **Nenhuma escrita na INK.** Detalhes, campos ainda não observados e decisões antes de habilitar escrita: `auditoria-integracao.md` §6.
+
+## Bugs encontrados
+
+**Nenhum** bug de código nesta rodada (portanto nenhum commit de correção nem teste novo). Falhas observadas foram de script de verificação próprio (expectativa errada do item 4 na 1ª leitura, coluna inexistente) e de infraestrutura (Colima), todas resolvidas fora do repositório.
+
+Observações (não são defeitos):
+- `DELETE` direto em `partner_payment_records` é barrado pela FK das alocações (o trigger append-only cobre `UPDATE`); o resultado — histórico imutável — se mantém.
+- `CARLA20` (aguardando validação) mostra "Ativar" habilitado mesmo com a verificação na INK falhando/ausente; é decisão de produto (cadastro manual é fallback integral).
+- 403 preexistente em `/api/admin/whatsapp-web/config` na Organization de demonstração (sem plano de WhatsApp) — não relacionado.
+
+## Verificação final de segurança
+
+| Item | Resultado |
+|---|---|
+| `AFILIADOS_MODULE_ENABLED` opt-in, desligado por padrão | **sim** (`=== 'true'`; sem ela as rotas respondem 404 e o job fica inerte) |
+| Escrita de promoções INK bloqueada | **sim** (409; flag `false` fixa no código) |
+| Nenhum cliente de escrita injetado | **sim** (`inkClient: { get }`) |
+| RLS em todas as tabelas do módulo | **sim**: 20/20 com RLS habilitada, `FORCE` e ≥ 1 política, todas com `organization_id` (consulta ao catálogo) |
+| Nenhum endpoint aceita seletor de `organization_id` | **sim**: o contexto vem só de `req.tenant`; seletor no request → 400 (`TENANT_SELECTOR_NOT_ALLOWED`); coberto por `afiliados-http` |
+| `member` sem dinheiro/aprovação | **sim** (item 8; 26 rotas → 403 nos testes) |
+| Histórico append-only/imutável | **sim**: 8 tabelas com trigger (ledger, benefícios, histórico de nível, alocações, pagamentos, auditoria, versões de contrato, regras de nível) |
+| Sem abstração multi-loja | **sim**: 1 Organization = 1 Store preservado; nenhum `store_id` como seletor |
+
+## Pendências
+
+**Bloqueantes para PR:** nenhuma. **Para o merge:** rodar a suíte completa `npm run test:app-role` no CI/ambiente sem contenção e reexecutar após integrar `main` (`b32e25b`, sem migrations, mas toca `server.js`).
+
+**Não bloqueantes / P2:** validação real de `GET /v1/stores/promotions` (formato, `free_quantity`, `usage_limit`, escopo); backfill de pedidos antigos (ficam em Revisões); `paid_at` inexistente no cache; papéis `finance`/`marketing`; feriados; upload de comprovante; portal/candidatura/e-mail/WhatsApp; ensaio das migrations contra dump de produção.
+
+**Decisões de produto abertas:** permitir "Ativar" cupom não verificado na INK; semântica de `free_quantity` e cupom reaproveitável; margem = receita líquida − custo de produção (sem taxas/impostos/frete); política de conflito padrão (`collab_precedence`); quando liberar escrita de promoções (por release, com token/escopo de escrita confirmados).
+
+## Recomendação
+
+**APTO PARA PR COM RESSALVAS**
+
+Motivos: checklist manual 10/10 PASS, 211/211 no wrapper `app-role` (subconjunto que cobre a branch), nenhum bug de código, invariantes de segurança confirmados (flag off, sem escrita na INK, RLS 20/20, append-only, member sem dinheiro, 1 workspace = 1 loja), sem colisão de migrations. Ressalvas: (1) o contrato real da INK **não foi validado** por falta de credencial local — a integração de promoções segue só com mock e a escrita permanece desligada; (2) o `npm run test:app-role` completo e a suíte inteira não foram concluídos nesta máquina e devem rodar no CI antes do merge; (3) `main` avançou (sem migrations), exigindo reexecução após a integração.
