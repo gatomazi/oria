@@ -63,7 +63,7 @@ test.before(async () => {
     await sup.query('INSERT INTO organizations (id, nome) VALUES ($1, $2)', [org, nome]);
     await sup.query('INSERT INTO stores (id, organization_id, nome, loja_legada) VALUES ($1, $2, $3, NULL)', [store, org, nome]);
   }
-  svc = criarAfiliados({ pool: pool(), relogio, inkClient: inkFalsa.somenteLeitura, flags: { inkPromotionWritesEnabled: false } });
+  svc = criarAfiliados({ pool: pool(), relogio, inkClient: inkFalsa.somenteLeitura });
 });
 
 test.after(async () => {
@@ -610,14 +610,14 @@ test('cachê por conteúdo é categoria separada e não se mistura à comissão 
   assert.equal(resumo.contentFeesOpenCents, 30000);
 });
 
-test('escrita remota de promoções está desligada: preview monta o pedido, criação recusa e nada é enviado', async () => {
+test('connector só de leitura (modo manual): preview monta o pedido, criação/sincronização/exclusão recusam e nada é enviado', async () => {
   const preview = await emA(() => svc.registry.previsualizarCriacaoNaInk(ctxA, cen.cupom.id));
   assert.equal(preview.ok, true);
   assert.equal(preview.enviaria, false);
   assert.match(preview.request.headers['Idempotency-Key'], new RegExp(`^oria-aff-create-${cen.cupom.id}-[0-9a-f]{16}$`));
-  await assert.rejects(emA(() => svc.registry.criarCupomNaInk(ctxA, cen.cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_DISABLED');
-  await assert.rejects(emA(() => svc.registry.sincronizarCupomNaInk(ctxA, cen.cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_DISABLED');
-  await assert.rejects(emA(() => svc.registry.excluirPromocaoNaInk(ctxA, cen.cupom.id, { motivo: 'x' })), (e) => ['INK_PROMOTION_WRITES_DISABLED', 'AFILIADOS_CUPOM_ATIVO'].includes(e.codigo));
+  await assert.rejects(emA(() => svc.registry.criarCupomNaInk(ctxA, cen.cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_UNAVAILABLE');
+  await assert.rejects(emA(() => svc.registry.sincronizarCupomNaInk(ctxA, cen.cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_UNAVAILABLE');
+  await assert.rejects(emA(() => svc.registry.excluirPromocaoNaInk(ctxA, cen.cupom.id, { motivo: 'x' })), (e) => ['INK_PROMOTION_WRITES_UNAVAILABLE', 'AFILIADOS_CUPOM_ATIVO'].includes(e.codigo));
   const v = await emA(() => svc.registry.verificarCupomNaInk(ctxA, cen.cupom.id));
   assert.equal(v.verificacao.status, 'confirmed');
   assert.equal(inkFalsa.escritas().length, 0);
@@ -733,8 +733,8 @@ test('migrations 0044/0045 descem e sobem de novo num banco descartável', async
 
 // ── Promoções da INK: ativação fail-closed e ciclo de vida (INK falsa em memória, contrato oficial) ──────────────────────────────
 const cicloInk = {};
-const servicoComEscrita = (ink) => criarAfiliados({ pool: pool(), relogio, inkClient: ink.client, inkScopes: ESCOPOS_INK, flags: { inkPromotionWritesEnabled: true } });
-const servicoSoLeitura = (ink) => criarAfiliados({ pool: pool(), relogio, inkClient: ink.somenteLeitura, flags: { inkPromotionWritesEnabled: false } });
+const servicoComEscrita = (ink) => criarAfiliados({ pool: pool(), relogio, inkClient: ink.client, inkScopes: ESCOPOS_INK });
+const servicoSoLeitura = (ink) => criarAfiliados({ pool: pool(), relogio, inkClient: ink.somenteLeitura });
 const estadoDoCupom = async (id) => (await sup.query('SELECT status, sync_status, sync_mode, ink_promotion_id, sync_error, valid_until FROM partner_coupon_links WHERE organization_id = $1 AND id = $2', [ORG_A, id])).rows[0];
 
 async function novoCupomDeCiclo(codigo, bps = 1000) {
@@ -779,7 +779,7 @@ test('ativação INK · existente e divergente: NÃO ativa, mostra a divergênci
   assert.equal(ink.escritas().length, 0);
 });
 
-test('ativação INK · inexistente com escrita desligada: sem POST, sem ativar, fica aguardando a INK', async () => {
+test('ativação INK · inexistente com connector sem criação (modo manual): sem POST, sem ativar, fica aguardando o vínculo', async () => {
   const ink = criarInkFalsa({ agora: relogio });
   const cupom = await novoCupomDeCiclo('CICLO30');
   const r = await emA(() => servicoSoLeitura(ink).registry.ativarCupom(ctxA, cupom.id));
@@ -790,11 +790,11 @@ test('ativação INK · inexistente com escrita desligada: sem POST, sem ativar,
   assert.equal(ink.escritas().length, 0);
   assert.equal(ink.leituras().length, 0);
   // Sem nenhuma INK conectada: mesmo resultado.
-  const svcSemInk = criarAfiliados({ pool: pool(), relogio, flags: { inkPromotionWritesEnabled: false } });
+  const svcSemInk = criarAfiliados({ pool: pool(), relogio });
   assert.equal((await emA(() => svcSemInk.registry.ativarCupom(ctxA, cupom.id))).outcome, 'awaiting_ink');
 });
 
-test('ativação INK · inexistente com escrita habilitada (mock): GET vazio → POST 201 → persiste ID e snapshot → ativa', async () => {
+test('ativação INK · inexistente com connector que cria: GET vazio → POST 201 → persiste ID e snapshot → ativa', async () => {
   const ink = criarInkFalsa({ agora: relogio });
   const cupom = await novoCupomDeCiclo('CICLO40', 1500);
   const r = await emA(() => servicoComEscrita(ink).registry.ativarCupom(ctxA, cupom.id));
@@ -897,7 +897,7 @@ test('ciclo de vida · PATCH sincroniza só a vigência da promoção depois de 
   const denovo = await emA(() => svcW.registry.sincronizarCupomNaInk(ctxA, cupom.id));
   assert.equal(denovo.atualizado, false);
   assert.equal(ink.chamadas.filter((c) => c[0] === 'PATCH').length, 1);
-  await assert.rejects(emA(() => servicoSoLeitura(ink).registry.sincronizarCupomNaInk(ctxA, cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_DISABLED');
+  await assert.rejects(emA(() => servicoSoLeitura(ink).registry.sincronizarCupomNaInk(ctxA, cupom.id)), (e) => e.codigo === 'INK_PROMOTION_WRITES_UNAVAILABLE');
 });
 
 test('ativação INK · outra Organization não ativa nem dispara chamada à INK pelo cupom alheio', async () => {

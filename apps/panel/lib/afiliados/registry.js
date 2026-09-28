@@ -528,10 +528,10 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
 
   // ── Integração com Promoções da INK (fail-closed) ───────────────────────────────────────────────
   // Nada aqui deixa um cupom "ativo" sem a INK ter confirmado a promoção. Falha de rede/permissão nunca vira sucesso, e o estado anterior é preservado.
-  const MSG_AGUARDANDO = 'Aguardando criação/verificação na INK: cadastre a promoção standard com este código no painel da INK (ou habilite a criação automática) e verifique de novo.';
+  const MSG_AGUARDANDO = 'Aguardando criação/verificação na INK: este connector não cria cupons automaticamente — crie a promoção standard com este código no painel da INK e verifique de novo.';
 
   const STATUS_HTTP_INK = Object.freeze({
-    INK_NOT_CONFIGURED: 409, INK_PROMOTION_CONFLICT: 409, INK_PROMOTION_INVALID: 409, INK_PROMOTION_WRITES_DISABLED: 409, INK_PROMOTION_SCOPE_MISSING: 409,
+    INK_NOT_CONFIGURED: 409, INK_PROMOTION_CONFLICT: 409, INK_PROMOTION_INVALID: 409, INK_PROMOTION_WRITES_UNAVAILABLE: 409, INK_PROMOTION_SCOPE_MISSING: 409,
     INK_VALIDATION: 422, INK_CONFLICT: 422, INK_NOT_FOUND: 409,
   });
 
@@ -598,7 +598,7 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
     } finally { c0.release(); }
     if (versaoDoContrato.status !== 'active') throw erro(422, 'AFILIADOS_CONTRATO_INATIVO', 'ative o contrato antes de ativar o cupom');
     if (retroativo && !textoOpcional(motivo, { max: 500, nome: 'motivo' })) throw entradaInvalida('ativação retroativa exige motivo');
-    const link = mapearCupom(cupom);
+    const link = { ...mapearCupom(cupom), timezone: (await lerConfig(ctx)).timezone };
 
     const aguardando = async (motivoInterno) => {
       const r = await gravarSincronia(ctx, cupom.id, { syncStatus: 'not_created', acao: 'coupon.activate.blocked', detalhes: { motivo: motivoInterno } });
@@ -621,8 +621,8 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
       const ativo = await ativarConfirmado(ctx, cupom.id, { retroativo, motivo, promotionId: v.promotionId, snapshot: v.observada, via: 'existing' });
       return { coupon: mapearCupom(ativo), activated: true, outcome: 'activated', message: 'Promoção verificada na INK; cupom ativado.', divergencias: [] };
     }
-    // not_found: só cria se TODAS as condições de escrita valerem; senão fica aguardando (sem POST).
-    if (inkPromotions.bloqueioDeEscrita('post')) return aguardando('promocao_inexistente_escrita_desligada');
+    // not_found: o Oria cria a promoção na INK quando o connector suporta (fluxo padrão); senão (modo manual) fica aguardando o vínculo, sem POST.
+    if (inkPromotions.bloqueioDeEscrita('post')) return aguardando('promocao_inexistente_connector_sem_criacao');
     let criada;
     try { criada = await inkPromotions.criarPromocao(link); } catch (err) {
       const e = erroDeInk(err);
@@ -684,23 +684,23 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
 
   async function lerCupomLink(ctx, id) {
     const c = await pool.connect();
-    try { return mapearCupom(await obterCupom(c, ctx, id)); } finally { c.release(); }
+    try { return { ...mapearCupom(await obterCupom(c, ctx, id)), timezone: (await lerConfig(ctx, c)).timezone }; } finally { c.release(); }
   }
 
   async function previsualizarCriacaoNaInk(ctx, id) {
     const cupom = await lerCupomLink(ctx, id);
-    if (!inkPromotions) return { ok: false, problemas: ['adaptador da INK indisponível'], escritaHabilitada: false, enviaria: false, bloqueio: 'INK_PROMOTION_WRITES_DISABLED', request: null };
+    if (!inkPromotions) return { ok: false, problemas: ['adaptador da INK indisponível'], criacaoDisponivel: false, enviaria: false, bloqueio: 'INK_PROMOTION_WRITES_UNAVAILABLE', request: null };
     return inkPromotions.previsualizarCriacao(cupom);
   }
 
   // Criação explícita da promoção (rota de owner). NÃO ativa o cupom: depois de criada e confirmada, a ativação passa pela verificação de novo.
   async function criarCupomNaInk(ctx, id) {
     const cupom = await lerCupomLink(ctx, id);
-    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita de promoções na INK está desligada; cadastre a promoção no painel da INK e use "Verificar na INK"');
+    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_UNAVAILABLE', 'este connector não cria promoções; crie o cupom na loja e use "Verificar na INK"');
     let r;
     try { r = await inkPromotions.criarPromocao(cupom); } catch (err) {
       const e = erroDeInk(err);
-      if (e.codigo !== 'INK_PROMOTION_WRITES_DISABLED') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_create.error', detalhes: { codigo: e.codigo } });
+      if (e.codigo !== 'INK_PROMOTION_WRITES_UNAVAILABLE') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_create.error', detalhes: { codigo: e.codigo } });
       throw e;
     }
     const ok = r.confirmacao.status === 'confirmed';
@@ -733,12 +733,12 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
   // PATCH parcial da promoção standard (rota de owner). Só campos da promoção; sem diferença patchável não envia nada.
   async function sincronizarCupomNaInk(ctx, id) {
     const cupom = await lerCupomLink(ctx, id);
-    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita de promoções na INK está desligada');
+    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_UNAVAILABLE', 'este connector não suporta alterar promoções');
     if (!cupom.inkPromotionId) throw conflito('AFILIADOS_CUPOM_SEM_PROMOCAO_INK', 'este cupom ainda não está vinculado a uma promoção da INK; verifique-o primeiro');
     let r;
     try { r = await inkPromotions.atualizarPromocao(cupom, cupom.inkPromotionId); } catch (err) {
       const e = erroDeInk(err);
-      if (e.codigo !== 'INK_PROMOTION_WRITES_DISABLED' && e.codigo !== 'INK_PROMOTION_SCOPE_MISSING') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_update.error', detalhes: { codigo: e.codigo } });
+      if (e.codigo !== 'INK_PROMOTION_WRITES_UNAVAILABLE' && e.codigo !== 'INK_PROMOTION_SCOPE_MISSING') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_update.error', detalhes: { codigo: e.codigo } });
       throw e;
     }
     if (!r.atualizado) return { atualizado: false, campos: [], naoSincronizaveis: r.naoSincronizaveis, coupon: cupom };
@@ -754,13 +754,13 @@ function criarRegistry({ pool, relogio = () => new Date(), inkPromotions = null 
   async function excluirPromocaoNaInk(ctx, id, { motivo } = {}) {
     const m = textoObrigatorio(motivo, { max: 500, nome: 'motivo' });
     const cupom = await lerCupomLink(ctx, id);
-    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_DISABLED', 'escrita de promoções na INK está desligada');
+    if (!inkPromotions) throw erro(409, 'INK_PROMOTION_WRITES_UNAVAILABLE', 'este connector não suporta alterar promoções');
     if (cupom.status === 'active') throw conflito('AFILIADOS_CUPOM_ATIVO', 'pause ou encerre o cupom antes de excluir a promoção na INK');
     if (!cupom.inkPromotionId) throw conflito('AFILIADOS_CUPOM_SEM_PROMOCAO_INK', 'este cupom não está vinculado a uma promoção da INK');
     let r;
     try { r = await inkPromotions.excluirPromocao(cupom.id, cupom.inkPromotionId); } catch (err) {
       const e = erroDeInk(err);
-      if (e.codigo !== 'INK_PROMOTION_WRITES_DISABLED' && e.codigo !== 'INK_PROMOTION_SCOPE_MISSING') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_delete.error', detalhes: { codigo: e.codigo } });
+      if (e.codigo !== 'INK_PROMOTION_WRITES_UNAVAILABLE' && e.codigo !== 'INK_PROMOTION_SCOPE_MISSING') await gravarSincronia(ctx, cupom.id, { syncStatus: 'error', erroTexto: e.message, acao: 'coupon.ink_delete.error', detalhes: { codigo: e.codigo } });
       throw e;
     }
     const linha = await db.tx(pool, async (t) => {

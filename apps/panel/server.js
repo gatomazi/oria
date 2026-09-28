@@ -17261,13 +17261,23 @@ if (PRODUCT_ANALYTICS) {
 //
 // Feature flag DESLIGADA por padrão: sem `AFILIADOS_MODULE_ENABLED=true` toda rota responde 404 (menos /status) e o job abaixo não
 // faz nada. O Oria é o livro-razão das comissões; a INK entra só como fonte de pedidos/catálogo e de promoções COMUNS (cupom).
-// `inkClient` é SÓ de leitura (verificação de cupom); nenhum cliente de escrita é injetado e `inkPromotionWritesEnabled` é fixo em
-// false — mudar isso é decisão de código e de release, nunca de configuração em runtime. Ver docs/afiliados/arquitetura.md.
+// `inkClient` é o connector da INK desta Organization (credencial da Organization do contexto, nunca escolhida pelo request): leitura e
+// escrita de promoções `standard`. A escrita é funcionalidade do painel — não há flag — mas só acontece por ação explícita de owner, com
+// Idempotency-Key, e nada é ativado sem confirmação da INK. Sem `post` no cliente (outro connector futuro sem integração de cupom), o fluxo
+// cai no modo manual. Ver docs/afiliados/arquitetura.md §7.
 const { criarAfiliados } = require('./lib/afiliados');
 const { createAfiliadosRouter } = require('./lib/afiliados/routes');
 const AFILIADOS_HABILITADO = process.env.AFILIADOS_MODULE_ENABLED === 'true';
 const AFILIADOS = pgPool
-  ? criarAfiliados({ pool: pgPool, inkClient: { get: (caminho) => inkApiRequestDaStore(caminho) }, flags: { inkPromotionWritesEnabled: false } })
+  ? criarAfiliados({
+    pool: pgPool,
+    inkClient: {
+      get: (caminho) => inkApiRequestDaStore(caminho),
+      post: (caminho, body, headers) => inkFetchDaStore('POST', caminho, { body, extraHeaders: headers }),
+      patch: (caminho, body, headers) => inkFetchDaStore('PATCH', caminho, { body, extraHeaders: headers }),
+      delete: (caminho, headers) => inkFetchDaStore('DELETE', caminho, { extraHeaders: headers }),
+    },
+  })
   : null;
 if (AFILIADOS) {
   app.use('/api/admin/afiliados', requireAdmin, createAfiliadosRouter({ service: AFILIADOS, enabled: () => AFILIADOS_HABILITADO }));

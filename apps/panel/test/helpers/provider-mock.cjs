@@ -61,7 +61,25 @@ function pedidoInk(id, tag) {
   };
 }
 
-function respostaDaInk(p, metodo, corpo, auth, url) {
+// Promoções da loja `F` (parcerias/afiliados) com estado em memória do processo: POST/PATCH/DELETE de `standard` agem de verdade, no formato do
+// contrato oficial (escrita `discount_tier` number → leitura `discount_tiers` string), e o replay da mesma Idempotency-Key devolve o resultado original.
+const PROMOS_F = new Map();
+const RESPOSTAS_IDEMPOTENTES = new Map();
+let sequenciaPromoF = 0;
+function promocaoDeLeitura(p) {
+  return {
+    id: p.id, type: 'standard', code: p.code, kind: p.kind || 'percentage', apply_automatically: p.apply_automatically ?? false, list_type: p.list_type || 'all', progress_kind: null, usage_limit: p.usage_limit ?? null,
+    first_purchase: p.first_purchase ?? false, show_on_product_page: p.show_on_product_page ?? false, show_in_cart: p.show_in_cart ?? false, starts_at: p.starts_at ?? null, expires_at: p.expires_at ?? null,
+    available: true, discount_tiers: [{ min_cart_value: p.min_cart_value ?? null, min_cart_items: p.min_cart_items ?? null, discount: p.discount === undefined ? null : Number(p.discount).toFixed(1) }],
+    product_ids: p.product_ids || [], product_type_ids: p.product_type_ids || [], collection_ids: p.collection_ids || [], created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+  };
+}
+function mesclarPromocao(base, c) {
+  const t = c.discount_tier;
+  return { ...base, ...Object.fromEntries(['code', 'kind', 'list_type', 'apply_automatically', 'first_purchase', 'show_on_product_page', 'show_in_cart', 'usage_limit', 'starts_at', 'expires_at', 'product_ids', 'product_type_ids', 'collection_ids'].filter((k) => c[k] !== undefined).map((k) => [k, c[k]])), ...(t ? { discount: t.discount, min_cart_value: t.min_cart_value ?? null, min_cart_items: t.min_cart_items ?? null } : {}) };
+}
+
+function respostaDaInk(p, metodo, corpo, auth, url, chave) {
   const tag = tagInk(auth);
   const base = FAIXA_INK[tag] || 9000;
   let m;
@@ -147,11 +165,45 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     // conhece o cupom de afiliado de teste (MockCupom, 5% em toda a loja); qualquer outro código volta vazio. Sem `code`, o payload legado de sempre.
     const code = url && url.searchParams ? url.searchParams.get('code') : null;
     if (code) {
+      if (tag === 'F') {
+        const criadas = [...PROMOS_F.values()].filter((x) => !x.excluida && x.code.toUpperCase() === code.toUpperCase()).map(promocaoDeLeitura);
+        if (criadas.length) return json({ promotions: criadas, page: 1, per_page: 5, total_pages: 1, total_count: criadas.length });
+      }
       const achou = tag === 'F' && code.toUpperCase() === 'MOCKCUPOM';
       const promocao = { id: base + 902, type: 'standard', code: 'MockCupom', kind: 'percentage', apply_automatically: false, list_type: 'all', progress_kind: null, usage_limit: null, first_purchase: false, show_on_product_page: false, show_in_cart: false, starts_at: null, expires_at: null, available: true, discount_tiers: [{ min_cart_value: null, min_cart_items: null, discount: '5.0' }], product_ids: [], product_type_ids: [], collection_ids: [], created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
       return json({ promotions: achou ? [promocao] : [], page: 1, per_page: 5, total_pages: 1, total_count: achou ? 1 : 0 });
     }
     return json({ promotions: [{ id: base + 900, code: `PROMO${tag}`, type: 'standard' }] });
+  }
+  if (tag === 'F' && (m = p.match(/^\/v1\/stores\/promotions\/(\d+)$/)) && metodo === 'GET') {
+    const x = PROMOS_F.get(Number(m[1]));
+    return x && !x.excluida ? json({ promotion: promocaoDeLeitura(x) }) : json({ error: 'not found' }, 404);
+  }
+  if (tag === 'F' && p === '/v1/stores/promotions/standard' && metodo === 'POST') {
+    if (!chave) return json({ error: 'Idempotency-Key ausente' }, 400);
+    if (RESPOSTAS_IDEMPOTENTES.has(chave)) return json(RESPOSTAS_IDEMPOTENTES.get(chave), 201);
+    const c = JSON.parse(corpo || '{}');
+    if (!c.discount_tier) return json({ status: 422, error: 'validation', errors: ['discount_tier é obrigatório'] }, 422);
+    if ([...PROMOS_F.values()].some((x) => !x.excluida && x.code.toUpperCase() === String(c.code).toUpperCase())) return json({ status: 422, error: 'validation', errors: ['code já está em uso'] }, 422);
+    const id = base + 950 + (sequenciaPromoF += 1);
+    PROMOS_F.set(id, mesclarPromocao({ id }, c));
+    const resposta = { promotion: promocaoDeLeitura(PROMOS_F.get(id)) };
+    RESPOSTAS_IDEMPOTENTES.set(chave, resposta);
+    return json(resposta, 201);
+  }
+  if (tag === 'F' && (m = p.match(/^\/v1\/stores\/promotions\/standard\/(\d+)$/)) && metodo === 'PATCH') {
+    const x = PROMOS_F.get(Number(m[1]));
+    if (!chave) return json({ error: 'Idempotency-Key ausente' }, 400);
+    if (!x || x.excluida) return json({ error: 'not found' }, 404);
+    PROMOS_F.set(x.id, mesclarPromocao(x, JSON.parse(corpo || '{}')));
+    return json({ promotion: promocaoDeLeitura(PROMOS_F.get(x.id)) });
+  }
+  if (tag === 'F' && (m = p.match(/^\/v1\/stores\/promotions\/(\d+)$/)) && metodo === 'DELETE') {
+    const x = PROMOS_F.get(Number(m[1]));
+    if (!chave) return json({ error: 'Idempotency-Key ausente' }, 400);
+    if (!x || x.excluida) return json({ error: 'not found' }, 404);
+    x.excluida = true;
+    return new Response(null, { status: 204 });
   }
   if ((m = p.match(/^\/v1\/stores\/promotions\/(standard|progressive|unit_free)$/)) && metodo === 'POST') {
     return json({ promotion: { id: base + 901, type: m[1], code: JSON.parse(corpo || '{}').code } }, 201);
@@ -168,11 +220,11 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
   return json({});
 }
 
-function responder(url, metodo, corpo, auth) {
+function responder(url, metodo, corpo, auth, chave) {
   const p = url.pathname;
   switch (url.hostname) {
     case 'api.reserva.ink':
-      return respostaDaInk(p, metodo, corpo, auth, url);
+      return respostaDaInk(p, metodo, corpo, auth, url, chave);
     case 'graph.facebook.com': {
       // Tokens do fluxo OAuth simulado: o code `meta<X>` vira `EAAG-oauth-meta<X>` (curto) e, na troca
       // por longa duração, `EAAG-long-<X>`. A ÚLTIMA letra do token é a "loja de teste": ela escolhe a
@@ -348,7 +400,7 @@ globalThis.fetch = async function fetchComMock(entrada, init = {}) {
   if (LOG) {
     fs.appendFileSync(LOG, `${JSON.stringify({
       host: url.hostname, caminho: url.pathname, metodo,
-      auth: headers.get('authorization'), corpo, query: url.search,
+      auth: headers.get('authorization'), idempotencyKey: headers.get('idempotency-key'), corpo, query: url.search,
     })}\n`);
   }
   // Controle de teste (arquivo JSON relido a cada chamada): o cadastro de clientes da Ink pode ficar lento ou fora do ar
@@ -359,5 +411,5 @@ globalThis.fetch = async function fetchComMock(entrada, init = {}) {
     if (controle.clientesCadastro === 'lento') await new Promise((r) => setTimeout(r, Number(controle.atrasoMs) || 3000));
     if (controle.clientesCadastro === 'falha') return json({ error: 'indisponível (simulado)' }, 503);
   }
-  return responder(url, metodo, corpo, headers.get('authorization'));
+  return responder(url, metodo, corpo, headers.get('authorization'), headers.get('idempotency-key'));
 };

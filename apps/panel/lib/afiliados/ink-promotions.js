@@ -13,22 +13,25 @@
 // Assimetria do contrato: o corpo de escrita usa `discount_tier` (objeto, `discount` NUMBER); a leitura devolve `discount_tiers` (array,
 // `discount` STRING como "10.0"). `available` é CALCULADO pela INK (não expirada, não agendada, sem estourar usage_limit) — nunca é configuração.
 //
-// Escrita: fail-closed. Só sai request POST/PATCH/DELETE se TODAS as condições valerem: flag `inkPromotionWritesEnabled=true`, cliente com o método
-// de escrita injetado, escopo `store.promotions.write` declarado, operação autorizada por quem chama (rota de owner) e Idempotency-Key. O
-// server.js só injeta `get`, e a flag é fixa em `false` no código: nesta versão nenhuma escrita real é possível. Não validado ponta a ponta
-// contra uma credencial real da loja (ver docs/afiliados/auditoria-integracao.md §6).
+// Escrita: é FUNCIONALIDADE do painel quando o connector da INK existe (o server.js injeta o cliente completo `get/post/patch/delete`), sem flag.
+// Continua fail-closed: só sai POST/PATCH/DELETE por ação explícita de owner (ativar cupom, ink-create/ink-sync/ink-delete), com `Idempotency-Key`,
+// e nada é ativado sem `201` válido + leitura de volta. Se o connector não suporta criação (cliente sem `post`) ou outro connector futuro não
+// tiver integração de cupom, o fluxo cai no modo MANUAL: cria-se o cupom na loja e o Oria só cria o vínculo/verifica.
+// Não validado ponta a ponta contra uma credencial real da loja (ver docs/afiliados/auditoria-integracao.md §7).
 
 const crypto = require('node:crypto');
 const { normalizarCodigo } = require('./engine');
+const { dataLocal, TZ_PADRAO } = require('./schedule');
 
 const ESCOPO_LEITURA = 'store.promotions.read';
 const ESCOPO_ESCRITA = 'store.promotions.write';
 
-class PromotionWritesDisabledError extends Error {
-  constructor(motivo = 'escrita de promoções na INK está desligada (ink_promotion_writes_enabled=false)') {
+// O connector atual não expõe essa escrita (ex.: cliente só de leitura, ou outro connector sem integração de cupom).
+class PromotionWritesUnavailableError extends Error {
+  constructor(motivo = 'este connector não suporta criar/alterar promoções; crie o cupom na loja e vincule-o aqui') {
     super(motivo);
-    this.name = 'PromotionWritesDisabledError';
-    this.codigo = 'INK_PROMOTION_WRITES_DISABLED';
+    this.name = 'PromotionWritesUnavailableError';
+    this.codigo = 'INK_PROMOTION_WRITES_UNAVAILABLE';
   }
 }
 
@@ -221,10 +224,20 @@ function diferencas(link, promocao, agora = new Date()) {
   if (o.apply_automatically !== e.apply_automatically) add('apply_automatically', 'aplicação automática diferente (o cupom de afiliado é digitado pelo cliente)');
   if (o.show_on_product_page !== e.show_on_product_page) add('show_on_product_page', 'exibição na página do produto diferente');
   if (o.show_in_cart !== e.show_in_cart) add('show_in_cart', 'exibição no carrinho diferente');
-  // Vigência: o Oria só comissiona dentro de [valid_from, valid_until). Início da INK depois do esperado = o cupom não funciona quando o
-  // Oria acha que sim; fim diferente (inclusive ausente) = o desconto continua/para fora da janela paga.
-  if (o.starts_at && e.starts_at && o.starts_at.getTime() - e.starts_at.getTime() > TOLERANCIA_MS) add('starts_at', 'início da vigência na INK é posterior ao do Oria');
-  if ((o.expires_at === null) !== (e.expires_at === null) || (o.expires_at && e.expires_at && Math.abs(o.expires_at - e.expires_at) > TOLERANCIA_MS)) add('expires_at', 'fim da vigência diferente');
+  // Vigência, comparada por DIA no fuso da loja (a INK e o Oria falam em datas; o painel da INK grava o "fim do dia" em fusos/horas próprios).
+  // Início da INK em dia POSTERIOR ao do Oria = o cupom não funciona quando o Oria acha que sim. Fim da INK em dia POSTERIOR (ou sem fim) = o desconto
+  // continua depois de o Oria parar de comissionar. Fim da INK até 1 dia ANTES é tolerado (normalização de fuso; só encurta o desconto).
+  const tz = link.timezone || TZ_PADRAO;
+  const dia = (d) => dataLocal(d, tz);
+  const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+  const dias = (iso) => { const [a, m, dd] = iso.split('-').map(Number); return Date.UTC(a, m - 1, dd) / 86400000; };
+  if (o.starts_at && e.starts_at && dia(o.starts_at) > dia(e.starts_at)) add('starts_at', `início da vigência na INK (${br(dia(o.starts_at))}) é posterior ao do Oria (${br(dia(e.starts_at))})`);
+  if (!o.expires_at && e.expires_at) add('expires_at', `fim da vigência diferente: a INK não tem fim e o Oria termina em ${br(dia(e.expires_at))}`);
+  else if (o.expires_at && !e.expires_at) add('expires_at', `fim da vigência diferente: a INK termina em ${br(dia(o.expires_at))} e o cupom no Oria não tem fim`);
+  else if (o.expires_at && e.expires_at) {
+    const adiantamento = dias(dia(e.expires_at)) - dias(dia(o.expires_at)); // >0: a INK termina antes do Oria
+    if (adiantamento < 0 || adiantamento > 1) add('expires_at', `fim da vigência diferente: INK ${br(dia(o.expires_at))} × Oria ${br(dia(e.expires_at))}`);
+  }
   // Janela do Oria já encerrada (cupom pausado/encerrado): a promoção também estar fora do ar é o esperado, não divergência.
   const janelaAberta = !(e.expires_at && e.expires_at.getTime() <= agora.getTime());
   if (janelaAberta && o.available === false && !(o.starts_at && o.starts_at.getTime() > agora.getTime() - TOLERANCIA_MS) && !d.some((x) => x.campo === 'expires_at')) add('available', 'promoção indisponível agora na INK (expirada ou limite de usos atingido)', false);
@@ -260,18 +273,18 @@ function instantaneo(promocao) {
 
 /**
  * @param {{ client?: {get?: Function, post?: Function, patch?: Function, delete?: Function}|null,
- *           flags?: {inkPromotionWritesEnabled?: boolean}, scopes?: string[]|null, relogio?: () => Date, tentativas?: number, esperar?: (ms:number)=>Promise }} deps
+ *           scopes?: string[]|null, relogio?: () => Date, tentativas?: number, esperar?: (ms:number)=>Promise }} deps
  *   `client.get(path)`, `client.post(path, body, headers)`, `client.patch(path, body, headers)`, `client.delete(path, headers)` — injetados.
- *   Em produção só `get` existe. `scopes` = escopos DECLARADOS do connector; sem `store.promotions.write` listado, nenhuma escrita sai.
+ *   `scopes` (opcional) = escopos declarados do connector: se informado e sem `store.promotions.write`, nenhuma escrita sai; se ausente, tenta e a INK responde 403.
  */
-function createInkPromotionsAdapter({ client = null, flags = {}, scopes = null, relogio = () => new Date(), tentativas = 2, esperar = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
-  const escritaLigada = () => flags.inkPromotionWritesEnabled === true;
+function createInkPromotionsAdapter({ client = null, scopes = null, relogio = () => new Date(), tentativas = 2, esperar = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  // Capacidades do connector (é o que decide entre "criar na INK" e o modo manual). Nenhum request é feito para descobrir.
+  const capacidades = () => ({ provider: 'ink', read: !!client && typeof client.get === 'function', create: !!client && typeof client.post === 'function', update: !!client && typeof client.patch === 'function', delete: !!client && typeof client.delete === 'function' });
 
-  // Por que uma escrita não pode acontecer agora (null = pode). Nenhum request é feito para descobrir isso.
+  // Por que uma escrita não pode acontecer agora (null = pode). Se `scopes` foi declarado, precisa listar o de escrita.
   function bloqueioDeEscrita(metodo) {
-    if (!escritaLigada()) return new PromotionWritesDisabledError();
-    if (!client || typeof client[metodo] !== 'function') return new PromotionWritesDisabledError('não há connector de escrita da INK configurado');
-    if (!Array.isArray(scopes) || !scopes.includes(ESCOPO_ESCRITA)) return new PromotionPermissionError(ESCOPO_ESCRITA);
+    if (!client || typeof client[metodo] !== 'function') return new PromotionWritesUnavailableError();
+    if (Array.isArray(scopes) && !scopes.includes(ESCOPO_ESCRITA)) return new PromotionPermissionError(ESCOPO_ESCRITA);
     return null;
   }
   const exigirEscrita = (metodo) => { const b = bloqueioDeEscrita(metodo); if (b) throw b; };
@@ -296,7 +309,7 @@ function createInkPromotionsAdapter({ client = null, flags = {}, scopes = null, 
   function previsualizarCriacao(link) {
     const montado = montarPedidoDeCriacao(link);
     const bloqueio = bloqueioDeEscrita('post');
-    return { ...montado, escritaHabilitada: escritaLigada(), enviaria: montado.ok && bloqueio === null, bloqueio: bloqueio ? bloqueio.codigo : null };
+    return { ...montado, criacaoDisponivel: bloqueio === null, enviaria: montado.ok && bloqueio === null, bloqueio: bloqueio ? bloqueio.codigo : null };
   }
 
   // GET /v1/stores/promotions?code=… — o envelope precisa ter `promotions` (array); qualquer outro formato é ERRO, nunca "não achou".
@@ -389,12 +402,12 @@ function createInkPromotionsAdapter({ client = null, flags = {}, scopes = null, 
     return { excluida: true, promotionId: Number(promotionId), idempotencyKey: chave };
   }
 
-  return { previsualizarCriacao, buscarPorCodigo, buscarPorId, verificarCupom, verificarPorId, criarPromocao, atualizarPromocao, excluirPromocao, bloqueioDeEscrita, escritaLigada };
+  return { previsualizarCriacao, buscarPorCodigo, buscarPorId, verificarCupom, verificarPorId, criarPromocao, atualizarPromocao, excluirPromocao, bloqueioDeEscrita, capacidades };
 }
 
 module.exports = {
   ESCOPO_LEITURA, ESCOPO_ESCRITA,
-  PromotionWritesDisabledError, PromotionConflictError, PromotionPermissionError, PromotionApiError,
+  PromotionWritesUnavailableError, PromotionConflictError, PromotionPermissionError, PromotionApiError,
   chaveDeCriacao, chaveDeAtualizacao, chaveDeExclusao, configuracaoEsperada, montarPedidoDeCriacao, montarAtualizacao, compararComPromocao, diferencas, instantaneo,
   traduzirErro, createInkPromotionsAdapter,
 };

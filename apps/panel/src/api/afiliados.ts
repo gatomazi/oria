@@ -10,7 +10,9 @@ export type Modalidade = 'coupon' | 'collab' | 'hybrid';
 export type TipoDeData = 'order' | 'release' | 'due' | 'paid';
 export type TipoDeDataPagar = 'sale' | 'competence' | 'release' | 'estimated' | 'due' | 'paid';
 
-export interface StatusModulo { enabled: boolean; inkPromotionWritesEnabled: boolean; papel: Papel | null }
+// `couponCreation`: o que o connector de cupons da loja sabe fazer (INK hoje). Sem `create`, o fluxo é manual: cria-se o cupom na loja e o Oria só vincula.
+export interface CapacidadesCupom { provider: string; read: boolean; create: boolean; update: boolean; delete: boolean }
+export interface StatusModulo { enabled: boolean; couponCreation: CapacidadesCupom; papel: Papel | null }
 
 export interface ConfigAfiliados {
   timezone: string; alertDays: number[]; minContributionBps: number; benefitBudgetBps: number; progressionCountsBy: 'orders' | 'units'; downgradeGraceDays: number; persistida: boolean;
@@ -196,12 +198,13 @@ export const afiliados = {
 
   cupons: (partnerId?: string) => api<{ itens: Cupom[] }>(`${BASE}/coupons${qs({ partnerId })}`),
   criarCupom: (b: { partnerId: string; contractId: string; code: string; discountKind?: 'percentage' | 'value'; discountBps?: number; discountCents?: number; validFrom?: string; validUntil?: string }) => post<Cupom>('/coupons', b),
+  sincronizarCupomNaInk: (id: string) => post<{ atualizado: boolean; campos: string[]; naoSincronizaveis: string[]; coupon: Cupom }>(`/coupons/${id}/ink-sync`, {}),
   ativarCupom: (id: string) => post<ResultadoAtivacao>(`/coupons/${id}/activate`, {}),
   pausarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/pause`, { reason }),
   retomarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/resume`, { reason }),
   encerrarCupom: (id: string, reason: string) => post<Cupom>(`/coupons/${id}/end`, { reason }),
   verificarCupom: (id: string) => post<{ coupon: Cupom; verificacao: { status: string; divergencias: string[] } }>(`/coupons/${id}/verify`, {}),
-  previaCupomNaInk: (id: string) => api<{ ok: boolean; problemas: string[]; escritaHabilitada: boolean; enviaria: boolean; request: { method: string; path: string; headers: Record<string, string>; body: unknown; escopoExigido: string } | null }>(`${BASE}/coupons/${id}/ink-preview`),
+  previaCupomNaInk: (id: string) => api<{ ok: boolean; problemas: string[]; criacaoDisponivel: boolean; enviaria: boolean; request: { method: string; path: string; headers: Record<string, string>; body: unknown; escopoExigido: string } | null }>(`${BASE}/coupons/${id}/ink-preview`),
 
   collabs: () => api<{ itens: CollabDaLista[] }>(`${BASE}/collabs`),
   criarCollab: (b: { name: string; imageUrl?: string; collectionUrl?: string; startsAt?: string; endsAt?: string; newMemberPolicy?: string; notes?: string }) => post<CollabDaLista>('/collabs', b),

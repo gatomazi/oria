@@ -75,7 +75,7 @@ function createAfiliadosRouter({ service, enabled = () => false, logger = consol
   const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
   router.get('/status', (req, res) => {
-    res.json({ enabled: !!enabled(), inkPromotionWritesEnabled: s.flags.inkPromotionWritesEnabled, papel: req.tenant ? req.tenant.papel : null });
+    res.json({ enabled: !!enabled(), couponCreation: s.inkPromotions.capacidades(), papel: req.tenant ? req.tenant.papel : null });
   });
 
   router.use((req, res, next) => {

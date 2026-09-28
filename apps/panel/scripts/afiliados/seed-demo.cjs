@@ -80,7 +80,7 @@ async function main() {
     inkDemo.semear({ code: 'BRUNO10', kind: 'percentage', discount_tier: { discount: 10 } });
     inkDemo.semear({ code: 'CARLA15', kind: 'percentage', discount_tier: { discount: 15 } });
     // CARLA20 fica de fora de propósito: mostra o estado "Aguardando criação/verificação na INK".
-    const svc = criarAfiliados({ pool: runtime.criarPoolTenant(real), relogio, inkClient: inkDemo.somenteLeitura, flags: { inkPromotionWritesEnabled: false } });
+    const svc = criarAfiliados({ pool: runtime.criarPoolTenant(real), relogio, inkClient: inkDemo.somenteLeitura });
     const em = (fn) => runtime.comContexto({ organizationId: ORG, storeId, origem: 'seed-demo' }, fn);
     let proximoItem = 5000;
 
