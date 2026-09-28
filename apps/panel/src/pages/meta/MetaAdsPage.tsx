@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Button, Callout, PageHeader, PageStack, Skeleton, TabList } from '../../components/ds';
 import { ApiError } from '../../api/client';
 import { idadeDoCache } from '../../lib/format';
-import { intervaloMeta, type PeriodoMeta } from '../../lib/meta';
+import { intervaloMeta, paraPeriodoGlobal, dePeriodoGlobal, type PeriodoMeta } from '../../lib/meta';
+import { usePeriodoGlobal } from '../../lib/periodoGlobal';
 import {
   getMetaConsolidado, getMetaCriativos, getMetaEntidades, getMetaOverview, getMetaStatus, getMetaTimeseries,
   type MetaConsolidado, type MetaCriativo, type MetaLinhaEntidade, type MetaMetas, type MetaNivel, type MetaOverview,
@@ -62,6 +63,35 @@ export function MetaAdsPage() {
     // replace: trocar período não deve encher o histórico de voltas.
     setParams(novo, { replace: true });
   }
+
+  // Período global (src/lib/periodoGlobal.ts): a URL continua sendo a fonte de verdade DESTA tela
+  // (link compartilhável, sobrevive ao F5) — mas na primeira visita sem período na URL, herda o que
+  // outra tela deixou; e daí em diante, toda troca aqui também atualiza o global, pra refletir nas
+  // outras. Nunca os dois sentidos na MESMA renderização (ver os dois efeitos abaixo).
+  const [periodoGlobal, setPeriodoGlobal] = usePeriodoGlobal();
+  const jaDecidiuNaMontagem = useRef(false);
+  useEffect(() => {
+    if (jaDecidiuNaMontagem.current) return;
+    jaDecidiuNaMontagem.current = true;
+    const urlJaTinhaPeriodo = params.get('periodo') !== null || params.get('de') !== null || params.get('ate') !== null;
+    if (!urlJaTinhaPeriodo) {
+      const g = dePeriodoGlobal(periodoGlobal);
+      mudarParams({ periodo: g.periodo === '30d' ? null : g.periodo, de: g.inicio || null, ate: g.fim || null });
+    } else {
+      const g = paraPeriodoGlobal(periodo, inicio, fim);
+      if (g) setPeriodoGlobal(g);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Depois da montagem, toda troca de período NESTA tela também grava no global — a montagem acima
+  // já decidiu sozinha o que fazer na 1ª renderização, este efeito nunca repete esse trabalho.
+  const primeiraRenderizacao = useRef(true);
+  useEffect(() => {
+    if (primeiraRenderizacao.current) { primeiraRenderizacao.current = false; return; }
+    const g = paraPeriodoGlobal(periodo, inicio, fim);
+    if (g) setPeriodoGlobal(g);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodo, inicio, fim]);
 
   const setAba = (v: Aba) => mudarParams({ aba: v === 'visao-geral' ? null : v });
   const setPeriodo = (v: PeriodoMeta) => mudarParams({ periodo: v === '30d' ? null : v });
