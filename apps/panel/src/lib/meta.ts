@@ -3,7 +3,21 @@
 // taxa como fração (0,0171) e a Insights API devolve já em pontos percentuais (1,71). Compartilhar
 // o formatador entre as duas seria a receita para um CTR aparecer 100x errado numa das telas.
 
+import type { PeriodoGlobal } from './periodoGlobal';
+
 export type PeriodoMeta = 'hoje' | 'ontem' | '7d' | '14d' | '30d' | '90d' | 'custom';
+
+// PeriodoMeta e PeriodoPresetId (periodoGlobal.ts) usam os MESMOS ids pros 6 presets — o Meta Ads
+// foi o molde do período global (era o único com "Ontem"/"14 dias"), então a conversão nunca perde
+// preset nenhum, só troca a forma do "personalizado" (aqui: from/to; lá: startDate/endDate).
+export function paraPeriodoGlobal(periodo: PeriodoMeta, inicio: string, fim: string): PeriodoGlobal | null {
+  if (periodo === 'custom') return inicio && fim ? { tipo: 'custom', startDate: inicio, endDate: fim } : null;
+  return { tipo: 'preset', id: periodo };
+}
+export function dePeriodoGlobal(g: PeriodoGlobal): { periodo: PeriodoMeta; inicio: string; fim: string } {
+  if (g.tipo === 'custom') return { periodo: 'custom', inicio: g.startDate, fim: g.endDate };
+  return { periodo: g.id, inicio: '', fim: '' };
+}
 
 export const PERIODOS_META: { valor: PeriodoMeta; rotulo: string }[] = [
   { valor: 'hoje', rotulo: 'Hoje' },

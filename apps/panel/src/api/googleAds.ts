@@ -119,8 +119,11 @@ export function atribuirLojaGoogleAds(customerId: string) {
   });
 }
 
-export function getGoogleAdsOverview(dias: number) {
-  return api<GoogleAdsOverview>(`/api/admin/analytics/google-ads/overview?dias=${dias}`);
+export function getGoogleAdsOverview({ startDate, endDate, dias }: { startDate?: string; endDate?: string; dias?: number }) {
+  const params = new URLSearchParams();
+  if (startDate && endDate) { params.set('startDate', startDate); params.set('endDate', endDate); }
+  else params.set('dias', String(dias ?? 30));
+  return api<GoogleAdsOverview>(`/api/admin/analytics/google-ads/overview?${params}`);
 }
 
 // Cada código tem uma ação diferente do usuário. O de acesso de teste é o que mais importa

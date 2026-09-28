@@ -1746,8 +1746,14 @@ app.get('/api/admin/dashboard/lucro-produtos', requireAdmin, async (req, res) =>
          AND ${escopo.sql}
          AND payment_status = ANY($2)
          AND is_troca IS NOT TRUE
-         AND criado_em >= $3::date AT TIME ZONE 'America/Sao_Paulo'
-         AND criado_em < ($4::date + 1) AT TIME ZONE 'America/Sao_Paulo'
+         -- ::date AT TIME ZONE zone (sem passar por timestamp) usa o overload ERRADO do Postgres:
+         -- em vez de "meia-noite NESSE fuso, convertida pra UTC" ele trata a data como timestamptz
+         -- (meia-noite UTC) e SÓ ENTÃO converte pro fuso — devolve timestamp sem fuso, ~3h adiantada
+         -- (e ao comparar com criado_em, que é timestamptz, o Postgres reinterpreta essa hora como
+         -- UTC de novo — o corte do dia acaba ~6h mais cedo do que deveria). ::timestamp força o
+         -- overload certo (timestamp AT TIME ZONE zone -> timestamptz).
+         AND criado_em >= $3::timestamp AT TIME ZONE 'America/Sao_Paulo'
+         AND criado_em < ($4::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo'
      )`;
   const itemDoPedido = `i.organization_id = $1 AND i.ink_order_id = p.ink_order_id
          AND (i.store_id = p.store_id OR (i.store_id IS NULL AND i.loja = p.loja))`;
@@ -1816,8 +1822,10 @@ app.get('/api/admin/dashboard/financeiro', requireAdmin, async (req, res) => {
        WHERE organization_id = $4
          AND payment_status = ANY($1)
          AND is_troca IS NOT TRUE
-         AND criado_em >= $2::date AT TIME ZONE 'America/Sao_Paulo'
-         AND criado_em < ($3::date + 1) AT TIME ZONE 'America/Sao_Paulo'
+         -- Mesmo cuidado do lucro-produtos acima: ::timestamp (não ::date) antes de AT TIME
+         -- ZONE, senão o corte do dia sai ~6h adiantado.
+         AND criado_em >= $2::timestamp AT TIME ZONE 'America/Sao_Paulo'
+         AND criado_em < ($3::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo'
        GROUP BY loja, dia
        ORDER BY dia`,
       [Array.from(RESUMO_PAGO), startDate, endDate, orgDoContexto()]
@@ -10878,19 +10886,21 @@ app.post('/api/admin/integrations/google-ads/sync', requireAdmin, async (req, re
 // módulo que o sync usa — nunca lidas da API nem tiradas de média.
 app.get('/api/admin/analytics/google-ads/overview', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'exige Postgres configurado' });
-  const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 30, 1), 365);
+  // resolverPeriodoDashboard é compartilhado além do Dashboard (ver seu comentário) — aceita
+  // startDate/endDate explícitos (seletor de período global) ou `dias` legado.
+  const { startDate, endDate, dias } = resolverPeriodoDashboard(req, { diasPadrao: 30, diasMax: 365, diasMin: 1 });
   try {
     const conta = await contaGoogleAdsSelecionada();
     if (!conta) return res.json({ conectado: false, conta: null, total: null, serie: [], campanhas: [] });
     const conexaoAds = await obterConexaoGoogleAds();
-    const desde = diaISOBrasil(dias - 1);
 
     const { rows: serie } = await pgPool.query(
       `SELECT to_char(data, 'YYYY-MM-DD') AS dia, impressoes, cliques, custo, conversoes, valor_conversoes, video_views
          FROM google_ads_insights_daily
-        WHERE customer_id = $1 AND level = 'customer' AND contagem_conversao = 'conversions' AND data >= $2::date
+        WHERE customer_id = $1 AND level = 'customer' AND contagem_conversao = 'conversions'
+          AND data >= $2::date AND data < ($3::date + 1)
         ORDER BY data`,
-      [conta.customer_id, desde]
+      [conta.customer_id, startDate, endDate]
     );
     const linhas = serie.map((r) => ({
       data: r.dia,
@@ -10907,10 +10917,10 @@ app.get('/api/admin/analytics/google-ads/overview', requireAdmin, async (req, re
          LEFT JOIN google_ads_campaigns c
                 ON c.customer_id = i.customer_id AND c.campaign_id = i.campaign_id
         WHERE i.customer_id = $1 AND i.level = 'campaign' AND i.contagem_conversao = 'conversions'
-          AND i.data >= $2::date
+          AND i.data >= $2::date AND i.data < ($3::date + 1)
         GROUP BY i.campaign_id, c.nome
         ORDER BY SUM(i.custo) DESC`,
-      [conta.customer_id, desde]
+      [conta.customer_id, startDate, endDate]
     );
 
     res.json({
@@ -10925,8 +10935,8 @@ app.get('/api/admin/analytics/google-ads/overview', requireAdmin, async (req, re
       // As datas exatas do recorte. Sem elas não existe comparação possível com a interface do
       // Google: "últimos 7 dias" ali exclui hoje, aqui inclui, e os dois números divergem sem que
       // ninguém consiga dizer por quê.
-      de: desde,
-      ate: diaISOBrasil(0),
+      de: startDate,
+      ate: endDate,
       // Quando estes números foram buscados. O dia de hoje muda ao longo do dia, então sem a hora
       // não dá para saber se uma divergência é erro ou só defasagem.
       sincronizadoEm: conexaoAds && conexaoAds.last_successful_sync_at
@@ -12398,8 +12408,9 @@ app.delete('/api/admin/financeiro/custos-api/precos/:chave', requireAdmin, async
 
 app.get('/api/admin/financeiro/custos-api', requireAdmin, async (req, res) => {
   if (!pgPool) return res.status(503).json({ error: 'custos de API exigem Postgres configurado' });
-  const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 30, 1), 365);
-  const desde = `((now() AT TIME ZONE 'America/Sao_Paulo')::date - ($1::int - 1))`;
+  const { startDate, endDate, dias } = resolverPeriodoDashboard(req, { diasPadrao: 30, diasMax: 365, diasMin: 1 });
+  const desde = `$1::date`;
+  const ate = `($2::date + 1)`;
   try {
     const precos = await lerPrecosCustos();
     const { provider } = await readWhatsappProviderConfig();
@@ -12409,9 +12420,9 @@ app.get('/api/admin/financeiro/custos-api', requireAdmin, async (req, res) => {
     // tela e o cliente acha que o painel não está enviando.
     const { rows: web } = await pgPool.query(
       `SELECT origem, COUNT(*)::int AS n FROM whatsapp_web_outbox
-        WHERE status = 'sent' AND sent_at >= ${desde}
+        WHERE status = 'sent' AND sent_at >= ${desde} AND sent_at < ${ate}
         GROUP BY origem`,
-      [dias]
+      [startDate, endDate]
     );
 
     // Campanhas pela API da Meta: cada destinatário enviado é uma mensagem cobrada. A categoria
@@ -12419,9 +12430,9 @@ app.get('/api/admin/financeiro/custos-api', requireAdmin, async (req, res) => {
     const { rows: campanhas } = await pgPool.query(
       `SELECT c.template_nome AS template, COUNT(*)::int AS n
          FROM campaign_recipients r JOIN campaigns c ON c.id = r.campaign_id
-        WHERE r.sent_at IS NOT NULL AND r.sent_at >= ${desde}
+        WHERE r.sent_at IS NOT NULL AND r.sent_at >= ${desde} AND r.sent_at < ${ate}
         GROUP BY c.template_nome`,
-      [dias]
+      [startDate, endDate]
     );
 
     // Categoria por template. Se o serviço estiver fora do ar, as mensagens viram "não medido" em
@@ -12466,9 +12477,9 @@ app.get('/api/admin/financeiro/custos-api', requireAdmin, async (req, res) => {
                 COALESCE(SUM(tokens_entrada_cache), 0)::bigint AS entrada_cache,
                 COALESCE(SUM(tokens_saida), 0)::bigint AS saida
            FROM creative_generations
-          WHERE created_at >= ${desde}
+          WHERE created_at >= ${desde} AND created_at < ${ate}
           GROUP BY modelo_imagem`,
-        [dias]
+        [startDate, endDate]
       );
       for (const r of rows) {
         geracoes.naoMedidas += r.sem_medicao;
@@ -12498,6 +12509,8 @@ app.get('/api/admin/financeiro/custos-api', requireAdmin, async (req, res) => {
 
     res.json({
       dias,
+      startDate,
+      endDate,
       conferidoEm: custosPrecos.CONFERIDO_EM,
       provider,
       whatsapp: {

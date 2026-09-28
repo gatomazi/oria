@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   Callout, Card, DataTable, EmptyState, ErrorState, KpiCard, KpiStrip, PageHeader, PageStack,
-  Select, Skeleton, type Column,
+  Skeleton, type Column,
 } from '../../components/ds';
 import { metaNumero, metaPercentual, metaReais, metaRoas } from '../../lib/meta';
 import { formatData, formatDiaISO } from '../../lib/format';
 import {
   getGoogleAdsOverview, type GoogleAdsCampanha, type GoogleAdsOverview,
 } from '../../api/googleAds';
+import { PeriodoGlobalSelect } from '../../components/PeriodoGlobalSelect';
+import { usePeriodoGlobal, intervaloDoPeriodo } from '../../lib/periodoGlobal';
 
 // Os números vêm todos do Postgres, gravados pelo sync — esta tela nunca fala com o Google. Por
 // isso trocar o período é instantâneo e não gasta cota da API.
@@ -18,28 +20,21 @@ import {
 // de propósito: as duas integrações falam a mesma unidade, então o mesmo número significa a mesma
 // coisa nas duas telas.
 
-const PERIODOS = [
-  { dias: 7, rotulo: 'Últimos 7 dias' },
-  { dias: 14, rotulo: 'Últimos 14 dias' },
-  { dias: 30, rotulo: 'Últimos 30 dias' },
-  { dias: 90, rotulo: 'Últimos 90 dias' },
-];
-
 export function GoogleAdsPage() {
-  const [params, setParams] = useSearchParams();
-  const dias = Number(params.get('dias')) || 30;
+  const [periodoGlobal, setPeriodoGlobal] = usePeriodoGlobal();
+  const { startDate, endDate } = intervaloDoPeriodo(periodoGlobal);
   const [dados, setDados] = useState<GoogleAdsOverview | null>(null);
   const [erro, setErro] = useState('');
 
   function carregar() {
     setErro('');
     setDados(null);
-    getGoogleAdsOverview(dias)
+    getGoogleAdsOverview({ startDate, endDate })
       .then(setDados)
       .catch((err: Error) => setErro(err.message));
   }
 
-  useEffect(carregar, [dias]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(carregar, [startDate, endDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const colunas: Column<GoogleAdsCampanha>[] = useMemo(() => [
     { key: 'nome', label: 'Campanha', render: (c) => c.nome },
@@ -76,15 +71,7 @@ export function GoogleAdsPage() {
     },
   ], []);
 
-  const seletor = (
-    <Select
-      aria-label="Período"
-      value={String(dias)}
-      onChange={(e) => setParams({ dias: e.target.value }, { replace: true })}
-    >
-      {PERIODOS.map((p) => <option key={p.dias} value={p.dias}>{p.rotulo}</option>)}
-    </Select>
-  );
+  const seletor = <PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />;
 
   if (erro) {
     return (
