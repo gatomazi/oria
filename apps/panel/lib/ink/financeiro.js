@@ -13,6 +13,8 @@
 // produção = kickback_value (fonte da verdade quando vier). Troca (is_exchange) tem kickback 0 e
 // não é venda — fica marcada pra quem soma excluir.
 
+const { camposDeAfiliadosDoItem } = require('./afiliados-campos');
+
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -74,6 +76,8 @@ function financeiroItensPedidoInk(order) {
       desconto,
       custo,
       lucro,
+      // Parcerias: cupom/devolução/custo unitário/ids (lib/ink/afiliados-campos.js). Não entram em nenhuma conta deste arquivo.
+      ...camposDeAfiliadosDoItem(it),
     };
   });
 }

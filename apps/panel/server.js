@@ -33,6 +33,7 @@ const { resolverMidiaDaOrganizacao } = require('./lib/financeiro/midia');
 const custosPrecos = require('./lib/custos/precos');
 const { MetaClient, MetaApiError, ERROS: META_ERROS, VERSAO_PADRAO: META_VERSAO_PADRAO, mascararToken } = require('./lib/meta/client');
 const { financeiroPedidoInk, financeiroItensPedidoInk } = require('./lib/ink/financeiro');
+const { camposDeAfiliadosDoPedido } = require('./lib/ink/afiliados-campos');
 const { comRetryDeLeitura } = require('./lib/ink/retry');
 const { variantesTelefone, acharCompraDoCarrinho } = require('./lib/recuperacao/compra');
 const atribuicaoCampanha = require('./lib/campanhas/atribuicao');
@@ -14760,11 +14761,13 @@ async function upsertItensPedidoInkPostgres(lojaOuChave, order) {
       await cliente.query(
         `INSERT INTO pedidos_ink_itens
            (store_id, loja, ink_order_id, item_id, produto_id, produto_nome, sku, modelo, cor, tamanho, quantidade,
-            valor_venda, desconto_rateado, custo_producao, lucro_operacional)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+            valor_venda, desconto_rateado, custo_producao, lucro_operacional,
+            unit_value, refunded_quantity, free_quantity, unit_ink_base_price, unit_additional_service_price, product_variant_id, product_cluster_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
          ON CONFLICT (organization_id, store_id, item_id) WHERE store_id IS NOT NULL DO NOTHING`,
         [storeId, loja || null, order.id, it.itemId, it.produtoId, it.produtoNome, it.sku, it.modelo, it.cor, it.tamanho, it.quantidade,
-          it.venda, it.desconto, it.custo, it.lucro]
+          it.venda, it.desconto, it.custo, it.lucro,
+          it.valorUnitario, it.quantidadeDevolvida, it.quantidadeGratis, it.custoBaseUnitario, it.servicoAdicionalUnitario, it.varianteId, it.clusterId]
       );
     }
     await cliente.query('COMMIT');
@@ -14791,8 +14794,9 @@ async function upsertPedidoInkPostgres(lojaOuChave, order) {
   const uf = String((order.shipping_address && order.shipping_address.state) || '').trim().toUpperCase().slice(0, 2) || null;
   await pgPool.query(
     `INSERT INTO pedidos_ink (store_id, loja, ink_order_id, rsv_factory_id, payment_status, order_status, buyer_nome, buyer_telefone, buyer_documento, buyer_email, buyer_aceita_marketing, buyer_uf, total_value, criado_em, items_count,
-       frete, descontos, lucro_bruto, custo_producao, lucro_operacional, is_troca, atualizado_em)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21, now())
+       frete, descontos, lucro_bruto, custo_producao, lucro_operacional, is_troca,
+       promotion_code, promotion_value, payment_discount_value, freight_value_difference, kickback_value, delivered_at, affiliate_snapshot_at, atualizado_em)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28, now())
      ON CONFLICT (organization_id, store_id, ink_order_id) WHERE store_id IS NOT NULL DO UPDATE SET
        payment_status = EXCLUDED.payment_status,
        order_status = EXCLUDED.order_status,
@@ -14810,6 +14814,14 @@ async function upsertPedidoInkPostgres(lojaOuChave, order) {
        custo_producao = COALESCE(EXCLUDED.custo_producao, pedidos_ink.custo_producao),
        lucro_operacional = COALESCE(EXCLUDED.lucro_operacional, pedidos_ink.lucro_operacional),
        is_troca = COALESCE(EXCLUDED.is_troca, pedidos_ink.is_troca),
+       -- Parcerias: só um payload COMPLETO (com itens) toca estes campos; evento parcial não apaga o que já se sabe.
+       promotion_code = CASE WHEN EXCLUDED.affiliate_snapshot_at IS NOT NULL THEN EXCLUDED.promotion_code ELSE pedidos_ink.promotion_code END,
+       promotion_value = COALESCE(EXCLUDED.promotion_value, pedidos_ink.promotion_value),
+       payment_discount_value = COALESCE(EXCLUDED.payment_discount_value, pedidos_ink.payment_discount_value),
+       freight_value_difference = COALESCE(EXCLUDED.freight_value_difference, pedidos_ink.freight_value_difference),
+       kickback_value = COALESCE(EXCLUDED.kickback_value, pedidos_ink.kickback_value),
+       delivered_at = COALESCE(EXCLUDED.delivered_at, pedidos_ink.delivered_at),
+       affiliate_snapshot_at = COALESCE(EXCLUDED.affiliate_snapshot_at, pedidos_ink.affiliate_snapshot_at),
        atualizado_em = now()`,
     [
       storeDoContexto(), loja || null, order.id, order.rsv_factory_id || null, normalizarPaymentStatusInk(order.payment_status) || null, order.order_status || null,
@@ -14830,6 +14842,7 @@ async function upsertPedidoInkPostgres(lojaOuChave, order) {
       fin ? fin.custoProducao : null,
       fin ? fin.lucroOperacional : null,
       fin ? fin.troca : null,
+      ...camposDeAfiliadosDoPedido(order),
     ]
   );
   await upsertItensPedidoInkPostgres(loja, order);
@@ -17243,6 +17256,35 @@ if (PRODUCT_ANALYTICS) {
     getCommerceCatalogSyncStatus: PRODUCT_ANALYTICS.getCommerceCatalogSyncStatus,
   }));
 }
+
+// ── Parcerias, Afiliados e Collabs (módulo próprio de afiliados do Oria) ───────────────────────
+//
+// Feature flag DESLIGADA por padrão: sem `AFILIADOS_MODULE_ENABLED=true` toda rota responde 404 (menos /status) e o job abaixo não
+// faz nada. O Oria é o livro-razão das comissões; a INK entra só como fonte de pedidos/catálogo e de promoções COMUNS (cupom).
+// `inkClient` é SÓ de leitura (verificação de cupom); nenhum cliente de escrita é injetado e `inkPromotionWritesEnabled` é fixo em
+// false — mudar isso é decisão de código e de release, nunca de configuração em runtime. Ver docs/afiliados/arquitetura.md.
+const { criarAfiliados } = require('./lib/afiliados');
+const { createAfiliadosRouter } = require('./lib/afiliados/routes');
+const AFILIADOS_HABILITADO = process.env.AFILIADOS_MODULE_ENABLED === 'true';
+const AFILIADOS = pgPool
+  ? criarAfiliados({ pool: pgPool, inkClient: { get: (caminho) => inkApiRequestDaStore(caminho) }, flags: { inkPromotionWritesEnabled: false } })
+  : null;
+if (AFILIADOS) {
+  app.use('/api/admin/afiliados', requireAdmin, createAfiliadosRouter({ service: AFILIADOS, enabled: () => AFILIADOS_HABILITADO }));
+}
+// Reconciliação periódica por Organization (lease por job/Organization, como os demais): só lê o cache de pedidos JÁ sincronizado —
+// zero chamada à INK — e só age em quem já cadastrou parceiro. Reprocessa pedidos alterados desde a última rodada e os que ainda têm
+// comissão provisória/retida (a criação-data da INK não avisa de devolução tardia).
+async function reconciliarAfiliadosDaOrganizacao() {
+  if (!AFILIADOS_HABILITADO || !AFILIADOS) return;
+  const ctx = contextoAtual();
+  if (!ctx || !ctx.storeId) return;
+  const { rows } = await pgPool.query('SELECT 1 FROM partnership_partners WHERE organization_id = $1 LIMIT 1', [ctx.organizationId]);
+  if (!rows.length) return;
+  const r = await AFILIADOS.reconciliarTudo({ organizationId: ctx.organizationId, storeId: ctx.storeId, userId: null });
+  if (r.criadas || r.promovidos || r.propostasCriadas) console.log(`[AFILIADOS] org ${ctx.organizationId}: ${r.pedidosAvaliados} pedidos · ${r.criadas} atribuições novas · ${r.promovidos} liberações · ${r.propostasCriadas} propostas de nível`);
+}
+JOBS.agendar('afiliados-reconciliar', 30 * 60 * 1000, () => reconciliarAfiliadosDaOrganizacao());
 
 // Gate A ("Jornada de Valor Operacional") · o catálogo canônico (commerce_products) deixa de
 // depender do lojista clicar "Sincronizar catálogo": mesmo padrão já usado pro cache legado

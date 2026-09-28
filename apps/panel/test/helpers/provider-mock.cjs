@@ -24,7 +24,7 @@ const json = (corpo, status = 200) => new Response(JSON.stringify(corpo), { stat
 // Catálogo/pedidos da Ink por "loja de teste": a 4ª letra do token Bearer (`inkC…`, `inkD…`, `inkA…`)
 // escolhe uma faixa de ids própria. Assim um teste prova que cada Organization leu o catálogo da
 // SUA credencial (e que nada de outra apareceu), sem o mock saber nada de Organization.
-const FAIXA_INK = { A: 3000, C: 1000, D: 2000 };
+const FAIXA_INK = { A: 3000, C: 1000, D: 2000, F: 6000 };
 function tagInk(auth) {
   return String(auth || '').replace(/^Bearer /, '')[3] || 'X';
 }
@@ -38,6 +38,20 @@ function produtoInk(tag, i) {
 }
 function pedidoInk(id, tag) {
   const base = FAIXA_INK[tag] || 9000;
+  // Loja de teste `F` (parcerias/afiliados): pedido com cupom e os campos que o módulo de comissões lê — só ela ganha estes campos,
+  // os demais testes continuam vendo exatamente o payload de sempre.
+  if (tag === 'F') {
+    return {
+      id, rsv_factory_id: null, payment_status: 'paid', order_status: 'awaiting_production', total_value: '85.00', shipping_value: '10.00', promotion_code: 'MockCupom', promotion_value: '5.00',
+      payment_discount_value: '0.00', freight_value_difference: '0.00', kickback_value: '45.00', is_exchange: false, created_at: new Date().toISOString(),
+      buyer: { first_name: 'Cliente', last_name: tag, phone: '11999990000', document: '12345678901', email: `c${tag}@exemplo.com`, accepts_marketing: true },
+      shipping_address: { state: 'SP' },
+      items: [{
+        id: id * 10 + 1, quantity: 1, unit_value: '90.00', total_value: '90.00', unit_ink_base_price: '40.00', unit_additional_service_price: '0.00', free_quantity: 0, refunded_quantity: 0, sku: 'SKU-F1',
+        product_variant: { id: base + 11 }, product_v2: { id: base + 1, name: `Produto ${tag}1`, product_cluster_id: null },
+      }],
+    };
+  }
   return {
     id, rsv_factory_id: null, payment_status: 'paid', order_status: 'awaiting_production', total_value: 100, shipping_value: 10,
     created_at: new Date().toISOString(),
@@ -128,7 +142,17 @@ function respostaDaInk(p, metodo, corpo, auth, url) {
     if (metodo === 'POST') return json({ refund: { id: base + 801, value: 10 } }, 201);
     return json({ refunds: [{ id: base + 800, value: 10 }] });
   }
-  if (p === '/v1/stores/promotions' && metodo === 'GET') return json({ promotions: [{ id: base + 900, code: `PROMO${tag}`, type: 'standard' }] });
+  if (p === '/v1/stores/promotions' && metodo === 'GET') {
+    // Com `code` segue o contrato oficial (filtro exato, case-insensitive; envelope paginado; `discount_tiers` com discount STRING). Só a loja `F`
+    // conhece o cupom de afiliado de teste (MockCupom, 5% em toda a loja); qualquer outro código volta vazio. Sem `code`, o payload legado de sempre.
+    const code = url && url.searchParams ? url.searchParams.get('code') : null;
+    if (code) {
+      const achou = tag === 'F' && code.toUpperCase() === 'MOCKCUPOM';
+      const promocao = { id: base + 902, type: 'standard', code: 'MockCupom', kind: 'percentage', apply_automatically: false, list_type: 'all', progress_kind: null, usage_limit: null, first_purchase: false, show_on_product_page: false, show_in_cart: false, starts_at: null, expires_at: null, available: true, discount_tiers: [{ min_cart_value: null, min_cart_items: null, discount: '5.0' }], product_ids: [], product_type_ids: [], collection_ids: [], created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
+      return json({ promotions: achou ? [promocao] : [], page: 1, per_page: 5, total_pages: 1, total_count: achou ? 1 : 0 });
+    }
+    return json({ promotions: [{ id: base + 900, code: `PROMO${tag}`, type: 'standard' }] });
+  }
   if ((m = p.match(/^\/v1\/stores\/promotions\/(standard|progressive|unit_free)$/)) && metodo === 'POST') {
     return json({ promotion: { id: base + 901, type: m[1], code: JSON.parse(corpo || '{}').code } }, 201);
   }

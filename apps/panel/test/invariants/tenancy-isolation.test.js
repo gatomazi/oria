@@ -117,9 +117,53 @@ async function valoresPara(tabela, chave) {
       namespace: 'sku', external_id: `sku-${chave}`, source: 'manual', confidence: 'exact',
     });
   }
+  // Parcerias/Afiliados (migration 0044): tabelas nativas com CHECKs de vocabulário fechado e FKs compostas por Organization.
+  // Valores explícitos e válidos (o gerador genérico violaria os CHECKs); os pais são as linhas da MESMA Organization.
+  if (tabela.startsWith('partner_') || tabela.startsWith('partnership_')) Object.assign(v, valoresDeParcerias(tabela, chave, o));
   const decl = manifesto.porTabela(tabela);
   if (decl && decl.pai) v[decl.pai.coluna] = linhas[chave].get(decl.pai.tabela).id;
   return v;
+}
+
+function valoresDeParcerias(tabela, chave, o) {
+  const agora = new Date().toISOString();
+  const pai = (t) => linhas[chave].get(t).id;
+  const base = { store_id: o.storeId };
+  switch (tabela) {
+    case 'partnership_settings': return base;
+    case 'partnership_partners': return { ...base, public_name: `Parceiro ${chave}` };
+    case 'partnership_contracts': return { ...base, partner_id: pai('partnership_partners'), modality: 'hybrid', title: `Contrato ${chave}` };
+    case 'partnership_contract_versions':
+      return { ...base, contract_id: pai('partnership_contracts'), version: 1, status: 'active', effective_from: agora, commission_basis: 'net_item_revenue_percent', commission_bps: 1000, reason: 'teste de isolamento', approved_by: pessoas[chave] };
+    case 'partner_coupon_links':
+      return { ...base, partner_id: pai('partnership_partners'), contract_id: pai('partnership_contracts'), code_display: `ISO${chave}`, code_normalized: `ISO${chave}`, valid_from: agora };
+    case 'partner_collabs': return { ...base, name: `Collab ${chave}`, starts_at: agora };
+    case 'partner_collab_creators':
+      return { ...base, collab_id: pai('partner_collabs'), partner_id: pai('partnership_partners'), contract_id: pai('partnership_contracts'), share_bps: 10000, valid_from: agora };
+    case 'partner_collab_product_memberships': return { ...base, collab_id: pai('partner_collabs'), ink_product_id: 111, status: 'active', valid_from: agora };
+    case 'partnership_review_items': return { ...base, ink_order_id: 1, reason: 'order_data_incomplete' };
+    case 'partnership_attributions':
+      return {
+        ...base, ink_order_id: 1, ink_item_id: 1, partner_id: pai('partnership_partners'), contract_id: pai('partnership_contracts'), contract_version_id: pai('partnership_contract_versions'),
+        basis: 'collab', collab_id: pai('partner_collabs'), evidence: '{}', snapshot: '{}', status: 'calculated', sale_at: agora, idempotency_key: `iso-${chave}`,
+      };
+    case 'partner_commission_ledger':
+      return {
+        ...base, partner_id: pai('partnership_partners'), attribution_id: pai('partnership_attributions'), contract_version_id: pai('partnership_contract_versions'), entry_type: 'accrual',
+        amount_cents: 1000, status: 'released', sale_at: agora, competence: '2026-09-01', origin_key: `iso-${chave}`,
+      };
+    case 'partner_payout_batches': return { ...base, partner_id: pai('partnership_partners'), competence_label: 'set/2026', cutoff_at: agora, proposed_cents: 1000 };
+    case 'partner_payout_batch_items': return { batch_id: pai('partner_payout_batches'), ledger_id: pai('partner_commission_ledger'), amount_cents: 1000 };
+    case 'partner_payment_records':
+      return { ...base, partner_id: pai('partnership_partners'), amount_cents: 1000, paid_at: agora, method: 'pix', recorded_by: pessoas[chave], idempotency_key: `iso-${chave}` };
+    case 'partner_payment_allocations': return { payment_id: pai('partner_payment_records'), ledger_id: pai('partner_commission_ledger'), amount_cents: 1000 };
+    case 'partnership_level_rule_sets': return { ...base, version: 1, effective_from: agora, rules: '{}', reason: 'teste', approved_by: pessoas[chave] };
+    case 'partner_level_history': return { ...base, partner_id: pai('partnership_partners'), level_key: 'raiz', effective_at: agora, source: 'initial' };
+    case 'partner_level_proposals': return { ...base, partner_id: pai('partnership_partners'), from_level: 'raiz', to_level: 'voz', direction: 'upgrade', observed: '{}' };
+    case 'partner_benefit_ledger': return { ...base, partner_id: pai('partnership_partners'), entry_type: 'budget_credit', amount_cents: 100, origin_key: `iso-${chave}` };
+    case 'partnership_audit_events': return { ...base, entity_type: 'teste', entity_id: '1', action: 'teste' };
+    default: throw new Error(`isolamento: tabela de parcerias sem valores explícitos: ${tabela}`);
+  }
 }
 
 // Ordem: pais antes dos filhos; `stores` já existe (1:1) e não ganha outra linha. As tabelas de

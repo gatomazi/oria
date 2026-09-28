@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Button, DataTable, EmptyState, ErrorState, Input, PageHeader, PageStack, Pagination, Select, Skeleton, StatusBadge, Toolbar, type TableSort,
 } from '../../components/ds';
@@ -68,6 +69,12 @@ export function PedidosCentralPage() {
   const [data, setData] = useState<ListaPedidosCentral | null>(null);
   const [erro, setErro] = useState('');
   const [drawer, setDrawer] = useState<{ loja: string; inkOrderId: string | number } | null>(null);
+  // Deep link (?order=<id da INK>): abre o pedido direto no drawer — usado pelo módulo Parcerias para ligar uma venda atribuída ao pedido.
+  const [params] = useSearchParams();
+  const pedidoDoLink = params.get('order');
+  useEffect(() => {
+    if (pedidoDoLink && /^\d{1,18}$/.test(pedidoDoLink)) setDrawer({ loja, inkOrderId: pedidoDoLink });
+  }, [pedidoDoLink, loja]);
 
   function query() {
     const params = new URLSearchParams();

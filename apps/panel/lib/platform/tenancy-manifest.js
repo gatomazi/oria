@@ -314,6 +314,28 @@ const TABELAS_PLATAFORMA = Object.freeze([
   // Fase F · Product Identity (lib/product-analytics/product-identity-resolver.js). Mesmo motivo:
   // nasce com organization_id/store_id explícitos, filha de commerce_products só por FK composta.
   Object.freeze({ tabela: 'product_external_identities', colunaTenant: 'organization_id' }),
+  // Parcerias, Afiliados e Collabs (migration 0044, lib/afiliados/). Nascem nativas, com organization_id/store_id
+  // explícitos; a ordem abaixo respeita as FKs compostas (pais antes dos filhos).
+  Object.freeze({ tabela: 'partnership_settings', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partnership_partners', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partnership_contracts', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partnership_contract_versions', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_coupon_links', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_collabs', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_collab_creators', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_collab_product_memberships', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partnership_review_items', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partnership_attributions', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_commission_ledger', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_payout_batches', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_payout_batch_items', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_payment_records', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_payment_allocations', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partnership_level_rule_sets', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_level_history', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_level_proposals', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_benefit_ledger', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partnership_audit_events', colunaTenant: 'organization_id' }),
 ]);
 
 // Globais DECLARADAS. Não recebem RLS. A role da aplicação acessa só as de identidade

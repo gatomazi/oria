@@ -1,0 +1,15 @@
+DROP INDEX IF EXISTS idx_pedidos_ink_promotion_code;
+ALTER TABLE pedidos_ink_itens DROP COLUMN IF EXISTS product_cluster_id;
+ALTER TABLE pedidos_ink_itens DROP COLUMN IF EXISTS product_variant_id;
+ALTER TABLE pedidos_ink_itens DROP COLUMN IF EXISTS unit_additional_service_price;
+ALTER TABLE pedidos_ink_itens DROP COLUMN IF EXISTS unit_ink_base_price;
+ALTER TABLE pedidos_ink_itens DROP COLUMN IF EXISTS free_quantity;
+ALTER TABLE pedidos_ink_itens DROP COLUMN IF EXISTS refunded_quantity;
+ALTER TABLE pedidos_ink_itens DROP COLUMN IF EXISTS unit_value;
+ALTER TABLE pedidos_ink DROP COLUMN IF EXISTS affiliate_snapshot_at;
+ALTER TABLE pedidos_ink DROP COLUMN IF EXISTS delivered_at;
+ALTER TABLE pedidos_ink DROP COLUMN IF EXISTS kickback_value;
+ALTER TABLE pedidos_ink DROP COLUMN IF EXISTS freight_value_difference;
+ALTER TABLE pedidos_ink DROP COLUMN IF EXISTS payment_discount_value;
+ALTER TABLE pedidos_ink DROP COLUMN IF EXISTS promotion_value;
+ALTER TABLE pedidos_ink DROP COLUMN IF EXISTS promotion_code;

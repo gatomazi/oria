@@ -1,0 +1,26 @@
+-- Forward-only por convenção do projeto; existe para dev/rollback local. Ordem: filhos antes dos pais.
+DROP TABLE IF EXISTS partnership_audit_events;
+DROP TABLE IF EXISTS partner_benefit_ledger;
+DROP TABLE IF EXISTS partner_level_proposals;
+DROP TABLE IF EXISTS partner_level_history;
+DROP TABLE IF EXISTS partnership_level_rule_sets;
+DROP TABLE IF EXISTS partner_payment_allocations;
+DROP TABLE IF EXISTS partner_payment_records;
+DROP TABLE IF EXISTS partner_payout_batch_items;
+DROP TABLE IF EXISTS partner_payout_batches;
+DROP TABLE IF EXISTS partner_commission_ledger;
+DROP TABLE IF EXISTS partnership_attributions;
+DROP TABLE IF EXISTS partnership_review_items;
+DROP TABLE IF EXISTS partner_collab_product_memberships;
+DROP TABLE IF EXISTS partner_collab_creators;
+DROP TABLE IF EXISTS partner_collabs;
+DROP TABLE IF EXISTS partner_coupon_links;
+DROP TABLE IF EXISTS partnership_contract_versions;
+DROP TABLE IF EXISTS partnership_contracts;
+DROP TABLE IF EXISTS partnership_partners;
+DROP TABLE IF EXISTS partnership_settings;
+DROP FUNCTION IF EXISTS partner_payment_allocations_invariante();
+DROP FUNCTION IF EXISTS partner_commission_ledger_valor_imutavel();
+DROP FUNCTION IF EXISTS partner_collab_creators_soma_participacao();
+DROP FUNCTION IF EXISTS partner_coupon_links_sem_sobreposicao();
+DROP FUNCTION IF EXISTS partnership_bloquear_mutacao();

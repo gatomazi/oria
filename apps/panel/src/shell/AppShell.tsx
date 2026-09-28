@@ -10,7 +10,8 @@ import { alternarColapso, alternarGrupo, gravarPrefs, grupoAberto, itensVisiveis
 import { getInternalToolsStatus } from '../api/internalTools';
 import { useWhatsappProvider } from '../state/whatsappProvider';
 import { AlertaAppWhatsapp } from '../components/AlertaAppWhatsapp';
-import { NAV_TOP, NAV_GROUPS, NAV_STORE_MENU, STORE_MENU_GROUP, PAGE_TITLES, NAV_ICON_PATHS, ROUTE_CONTEXT, type NavItem, type NavGroup } from './nav';
+import { NAV_TOP, NAV_GROUPS, NAV_STORE_MENU, STORE_MENU_GROUP, PAGE_TITLES, NAV_ICON_PATHS, ROUTE_CONTEXT, NAV_ITEM_PARCERIAS, NAV_GRUPO_DO_ITEM_PARCERIAS, type NavItem, type NavGroup } from './nav';
+import { useStatusAfiliados } from '../state/afiliadosModulo';
 
 // Shell do painel (DESIGN.md › Layout, Navigation, Top Bar): sidebar de 240px (drawer abaixo de
 // 1024px), topbar sticky de 56px com breadcrumb + troca de workspace (só para quem tem mais de uma
@@ -34,6 +35,17 @@ function useFerramentasInternasGroup(): NavGroup | null {
     label: 'Ferramentas internas',
     items: [{ key: 'origens-migration', label: 'Migração Use Origens', href: '/admin/internal/origens-migration' }],
   };
+}
+
+// Grupos da sidebar: NAV_GROUPS + "Parcerias e Afiliados" na seção Comunicação, mas só quando o servidor liberou o módulo. Esconder o item
+// não é autorização — as rotas do módulo respondem 404/403 no backend de qualquer forma.
+function useNavGroupsComParcerias(): NavGroup[] {
+  const status = useStatusAfiliados();
+  const liberado = !!status && status.enabled;
+  return useMemo(
+    () => (liberado ? NAV_GROUPS.map((g) => (g.label === NAV_GRUPO_DO_ITEM_PARCERIAS ? { ...g, items: [...g.items, NAV_ITEM_PARCERIAS] } : g)) : NAV_GROUPS),
+    [liberado],
+  );
 }
 
 function navIcon(key: string, className = 'ad-nav__icon') {
@@ -83,10 +95,10 @@ interface RouteInfo {
 // Resolve item ativo, título da aba e breadcrumb a partir da rota: contexto declarado em
 // ROUTE_CONTEXT (páginas filhas e fora do menu) ou, senão, o item de navegação com o href mais
 // longo que casa com a rota.
-function useRouteInfo(extraGroup: NavGroup | null): RouteInfo {
+function useRouteInfo(extraGroup: NavGroup | null, base: NavGroup[]): RouteInfo {
   const { pathname } = useLocation();
   return useMemo(() => {
-    const groups = [...NAV_GROUPS, ...(extraGroup ? [extraGroup] : [])];
+    const groups = [...base, ...(extraGroup ? [extraGroup] : [])];
     const groupOf = (key: string) => groups.find((g) => g.items.some((i) => i.key === key))?.label ?? null;
     const all = [...NAV_TOP, ...groups.flatMap((g) => g.items)];
 
@@ -109,7 +121,7 @@ function useRouteInfo(extraGroup: NavGroup | null): RouteInfo {
     }
     if (!best) return { activeKey: '', title: '', group: null, parent: null };
     return { activeKey: best.key, title: PAGE_TITLES[best.key] || best.label, group: groupOf(best.key), parent: null };
-  }, [pathname, extraGroup]);
+  }, [pathname, extraGroup, base]);
 }
 
 function initials(text: string): string {
@@ -250,7 +262,8 @@ function Breadcrumb({ info }: { info: RouteInfo }) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const ferramentasInternasGroup = useFerramentasInternasGroup();
-  const routeInfo = useRouteInfo(ferramentasInternasGroup);
+  const gruposBase = useNavGroupsComParcerias();
+  const routeInfo = useRouteInfo(ferramentasInternasGroup, gruposBase);
   const { pathname } = useLocation();
   const { logout, usuario, organizacaoAtiva } = useAuth();
   const [settings, setSettings] = useState<ProductSettings | null>(null);
@@ -319,7 +332,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     menuBtnRef.current?.focus();
   }, [navOpen]);
 
-  const grupos = [...NAV_GROUPS, ...(ferramentasInternasGroup ? [ferramentasInternasGroup] : [])]
+  const grupos = [...gruposBase, ...(ferramentasInternasGroup ? [ferramentasInternasGroup] : [])]
     .map((g) => ({ ...g, items: g.items.filter(itemVisivel) }))
     .filter((g) => g.items.length > 0);
 
