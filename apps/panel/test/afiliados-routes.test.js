@@ -52,6 +52,9 @@ function servicoDuble() {
       listarPagamentos: registrar('listarPagamentos', []), estornarPagamento: registrar('estornarPagamento'), alterarVencimento: registrar('alterarVencimento'), lancarManual: registrar('lancarManual'),
       exportarCsv: registrar('exportarCsv', { csv: 'a,b\r\n', linhas: 0 }),
     },
+    preview: {
+      statusDoLink: registrar('statusDoLink', { ativo: false }), gerarLink: registrar('gerarLink', { token: 'x'.repeat(43), partnerName: 'x' }), revogarLink: registrar('revogarLink', { revogado: true }),
+    },
   };
   return s;
 }
@@ -91,6 +94,7 @@ const ROTAS_SO_OWNER = [
   ['GET', '/payables'], ['GET', '/payables/summary'], ['GET', '/payables/export.csv'], ['POST', '/payouts/preview', { partnerId: UUID }], ['POST', '/payouts', { partnerId: UUID }], ['GET', '/payouts'],
   ['POST', `/payouts/${UUID}/approve`, {}], ['POST', `/payouts/${UUID}/void`, { reason: 'x' }], ['POST', '/payments', { partnerId: UUID }], ['GET', '/payments'],
   ['POST', `/payments/${UUID}/reverse`, { reason: 'x' }], ['POST', '/ledger/due-date', { ledgerIds: [UUID], dueAt: '2026-10-10', reason: 'x' }], ['POST', '/ledger/manual', { partnerId: UUID }],
+  ['GET', `/partners/${UUID}/preview-link`], ['POST', `/partners/${UUID}/preview-link`, {}], ['POST', `/partners/${UUID}/preview-link/revoke`, {}],
 ];
 
 test('feature flag desligada: tudo 404, exceto /status que diz enabled:false', async () => {

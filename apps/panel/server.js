@@ -793,6 +793,7 @@ const RESOLVEDORES_SEM_SESSAO = new Set([
   'publico_organization_da_midia',
   'publico_organization_do_agente',
   'ink_organization_do_webhook',
+  'publico_organization_do_preview_afiliado',
 ]);
 async function organizacaoPorResolvedor(funcao, valor) {
   if (!RESOLVEDORES_SEM_SESSAO.has(funcao)) throw new Error(`resolvedor desconhecido: ${funcao}`);
@@ -923,6 +924,14 @@ app.use('/admin/assets', express.static(path.join(__dirname, 'dist', 'assets'), 
   immutable: true,
 }));
 app.get(/^\/admin(\/.*)?$/, (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+// Link público do afiliado (capability URL): página fora de /admin de propósito — quem recebe o
+// link não tem conta nem acesso ao painel, e uma URL com "admin" nela seria confusa/desencorajadora.
+// Os assets do bundle continuam absolutos em /admin/assets/… (vite.config `base`), então servir o
+// MESMO index.html aqui funciona igual — só a rota cliente (App.tsx) é outra.
+app.get('/parcerias/preview', (req, res) => {
   res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
@@ -17267,6 +17276,7 @@ if (PRODUCT_ANALYTICS) {
 // cai no modo manual. Ver docs/afiliados/arquitetura.md §7.
 const { criarAfiliados } = require('./lib/afiliados');
 const { createAfiliadosRouter } = require('./lib/afiliados/routes');
+const { createLoginLimiter } = require('./lib/auth/rate-limit');
 const AFILIADOS_HABILITADO = process.env.AFILIADOS_MODULE_ENABLED === 'true';
 const AFILIADOS = pgPool
   ? criarAfiliados({
@@ -17282,6 +17292,46 @@ const AFILIADOS = pgPool
 if (AFILIADOS) {
   app.use('/api/admin/afiliados', requireAdmin, createAfiliadosRouter({ service: AFILIADOS, enabled: () => AFILIADOS_HABILITADO }));
 }
+
+// ── Link público (capability URL) do parceiro ver as próprias vendas/comissão/saldo ────────────
+// NÃO é login do afiliado: rota ANÔNIMA, sem sessão, sem cookie, sem CSRF (não há sessão para
+// forjar). O segredo viaja no CORPO do POST — nunca GET/query string (mesma razão do aceite de
+// convite: URL vira histórico do navegador, Referer e log de proxy). O front lê o token do
+// FRAGMENTO da URL (`#key=…`, nunca enviado ao servidor) e o repassa aqui no corpo — ver
+// src/pages/parcerias/PreviewAfiliadoPage.tsx. `organizacaoPorResolvedor` já é a via estreita e
+// pré-autorizada (SECURITY DEFINER, lista fechada) usada por todo link público deste servidor.
+const PREVIEW_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+const limiterPreviewAfiliado = createLoginLimiter({ maxPorConta: 10, janelaMs: 15 * 60 * 1000, maxGlobal: 60, janelaGlobalMs: 60 * 1000 });
+app.post('/api/public/afiliados/preview', async (req, res) => {
+  if (!AFILIADOS || !AFILIADOS_HABILITADO) return res.status(404).json({ error: 'módulo indisponível', codigo: 'AFILIADOS_DESABILITADO' });
+  const token = req.body && typeof req.body.token === 'string' ? req.body.token : '';
+  const hash = PREVIEW_TOKEN_RE.test(token) ? crypto.createHash('sha256').update(token).digest('hex') : null;
+  // Chave do balde = prefixo curto do hash (nunca o token, nunca o hash inteiro) — mesma régua do rate limit do convite.
+  const chave = `preview:${hash ? hash.slice(0, 12) : 'formato-invalido'}`;
+  if (limiterPreviewAfiliado.bloqueado(chave)) return res.status(429).json({ error: 'muitas tentativas, tente novamente mais tarde' });
+  // Uma resposta só, para token malformado, inexistente ou revogado — quem tenta não distingue os três (0019/0020).
+  const invalido = () => { limiterPreviewAfiliado.registrarFalha(chave); return res.status(404).json({ error: 'link inválido ou revogado', codigo: 'PREVIEW_INVALIDO' }); };
+  if (!hash) return invalido();
+  try {
+    const organizationId = await organizacaoPorResolvedor('publico_organization_do_preview_afiliado', hash);
+    if (!organizationId) return invalido();
+    const preview = await comOrganizacaoResolvida(organizationId, 'publico', async () => {
+      const { rows } = await pgPool.query(
+        `UPDATE partner_preview_links SET last_accessed_at = now(), access_count = access_count + 1
+           WHERE organization_id = $1 AND key_hash = $2 AND status = 'active' RETURNING store_id, partner_id`,
+        [organizationId, hash]
+      );
+      if (!rows[0]) return null; // corrida rara: revogado entre os dois passos
+      return AFILIADOS.preview.montarPreview({ organizationId, storeId: rows[0].store_id, userId: null }, rows[0].partner_id);
+    });
+    if (!preview) return invalido();
+    limiterPreviewAfiliado.registrarSucesso(chave);
+    return res.json(preview);
+  } catch (err) {
+    console.error(`[PREVIEW_AFILIADO] erro: ${err.message}`);
+    return res.status(500).json({ error: 'erro interno' });
+  }
+});
 // Reconciliação periódica por Organization (lease por job/Organization, como os demais): só lê o cache de pedidos JÁ sincronizado —
 // zero chamada à INK — e só age em quem já cadastrou parceiro. Reprocessa pedidos alterados desde a última rodada e os que ainda têm
 // comissão provisória/retida (a criação-data da INK não avisa de devolução tardia).

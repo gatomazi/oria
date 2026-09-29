@@ -14,6 +14,7 @@ const { criarReconciliador } = require('./reconcile');
 const { criarPayables } = require('./payables');
 const { criarProgressao } = require('./progression');
 const { criarDiretorio } = require('./directory');
+const { criarPreview } = require('./preview');
 
 function criarAfiliados({ pool, relogio = () => new Date(), inkClient = null, inkScopes = null }) {
   if (!pool || typeof pool.query !== 'function' || typeof pool.connect !== 'function') throw new Error('criarAfiliados exige um pool');
@@ -24,6 +25,7 @@ function criarAfiliados({ pool, relogio = () => new Date(), inkClient = null, in
   const payables = criarPayables({ pool, relogio, registry });
   const progressao = criarProgressao({ pool, relogio, registry });
   const diretorio = criarDiretorio({ pool, relogio, registry, payables, progressao });
+  const preview = criarPreview({ pool, relogio, registry, payables, progressao });
 
   // Reconcilia pedidos e, em seguida, recalcula propostas de nível (só propõe; a decisão é do lojista).
   async function reconciliarTudo(ctx, opcoes = {}) {
@@ -32,7 +34,7 @@ function criarAfiliados({ pool, relogio = () => new Date(), inkClient = null, in
     return { ...r, ...p };
   }
 
-  return { registry, collabs, reconciliador, payables, progressao, diretorio, reconciliarTudo, inkPromotions };
+  return { registry, collabs, reconciliador, payables, progressao, diretorio, preview, reconciliarTudo, inkPromotions };
 }
 
 module.exports = { criarAfiliados };

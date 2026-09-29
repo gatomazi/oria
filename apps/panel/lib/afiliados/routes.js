@@ -26,6 +26,7 @@ const PERMITIDOS = Object.freeze({
   couponCreate: ['partnerId', 'contractId', 'code', 'discountKind', 'discountBps', 'discountCents', 'validFrom', 'validUntil'],
   couponActivate: ['retroactive', 'reason'],
   reasonOnly: ['reason'],
+  vazio: [],
   collab: ['name', 'imageUrl', 'collectionUrl', 'startsAt', 'endsAt', 'newMemberPolicy', 'notes', 'status'],
   collabCreator: ['partnerId', 'contractId', 'shareBps'],
   collabProducts: ['products', 'retroativoDesde', 'reason'],
@@ -118,6 +119,14 @@ function createAfiliadosRouter({ service, enabled = () => false, logger = consol
   }));
   router.get('/partners/:id/sales', wrap(async (req, res) => res.json(await s.diretorio.listarVendas(contexto(req), { ...req.query, partnerId: req.params.id }))));
   router.get('/partners/:id/statement', wrap(async (req, res) => { exigirOwner(req); res.json(await s.payables.extratoDoParceiro(contexto(req), req.params.id, req.query)); }));
+  // Link público de leitura (capability URL) — NÃO é login do afiliado. Ver lib/afiliados/preview.js.
+  router.get('/partners/:id/preview-link', wrap(async (req, res) => { exigirOwner(req); res.json(await s.preview.statusDoLink(contexto(req), req.params.id)); }));
+  router.post('/partners/:id/preview-link', wrap(async (req, res) => {
+    exigirOwner(req); corpo(req, 'vazio');
+    // O token cru só existe nesta resposta — não fica gravado em lugar nenhum, nem no log de auditoria.
+    res.status(201).json(await s.preview.gerarLink(contexto(req), req.params.id));
+  }));
+  router.post('/partners/:id/preview-link/revoke', wrap(async (req, res) => { exigirOwner(req); corpo(req, 'vazio'); res.json(await s.preview.revogarLink(contexto(req), req.params.id)); }));
   router.get('/partners/:id/level', wrap(async (req, res) => res.json(await s.progressao.avaliarParceiro(contexto(req), req.params.id))));
   router.post('/partners/:id/level', wrap(async (req, res) => { exigirOwner(req); res.json(await s.progressao.definirNivelManual(contexto(req), req.params.id, corpo(req, 'levelOverride'))); }));
   router.get('/partners/:id/benefits', wrap(async (req, res) => res.json(await s.progressao.listarBeneficios(contexto(req), req.params.id))));

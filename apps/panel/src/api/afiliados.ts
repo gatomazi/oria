@@ -176,6 +176,10 @@ export interface TermosDeContrato {
   accumulateBelowMin?: boolean; weekendShift?: boolean; newCollabMemberPolicy?: VersaoContrato['newCollabMemberPolicy']; levelCapOverrideReason?: string; notes?: string;
 }
 
+// Link público (capability URL) — NÃO é login do afiliado. `token` só vem na resposta de `gerarLinkPreview`,
+// nunca de novo depois disso (mesma regra do aceite de convite): quem perdeu o link precisa gerar outro.
+export interface StatusDoLinkPreview { ativo: boolean; createdAt?: string; lastAccessedAt?: string | null; accessCount?: number }
+
 function qs(params: Record<string, string | number | boolean | null | undefined>): string {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '' && v !== false) p.set(k, String(v));
@@ -201,6 +205,9 @@ export const afiliados = {
   mudarVinculo: (id: string, b: { status: Parceiro['relationshipStatus']; reason: string }) => post<Parceiro & { cupons?: EncerramentoDeCupons }>(`/partners/${id}/relationship`, b),
   vendasDoParceiro: (id: string, p: Record<string, string | number | undefined>) => api<{ total: number; itens: VendaAtribuida[] }>(`${BASE}/partners/${id}/sales${qs(p)}`),
   extrato: (id: string, p: Record<string, string | number | undefined> = {}) => api<{ totais: TotaisDoParceiro; itens: LancamentoDoExtrato[] }>(`${BASE}/partners/${id}/statement${qs(p)}`),
+  statusDoLinkPreview: (id: string) => api<StatusDoLinkPreview>(`${BASE}/partners/${id}/preview-link`),
+  gerarLinkPreview: (id: string) => post<{ token: string; partnerName: string }>(`/partners/${id}/preview-link`),
+  revogarLinkPreview: (id: string) => post<{ revogado: boolean }>(`/partners/${id}/preview-link/revoke`),
 
   simularContrato: (b: unknown) => post<SimulacaoContrato>('/contracts/simulate', b),
   criarContrato: (b: { partnerId: string; modality: Modalidade; title: string; status?: 'draft' | 'active'; reason: string; effectiveFrom?: string; terms: TermosDeContrato }) => post<{ contract: { id: string }; version: VersaoContrato }>('/contracts', b),

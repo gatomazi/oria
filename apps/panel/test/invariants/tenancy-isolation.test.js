@@ -162,6 +162,7 @@ function valoresDeParcerias(tabela, chave, o) {
     case 'partner_level_proposals': return { ...base, partner_id: pai('partnership_partners'), from_level: 'raiz', to_level: 'voz', direction: 'upgrade', observed: '{}' };
     case 'partner_benefit_ledger': return { ...base, partner_id: pai('partnership_partners'), entry_type: 'budget_credit', amount_cents: 100, origin_key: `iso-${chave}` };
     case 'partnership_audit_events': return { ...base, entity_type: 'teste', entity_id: '1', action: 'teste' };
+    case 'partner_preview_links': return { ...base, partner_id: pai('partnership_partners'), key_hash: `${'a'.repeat(63)}${chave === 'A' ? '1' : '2'}` };
     default: throw new Error(`isolamento: tabela de parcerias sem valores explícitos: ${tabela}`);
   }
 }

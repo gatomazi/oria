@@ -363,7 +363,8 @@ test('r19 §15 · dry-run do runbook: antes da B → B (31a7cdb) → D0 (8c024d2
       '1790002700000_catalog-sync-observabilidade',
       '1790002800000_segments-rfm',
       '1790002900000_partnerships',
-      '1790003000000_pedidos-ink-afiliados-campos'],
+      '1790003000000_pedidos-ink-afiliados-campos',
+      '1790003100000_parceiro-preview-links'],
     'o pre-deploy da D\' aplicou um conjunto de migrations diferente do declarado'
   );
   semSegredo(pdD.saida, 'pre-deploy D\'');

@@ -336,6 +336,7 @@ const TABELAS_PLATAFORMA = Object.freeze([
   Object.freeze({ tabela: 'partner_level_proposals', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'partner_benefit_ledger', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'partnership_audit_events', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'partner_preview_links', colunaTenant: 'organization_id' }),
 ]);
 
 // Globais DECLARADAS. Não recebem RLS. A role da aplicação acessa só as de identidade

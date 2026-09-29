@@ -72,6 +72,8 @@ const ParceriasNiveisPage = tela(() => import('./pages/parcerias/NiveisPage'), '
 // Aceite de convite: rota ANÔNIMA (fora do ProtectedRoute e fora do AppShell). Quem abre ainda
 // pode não ter conta — é o passo em que a conta nasce.
 const AceitarConvitePage = tela(() => import('./pages/convite/AceitarConvitePage'), 'AceitarConvitePage');
+// Link público do afiliado: rota ANÔNIMA (mesmo motivo do convite) — não é login, é capability URL.
+const PreviewAfiliadoPage = tela(() => import('./pages/parcerias/PreviewAfiliadoPage'), 'PreviewAfiliadoPage');
 
 // Layout de tudo que exige sessão + Organization ativa. Antes, `ProtectedRoute` envolvia o
 // `<Routes>` inteiro, o que tornava impossível ter uma tela pública; agora ele é a rota-mãe das
@@ -104,6 +106,10 @@ export function App() {
             <Route
               path="/admin/convite"
               element={<Suspense fallback={null}><AceitarConvitePage /></Suspense>}
+            />
+            <Route
+              path="/parcerias/preview"
+              element={<Suspense fallback={null}><PreviewAfiliadoPage /></Suspense>}
             />
             <Route element={<PainelAutenticado />}>
             <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
