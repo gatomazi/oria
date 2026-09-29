@@ -139,6 +139,16 @@ test('A · com o sync desabilitado (CATALOG_SYNC_DISABLED) nada é necessário e
   assert.equal(rows[0].n, 0); // nenhum log aberto
 }));
 
+test('A · com o volume em nível crítico o sync não começa: nem lease, nem log, nem chamada à Ink', () => em(ORG_B, STORE_B, async () => {
+  const chaveiro = createKeyring({ ENCRYPTION_MASTER_KEY: MESTRA });
+  const gate = async () => ({ permitido: false, motivo: 'uso do volume ~90.0% (> 80%)' });
+  const bloqueada = createProductAnalyticsComposition({ pool: fachada, keyring: chaveiro, storageGate: gate });
+  const r = await bloqueada.syncCommerceCatalog({ organizationId: ORG_B, storeId: STORE_B });
+  assert.equal(r.status, 'storage_critical');
+  const { rows } = await sup.query('SELECT count(*)::int AS n FROM commerce_catalog_sync_logs WHERE organization_id = $1', [ORG_B]);
+  assert.equal(rows[0].n, 0); // nenhum log aberto: nada foi tentado
+}));
+
 test('A · sucesso RECENTE (dentro do maxAgeMs) → não precisa', () => em(ORG_A, STORE_A, async () => {
   await gravarLog(ORG_A, STORE_A, { status: 'success', finishedAtOffsetMs: 1 }); // 1ms atrás, limite é 200ms
   const precisa = await composicao.catalogSyncNecessario({ organizationId: ORG_A, storeId: STORE_A });

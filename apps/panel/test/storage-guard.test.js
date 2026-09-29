@@ -42,3 +42,49 @@ test('verificarTenant: identity espelho só alerta no modo derived; órfãos sem
   assert.equal(derived.espelho, 4);
   assert.equal(derived.alertas.length, 2);
 });
+
+function loggerMudo() { return { warn() {}, error() {}, log() {} }; }
+
+test('podeIniciarEscritaPesada: volume saudável e em aviso liberam; só o crítico (> 80 %) nega', async () => {
+  const saudavel = poolFalso([[/pg_database_size/, [{ bytes: String(10 * GB) }]], [/pg_ls_waldir/, [{ bytes: String(0.5 * GB) }]]]);
+  const emAviso = poolFalso([[/pg_database_size/, [{ bytes: String(13.5 * GB) }]], [/pg_ls_waldir/, [{ bytes: String(0.3 * GB) }]]]);
+  const critico = poolFalso([[/pg_database_size/, [{ bytes: String(15 * GB) }]], [/pg_ls_waldir/, [{ bytes: String(1 * GB) }]]]);
+  const de = (pool) => createStorageGuard({ pool, logger: loggerMudo(), capacidadeBytes: 19 * GB }).podeIniciarEscritaPesada();
+  assert.equal((await de(saudavel)).permitido, true);
+  const aviso = await de(emAviso);
+  assert.equal(aviso.permitido, true);
+  assert.equal(aviso.nivel, 'aviso');
+  const negado = await de(critico);
+  assert.equal(negado.permitido, false);
+  assert.equal(negado.nivel, 'critico');
+  assert.match(negado.motivo, /uso do volume/);
+});
+
+test('podeIniciarEscritaPesada: o mesmo vigia libera de novo depois que o volume normaliza', async () => {
+  let bytes = 15 * GB;
+  const pool = { query: async (sql) => (/pg_database_size/.test(sql) ? { rows: [{ bytes: String(bytes) }] } : { rows: [{ bytes: String(0.5 * GB) }] }) };
+  const guard = createStorageGuard({ pool, logger: loggerMudo(), capacidadeBytes: 19 * GB });
+  assert.equal((await guard.podeIniciarEscritaPesada()).permitido, false);
+  bytes = 8 * GB;
+  assert.equal((await guard.podeIniciarEscritaPesada()).permitido, true);
+});
+
+test('podeIniciarEscritaPesada: sem capacidade configurada libera sem consultar o banco e avisa que falta a variável', async () => {
+  const linhas = [];
+  const logger = { warn: (m) => linhas.push(m), error: (m) => linhas.push(m), log: (m) => linhas.push(m) };
+  const pool = { query: async () => { throw new Error('não deveria consultar o banco'); } };
+  const r = await createStorageGuard({ pool, logger, capacidadeBytes: 0 }).podeIniciarEscritaPesada();
+  assert.equal(r.permitido, true);
+  assert.equal(r.nivel, 'sem_capacidade');
+  assert.match(linhas.join('\n'), /PG_VOLUME_CAPACITY_GB não configurada/);
+});
+
+test('podeIniciarEscritaPesada: falha ao ler o tamanho do banco libera e registra o motivo', async () => {
+  const avisos = [];
+  const logger = { warn: (m) => avisos.push(m), error() {}, log() {} };
+  const pool = poolFalso([[/pg_database_size/, new Error('connection refused')]]);
+  const r = await createStorageGuard({ pool, logger, capacidadeBytes: 19 * GB }).podeIniciarEscritaPesada();
+  assert.equal(r.permitido, true);
+  assert.equal(r.nivel, 'desconhecido');
+  assert.match(avisos[0], /não foi possível medir o volume \(connection refused\)/);
+});
