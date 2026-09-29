@@ -1189,3 +1189,75 @@ test('link público · parceiro com vínculo ENCERRADO para de aparecer no previ
   assert.equal(status.ativo, true);
   void g;
 });
+
+test('link público · muitas vendas: paginação (20/página), filtro de data e filtro pago/a receber', async () => {
+  definirAgora('2027-02-01T09:00:00Z');
+  const parceiro = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Parceira Muitas Vendas' }, { aprovarDireto: true }));
+  const k = (await emA(() => svc.registry.criarContrato(ctxA, { partnerId: parceiro.id, modality: 'collab', title: 'Contrato Muitas Vendas', status: 'active', reason: 'teste', terms: { commissionBasis: 'verified_margin_percent', commissionBps: 1000 } }, { podeAtivar: true }))).contract.id;
+  const collab = await emA(() => svc.collabs.criarCollab(ctxA, { name: 'Collab Muitas Vendas', collectionUrl: 'https://loja.exemplo.invalid/muitas-vendas' }));
+  await emA(() => svc.collabs.adicionarCriador(ctxA, collab.id, { partnerId: parceiro.id, contractId: k, shareBps: 10000 }));
+  await emA(() => svc.collabs.adicionarProdutos(ctxA, collab.id, { products: [{ inkProductId: '9501', productName: 'Produto Muitas Vendas' }] }));
+  definirAgora('2027-02-01T12:00:00Z');
+
+  // 22 pedidos, um por dia de 01 a 22/fev — mais que uma "página" (20) pra provar que pagina de verdade.
+  const ids = [];
+  for (let dia = 1; dia <= 22; dia += 1) {
+    const d = String(dia).padStart(2, '0');
+    const id = 9500 + dia;
+    ids.push(String(id));
+    await semearPedido(ctxA, { id, criadoEm: `2027-02-${d}T10:00:00Z`, entregueEm: `2027-02-${d}T11:00:00Z`, itens: [{ produtoId: 9501 }] });
+  }
+  definirAgora('2027-05-01T00:00:00Z'); // bem depois da carência de qualquer contrato — todo mundo elegível a "liberado"
+  await emA(() => svc.reconciliarTudo(ctxA, { pedidos: ids }));
+  const extrato = await emA(() => svc.payables.extratoDoParceiro(ctxA, parceiro.id, { limit: '200' }));
+  assert.ok(extrato.totais.grossCents > 0, 'cenário deve ter gerado comissão — senão o teste não prova nada');
+
+  await emA(() => svc.preview.gerarLink(ctxA, parceiro.id));
+
+  // Paginação: página 1 tem 20, página 2 tem as 2 restantes, total bate com os 22 pedidos.
+  const p1 = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, {}));
+  assert.equal(p1.paginacao.total, 22);
+  assert.equal(p1.paginacao.totalPages, 2);
+  assert.equal(p1.paginacao.page, 1);
+  assert.equal(p1.vendas.length, 20);
+  const p2 = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { page: 2 }));
+  assert.equal(p2.paginacao.page, 2);
+  assert.equal(p2.vendas.length, 2);
+  // Página além do fim não quebra: cai na última válida (mesma régua de "clamp" do resto do painel).
+  const alemDoFim = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { page: 99 }));
+  assert.equal(alemDoFim.paginacao.page, 2);
+
+  // Filtro de data: só os pedidos de 10 a 15/fev (6 dias, 1 pedido por dia).
+  const porData = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { desde: '2027-02-10', ate: '2027-02-15' }));
+  assert.equal(porData.paginacao.total, 6);
+  assert.deepEqual(porData.vendas.map((v) => v.inkOrderId).sort(), ['9510', '9511', '9512', '9513', '9514', '9515'].sort());
+  // KPIs no topo NUNCA mudam com o filtro da tabela — são sempre o total do parceiro.
+  assert.equal(porData.kpis.commissionTotalCents, p1.kpis.commissionTotalCents);
+
+  // Antes de qualquer pagamento, tudo é "a receber"; nada é "pago".
+  const antesDoPgto = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { status: 'pendente' }));
+  assert.equal(antesDoPgto.paginacao.total, 22);
+  const semPagoAinda = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { status: 'pago' }));
+  assert.equal(semPagoAinda.paginacao.total, 0);
+
+  // Quita o lançamento do pedido 9501 direto (sem lote — registrarPagamento aceita ledger liberado avulso).
+  const { rows: lanc } = await sup.query(
+    `SELECT l.id, l.amount_cents FROM partner_commission_ledger l JOIN partnership_attributions a ON a.id = l.attribution_id AND a.organization_id = l.organization_id
+      WHERE l.organization_id = $1 AND l.partner_id = $2 AND a.ink_order_id = $3 AND l.category = 'commission' AND l.entry_type = 'accrual'`,
+    [ORG_A, parceiro.id, '9501']
+  );
+  assert.equal(lanc.length, 1);
+  await emA(() => svc.payables.registrarPagamento(ctxA, {
+    partnerId: parceiro.id, idempotencyKey: 'preview-filtro-pago', method: 'pix', paidAt: '2027-05-01T00:00:00Z', allocations: [{ ledgerId: lanc[0].id, amountCents: Number(lanc[0].amount_cents) }],
+  }));
+
+  const depoisDoPgto = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { status: 'pago' }));
+  assert.equal(depoisDoPgto.paginacao.total, 1);
+  assert.equal(depoisDoPgto.vendas[0].inkOrderId, '9501');
+  assert.equal(depoisDoPgto.vendas[0].paymentStatus, 'pago');
+  const pendentesDepois = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { status: 'pendente' }));
+  assert.equal(pendentesDepois.paginacao.total, 21);
+  // Comissão total (KPI) continua batendo com o extrato mesmo depois do pagamento parcial do conjunto.
+  const extratoFinal = await emA(() => svc.payables.extratoDoParceiro(ctxA, parceiro.id));
+  assert.equal(depoisDoPgto.kpis.commissionPaidCents, extratoFinal.totais.paidCents);
+});

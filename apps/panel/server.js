@@ -17322,7 +17322,10 @@ app.post('/api/public/afiliados/preview', async (req, res) => {
         [organizationId, hash]
       );
       if (!rows[0]) return null; // corrida rara: revogado entre os dois passos
-      return AFILIADOS.preview.montarPreview({ organizationId, storeId: rows[0].store_id, userId: null }, rows[0].partner_id);
+      // Filtro de data/pagamento e página da tabela — validados dentro de montarPreview (entrada não
+      // confiável descartada em silêncio, nunca vira erro nesta rota pública).
+      const filtros = { desde: req.body?.desde, ate: req.body?.ate, status: req.body?.status, page: req.body?.page };
+      return AFILIADOS.preview.montarPreview({ organizationId, storeId: rows[0].store_id, userId: null }, rows[0].partner_id, filtros);
     });
     if (!preview) return invalido();
     limiterPreviewAfiliado.registrarSucesso(chave);

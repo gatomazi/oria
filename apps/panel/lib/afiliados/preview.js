@@ -15,11 +15,18 @@
 
 const crypto = require('crypto');
 const db = require('./db');
+const { intervaloLocal, dataLocal } = require('./schedule');
 
 const { conflito, exigirUuid } = db;
 
 const TOKEN_BYTES = 32; // 256 bits — mesmo tamanho do token de convite (lib/auth/invites.js)
 const sha256 = (valor) => crypto.createHash('sha256').update(valor).digest('hex');
+
+const RE_DATA = /^\d{4}-\d{2}-\d{2}$/;
+const TAMANHO_PAGINA_VENDAS = 20;
+// Prioridade pra escolher o status "pior caso" de um pedido com vários itens (ex.: um item liberado e
+// outro ainda em carência) — o que ainda pesa mais pro afiliado entender o que falta.
+const PRIORIDADE_STATUS = { manual_review: 4, held: 3, provisional: 3, released: 2, reversed: 1 };
 
 function criarPreview({ pool, relogio = () => new Date(), registry, payables, progressao }) {
   // ── Gestão (owner autenticado, tenant-scoped) ─────────────────────────────────────────────────
@@ -73,28 +80,71 @@ function criarPreview({ pool, relogio = () => new Date(), registry, payables, pr
   // `ctx`/`storeId`/`partnerId` já vêm resolvidos e travados pelo servidor (nunca de entrada do
   // cliente). Devolve `null` para "nada a mostrar" — o servidor traduz para a mesma resposta genérica
   // de link inválido/revogado, sem diferenciar o motivo (mesma lição do aceite de convite).
-  async function montarPreview(ctx, partnerId) {
+  // `filtros` vêm do corpo da rota pública, já brutos (nunca confiar) — datas fora do formato ou
+  // invertidas são apenas IGNORADAS (mostra tudo), nunca viram erro de validação: é uma página sem
+  // login, pro afiliado, não um formulário administrativo.
+  async function montarPreview(ctx, partnerId, filtros = {}) {
     const parceiro = await registry.obterParceiroBasico(pool, ctx, partnerId).catch(() => null);
     // Vínculo encerrado: o link não deve seguir mostrando dado vivo de uma parceria que já terminou.
     // Não é "link inválido" no banco — é uma regra de exibição, então fica aqui, não na resolução.
     if (!parceiro || parceiro.relationship_status === 'ended') return null;
-    const extrato = await payables.extratoDoParceiro(ctx, partnerId, { limit: '100' });
+    const settings = await registry.lerConfig(ctx);
+    const agora = relogio();
+    // KPIs são sempre o TOTAL do parceiro — nunca mudam com o filtro da tabela (mesmo padrão do resto
+    // do painel: "A pagar" também mantém os KPIs fixos e só filtra a lista abaixo).
+    const extrato = await payables.extratoDoParceiro(ctx, partnerId, { limit: '200' });
     const nivel = await progressao.avaliarParceiro(ctx, partnerId).catch(() => null);
 
-    // Agrupa os lançamentos de comissão por pedido da INK (só o id — nunca dado de comprador, que
-    // as tabelas do módulo nem guardam) para uma leitura "Pedido · N itens", como o extrato do owner.
-    const porPedido = new Map();
-    for (const item of extrato.itens) {
-      if (item.category !== 'commission' || item.inkOrderId === null) continue;
-      if (!porPedido.has(item.inkOrderId)) {
-        porPedido.set(item.inkOrderId, { inkOrderId: item.inkOrderId, saleAt: item.saleAt, itens: 0, commissionCents: 0, status: item.status, dueAt: item.dueAt, estimatedPaymentAt: item.estimatedPaymentAt });
-      }
-      const p = porPedido.get(item.inkOrderId);
-      p.itens += 1;
-      p.commissionCents += item.amountCents;
-      if (new Date(item.saleAt) < new Date(p.saleAt)) p.saleAt = item.saleAt;
+    const desde = RE_DATA.test(String(filtros.desde || '')) ? String(filtros.desde) : null;
+    const ate = RE_DATA.test(String(filtros.ate || '')) ? String(filtros.ate) : null;
+    let intervalo = null;
+    if (desde || ate) {
+      try { intervalo = intervaloLocal(desde || '2000-01-01', ate || dataLocal(agora, settings.timezone), settings.timezone); } catch { intervalo = null; }
     }
-    const vendas = [...porPedido.values()].sort((a, b) => new Date(b.saleAt) - new Date(a.saleAt)).slice(0, 50);
+    const statusPagamento = filtros.status === 'pago' || filtros.status === 'pendente' ? filtros.status : null;
+    const pagina = Math.max(1, Number.parseInt(filtros.page, 10) || 1);
+
+    // Busca os lançamentos de comissão (não limitados à janela dos KPIs) filtrados por data da venda,
+    // pra a paginação/filtro cobrir o histórico inteiro, não só os últimos 200 lançamentos.
+    const linhas = await payables.lancamentosFiltrados(
+      ctx, { partnerId, category: 'commission', dateType: 'sale', intervalo }, settings.timezone, agora, { executor: pool }
+    );
+
+    // Agrupa por pedido da INK (só o id — nunca dado de comprador, que as tabelas do módulo nem
+    // guardam) para uma leitura "Pedido · N itens", como o extrato do owner.
+    const porPedido = new Map();
+    for (const r of linhas) {
+      if (r.ink_order_id === null) continue;
+      const id = String(r.ink_order_id);
+      if (!porPedido.has(id)) {
+        porPedido.set(id, { inkOrderId: id, saleAt: r.sale_at, itens: 0, commissionCents: 0, paidCents: 0, abertoCents: 0, status: r.eff_status, dueAt: r.due_at, estimatedPaymentAt: r.estimated_payment_at });
+      }
+      const p = porPedido.get(id);
+      p.itens += 1;
+      p.commissionCents += Number(r.amount_cents);
+      p.paidCents += Number(r.pago);
+      p.abertoCents += Number(r.aberto);
+      if (new Date(r.sale_at) < new Date(p.saleAt)) p.saleAt = r.sale_at;
+      if ((PRIORIDADE_STATUS[r.eff_status] || 0) > (PRIORIDADE_STATUS[p.status] || 0)) p.status = r.eff_status;
+    }
+
+    let vendas = [...porPedido.values()].map((p) => ({
+      ...p,
+      // "pago" = nada em aberto (quitado); "parcial" = pagou parte; "pendente" = nada pago ainda.
+      // Distinto do `status` técnico do lançamento (provisionado/em carência/liberado/…): isso aqui é
+      // especificamente "já caiu na sua conta ou não", que é o que o afiliado quer saber primeiro.
+      paymentStatus: p.abertoCents === 0 ? 'pago' : p.paidCents > 0 ? 'parcial' : 'pendente',
+    }));
+    if (statusPagamento === 'pago') vendas = vendas.filter((v) => v.abertoCents === 0);
+    else if (statusPagamento === 'pendente') vendas = vendas.filter((v) => v.abertoCents !== 0);
+    vendas.sort((a, b) => new Date(b.saleAt) - new Date(a.saleAt));
+
+    const total = vendas.length;
+    const totalPages = Math.max(1, Math.ceil(total / TAMANHO_PAGINA_VENDAS));
+    const paginaValida = Math.min(pagina, totalPages);
+    const vendasDaPagina = vendas
+      .slice((paginaValida - 1) * TAMANHO_PAGINA_VENDAS, paginaValida * TAMANHO_PAGINA_VENDAS)
+      .map(({ abertoCents, ...v }) => v); // abertoCents é só pra classificar/filtrar — não é dado a expor
 
     return {
       partnerName: parceiro.public_name,
@@ -107,7 +157,9 @@ function criarPreview({ pool, relogio = () => new Date(), registry, payables, pr
         commissionPaidCents: extrato.totais.paidCents,
         commissionBalanceCents: extrato.totais.netBalanceCents,
       },
-      vendas,
+      vendas: vendasDaPagina,
+      paginacao: { page: paginaValida, totalPages, total },
+      filtros: { desde, ate, status: statusPagamento },
       atualizadoEm: relogio().toISOString(),
     };
   }
