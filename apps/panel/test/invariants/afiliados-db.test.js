@@ -773,18 +773,20 @@ test('vencido é por LANÇAMENTO: num grupo com prazos diferentes só o saldo j�
   assert.ok(visao.alerts.some((a) => a.kind === 'due_soon' && /7 dias/.test(a.message)), JSON.stringify(visao.alerts));
 });
 
-test('migrations 0044/0045 descem e sobem de novo num banco descartável', async () => {
+test('migrations 0044/0045/0046 descem e sobem de novo num banco descartável', async () => {
   const d = await h.criarBancoDescartavel('oria_afil_rev');
   try {
     assert.equal(h.migrar(d.url).status, 0);
-    const down = h.migrar(d.url, { comando: 'down', posicionais: ['2'] });
+    const down = h.migrar(d.url, { comando: 'down', posicionais: ['3'] }); // 0046 + 0045 + 0044 (as 3 últimas)
     assert.equal(down.status, 0, `${down.stdout.slice(-1500)}${down.stderr}`);
     const p = h.abrirPoolDescartavel(d.url, { max: 1 });
     try {
-      const { rows } = await p.query(`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_name IN ('partnership_partners', 'partner_commission_ledger')`);
+      const { rows } = await p.query(`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_name IN ('partnership_partners', 'partner_commission_ledger', 'partner_preview_links')`);
       assert.equal(rows[0].n, 0);
       const { rows: cols } = await p.query(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'pedidos_ink' AND column_name = 'promotion_code'`);
       assert.equal(cols[0].n, 0);
+      const { rows: fn } = await p.query(`SELECT count(*)::int AS n FROM pg_proc WHERE proname = 'publico_organization_do_preview_afiliado'`);
+      assert.equal(fn[0].n, 0);
     } finally { await p.end(); }
     assert.equal(h.migrar(d.url).status, 0);
   } finally { await d.destruir(); }
@@ -1073,4 +1075,189 @@ test('ativação INK · outra Organization não ativa nem dispara chamada à INK
   await assert.rejects(emB(() => servicoComEscrita(ink).registry.ativarCupom(ctxB, cupom.id)), (e) => e.status === 404);
   assert.equal(ink.chamadas.length, 0);
   assert.equal((await estadoDoCupom(cupom.id)).status, 'pending_validation');
+});
+
+// ── Link público (capability URL) do parceiro: gestão, resolução, isolamento, PII ────────────────
+test('link público · gerar/status/revogar; regenerar revoga o anterior; token nunca é persistido', async () => {
+  const parceiro = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Parceira Link Público' }, { aprovarDireto: true }));
+  const s0 = await emA(() => svc.preview.statusDoLink(ctxA, parceiro.id));
+  assert.equal(s0.ativo, false);
+
+  const g1 = await emA(() => svc.preview.gerarLink(ctxA, parceiro.id));
+  assert.equal(typeof g1.token, 'string');
+  assert.equal(g1.token.length, 43); // 32 bytes em base64url
+  assert.equal(g1.partnerName, 'Parceira Link Público');
+
+  const s1 = await emA(() => svc.preview.statusDoLink(ctxA, parceiro.id));
+  assert.equal(s1.ativo, true);
+  assert.equal(s1.accessCount, 0);
+
+  // O token cru nunca fica em nenhuma coluna da tabela — só o hash.
+  const linhas = (await sup.query(`SELECT key_hash FROM partner_preview_links WHERE organization_id = $1 AND partner_id = $2`, [ORG_A, parceiro.id])).rows;
+  assert.equal(linhas.length, 1);
+  assert.match(linhas[0].key_hash, /^[0-9a-f]{64}$/);
+  assert.notEqual(linhas[0].key_hash, g1.token);
+
+  const g2 = await emA(() => svc.preview.gerarLink(ctxA, parceiro.id));
+  assert.notEqual(g2.token, g1.token);
+  const contagemAtiva = await contar(`SELECT count(*)::int AS n FROM partner_preview_links WHERE organization_id = $1 AND partner_id = $2 AND status = 'active'`, [ORG_A, parceiro.id]);
+  assert.equal(contagemAtiva, 1); // regenerar revoga o anterior — nunca dois ativos ao mesmo tempo
+  const contagemTotal = await contar(`SELECT count(*)::int AS n FROM partner_preview_links WHERE organization_id = $1 AND partner_id = $2`, [ORG_A, parceiro.id]);
+  assert.equal(contagemTotal, 2); // histórico preservado (revogado, não apagado)
+
+  await emA(() => svc.preview.revogarLink(ctxA, parceiro.id));
+  const s2 = await emA(() => svc.preview.statusDoLink(ctxA, parceiro.id));
+  assert.equal(s2.ativo, false);
+  await assert.rejects(emA(() => svc.preview.revogarLink(ctxA, parceiro.id)), (e) => e.codigo === 'AFILIADOS_SEM_LINK_ATIVO');
+});
+
+test('link público · resolução via SQL (função da role da aplicação): achado, revogado, inexistente, isolamento entre Organizations', async () => {
+  const pA = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Resolução A' }, { aprovarDireto: true }));
+  const pB = await emB(() => svc.registry.criarParceiro(ctxB, { publicName: 'Resolução B' }, { aprovarDireto: true }));
+  const gA = await emA(() => svc.preview.gerarLink(ctxA, pA.id));
+  const gB = await emB(() => svc.preview.gerarLink(ctxB, pB.id));
+  const hashA = crypto.createHash('sha256').update(gA.token).digest('hex');
+  const hashB = crypto.createHash('sha256').update(gB.token).digest('hex');
+
+  // A ROLE DA APLICAÇÃO (não o superusuário) resolve pelo hash — prova que o GRANT EXECUTE (FUNCOES_DA_APLICACAO) está correto.
+  const rA = await appPoolReal.query('SELECT publico_organization_do_preview_afiliado($1) AS id', [hashA]);
+  assert.equal(rA.rows[0].id, ORG_A);
+  const rB = await appPoolReal.query('SELECT publico_organization_do_preview_afiliado($1) AS id', [hashB]);
+  assert.equal(rB.rows[0].id, ORG_B);
+  // Nunca cruza: o hash de B não resolve a Organization A, e vice-versa.
+  assert.notEqual(rA.rows[0].id, rB.rows[0].id);
+
+  await emA(() => svc.preview.revogarLink(ctxA, pA.id));
+  const rRevogado = await appPoolReal.query('SELECT publico_organization_do_preview_afiliado($1) AS id', [hashA]);
+  assert.equal(rRevogado.rows[0].id, null); // revogado = igual a nunca existiu (mesma lição do convite)
+
+  const rInexistente = await appPoolReal.query('SELECT publico_organization_do_preview_afiliado($1) AS id', ['f'.repeat(64)]);
+  assert.equal(rInexistente.rows[0].id, null);
+
+  // Nada no app lê esta tabela sem contexto de tenant (o guard de tenant-runtime.js recusa antes da query) — mesma regra
+  // de toda tabela do módulo (linha 529 faz a mesma prova para partner_commission_ledger).
+  await assert.rejects(pool().query('SELECT 1 FROM partner_preview_links LIMIT 1'), /contexto|TENANT_CONTEXT_REQUIRED/);
+  // E, mesmo por uma conexão CRUA da role da aplicação (sem passar pelo guard do app), a RLS por si só já filtra: zero
+  // linhas, nunca vaza — sem `app.current_organization_id` setado, nenhuma linha bate a policy.
+  const cru = await appPoolReal.query('SELECT 1 FROM partner_preview_links LIMIT 1');
+  assert.equal(cru.rows.length, 0);
+});
+
+test('link público · leitura pública: KPIs batem com o extrato do owner, sem nenhum dado de comprador; agrupa por pedido', async () => {
+  // Collab (não cupom): não depende de verificação na INK, mantém o cenário simples e focado no preview. O vínculo do
+  // produto à collab precisa existir ANTES da venda (janela versionada de associação) — por isso monta tudo às 09h e
+  // só depois avança o relógio para a venda (10h/11h).
+  definirAgora('2027-02-01T09:00:00Z');
+  const parceiro = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Parceira Preview Dados' }, { aprovarDireto: true }));
+  const k = (await emA(() => svc.registry.criarContrato(ctxA, { partnerId: parceiro.id, modality: 'collab', title: 'Contrato Preview', status: 'active', reason: 'teste', terms: { commissionBasis: 'verified_margin_percent', commissionBps: 1000 } }, { podeAtivar: true }))).contract.id;
+  const collab = await emA(() => svc.collabs.criarCollab(ctxA, { name: 'Collab Preview Dados', collectionUrl: 'https://loja.exemplo.invalid/preview' }));
+  await emA(() => svc.collabs.adicionarCriador(ctxA, collab.id, { partnerId: parceiro.id, contractId: k, shareBps: 10000 }));
+  await emA(() => svc.collabs.adicionarProdutos(ctxA, collab.id, { products: [{ inkProductId: '9001', productName: 'Produto Preview Dados' }] }));
+  definirAgora('2027-02-01T12:00:00Z');
+  await semearPedido(ctxA, { id: 8001, criadoEm: '2027-02-01T10:00:00Z', entregueEm: '2027-02-01T11:00:00Z', itens: [{ itemId: 88010, produtoId: 9001 }] });
+  await emA(() => svc.reconciliarTudo(ctxA, { pedidos: ['8001'] }));
+
+  const extrato = await emA(() => svc.payables.extratoDoParceiro(ctxA, parceiro.id));
+  assert.ok(extrato.totais.grossCents > 0, 'cenário deve ter gerado comissão — senão o teste não prova nada'); // guarda contra falso-positivo (0 === 0)
+  const g = await emA(() => svc.preview.gerarLink(ctxA, parceiro.id));
+  const hash = crypto.createHash('sha256').update(g.token).digest('hex');
+  const orgId = (await appPoolReal.query('SELECT publico_organization_do_preview_afiliado($1) AS id', [hash])).rows[0].id;
+  assert.equal(orgId, ORG_A);
+  const dados = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id));
+
+  assert.equal(dados.partnerName, 'Parceira Preview Dados');
+  assert.equal(dados.kpis.commissionTotalCents, extrato.totais.grossCents + extrato.totais.adjustmentsCents);
+  assert.equal(dados.kpis.commissionPaidCents, extrato.totais.paidCents);
+  assert.equal(dados.vendas.some((v) => v.inkOrderId === '8001'), true);
+  // Nenhum campo de comprador (as tabelas do módulo nem guardam isso — ver arquitetura.md) e nenhum id interno (ledger/attribution) exposto.
+  const bruto = JSON.stringify(dados);
+  assert.doesNotMatch(bruto, /buyer|comprador|e-?mail|telefone|phone|address|endereco|cpf/i);
+  assert.doesNotMatch(bruto, /custo|cost|margem|freight|frete/i); // custo/margem da loja não é do afiliado ver
+});
+
+test('link público · parceiro com vínculo ENCERRADO para de aparecer no preview (mesmo sem revogar o link)', async () => {
+  definirAgora('2027-02-02T12:00:00Z');
+  const parceiro = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Parceira Vai Encerrar' }, { aprovarDireto: true }));
+  const g = await emA(() => svc.preview.gerarLink(ctxA, parceiro.id));
+  const antes = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id));
+  assert.ok(antes);
+  await emA(() => svc.registry.mudarVinculo(ctxA, parceiro.id, { status: 'ended', motivo: 'fim de teste' }));
+  const depois = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id));
+  assert.equal(depois, null);
+  // O link continua "ativo" no banco (a decisão de encerrar é de exibição, não apaga o link) — o owner ainda pode revogar de vez se quiser.
+  const status = await emA(() => svc.preview.statusDoLink(ctxA, parceiro.id));
+  assert.equal(status.ativo, true);
+  void g;
+});
+
+test('link público · muitas vendas: paginação (20/página), filtro de data e filtro pago/a receber', async () => {
+  definirAgora('2027-02-01T09:00:00Z');
+  const parceiro = await emA(() => svc.registry.criarParceiro(ctxA, { publicName: 'Parceira Muitas Vendas' }, { aprovarDireto: true }));
+  const k = (await emA(() => svc.registry.criarContrato(ctxA, { partnerId: parceiro.id, modality: 'collab', title: 'Contrato Muitas Vendas', status: 'active', reason: 'teste', terms: { commissionBasis: 'verified_margin_percent', commissionBps: 1000 } }, { podeAtivar: true }))).contract.id;
+  const collab = await emA(() => svc.collabs.criarCollab(ctxA, { name: 'Collab Muitas Vendas', collectionUrl: 'https://loja.exemplo.invalid/muitas-vendas' }));
+  await emA(() => svc.collabs.adicionarCriador(ctxA, collab.id, { partnerId: parceiro.id, contractId: k, shareBps: 10000 }));
+  await emA(() => svc.collabs.adicionarProdutos(ctxA, collab.id, { products: [{ inkProductId: '9501', productName: 'Produto Muitas Vendas' }] }));
+  definirAgora('2027-02-01T12:00:00Z');
+
+  // 22 pedidos, um por dia de 01 a 22/fev — mais que uma "página" (20) pra provar que pagina de verdade.
+  const ids = [];
+  for (let dia = 1; dia <= 22; dia += 1) {
+    const d = String(dia).padStart(2, '0');
+    const id = 9500 + dia;
+    ids.push(String(id));
+    await semearPedido(ctxA, { id, criadoEm: `2027-02-${d}T10:00:00Z`, entregueEm: `2027-02-${d}T11:00:00Z`, itens: [{ produtoId: 9501 }] });
+  }
+  definirAgora('2027-05-01T00:00:00Z'); // bem depois da carência de qualquer contrato — todo mundo elegível a "liberado"
+  await emA(() => svc.reconciliarTudo(ctxA, { pedidos: ids }));
+  const extrato = await emA(() => svc.payables.extratoDoParceiro(ctxA, parceiro.id, { limit: '200' }));
+  assert.ok(extrato.totais.grossCents > 0, 'cenário deve ter gerado comissão — senão o teste não prova nada');
+
+  await emA(() => svc.preview.gerarLink(ctxA, parceiro.id));
+
+  // Paginação: página 1 tem 20, página 2 tem as 2 restantes, total bate com os 22 pedidos.
+  const p1 = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, {}));
+  assert.equal(p1.paginacao.total, 22);
+  assert.equal(p1.paginacao.totalPages, 2);
+  assert.equal(p1.paginacao.page, 1);
+  assert.equal(p1.vendas.length, 20);
+  const p2 = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { page: 2 }));
+  assert.equal(p2.paginacao.page, 2);
+  assert.equal(p2.vendas.length, 2);
+  // Página além do fim não quebra: cai na última válida (mesma régua de "clamp" do resto do painel).
+  const alemDoFim = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { page: 99 }));
+  assert.equal(alemDoFim.paginacao.page, 2);
+
+  // Filtro de data: só os pedidos de 10 a 15/fev (6 dias, 1 pedido por dia).
+  const porData = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { desde: '2027-02-10', ate: '2027-02-15' }));
+  assert.equal(porData.paginacao.total, 6);
+  assert.deepEqual(porData.vendas.map((v) => v.inkOrderId).sort(), ['9510', '9511', '9512', '9513', '9514', '9515'].sort());
+  // KPIs no topo NUNCA mudam com o filtro da tabela — são sempre o total do parceiro.
+  assert.equal(porData.kpis.commissionTotalCents, p1.kpis.commissionTotalCents);
+
+  // Antes de qualquer pagamento, tudo é "a receber"; nada é "pago".
+  const antesDoPgto = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { status: 'pendente' }));
+  assert.equal(antesDoPgto.paginacao.total, 22);
+  const semPagoAinda = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { status: 'pago' }));
+  assert.equal(semPagoAinda.paginacao.total, 0);
+
+  // Quita o lançamento do pedido 9501 direto (sem lote — registrarPagamento aceita ledger liberado avulso).
+  const { rows: lanc } = await sup.query(
+    `SELECT l.id, l.amount_cents FROM partner_commission_ledger l JOIN partnership_attributions a ON a.id = l.attribution_id AND a.organization_id = l.organization_id
+      WHERE l.organization_id = $1 AND l.partner_id = $2 AND a.ink_order_id = $3 AND l.category = 'commission' AND l.entry_type = 'accrual'`,
+    [ORG_A, parceiro.id, '9501']
+  );
+  assert.equal(lanc.length, 1);
+  await emA(() => svc.payables.registrarPagamento(ctxA, {
+    partnerId: parceiro.id, idempotencyKey: 'preview-filtro-pago', method: 'pix', paidAt: '2027-05-01T00:00:00Z', allocations: [{ ledgerId: lanc[0].id, amountCents: Number(lanc[0].amount_cents) }],
+  }));
+
+  const depoisDoPgto = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { status: 'pago' }));
+  assert.equal(depoisDoPgto.paginacao.total, 1);
+  assert.equal(depoisDoPgto.vendas[0].inkOrderId, '9501');
+  assert.equal(depoisDoPgto.vendas[0].paymentStatus, 'pago');
+  const pendentesDepois = await emA(() => svc.preview.montarPreview(ctxA, parceiro.id, { status: 'pendente' }));
+  assert.equal(pendentesDepois.paginacao.total, 21);
+  // Comissão total (KPI) continua batendo com o extrato mesmo depois do pagamento parcial do conjunto.
+  const extratoFinal = await emA(() => svc.payables.extratoDoParceiro(ctxA, parceiro.id));
+  assert.equal(depoisDoPgto.kpis.commissionPaidCents, extratoFinal.totais.paidCents);
 });

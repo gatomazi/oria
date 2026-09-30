@@ -7,6 +7,7 @@ import {
 import {
   afiliados, type Contrato, type Cupom, type ResultadoAtivacao, type LancamentoDoExtrato, type PerfilDoParceiro, type VendaAtribuida, type VersaoContrato,
 } from '../../api/afiliados';
+import { PreviewLinkCard } from './PreviewLinkCard';
 import { useAsync } from '../../lib/useAsync';
 import { useFiltrosUrl } from '../../lib/useFiltrosUrl';
 import { toast } from '../../lib/toast';
@@ -32,7 +33,9 @@ const ROTULOS_ACAO: Record<string, string> = {
   'collab.product.approve.retroactive': 'Produto da collab aprovado (retroativo)', 'collab.product.reject': 'Produto da collab rejeitado', 'collab.product.remove': 'Produto removido da collab',
   'collab.product.discovered': 'Produto novo encontrado no agrupamento', 'collab.product.auto_include': 'Produto incluído automaticamente na collab', 'coupon.ink_create': 'Cupom criado na INK',
   'batch.create': 'Lote de fechamento criado', 'batch.approve': 'Lote aprovado', 'batch.void': 'Lote anulado', 'batch.due_at.change': 'Vencimento do lote alterado', 'settings.update': 'Configuração alterada',
-  'level_rules.create': 'Regras de nível alteradas',
+  'level_rules.create': 'Regras de nível alteradas', 'coupon.ink_sync': 'Promoção sincronizada com a INK', 'coupon.ink_delete': 'Promoção excluída na INK',
+  'coupon.end.partner_ended': 'Cupom encerrado (vínculo do parceiro encerrado)', 'coupon.end.contract_ended': 'Cupom encerrado (contrato encerrado)',
+  'partner.preview_link.create': 'Link público gerado', 'partner.preview_link.revoke': 'Link público revogado',
 };
 
 function statusDeContrato(s: VersaoContrato['status']) {
@@ -544,6 +547,7 @@ export function ParceiroPerfilPage() {
               <KpiCard title="Saldo líquido" value={brl(perfil.balance.netBalanceCents)} helper="liberado + previsto" />
             </KpiStrip>
           )}
+          {isOwner && <PreviewLinkCard partnerId={p.id} />}
           <Card title="Atividade recente"><ListaDeAtividades itens={perfil.activity.slice(0, 6)} tz={tz} /></Card>
         </div>
       )}

@@ -25,6 +25,8 @@ const FUNCOES_DA_APLICACAO = Object.freeze([
   'publico_organization_do_pedido(TEXT)',
   'publico_organization_da_midia(TEXT)',
   'publico_organization_do_agente(TEXT)',
+  // Parcerias · link público (capability URL) do parceiro ver as próprias vendas/comissão/saldo.
+  'publico_organization_do_preview_afiliado(TEXT)',
   // Fase 4 · posse de recurso externo, sempre com a Organization do contexto.
   'integracao_reivindicar_recurso(TEXT, TEXT, TEXT)',
   'integracao_liberar_recursos(TEXT, TEXT, TEXT)',

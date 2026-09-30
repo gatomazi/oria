@@ -94,6 +94,18 @@ O owner **associa** o item a uma collab/cupom ou **descarta**, sempre com motivo
   peça** debita produção + frete reais; exige nível, vendas, período, atividade e saldo. *Criador convidado* é exceção documentada
   (entregáveis + aprovação), não sobe nível e não vira dinheiro a pagar.
 
+## Link público do parceiro ver as próprias vendas
+
+- No perfil do parceiro, **Link público do parceiro**: "Gerar link" cria um link que ele abre sem login (sem conta, sem senha) e vê
+  as próprias vendas, comissão e saldo — como um extrato pessoal. "Gerar novo link" troca o link (o antigo para na hora); "Revogar"
+  desativa sem gerar outro.
+- **O link só aparece uma vez**, na hora em que você gera — copie e envie ao parceiro por fora (WhatsApp, e-mail…). Se perder,
+  gere um novo; não tem como recuperar o antigo.
+- Encerrar o vínculo do parceiro também interrompe o que o link mostra, mesmo sem revogá-lo — se quiser desativar o link em si
+  (por exemplo, para reaproveitar depois), revogue manualmente.
+- O que ele vê: unidades atribuídas, comissão total/paga/saldo, e a lista de vendas (pedido, data, itens, comissão, status). Nunca
+  seus dados de cliente, nem o que a loja tem com outros parceiros.
+
 ## Rodar o cenário de demonstração localmente
 
 ```bash

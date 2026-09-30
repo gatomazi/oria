@@ -64,6 +64,20 @@
 .pa-aviso { font: var(--type-caption); color: var(--text-secondary); margin: 0; }
 .pa-aviso--forte { color: var(--warning); }
 
+/* Subgrupo dentro de um formulário (ex.: "Configurações do programa" e cada bloco do editor de níveis) */
+.pa-subgrupo { display: flex; flex-direction: column; gap: var(--space-2); }
+.pa-subgrupo__titulo { margin: 0; font: var(--type-label); color: var(--text-muted); text-transform: uppercase; letter-spacing: .02em; }
+
+/* Um card por nível (Níveis e benefícios): fechado = resumo; aberto = formulário, com o accent na borda. */
+.pa-nivel { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-2); min-width: 0; }
+.pa-nivel--aberto { border-color: var(--accent); }
+.pa-nivel__cabecalho { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.pa-nivel__ordinal { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 50%; background: var(--surface-3); color: var(--text-secondary); font: var(--type-caption); font-weight: 600; }
+.pa-nivel__nome { font: var(--type-body-dense); font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.pa-nivel__resumo { display: flex; flex-direction: column; gap: var(--space-1); }
+.pa-nivel__linha-resumo { margin: 0; font: var(--type-body-dense); color: var(--text-secondary); overflow-wrap: anywhere; }
+.pa-nivel__linha-resumo strong { color: var(--text-primary); font-weight: 600; }
+
 /* Tabela: alvo de clique e linhas destacadas */
 .pa-linha-vencida td { background: var(--danger-tint); }
 .pa-total { font: var(--type-label); color: var(--text-secondary); display: flex; gap: var(--space-4); flex-wrap: wrap; }
@@ -83,5 +97,13 @@
 }
 
 .pa-atraso { color: var(--danger); font-variant-numeric: tabular-nums; }
+
+/* Link público do afiliado (PreviewAfiliadoPage): página autônoma, sem AppShell/sidebar. */
+.pa-preview-publico { min-height: 100vh; padding: var(--space-6, 32px) var(--space-4, 16px); }
+.pa-preview-publico__container { max-width: 960px; margin: 0 auto; }
+.pa-preview-publico__cabecalho { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-2); }
+.pa-preview-publico__cabecalho h1 { margin: 0; font-size: 1.5rem; }
+.pa-preview-publico__marca { font: var(--type-label); color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; }
+.pa-preview-publico__rodape { font: var(--type-caption); color: var(--text-muted); text-align: center; margin: var(--space-4) 0 0; }
 
 .pa-lista { margin: var(--space-3, 12px) 0 0; padding-left: var(--space-5, 20px); display: grid; gap: var(--space-2, 8px); color: var(--text-secondary, inherit); }

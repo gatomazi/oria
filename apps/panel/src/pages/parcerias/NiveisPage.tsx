@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Callout, Card, DataTable, EmptyState, ErrorState, Field, Input, PageHeader, PageStack, Select, Skeleton, Textarea } from '../../components/ds';
+import {
+  Button, Callout, Card, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, Input, PageHeader, PageStack, RowActionsMenu, Select, Skeleton, StatusBadge,
+} from '../../components/ds';
 import { afiliados, type NivelDeRegra, type PropostaDeNivel } from '../../api/afiliados';
 import { useAsync } from '../../lib/useAsync';
 import { toast } from '../../lib/toast';
@@ -24,36 +26,102 @@ function sugerirChave(label: string, emUso: Set<string>): string {
   return `${raiz.slice(0, 20)}_${Date.now().toString(36)}`;
 }
 
+// Só o benefício em si (sem a comissão) — usado como retorno rápido dentro do próprio formulário de edição.
 function descreverBeneficio(b: NivelDeRegra['beneficio']): string {
   if (b.tipo === 'nenhum') return 'Sem peça';
   if (b.tipo === 'primeira_peca') return `1ª peça após ${plural(b.aPartirDeVendas ?? 0, 'venda')}`;
   return `Peça a cada ${plural(b.aCadaDias ?? 0, 'dia')}${b.exigeVendasUltimos30d ? ` · exige ${b.exigeVendasUltimos30d}+ vendas em 30 dias` : ''}`;
 }
 
+// Fragmentos curtos das metas de progressão (vazio quando não se aplicam) — a mesma lista alimenta o resumo fechado
+// (bullets) e a frase completa dentro da edição; nunca é hardcoded, sempre lido do nível atual.
+function fragmentosDeRequisito(n: NivelDeRegra): string[] {
+  const partes: string[] = [];
+  if (n.vendasQualificadas > 0) partes.push(plural(n.vendasQualificadas, 'venda qualificada', 'vendas qualificadas'));
+  if (n.margemCents > 0) partes.push(`${brl(n.margemCents)} de margem`);
+  if (n.mesesComVenda > 0) partes.push(`vendas em ${plural(n.mesesComVenda, 'mês', 'meses')}`);
+  if (n.vendasUltimos60d > 0) partes.push(`${plural(n.vendasUltimos60d, 'venda recente', 'vendas recentes')}`);
+  return partes;
+}
+
+function resumoRequisitos(n: NivelDeRegra): string {
+  const partes = fragmentosDeRequisito(n);
+  if (n.janelaDias) partes.push(`janela de ${plural(n.janelaDias, 'dia')}`);
+  return partes.length ? partes.join(' • ') : 'Sem meta de vendas própria';
+}
+
+function fraseRequisitos(n: NivelDeRegra): string {
+  const partes = fragmentosDeRequisito(n);
+  if (!partes.length) return 'Este nível não exige metas de vendas — qualquer parceiro aprovado alcança.';
+  let frase = `O parceiro precisa cumprir ${partes.join(' + ')}`;
+  if (n.janelaDias) frase += `, considerando os últimos ${plural(n.janelaDias, 'dia')}`;
+  return `${frase}.`;
+}
+
+function resumoBeneficios(n: NivelDeRegra): string {
+  return [`Até ${pct(n.tetoMargemBps)} de comissão`, descreverBeneficio(n.beneficio)].join(' • ');
+}
+
+// Um card por nível: fechado mostra o resumo (o que exige, o que dá); só um fica aberto em edição por vez — trocar
+// com edição não salva avisa antes de descartar. `ordem` nunca é campo do formulário: é a posição no array.
 function EditorDeRegras({ niveis, isOwner, onSalvo }: { niveis: NivelDeRegra[]; isOwner: boolean; onSalvo: () => void }) {
   const [linhas, setLinhas] = useState<NivelDeRegra[]>(niveis);
-  const [motivo, setMotivo] = useState('');
-  const [enviando, setEnviando] = useState(false);
-  const [erro, setErro] = useState('');
+  const [editando, setEditando] = useState<number | null>(null);
+  const [snapshot, setSnapshot] = useState<NivelDeRegra | null>(null);
+  const [novoAberto, setNovoAberto] = useState(false); // o card em edição nunca existiu numa versão salva: Cancelar remove a linha, não só reverte campos
+  const [trocaPendente, setTrocaPendente] = useState<number | 'adicionar' | null>(null);
+  const [removendo, setRemovendo] = useState<number | null>(null);
+  const [modalSalvar, setModalSalvar] = useState(false);
   const [avisoOrfaos, setAvisoOrfaos] = useState<{ key: string; partners: number; exemplo: string }[]>([]);
-  useEffect(() => setLinhas(niveis), [niveis]);
+  useEffect(() => { setLinhas(niveis); setEditando(null); setSnapshot(null); setNovoAberto(false); }, [niveis]);
   const alterado = JSON.stringify(linhas.map(({ ordem: _ordem, ...resto }) => resto)) !== JSON.stringify(niveis.map(({ ordem: _ordem, ...resto }) => resto));
+  const sujo = editando !== null && snapshot !== null && JSON.stringify(linhas[editando]) !== JSON.stringify(snapshot);
 
   const reindexar = (ls: NivelDeRegra[]) => ls.map((n, i) => ({ ...n, ordem: i }));
   const atualizar = (i: number, patch: Partial<NivelDeRegra>) => setLinhas((ls) => reindexar(ls.map((n, j) => (j === i ? { ...n, ...patch } : n))));
   const atualizarBeneficio = (i: number, b: NivelDeRegra['beneficio']) => atualizar(i, { beneficio: b });
 
-  function adicionar() {
+  function abrirEdicao(i: number) {
+    if (sujo && editando !== i) { setTrocaPendente(i); return; }
+    setEditando(i); setSnapshot(linhas[i]); setNovoAberto(false);
+  }
+  function cancelarEdicao() {
+    if (editando !== null) {
+      if (novoAberto) setLinhas((ls) => reindexar(ls.filter((_, j) => j !== editando))); // nunca foi salvo: cancelar tira a linha inteira
+      else if (snapshot) setLinhas((ls) => ls.map((n, j) => (j === editando ? snapshot : n)));
+    }
+    setEditando(null); setSnapshot(null); setNovoAberto(false);
+  }
+  function concluirEdicaoDoCard() { setEditando(null); setSnapshot(null); setNovoAberto(false); } // fecha o card; o que foi digitado FICA em `linhas` (só publica ao Salvar alterações)
+
+  function novoNivel(): NivelDeRegra {
     const emUso = new Set(linhas.map((n) => n.key));
     const label = `Nível ${linhas.length + 1}`;
     const ultimo = linhas[linhas.length - 1];
-    setLinhas((ls) => reindexar([...ls, {
-      key: sugerirChave(label, emUso), label, ordem: ls.length, janelaDias: 90,
+    return {
+      key: sugerirChave(label, emUso), label, ordem: linhas.length, janelaDias: 90,
       vendasQualificadas: ultimo.vendasQualificadas + 10, margemCents: ultimo.margemCents + 15000, mesesComVenda: 0, vendasUltimos60d: 0,
       tetoMargemBps: Math.min(10000, ultimo.tetoMargemBps + 500), beneficio: { tipo: 'nenhum' },
-    }]));
+    };
   }
-  function remover(i: number) { if (i > 0 && linhas.length > MIN_NIVEIS) setLinhas((ls) => reindexar(ls.filter((_, j) => j !== i))); }
+  function adicionar() {
+    if (sujo) { setTrocaPendente('adicionar'); return; }
+    const indiceNovo = linhas.length;
+    const nova = novoNivel();
+    setLinhas((ls) => reindexar([...ls, nova]));
+    setEditando(indiceNovo); setSnapshot(nova); setNovoAberto(true);
+  }
+  function confirmarTroca() {
+    const alvo = trocaPendente;
+    cancelarEdicao();
+    if (alvo === 'adicionar') { const nova = novoNivel(); setLinhas((ls) => reindexar([...ls, nova])); setEditando(linhas.length); setSnapshot(nova); setNovoAberto(true); }
+    else if (alvo !== null) { setEditando(alvo); setSnapshot(linhas[alvo]); setNovoAberto(false); }
+    setTrocaPendente(null);
+  }
+  function removerDeVerdade(i: number) {
+    setLinhas((ls) => reindexar(ls.filter((_, j) => j !== i)));
+    if (editando === i) { setEditando(null); setSnapshot(null); setNovoAberto(false); }
+  }
   function mover(i: number, delta: number) {
     const j = i + delta;
     if (i === 0 || j <= 0 || j >= linhas.length) return;
@@ -69,79 +137,140 @@ function EditorDeRegras({ niveis, isOwner, onSalvo }: { niveis: NivelDeRegra[]; 
     if (!n.label.trim()) problemas.push(`nível ${i + 1}: nome é obrigatório`);
   });
 
-  async function salvar() {
-    setEnviando(true); setErro(''); setAvisoOrfaos([]);
-    try {
-      const r = await afiliados.salvarRegrasDeNivel({ niveis: linhas }, motivo.trim());
-      toast('Regras de nível salvas em nova versão.', 'sucesso'); setMotivo(''); setAvisoOrfaos(r.avisos.niveisOrfaos); onSalvo();
-    } catch (e) { setErro(mensagemDoErro(e)); } finally { setEnviando(false); }
+  async function salvar(motivo: string) {
+    const r = await afiliados.salvarRegrasDeNivel({ niveis: linhas }, motivo);
+    setAvisoOrfaos(r.avisos.niveisOrfaos);
+    toast('Regras de nível salvas em nova versão.', 'sucesso');
+    onSalvo();
   }
 
   return (
     <div className="pa-form">
-      {linhas.map((n, i) => (
-        <div key={i} className="pa-shell pa-mb-5">
-          <div className="ds-toolbar">
-            <Field label="Nome do nível"><Input value={n.label} disabled={!isOwner} maxLength={60} onChange={(e) => atualizar(i, { label: e.target.value })} style={{ minWidth: 180 }} /></Field>
-            <Field label="Chave interna" hint="Identifica o nível entre versões; parceiros já neste nível avisam se ela sumir."><Input value={n.key} disabled={!isOwner} onChange={(e) => atualizar(i, { key: e.target.value.trim().toLowerCase() })} style={{ minWidth: 140 }} /></Field>
-            {i === 0 && <span className="pa-aviso">Nível base — todo parceiro aprovado começa aqui; metas não se aplicam.</span>}
-            {isOwner && (
-              <div className="ds-toolbar__end">
-                <Button size="sm" variant="ghost" disabled={i <= 1} onClick={() => mover(i, -1)} aria-label={`Mover ${n.label} para cima`}>↑</Button>
-                <Button size="sm" variant="ghost" disabled={i === 0 || i === linhas.length - 1} onClick={() => mover(i, 1)} aria-label={`Mover ${n.label} para baixo`}>↓</Button>
-                <Button size="sm" variant="ghost" disabled={i === 0 || linhas.length <= MIN_NIVEIS} onClick={() => remover(i)}>Remover</Button>
+      {avisoOrfaos.length > 0 && (
+        <Callout tone="warning">
+          <ul className="pa-lista">{avisoOrfaos.map((a) => <li key={a.key}>{plural(a.partners, 'parceiro está', 'parceiros estão')} no nível "{a.key}" (ex.: {a.exemplo}), que não existe mais nesta versão — {a.partners === 1 ? 'ele' : 'eles'} volta{a.partners === 1 ? '' : 'm'} para o nível base até a próxima proposta.</li>)}</ul>
+        </Callout>
+      )}
+      {linhas.map((n, i) => {
+        const aberto = editando === i;
+        return (
+          <div key={i} className={`pa-nivel${aberto ? ' pa-nivel--aberto' : ''}`}>
+            <div className="pa-nivel__cabecalho">
+              <span className="pa-nivel__ordinal" aria-hidden="true">{i + 1}</span>
+              <strong className="pa-nivel__nome">{n.label || '(sem nome)'}</strong>
+              {i === 0 && <StatusBadge tone="neutral" label="Nível inicial" />}
+              {isOwner && (
+                <div className="ds-toolbar__end">
+                  <Button size="sm" variant="ghost" disabled={i <= 1} onClick={() => mover(i, -1)} aria-label={`Mover ${n.label} para cima`}>↑</Button>
+                  <Button size="sm" variant="ghost" disabled={i === 0 || i === linhas.length - 1} onClick={() => mover(i, 1)} aria-label={`Mover ${n.label} para baixo`}>↓</Button>
+                  <RowActionsMenu items={[{ label: 'Remover nível', variant: 'danger', disabled: i === 0 || linhas.length <= MIN_NIVEIS, onSelect: () => setRemovendo(i) }]} />
+                </div>
+              )}
+            </div>
+
+            {!aberto ? (
+              <div className="pa-nivel__resumo">
+                {i === 0 ? (
+                  <>
+                    <p className="pa-nivel__linha-resumo">Todo parceiro aprovado começa aqui.</p>
+                    <p className="pa-nivel__linha-resumo">Comissão máxima: <strong>{pct(n.tetoMargemBps)}</strong> · Benefício: <strong>{descreverBeneficio(n.beneficio)}</strong></p>
+                  </>
+                ) : (
+                  <>
+                    <p className="pa-nivel__linha-resumo">Para chegar aqui: {resumoRequisitos(n)}</p>
+                    <p className="pa-nivel__linha-resumo">Benefícios: {resumoBeneficios(n)}</p>
+                  </>
+                )}
+                {isOwner && (
+                  <div className="ds-toolbar"><span /><div className="ds-toolbar__end"><Button size="sm" variant="secondary" onClick={() => abrirEdicao(i)}>Editar nível</Button></div></div>
+                )}
+              </div>
+            ) : (
+              <div className="pa-form">
+                <div className="pa-subgrupo">
+                  <h4 className="pa-subgrupo__titulo">Identificação</h4>
+                  <div className="pa-form__linha">
+                    <Field label="Nome do nível"><Input value={n.label} maxLength={60} onChange={(e) => atualizar(i, { label: e.target.value })} /></Field>
+                    <Field label="Chave interna" hint="Usada internamente pelo sistema; parceiros já neste nível avisam se ela sumir."><Input controlSize="sm" value={n.key} onChange={(e) => atualizar(i, { key: e.target.value.trim().toLowerCase() })} /></Field>
+                  </div>
+                </div>
+
+                {i > 0 ? (
+                  <div className="pa-subgrupo">
+                    <h4 className="pa-subgrupo__titulo">Requisitos para alcançar este nível</h4>
+                    <div className="pa-form__linha">
+                      <Field label="Vendas qualificadas"><Input type="number" min={0} aria-label={`${n.label}: vendas qualificadas`} value={texto(n.vendasQualificadas)} onChange={(e) => atualizar(i, { vendasQualificadas: Number(e.target.value) })} /></Field>
+                      <Field label="Margem mínima gerada (R$)"><Input inputMode="decimal" aria-label={`${n.label}: margem`} value={(n.margemCents / 100).toFixed(2).replace('.', ',')} onChange={(e) => atualizar(i, { margemCents: centavosDeTexto(e.target.value) ?? 0 })} /></Field>
+                      <Field label="Meses com venda"><Input type="number" min={0} aria-label={`${n.label}: meses`} value={texto(n.mesesComVenda)} onChange={(e) => atualizar(i, { mesesComVenda: Number(e.target.value) })} /></Field>
+                      <Field label="Vendas recentes" hint="Quantidade mínima de vendas dentro dos últimos 60 dias."><Input type="number" min={0} aria-label={`${n.label}: vendas em 60 dias`} value={texto(n.vendasUltimos60d)} onChange={(e) => atualizar(i, { vendasUltimos60d: Number(e.target.value) })} /></Field>
+                      <Field label="Janela de avaliação (dias)" hint="O maior valor entre os níveis define até quando o sistema olha vendas para trás (mínimo 90 dias)."><Input type="number" min={1} placeholder="90" value={texto(n.janelaDias)} onChange={(e) => atualizar(i, { janelaDias: e.target.value ? Number(e.target.value) : null })} /></Field>
+                    </div>
+                    <p className="pa-aviso">{fraseRequisitos(n)}</p>
+                  </div>
+                ) : (
+                  <p className="pa-aviso">Nível base: todo parceiro aprovado começa aqui, sem meta de vendas.</p>
+                )}
+
+                <div className="pa-subgrupo">
+                  <h4 className="pa-subgrupo__titulo">Benefícios deste nível</h4>
+                  <div className="pa-form__linha">
+                    <Field label="Comissão máxima (%)" hint="Percentual máximo da margem que pode ser negociado com parceiros deste nível."><Input inputMode="decimal" aria-label={`${n.label}: comissão máxima`} value={(n.tetoMargemBps / 100).toString().replace('.', ',')} onChange={(e) => atualizar(i, { tetoMargemBps: Math.round((Number(e.target.value.replace(',', '.')) || 0) * 100) })} /></Field>
+                    <Field label="Benefício de produto">
+                      <Select value={n.beneficio.tipo} onChange={(e) => {
+                        const tipo = e.target.value as NivelDeRegra['beneficio']['tipo'];
+                        atualizarBeneficio(i, tipo === 'nenhum' ? { tipo } : tipo === 'primeira_peca' ? { tipo, aPartirDeVendas: 10 } : { tipo, aCadaDias: 90 });
+                      }}>
+                        <option value="nenhum">Sem peça</option>
+                        <option value="primeira_peca">1ª peça após N vendas</option>
+                        <option value="peca_periodica">Peça a cada N dias</option>
+                      </Select>
+                    </Field>
+                    {n.beneficio.tipo === 'primeira_peca' && (
+                      <Field label="A partir de quantas vendas"><Input type="number" min={0} value={texto(n.beneficio.aPartirDeVendas)} onChange={(e) => atualizarBeneficio(i, { tipo: 'primeira_peca', aPartirDeVendas: Number(e.target.value) })} /></Field>
+                    )}
+                    {n.beneficio.tipo === 'peca_periodica' && (
+                      <>
+                        <Field label="Frequência do benefício (dias)"><Input type="number" min={1} value={texto(n.beneficio.aCadaDias)} onChange={(e) => atualizarBeneficio(i, { ...n.beneficio, tipo: 'peca_periodica', aCadaDias: Number(e.target.value) })} /></Field>
+                        <Field label="Vendas mínimas recentes para receber o benefício" hint="Opcional; deixe em branco para não exigir."><Input type="number" min={0} placeholder="—" value={texto(n.beneficio.exigeVendasUltimos30d)} onChange={(e) => atualizarBeneficio(i, { ...n.beneficio, tipo: 'peca_periodica', exigeVendasUltimos30d: e.target.value ? Number(e.target.value) : undefined })} /></Field>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="ds-toolbar">
+                  <span />
+                  <div className="ds-toolbar__end">
+                    <Button size="sm" variant="ghost" onClick={cancelarEdicao}>Cancelar</Button>
+                    <Button size="sm" onClick={concluirEdicaoDoCard}>Salvar alterações</Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-          {i > 0 && (
-            <div className="pa-form__linha">
-              <Field label="Vendas qualificadas"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: vendas qualificadas`} value={texto(n.vendasQualificadas)} disabled={!isOwner} onChange={(e) => atualizar(i, { vendasQualificadas: Number(e.target.value) })} /></Field>
-              <Field label="Margem verificada (R$)"><Input inputMode="decimal" controlSize="sm" aria-label={`${n.label}: margem`} value={(n.margemCents / 100).toFixed(2).replace('.', ',')} disabled={!isOwner} onChange={(e) => atualizar(i, { margemCents: centavosDeTexto(e.target.value) ?? 0 })} /></Field>
-              <Field label="Meses com venda"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: meses`} value={texto(n.mesesComVenda)} disabled={!isOwner} onChange={(e) => atualizar(i, { mesesComVenda: Number(e.target.value) })} /></Field>
-              <Field label="Vendas em 60 dias"><Input type="number" min={0} controlSize="sm" aria-label={`${n.label}: vendas em 60 dias`} value={texto(n.vendasUltimos60d)} disabled={!isOwner} onChange={(e) => atualizar(i, { vendasUltimos60d: Number(e.target.value) })} /></Field>
-              <Field label="Janela (dias)" hint="O maior valor entre os níveis define até quando o sistema olha vendas para trás (mínimo 90 dias)."><Input type="number" min={1} controlSize="sm" placeholder="90" value={texto(n.janelaDias)} disabled={!isOwner} onChange={(e) => atualizar(i, { janelaDias: e.target.value ? Number(e.target.value) : null })} /></Field>
-            </div>
-          )}
-          <div className="pa-form__linha">
-            <Field label="Teto sobre margem (%)"><Input inputMode="decimal" controlSize="sm" aria-label={`${n.label}: teto`} value={(n.tetoMargemBps / 100).toString().replace('.', ',')} disabled={!isOwner} onChange={(e) => atualizar(i, { tetoMargemBps: Math.round((Number(e.target.value.replace(',', '.')) || 0) * 100) })} /></Field>
-            <Field label="Peça / benefício">
-              <Select controlSize="sm" value={n.beneficio.tipo} disabled={!isOwner} onChange={(e) => {
-                const tipo = e.target.value as NivelDeRegra['beneficio']['tipo'];
-                atualizarBeneficio(i, tipo === 'nenhum' ? { tipo } : tipo === 'primeira_peca' ? { tipo, aPartirDeVendas: 10 } : { tipo, aCadaDias: 90 });
-              }}>
-                <option value="nenhum">Sem peça</option>
-                <option value="primeira_peca">1ª peça após N vendas</option>
-                <option value="peca_periodica">Peça a cada N dias</option>
-              </Select>
-            </Field>
-            {n.beneficio.tipo === 'primeira_peca' && (
-              <Field label="A partir de quantas vendas"><Input type="number" min={0} controlSize="sm" value={texto(n.beneficio.aPartirDeVendas)} disabled={!isOwner} onChange={(e) => atualizarBeneficio(i, { tipo: 'primeira_peca', aPartirDeVendas: Number(e.target.value) })} /></Field>
-            )}
-            {n.beneficio.tipo === 'peca_periodica' && (
-              <>
-                <Field label="A cada quantos dias"><Input type="number" min={1} controlSize="sm" value={texto(n.beneficio.aCadaDias)} disabled={!isOwner} onChange={(e) => atualizarBeneficio(i, { ...n.beneficio, tipo: 'peca_periodica', aCadaDias: Number(e.target.value) })} /></Field>
-                <Field label="Exige vendas nos últimos 30 dias" hint="Opcional; deixe em branco para não exigir."><Input type="number" min={0} controlSize="sm" placeholder="—" value={texto(n.beneficio.exigeVendasUltimos30d)} disabled={!isOwner} onChange={(e) => atualizarBeneficio(i, { ...n.beneficio, tipo: 'peca_periodica', exigeVendasUltimos30d: e.target.value ? Number(e.target.value) : undefined })} /></Field>
-              </>
-            )}
-          </div>
-          <p className="pa-aviso">{descreverBeneficio(n.beneficio)}</p>
-        </div>
-      ))}
+        );
+      })}
       {isOwner && linhas.length < MAX_NIVEIS && <div><Button variant="secondary" onClick={adicionar}>+ Adicionar nível</Button></div>}
-      <p className="pa-aviso">As metas de cada nível (menos o base) são simultâneas. As regras ficam versionadas por loja: cada gravação é uma versão nova, nunca reescreve vendas já capturadas. O nível nunca reescreve um contrato em vigor — quem decide muda-lo é você, aqui.</p>
+      <p className="pa-aviso">As metas de cada nível (menos o base) são simultâneas. As regras ficam versionadas por loja: cada gravação é uma versão nova, nunca reescreve vendas já capturadas. O nível nunca reescreve um contrato em vigor — quem decide mudá-lo é você, aqui.</p>
+      {isOwner && problemas.length > 0 && <Callout tone="danger" role="alert"><ul className="pa-lista">{problemas.map((p) => <li key={p}>{p}</li>)}</ul></Callout>}
       {isOwner && (
-        <>
-          {problemas.length > 0 && <Callout tone="danger" role="alert"><ul className="pa-lista">{problemas.map((p) => <li key={p}>{p}</li>)}</ul></Callout>}
-          {avisoOrfaos.length > 0 && (
-            <Callout tone="warning">
-              <ul className="pa-lista">{avisoOrfaos.map((a) => <li key={a.key}>{plural(a.partners, 'parceiro está', 'parceiros estão')} no nível "{a.key}" (ex.: {a.exemplo}), que não existe mais nesta versão — {a.partners === 1 ? 'ele' : 'eles'} volta{a.partners === 1 ? '' : 'm'} para o nível base até a próxima proposta.</li>)}</ul>
-            </Callout>
-          )}
-          <Field label="Motivo da alteração" hint="Obrigatório para gravar uma nova versão das regras."><Textarea rows={2} value={motivo} maxLength={500} onChange={(e) => setMotivo(e.target.value)} /></Field>
-          {erro && <Callout tone="danger" role="alert">{erro}</Callout>}
-          <div><Button onClick={salvar} disabled={enviando || !alterado || !motivo.trim() || problemas.length > 0}>{enviando ? 'Aguarde…' : 'Salvar nova versão das regras'}</Button></div>
-        </>
+        <div><Button onClick={() => { setEditando(null); setSnapshot(null); setModalSalvar(true); }} disabled={!alterado || problemas.length > 0}>Salvar alterações</Button></div>
       )}
+
+      <ConfirmDialog
+        open={trocaPendente !== null} onClose={() => setTrocaPendente(null)} title="Descartar alterações não salvas?"
+        description={editando !== null ? `Suas edições em "${linhas[editando]?.label}" ainda não foram salvas. Se continuar, elas serão descartadas.` : undefined}
+        confirmLabel="Descartar e continuar" confirmVariant="danger" onConfirm={confirmarTroca}
+      />
+      <ConfirmDialog
+        open={removendo !== null} onClose={() => setRemovendo(null)} title={`Remover o nível "${removendo !== null ? linhas[removendo]?.label : ''}"?`}
+        description="A remoção só é gravada quando você salvar as alterações. Se algum parceiro estiver hoje neste nível, o aviso aparece antes de confirmar."
+        confirmLabel="Remover nível" confirmVariant="danger" onConfirm={() => { if (removendo !== null) removerDeVerdade(removendo); setRemovendo(null); }}
+      />
+      <MotivoDialog
+        open={modalSalvar} onClose={() => setModalSalvar(false)} titulo="Salvar nova versão das regras?" rotulo="Motivo da alteração"
+        descricao="As novas regras valem para as próximas avaliações. Vendas e contratos já registrados não mudam." confirmLabel="Salvar nova versão"
+        onConfirm={salvar}
+      />
     </div>
   );
 }
@@ -175,14 +304,32 @@ function ConfiguracaoDaLoja({ isOwner }: { isOwner: boolean }) {
   if (!dado) return <Skeleton rows={3} />;
   return (
     <div className="pa-form">
-      <div className="pa-form__linha">
-        <Field label="Crédito de benefícios (% da contribuição)" hint="Até esta fração da contribuição pós-parceria positiva e verificada vira crédito na carteira."><Input inputMode="decimal" value={benef} disabled={!isOwner} onChange={(e) => setBenef(e.target.value)} /></Field>
-        <Field label="Contribuição mínima por item (%)" hint="Alerta de margem — nunca bloqueia o pedido."><Input inputMode="decimal" value={minContrib} disabled={!isOwner} onChange={(e) => setMinContrib(e.target.value)} /></Field>
-        <Field label="Progressão conta">
-          <Select value={contarPor} disabled={!isOwner} onChange={(e) => setContarPor(e.target.value as typeof contarPor)}><option value="orders">Pedidos elegíveis distintos (padrão)</option><option value="units">Unidades elegíveis</option></Select>
-        </Field>
-        <Field label="Carência de rebaixamento (dias)"><Input type="number" min={0} value={grace} disabled={!isOwner} onChange={(e) => setGrace(e.target.value)} /></Field>
-        <Field label="Avisos de vencimento (dias antes)" hint="Ex.: 7, 3, 1. Avisos aparecem só aqui, no painel."><Input value={alertas} disabled={!isOwner} onChange={(e) => setAlertas(e.target.value)} /></Field>
+      <div className="pa-subgrupo">
+        <h4 className="pa-subgrupo__titulo">Benefícios</h4>
+        <div className="pa-form__linha">
+          <Field label="Crédito de benefícios (% da contribuição)" hint="Até esta fração da contribuição pós-parceria positiva e verificada vira crédito na carteira."><Input inputMode="decimal" value={benef} disabled={!isOwner} onChange={(e) => setBenef(e.target.value)} /></Field>
+        </div>
+      </div>
+      <div className="pa-subgrupo">
+        <h4 className="pa-subgrupo__titulo">Elegibilidade</h4>
+        <div className="pa-form__linha">
+          <Field label="Contribuição mínima por item (%)" hint="Alerta de margem — nunca bloqueia o pedido."><Input inputMode="decimal" value={minContrib} disabled={!isOwner} onChange={(e) => setMinContrib(e.target.value)} /></Field>
+          <Field label="Progressão conta">
+            <Select value={contarPor} disabled={!isOwner} onChange={(e) => setContarPor(e.target.value as typeof contarPor)}><option value="orders">Pedidos elegíveis distintos (padrão)</option><option value="units">Unidades elegíveis</option></Select>
+          </Field>
+        </div>
+      </div>
+      <div className="pa-subgrupo">
+        <h4 className="pa-subgrupo__titulo">Rebaixamento</h4>
+        <div className="pa-form__linha">
+          <Field label="Carência de rebaixamento (dias)"><Input type="number" min={0} value={grace} disabled={!isOwner} onChange={(e) => setGrace(e.target.value)} /></Field>
+        </div>
+      </div>
+      <div className="pa-subgrupo">
+        <h4 className="pa-subgrupo__titulo">Alertas</h4>
+        <div className="pa-form__linha">
+          <Field label="Avisos de vencimento (dias antes)" hint="Ex.: 7, 3, 1. Avisos aparecem só aqui, no painel."><Input value={alertas} disabled={!isOwner} onChange={(e) => setAlertas(e.target.value)} /></Field>
+        </div>
       </div>
       <p className="pa-aviso">Fuso da loja: {dado.timezone}. Fim de semana não é tratado como feriado: sem calendário confiável, feriados não são calculados.</p>
       {erroSalvar && <Callout tone="danger" role="alert">{erroSalvar}</Callout>}
@@ -206,7 +353,7 @@ export function NiveisPage() {
 
   return (
     <PageStack>
-      <PageHeader title="Níveis e benefícios" description="Metas simultâneas, propostas que dependem da sua aprovação e uma carteira de benefícios separada das comissões." actions={isOwner ? <Button variant="secondary" onClick={reavaliar} disabled={avaliando}>{avaliando ? 'Avaliando…' : 'Reavaliar níveis'}</Button> : undefined} />
+      <PageHeader title="Níveis e benefícios" description="Defina como os parceiros evoluem e quais benefícios recebem em cada etapa." actions={isOwner ? <Button variant="secondary" onClick={reavaliar} disabled={avaliando}>{avaliando ? 'Avaliando…' : 'Reavaliar níveis'}</Button> : undefined} />
 
       <Card title="Propostas de mudança de nível" description="O sistema calcula; quem decide é você. Aprovar altera elegibilidade e benefícios — não reescreve contrato em vigor.">
         {propostas.erro && <ErrorState description={propostas.erro} onRetry={propostas.recarregar} />}
@@ -227,13 +374,13 @@ export function NiveisPage() {
         )}
       </Card>
 
-      <Card title="Regras de nível" description={regras.dado ? `Versão ${regras.dado.padrao ? 'padrão (ainda não personalizada)' : regras.dado.version}` : undefined}>
+      <Card title="Seus níveis" description={regras.dado ? `Versão ${regras.dado.padrao ? 'padrão (ainda não personalizada)' : regras.dado.version}.` : undefined}>
         {regras.erro && <ErrorState description={regras.erro} onRetry={regras.recarregar} />}
         {regras.carregando && !regras.dado && <Skeleton rows={4} />}
         {regras.dado && <EditorDeRegras niveis={regras.dado.regras.niveis} isOwner={isOwner} onSalvo={regras.recarregar} />}
       </Card>
 
-      <Card title="Configuração da loja" description="Carteira de benefícios, alertas e contagem para progressão."><ConfiguracaoDaLoja isOwner={isOwner} /></Card>
+      <Card title="Configurações do programa" description="Carteira de benefícios, elegibilidade, rebaixamento e alertas."><ConfiguracaoDaLoja isOwner={isOwner} /></Card>
 
       <MotivoDialog
         open={!!decidir} onClose={() => setDecidir(null)} titulo={decidir?.decisao === 'approve' ? `Aprovar ${decidir?.p.fromLevel} → ${decidir?.p.toLevel}` : 'Descartar proposta'} obrigatorio={false} rotulo="Observação (opcional)"

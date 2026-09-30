@@ -20,7 +20,7 @@ Parceiro no Oria → contrato → promoção/cupom na INK → pedidos da INK →
 - O tenant vem **só da sessão** (`req.tenant`). `organizationId/storeId` em query, header ou corpo → 400. Todo SQL também filtra por
   `organization_id` (defesa em profundidade; a RLS é o piso). Id que não é UUID responde 404 igual a "não existe".
 
-## 2. Modelo de dados (migrations `0044` e `0045`)
+## 2. Modelo de dados (migrations `0044`, `0045` e `0046`)
 
 Dinheiro em **BIGINT centavos (BRL)**, percentuais em **basis points**, datas em UTC (regras de calendário no timezone da loja).
 
@@ -162,7 +162,31 @@ lojista pode editar, reordenar, encurtar ou estender livremente — não são co
   Organization continua possível (`pg_trigger_depth()`).
 - Auditoria de contrato, política de conflito, pagamento/estorno, vencimento manual, override de nível/teto, benefício e resolução manual.
 
-## 9. Operação em runtime
+## 9. Link público do parceiro (`0046`, `lib/afiliados/preview.js`)
+
+O parceiro vê as **próprias** vendas, comissão e saldo por um link — **não é login**: sem conta, sem senha, sem e-mail. É uma
+*capability URL*, mesma família de `publico_organization_do_pedido`/`_da_midia`/`_do_agente` (0012): um segredo opaco de 256 bits
+(`crypto.randomBytes(32)`, base64url) que, sozinho, resolve a Organization via `publico_organization_do_preview_afiliado`
+(SECURITY DEFINER). Só o SHA-256 do token é persistido (`partner_preview_links.key_hash`) — nunca o token cru, mesmo desenho do
+aceite de convite (0019/0020).
+
+- **Gestão** (`/partners/:id/preview-link[/revoke]`, owner-only): gerar cria um link e revoga o anterior na mesma transação —
+  nunca dois ativos ao mesmo tempo; o histórico fica (`status=revoked`, nunca apagado). O token só existe na resposta desta
+  chamada; não há como recuperá-lo depois.
+- **Leitura pública** (`POST /api/public/afiliados/preview`, sem sessão): o segredo viaja no **corpo**, nunca em query string
+  (mesma razão do convite — URL vira histórico do navegador/Referer/log de proxy). O front lê o token do **fragmento** da URL
+  (`/parcerias/preview#key=…`, que o navegador nunca envia ao servidor) — `PreviewAfiliadoPage.tsx`. Fora de `/admin`, fora do
+  `AppShell`/`ProtectedRoute`, de propósito: quem recebe o link não tem conta.
+- Token malformado, inexistente ou revogado dão a **mesma resposta genérica** (404), sem diferenciar motivo — mesma lição do
+  convite. Rate limit por prefixo curto do hash (nunca o token nem o hash inteiro), mesmos números do convite.
+- O que aparece: unidades atribuídas, comissão total/paga/saldo (do extrato do owner, `payables.extratoDoParceiro`) e as vendas
+  agrupadas por pedido da INK (id, data, itens, comissão, status) — **nada de dado de comprador** (as tabelas do módulo nem
+  guardam isso) nem de custo/margem da loja.
+- Vínculo `ended` interrompe a leitura mesmo com o link ainda ativo no banco (regra de exibição, não apaga o link — o owner
+  decide se revoga).
+- Não validado ponta a ponta com um afiliado real (uso só local/sintético nesta rodada).
+
+## 10. Operação em runtime
 
 | Flag / job | Padrão | Efeito |
 |---|---|---|
@@ -171,5 +195,5 @@ lojista pode editar, reordenar, encurtar ou estender livremente — não são co
 | `POST /reconcile` (owner) | manual | Mesma rotina sob demanda; `completo:true` reprocessa tudo |
 
 Mapa de código: `lib/afiliados/{money,schedule,engine,levels,csv,ink-promotions}.js` (puros) · `{db,registry,collabs,reconcile,payables,
-progression,directory,index,routes}.js` (persistência/HTTP) · `src/pages/parcerias/*` (telas) · `scripts/afiliados/seed-demo.cjs` (cenário
-local sintético).
+progression,directory,preview,index,routes}.js` (persistência/HTTP) · `src/pages/parcerias/*` (telas; `PreviewAfiliadoPage.tsx`/
+`PreviewLinkCard.tsx` são a única parte pública) · `scripts/afiliados/seed-demo.cjs` (cenário local sintético).
