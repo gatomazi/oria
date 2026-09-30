@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0B121A" />
 
   <title>Oria — Painel de gestão para lojas</title>
-  <meta name="description" content="Oria é um painel de gestão para lojas Reserva Ink: resultado depois da mídia, pedidos e pós-venda, anúncios, Analytics e clientes no mesmo lugar." />
+  <meta name="description" content="Oria é um painel de gestão para lojas: resultado depois da mídia, pedidos e pós-venda, anúncios, Analytics e clientes no mesmo lugar." />
   <!-- canonical/og seguem no endereço cadastrado hoje como página inicial do app no console OAuth do
        Google. Trocar de domínio é decisão fora do repositório (atualizar o console junto). -->
   <link rel="canonical" href="https://orgulhoregional.com.br/oria" />
@@ -15,7 +15,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://orgulhoregional.com.br/oria" />
   <meta property="og:title" content="Oria — Sua loja vende. Você sabe quanto sobra?" />
-  <meta property="og:description" content="Resultado depois da mídia, pedidos, anúncios e clientes da sua loja Reserva Ink em um só painel." />
+  <meta property="og:description" content="Resultado depois da mídia, pedidos, anúncios e clientes da sua loja em um só painel." />
   <meta property="og:locale" content="pt_BR" />
   <meta property="og:site_name" content="Oria" />
   <meta property="og:image" content="https://orgulhoregional.com.br/assets/oria/oria-logo.png" />
@@ -332,27 +332,53 @@
     .ferramenta p { color: var(--text-secondary); font-size: 15px; margin-top: 8px; }
     .ferramenta__tag { color: var(--text-muted); font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
     .palco-ferramenta { align-items: center; background: var(--bg-app); border: 1px solid var(--border-default); border-radius: 14px; display: flex; flex-direction: column; gap: 14px; margin-top: auto; padding: 22px 18px; }
-    .etapas-wizard { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
-    .etapas-wizard span { border-radius: 999px; color: var(--text-muted); font-size: 11px; padding: 3px 9px; }
-    .etapas-wizard span.feito { background: var(--ok-tint); color: var(--ok); }
-    .etapas-wizard span.agora { background: var(--marca-tint); box-shadow: inset 0 0 0 1px var(--marca-linha); color: var(--marca); }
-    .camisetas { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 380px; width: 100%; }
-    .camiseta { align-items: center; display: flex; flex-direction: column; gap: 6px; }
-    .camiseta svg { height: auto; transition: transform .4s var(--ease-out); width: 100%; }
-    .camiseta small { color: var(--text-muted); font-size: 11px; }
-    .camiseta.em-foco svg { transform: translateY(-4px) scale(1.05); }
-    .camiseta.em-foco small { color: var(--text-primary); }
-    .formatos { align-items: flex-end; display: flex; gap: 16px; justify-content: center; }
-    .formato { align-items: center; display: flex; flex-direction: column; gap: 8px; }
-    .formato__quadro { background: linear-gradient(165deg, #1d3a44 0%, #16263a 55%, #2a1f3a 100%); border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; position: relative; transition: transform .5s var(--ease-out), box-shadow .5s; }
-    .formato__quadro::before { background: radial-gradient(circle at 50% 38%, rgba(255,255,255,.18), transparent 45%); content: ""; inset: 0; position: absolute; }
-    .formato__quadro svg { bottom: 12%; left: 50%; position: absolute; transform: translateX(-50%); width: 58%; }
-    .formato--feed .formato__quadro { height: 150px; width: 120px; }
-    .formato--story .formato__quadro { height: 190px; width: 107px; }
-    .formato.em-foco .formato__quadro { box-shadow: 0 0 0 2px var(--marca), 0 20px 50px -20px rgba(63,233,197,.5); transform: translateY(-4px); }
-    .formato small { color: var(--text-muted); font-size: 11px; }
-    .angulos { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-    .angulos span { background: var(--surface-2); border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); font-size: 11.5px; padding: 3px 10px; }
+    /* Categorias em lote: estado final no HTML; com JS e em vista, a lista entra item a item e a barra enche. */
+    .lote { align-items: stretch; gap: 12px; }
+    .lote__cab { align-items: baseline; display: flex; font-size: 12.5px; justify-content: space-between; }
+    .lote__cab b { font-weight: 600; }
+    .lote__cab span { color: var(--text-muted); font-size: 11.5px; }
+    .lote__lista { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; list-style: none; }
+    .lote__lista li { align-items: center; background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: 8px; display: flex; font-size: 12.5px; gap: 8px; justify-content: space-between; padding: 8px 10px; }
+    .lote__lista em { color: var(--ok); font-size: 11px; font-style: normal; font-weight: 600; }
+    .lote__assoc { border-top: 1px dashed var(--border-strong); display: grid; gap: 10px; padding-top: 12px; }
+    .lote__prev { align-items: center; display: grid; gap: 10px; grid-template-columns: 1fr auto 1fr; }
+    .lote__prev div { background: var(--surface-1); border-radius: 8px; padding: 8px 10px; }
+    .lote__prev small { color: var(--text-muted); display: block; font-size: 10.5px; }
+    .lote__prev span { font-size: 12.5px; font-weight: 600; }
+    .lote__prev div:last-child span { color: var(--marca); }
+    .lote__prev i { color: var(--text-muted); font-style: normal; }
+    .lote__barra { background: var(--surface-2); border-radius: 999px; height: 6px; overflow: hidden; }
+    .lote__barra i { background: linear-gradient(90deg, var(--ok), var(--marca)); border-radius: 999px; display: block; height: 100%; transform-origin: left; }
+    @keyframes lote-item { from { opacity: .35; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    @keyframes lote-barra { from { transform: scaleX(.04); } to { transform: none; } }
+    .lote.rodando .lote__lista li { animation: lote-item .5s var(--ease-out) both; animation-delay: calc(var(--i) * 160ms); }
+    .lote.rodando .lote__barra i { animation: lote-barra 1.6s var(--ease-out) .6s both; }
+
+    /* Criativos: foto do produto → anúncio Feed 4:5 → Story 9:16. Cada .criativo__arte aceita <img>. */
+    .criativos { align-items: flex-end; flex-direction: row; gap: 12px; justify-content: center; padding: 22px 14px; }
+    .criativo { align-items: center; display: flex; flex-direction: column; gap: 8px; margin: 0; }
+    .criativo figcaption { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+    .criativo__arte { overflow: hidden; position: relative; }
+    .criativo__arte svg, .criativo__arte img { display: block; height: 100%; object-fit: cover; width: 100%; }
+    .criativo--produto .criativo__arte { aspect-ratio: 1; border-radius: 10px; box-shadow: 0 10px 30px -12px rgba(0,0,0,.6); width: 92px; }
+    .criativos__seta { align-self: center; color: var(--marca); font-size: 18px; margin-bottom: 18px; }
+    .criativo__moldura { background: #fff; border-radius: 12px; box-shadow: 0 24px 50px -24px rgba(0,0,0,.8); color: #11161c; overflow: hidden; position: relative; transition: transform .5s var(--ease-out), box-shadow .5s; }
+    .criativo--feed .criativo__moldura { width: 164px; }
+    .criativo--feed .criativo__arte { aspect-ratio: 4 / 5; }
+    .criativo__topo { align-items: center; display: flex; font-size: 8.5px; gap: 5px; padding: 6px 7px; }
+    .criativo__topo i { background: linear-gradient(135deg, var(--marca), #1fae93); border-radius: 50%; height: 14px; width: 14px; }
+    .criativo__topo b { font-weight: 700; }
+    .criativo__topo small { color: #6b7480; font-size: 8px; }
+    .criativo__cta { align-items: center; border-top: 1px solid #e6e8eb; display: flex; font-size: 9px; font-weight: 700; justify-content: space-between; padding: 6px 8px; }
+    .criativo--story .criativo__moldura { aspect-ratio: 9 / 16; background: #0e1b24; color: #fff; width: 116px; }
+    .criativo--story .criativo__arte { inset: 0; position: absolute; }
+    .criativo__progresso { display: flex; gap: 3px; left: 6px; position: absolute; right: 6px; top: 5px; z-index: 2; }
+    .criativo__progresso i { background: rgba(255,255,255,.4); border-radius: 2px; flex: 1; height: 2px; }
+    .criativo__progresso i:first-child { background: #fff; }
+    .criativo__topo--story { left: 0; position: absolute; right: 0; top: 8px; z-index: 2; }
+    .criativo__topo--story small { color: rgba(255,255,255,.75); }
+    .criativo__pilula { background: rgba(255,255,255,.92); border-radius: 999px; bottom: 10px; color: #11161c; font-size: 8.5px; font-weight: 700; left: 50%; padding: 4px 10px; position: absolute; transform: translateX(-50%); white-space: nowrap; z-index: 2; }
+    .criativo.em-foco .criativo__moldura { box-shadow: 0 0 0 2px var(--marca), 0 24px 60px -20px rgba(63,233,197,.45); transform: translateY(-4px); }
 
     /* ── 07 · Comunicação, integrações, dados do Google ───────────────────── */
     .whats { align-items: center; display: grid; gap: clamp(28px, 4vw, 56px); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -363,11 +389,15 @@
     .fluxo-whats__passo small { color: var(--text-muted); font-size: 12.5px; }
     .balao { background: #13342B; border-radius: 14px 14px 4px 14px; color: #D5F5E7; font-size: 13px; justify-self: end; line-height: 1.5; max-width: 92%; padding: 10px 13px; }
     .balao small { color: #8CC7AE; display: block; font-size: 10.5px; margin-top: 4px; text-align: right; }
-    .conexoes { display: grid; gap: 12px; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: clamp(40px, 5vw, 64px); }
-    .conexao { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: 14px; display: flex; flex-direction: column; gap: 8px; padding: 18px; }
-    .conexao--nucleo { border-color: var(--marca-linha); }
-    .conexao h3 { font-size: 15.5px; font-weight: 600; }
-    .conexao p { color: var(--text-secondary); font-size: 13.5px; line-height: 1.55; }
+    .conecta { display: grid; gap: clamp(20px, 3vw, 40px); grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); margin-top: clamp(48px, 6vw, 80px); align-items: start; }
+    .conecta__cab h3 { font-size: clamp(1.3rem, 2vw, 1.6rem); font-weight: 600; letter-spacing: -.025em; }
+    .conecta__cab p { color: var(--text-secondary); margin-top: 10px; }
+    .conexoes { display: grid; gap: 8px; list-style: none; }
+    .conexao { align-items: center; background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: 12px; display: grid; gap: 4px 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); padding: 12px 16px; }
+    .conexao--nucleo { background: radial-gradient(120% 160% at 0% 0%, rgba(63,233,197,.08), transparent 60%), var(--surface-1); border-color: var(--marca-linha); }
+    .conexao__nome { align-items: center; display: flex; flex-wrap: wrap; gap: 6px 10px; }
+    .conexao__nome b { font-size: 15px; font-weight: 600; }
+    .conexao p { color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
     .acesso { align-self: flex-start; border: 1px solid var(--marca-linha); border-radius: 999px; color: var(--marca); font-size: 11px; font-weight: 600; letter-spacing: .03em; padding: 2px 9px; }
     .acesso--escrita { border-color: rgba(167,139,250,.45); color: var(--premium); }
     .acesso--envio { border-color: rgba(52,183,235,.45); color: var(--info); }
@@ -423,15 +453,13 @@
     @media (max-width: 1099px) {
       .heroi__grade { grid-template-columns: minmax(0, 1fr); }
       .heroi__copia { max-width: 44rem; }
-      .conexoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .conexao--nucleo { grid-column: 1 / -1; }
     }
     @media (max-width: 1023px) {
       .topo__nav, .topo__acoes { display: none; }
       .topo__menu { display: inline-flex; }
       .topo__entrar-movel { color: var(--text-primary); display: inline-flex; font-size: 14px; font-weight: 600; margin-left: auto; text-decoration: none; }
       .topo__menu:not([hidden]) ~ .topo__entrar-movel, .js-menu .topo__entrar-movel { display: none; }
-      .cap__grade, .cap__grade--inverso, .whats, .privacidade, .detalhe { grid-template-columns: minmax(0, 1fr); }
+      .cap__grade, .cap__grade--inverso, .whats, .privacidade, .detalhe, .conecta { grid-template-columns: minmax(0, 1fr); }
       .cap__grade--inverso > :first-child { order: 0; }
     }
     @media (max-width: 767px) {
@@ -452,15 +480,20 @@
     }
     @media (max-width: 639px) {
       .heroi__acoes .botao, .fecho__acoes .botao { flex: 1 1 100%; }
-      .conexoes { grid-template-columns: minmax(0, 1fr); }
+      .conexao { grid-template-columns: minmax(0, 1fr); }
       .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .kpis .kpi:first-child { grid-column: 1 / -1; }
       .rodape__linha { align-items: flex-start; flex-direction: column; }
       .comparativo__linha { grid-template-columns: 96px minmax(0, 1fr) 50px; }
       .kv div { grid-template-columns: 92px 1fr; }
       .calor { gap: 2px; grid-template-columns: 30px repeat(12, minmax(0, 1fr)); }
-      .formato--feed .formato__quadro { height: 125px; width: 100px; }
-      .formato--story .formato__quadro { height: 160px; width: 90px; }
+      .criativos { gap: 6px; padding: 18px 8px; }
+      .criativo--produto .criativo__arte { width: 50px; }
+      .criativos__seta { font-size: 14px; }
+      .criativo--feed .criativo__moldura { width: 108px; }
+      .criativo--story .criativo__moldura { width: 72px; }
+      .criativo figcaption span, .criativo__topo--story small { display: none; }
+      .lote__lista { grid-template-columns: 1fr; }
     }
     @media (max-width: 400px) {
       .cascata .degrau__barra b { font-size: 9px; }
@@ -504,6 +537,9 @@
     </nav>
   </header>
 
+  <!-- Regra interna (QA/produção): toda demo desta página usa dados fictícios e ilustrações próprias —
+       nunca números, nomes, pedidos, produtos ou criativos de clientes reais. O aviso não aparece na
+       interface pública por decisão do produto; test/landing-oria.test.js trava que nada real entre aqui. -->
   <main id="conteudo">
     <!-- ── 01 · Herói ─────────────────────────────────────────────────────── -->
     <section class="heroi" aria-labelledby="titulo-heroi">
@@ -515,8 +551,8 @@
             <span class="heroi__linha heroi__linha--acento" style="--d:120ms">Você sabe quanto sobra?</span>
           </h1>
           <p class="heroi__texto" style="--d:200ms">
-            <strong>Oria é um painel de gestão para lojas.</strong> Ele reúne resultado, pedidos e dados
-            da sua loja Reserva Ink: veja a margem depois da mídia e decida com a operação à vista.
+            <strong>Oria é um painel de gestão para lojas.</strong> Conecta operação, marketing e dados
+            num lugar só — para você ver a margem depois da mídia e decidir com a operação à vista.
           </p>
           <div class="heroi__acoes" style="--d:280ms">
             <a class="botao botao--principal" href="mailto:tomazi.brand@gmail.com?subject=Quero%20conhecer%20o%20Oria">
@@ -525,16 +561,16 @@
             </a>
             <a class="botao botao--secundario" href="#resultado">Explorar o painel</a>
           </div>
-          <p class="heroi__apoio"><span class="ponto" aria-hidden="true"></span>Criado para quem opera uma loja Reserva Ink.</p>
+          <p class="heroi__apoio"><span class="ponto" aria-hidden="true"></span>Hoje, o principal conector operacional do Oria é a Reserva Ink.</p>
         </div>
 
         <!-- Demo: resultado do período, com os rótulos do Dashboard do painel. Os números estão no
              HTML — sem JS o estado "30 dias" já aparece completo. -->
-        <figure class="demo" id="demo-resultado" aria-label="Demonstração ilustrativa do resultado do período, com dados fictícios">
+        <figure class="demo" id="demo-resultado" aria-label="Demonstração do resultado do período no painel">
           <div class="demo__barra" aria-hidden="true"><i></i><i></i><i></i><span>Oria · Visão geral</span></div>
           <div class="demo__corpo">
             <div class="resultado__cab">
-              <strong>Resultado do período<small>Sua loja · dados fictícios</small></strong>
+              <strong>Resultado do período<small>Sua loja</small></strong>
               <div class="segmentado" role="group" aria-label="Período da demonstração">
                 <button type="button" data-periodo="7" aria-pressed="false">7 dias</button>
                 <button type="button" data-periodo="30" aria-pressed="true">30 dias</button>
@@ -561,7 +597,6 @@
               <span style="--c:var(--aviso)">Produção</span><span style="--c:var(--info)">Mídia</span><span style="--c:#5C6F84">Frete e descontos</span><span style="--c:var(--marca)">Sobra</span>
             </div>
           </div>
-          <figcaption class="demo__rodape">Demonstração ilustrativa · dados fictícios, sem conexão com contas reais</figcaption>
         </figure>
       </div>
     </section>
@@ -582,7 +617,7 @@
           </ol>
           <p class="nota">Quando falta um dado — uma conta de anúncio não conectada, um pedido ainda sem custo — o painel avisa em vez de mostrar zero.</p>
         </div>
-        <figure class="demo anima-alvo" aria-label="Cascata ilustrativa do faturamento até o lucro após mídia, com dados fictícios">
+        <figure class="demo anima-alvo" aria-label="Cascata do faturamento até o lucro após mídia">
           <div class="demo__corpo">
             <div class="cascata" id="cascata">
               <div class="degrau degrau--total"><div class="degrau__area"><div class="degrau__barra" style="--base:0;--alt:100"><b>48,3k</b></div></div><div class="degrau__rotulo">Faturamento</div></div>
@@ -594,7 +629,6 @@
               <div class="degrau degrau--sobra"><div class="degrau__area"><div class="degrau__barra" style="--base:0;--alt:32.7"><b>15,8k</b></div></div><div class="degrau__rotulo">Lucro após mídia</div></div>
             </div>
           </div>
-          <figcaption class="demo__rodape">Dados fictícios · a mesma conta do painel: receita líquida − custo de produção − mídia</figcaption>
         </figure>
       </div>
     </section>
@@ -608,7 +642,7 @@
           <p class="lead">Todos os pedidos da loja numa lista que ordena e filtra. Abra um pedido e responda o cliente com a etapa informada pela Reserva Ink, os itens e o rastreio da entrega.</p>
           <p class="nota">A etapa de produção é a que a Reserva Ink informa — o Oria mostra, não altera a produção.</p>
         </div>
-        <figure class="demo anima-alvo" aria-label="Demonstração interativa da lista de pedidos e do detalhe do pedido, com dados fictícios">
+        <figure class="demo anima-alvo" aria-label="Demonstração interativa da lista de pedidos e do detalhe do pedido">
           <div class="demo__barra" aria-hidden="true"><i></i><i></i><i></i><span>Operação · Pedidos</span></div>
           <div class="pedidos">
             <div class="pedidos__lista" role="group" aria-label="Pedidos de exemplo">
@@ -650,7 +684,6 @@
               </div>
             </div>
           </div>
-          <figcaption class="demo__rodape">Demonstração com pedidos fictícios · escolha um pedido e navegue pelas abas</figcaption>
         </figure>
       </div>
     </section>
@@ -693,7 +726,6 @@
                 <div class="comparativo__linha"><span>GA4 (atribuído)</span><i style="--c:var(--premium);--w:83%"></i><b class="num">43,2k</b></div>
               </div>
             </div>
-            <div class="demo__rodape">Dados fictícios · divergência entre as fontes é esperada: cada uma mede de um jeito</div>
           </div>
           <div class="demo" id="v-meta" role="tabpanel" aria-labelledby="aba-v-meta">
             <div class="demo__corpo detalhe">
@@ -704,7 +736,6 @@
                 <div class="anuncio"><span class="anuncio__thumb" style="--c1:#5a4a2b;--c2:#2e2616"></span><div><b>Estampa nova · imagem</b><small>Investimento R$ 910</small></div><em class="num">ROAS 2,2<small>atribuído</small></em></div>
               </div>
             </div>
-            <div class="demo__rodape">Dados fictícios · leitura das contas de anúncio conectadas</div>
           </div>
           <div class="demo" id="v-ga4" role="tabpanel" aria-labelledby="aba-v-ga4">
             <div class="demo__corpo detalhe">
@@ -714,7 +745,6 @@
                 <div class="calor__eixo" aria-hidden="true"><span></span><span>0h</span><span>6h</span><span>12h</span><span>18h</span></div>
               </div>
             </div>
-            <div class="demo__rodape">Dados fictícios · acesso somente leitura ao Google Analytics</div>
           </div>
         </div>
       </div>
@@ -729,7 +759,7 @@
           <p class="lead">Veja sua base além do total de pedidos: uma lista única de clientes — documento, telefone e e-mail viram uma pessoa só — com recompra, ticket e histórico.</p>
           <p class="nota">Os segmentos por recência, frequência e valor (RFM) mostram a regra usada e avisam quando o histórico ainda é curto. Os limites são padrão, não calibrados para cada loja.</p>
         </div>
-        <figure class="demo anima-alvo" aria-label="Demonstração da lista de clientes e do mapa de segmentos, com dados fictícios">
+        <figure class="demo anima-alvo" aria-label="Demonstração da lista de clientes e do mapa de segmentos">
           <div class="demo__barra" aria-hidden="true"><i></i><i></i><i></i><span>Operação · Clientes</span></div>
           <div class="demo__corpo">
             <div class="clientes__cab">
@@ -763,7 +793,6 @@
               </div>
             </div>
           </div>
-          <figcaption class="demo__rodape">Clientes e números fictícios · segmentos com os nomes usados no painel</figcaption>
         </figure>
       </div>
     </section>
@@ -773,40 +802,75 @@
       <div class="envoltorio">
         <span class="capitulo__num">06 · Ferramentas</span>
         <h2 class="titulo" id="titulo-ferramentas">Menos trabalho <em>repetido.</em></h2>
-        <p class="lead" style="max-width:58ch">Dois módulos opcionais para o que mais toma tempo fora da operação: montar o catálogo e produzir imagem de anúncio.</p>
+        <p class="lead" style="max-width:58ch">O que toma tempo toda semana, resolvido em lote: organizar o catálogo e produzir imagem de anúncio.</p>
         <div class="ferramentas">
           <article class="ferramenta anima-alvo">
             <div>
-              <span class="ferramenta__tag">Catálogo Reserva Ink</span>
-              <h3>Uma arte, várias cores.</h3>
-              <p>Crie o produto na Reserva Ink a partir de uma arte e aplique a mesma estampa em várias cores e peças. Organize categorias em lote, com prévia do antes e depois.</p>
+              <span class="ferramenta__tag">Organização da loja</span>
+              <h3>Categorias em lote, com prévia.</h3>
+              <p>Crie várias categorias de uma vez e associe produtos em massa. Antes de confirmar você vê o antes e o depois, e acompanha o andamento até o fim — com nova tentativa só do que falhou.</p>
             </div>
-            <div class="palco-ferramenta" aria-hidden="true">
-              <div class="etapas-wizard"><span class="feito">Tipo</span><span class="feito">Informações</span><span class="feito">Arte</span><span class="agora">Variantes</span><span>Categorias</span><span>Revisão</span></div>
-              <div class="camisetas" id="camisetas">
-                <div class="camiseta em-foco"><svg viewBox="0 0 64 64"><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#F3F6F9"/><circle cx="32" cy="34" r="7" fill="none" stroke="#0B121A" stroke-width="2.5"/><path d="M36 28l6-5" stroke="#0B121A" stroke-width="2.5" stroke-linecap="round"/></svg><small>Off-white</small></div>
-                <div class="camiseta"><svg viewBox="0 0 64 64"><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#1f3b35"/><circle cx="32" cy="34" r="7" fill="none" stroke="#7AF1D7" stroke-width="2.5"/><path d="M36 28l6-5" stroke="#7AF1D7" stroke-width="2.5" stroke-linecap="round"/></svg><small>Verde</small></div>
-                <div class="camiseta"><svg viewBox="0 0 64 64"><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#2c2f3a"/><circle cx="32" cy="34" r="7" fill="none" stroke="#F3F6F9" stroke-width="2.5"/><path d="M36 28l6-5" stroke="#F3F6F9" stroke-width="2.5" stroke-linecap="round"/></svg><small>Grafite</small></div>
-                <div class="camiseta"><svg viewBox="0 0 64 64"><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#7a4b2a"/><circle cx="32" cy="34" r="7" fill="none" stroke="#F3F6F9" stroke-width="2.5"/><path d="M36 28l6-5" stroke="#F3F6F9" stroke-width="2.5" stroke-linecap="round"/></svg><small>Caramelo</small></div>
+            <div class="palco-ferramenta lote" id="lote" aria-hidden="true">
+              <div class="lote__cab"><b>Nova leva de categorias</b><span>4 de 4</span></div>
+              <ul class="lote__lista">
+                <li style="--i:0"><span>Inverno 2026</span><em>criada</em></li>
+                <li style="--i:1"><span>Mais vendidas</span><em>criada</em></li>
+                <li style="--i:2"><span>Presentes</span><em>criada</em></li>
+                <li style="--i:3"><span>Coleção cidades</span><em>criada</em></li>
+              </ul>
+              <div class="lote__assoc">
+                <div class="lote__cab"><b>Associar 184 produtos</b><span class="num">184 / 184</span></div>
+                <div class="lote__prev">
+                  <div><small>Antes</small><span>Sem categoria</span></div>
+                  <i>→</i>
+                  <div><small>Depois</small><span>Inverno 2026</span></div>
+                </div>
+                <div class="lote__barra"><i></i></div>
               </div>
             </div>
           </article>
           <article class="ferramenta anima-alvo" style="--d:100ms">
             <div>
               <span class="ferramenta__tag">Criativos com IA</span>
-              <h3>Do produto ao anúncio, em Feed e Story.</h3>
-              <p>Gere imagens de anúncio a partir das fotos do produto, escolhendo o ângulo e o formato. A geração usa a sua própria chave da OpenAI — o custo fica na sua conta, e o painel mostra a estimativa do que foi gasto.</p>
+              <h3>Do produto ao anúncio.</h3>
+              <p>A partir das fotos do produto, gere imagens de anúncio no ângulo e no formato que você escolher — Feed ou Story. A geração usa a sua própria chave da OpenAI: o custo fica na sua conta, e o painel mostra a estimativa do que foi gasto.</p>
             </div>
-            <div class="palco-ferramenta" aria-hidden="true">
-              <div class="formatos" id="formatos">
-                <div class="formato formato--feed em-foco"><div class="formato__quadro"><svg viewBox="0 0 64 64"><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#F3F6F9"/><circle cx="32" cy="34" r="7" fill="none" stroke="#0B121A" stroke-width="2.5"/></svg></div><small>Feed 4:5</small></div>
-                <div class="formato formato--story"><div class="formato__quadro"><svg viewBox="0 0 64 64"><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#F3F6F9"/><circle cx="32" cy="34" r="7" fill="none" stroke="#0B121A" stroke-width="2.5"/></svg></div><small>Story 9:16</small></div>
-              </div>
-              <div class="angulos"><span>Flatlay</span><span>Cabide</span><span>Lifestyle</span></div>
+            <!-- Slot de arte: cada .criativo__arte aceita a imagem final no lugar do SVG, por ex.
+                 <img src="/assets/oria/landing/criativo-feed.webp" alt="" width="400" height="500" loading="lazy">
+                 (produto: 1:1 · Feed: 4:5 · Story: 9:16). O SVG é o fallback enquanto a arte não existe. -->
+            <div class="palco-ferramenta criativos" id="criativos" aria-hidden="true">
+              <figure class="criativo criativo--produto">
+                <div class="criativo__arte">
+                  <svg viewBox="0 0 100 100"><defs><radialGradient id="cp-bg" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#f4f5f6"/><stop offset="1" stop-color="#d9dde2"/></radialGradient></defs><rect width="100" height="100" fill="url(#cp-bg)"/><ellipse cx="50" cy="86" rx="26" ry="4" fill="#000" opacity=".12"/><g transform="translate(18 14) scale(1)"><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#2c2f3a"/><circle cx="32" cy="32" r="7" fill="none" stroke="#3FE9C5" stroke-width="2.4"/><path d="M36 26l6-5" stroke="#3FE9C5" stroke-width="2.4" stroke-linecap="round"/></g></svg>
+                </div>
+                <figcaption>Produto</figcaption>
+              </figure>
+              <span class="criativos__seta">→</span>
+              <figure class="criativo criativo--feed em-foco">
+                <div class="criativo__moldura">
+                  <div class="criativo__topo"><i></i><b>sua.loja</b><small>Patrocinado</small></div>
+                  <div class="criativo__arte">
+                    <svg viewBox="0 0 80 100"><defs><linearGradient id="cf-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#efe6da"/><stop offset="1" stop-color="#dccbb4"/></linearGradient></defs><rect width="80" height="100" fill="url(#cf-bg)"/><path d="M-4 78 C 20 70, 40 90, 84 76 L84 100 L-4 100Z" fill="#cdb99c" opacity=".55"/><g transform="translate(10 18) rotate(-6 30 30)"><ellipse cx="32" cy="62" rx="24" ry="4" fill="#000" opacity=".12"/><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#2c2f3a"/><circle cx="32" cy="32" r="7" fill="none" stroke="#3FE9C5" stroke-width="2.4"/><path d="M36 26l6-5" stroke="#3FE9C5" stroke-width="2.4" stroke-linecap="round"/></g><path d="M62 12c6 2 9 8 8 14-6-1-10-6-8-14z" fill="#6f7f4c"/><path d="M8 84c5-5 12-5 16 0-5 4-11 4-16 0z" fill="#7d8b56"/></svg>
+                  </div>
+                  <div class="criativo__cta"><span>Comprar agora</span><span>›</span></div>
+                </div>
+                <figcaption>Feed 4:5<span> · Flatlay</span></figcaption>
+              </figure>
+              <figure class="criativo criativo--story">
+                <div class="criativo__moldura">
+                  <div class="criativo__progresso"><i></i><i></i><i></i></div>
+                  <div class="criativo__topo criativo__topo--story"><i></i><b>sua.loja</b><small>Patrocinado</small></div>
+                  <div class="criativo__arte">
+                    <svg viewBox="0 0 56 100"><defs><radialGradient id="cs-bg" cx="50%" cy="35%" r="75%"><stop offset="0" stop-color="#2d5560"/><stop offset="1" stop-color="#0e1b24"/></radialGradient></defs><rect width="56" height="100" fill="url(#cs-bg)"/><path d="M28 22v-5a3 3 0 1 1 3-3" fill="none" stroke="#c9ced6" stroke-width="1.2"/><path d="M12 30 L28 22 L44 30" fill="none" stroke="#c9ced6" stroke-width="1.2"/><g transform="translate(6.5 24) scale(.67)"><path d="M20 8l-12 8 5 10 6-3v33h26V23l6 3 5-10-12-8c-2 4-6 6-12 6s-10-2-12-6z" fill="#f3f6f9"/><circle cx="32" cy="32" r="7" fill="none" stroke="#0B121A" stroke-width="2.6"/><path d="M36 26l6-5" stroke="#0B121A" stroke-width="2.6" stroke-linecap="round"/></g><ellipse cx="28" cy="80" rx="16" ry="2.5" fill="#000" opacity=".3"/></svg>
+                  </div>
+                  <div class="criativo__pilula">Saiba mais</div>
+                </div>
+                <figcaption>Story 9:16<span> · Cabide</span></figcaption>
+              </figure>
             </div>
           </article>
         </div>
-        <p class="nota">Módulos disponíveis conforme a configuração da loja. Ilustrações próprias, sem produtos ou criativos de clientes.</p>
+        <p class="nota">Módulos disponíveis conforme a configuração da loja.</p>
       </div>
     </section>
 
@@ -825,36 +889,37 @@
             <div class="fluxo-whats__passo"><i>2</i><div><b>Número da loja conectado</b><small>Pela conta Meta da própria loja, em Integrações</small></div></div>
             <div class="fluxo-whats__passo"><i>3</i><div><b>Modelos e cadência</b><small>Modelos aprovados pela Meta, espera, reenvios e horário permitido</small></div></div>
             <div class="fluxo-whats__passo"><i>4</i><div><b>Campanhas por segmento</b><small>Públicos salvos e envio em lotes, sem repetir o mesmo cliente</small></div></div>
-            <div class="balao">Oi, Marina! Seu carrinho ainda está guardado. Quer ajuda para finalizar o pedido?<small>exemplo de mensagem · fictício</small></div>
+            <div class="balao">Oi, Marina! Seu carrinho ainda está guardado. Quer ajuda para finalizar o pedido?<small>exemplo de mensagem</small></div>
           </div>
         </div>
 
-        <div class="conexoes">
-          <article class="conexao conexao--nucleo anima-alvo">
-            <span class="acesso acesso--escrita">Leitura e ações da loja</span>
-            <h3>Reserva Ink</h3>
-            <p>O núcleo: lê pedidos, carrinhos, catálogo e extrato. Ações como catálogo, promoções, trocas e reembolsos são feitas na loja a partir do painel.</p>
-          </article>
-          <article class="conexao anima-alvo" style="--d:60ms">
-            <span class="acesso">Leitura</span>
-            <h3>Meta Ads</h3>
-            <p>Leitura do desempenho das campanhas de anúncios. O Oria não cria, não pausa e não edita campanhas.</p>
-          </article>
-          <article class="conexao anima-alvo" style="--d:120ms">
-            <span class="acesso">Leitura</span>
-            <h3>Google Ads</h3>
-            <p>Leitura das métricas e do gasto das campanhas. O Oria só consulta — não cria nem altera anúncios.</p>
-          </article>
-          <article class="conexao anima-alvo" style="--d:180ms">
-            <span class="acesso">Somente leitura</span>
-            <h3>Google Analytics</h3>
-            <p>Sessões, origens de tráfego e conversões da propriedade escolhida, ao lado dos pedidos.</p>
-          </article>
-          <article class="conexao anima-alvo" style="--d:240ms">
-            <span class="acesso acesso--envio">Envio configurado pela loja</span>
-            <h3>WhatsApp</h3>
-            <p>Mensagens de recuperação e campanhas pelo número que a loja conecta, para o contato que o comprador informou na compra.</p>
-          </article>
+        <div class="conecta">
+          <div class="conecta__cab">
+            <h3>Como o Oria se conecta</h3>
+            <p>Hoje, o principal conector operacional é a Reserva Ink. Anúncios, Analytics e WhatsApp entram conforme a sua loja usa — cada um com um papel e um tipo de acesso.</p>
+          </div>
+          <ul class="conexoes">
+            <li class="conexao conexao--nucleo anima-alvo">
+              <div class="conexao__nome"><b>Reserva Ink</b><span class="acesso acesso--escrita">Leitura e sincronização operacional</span></div>
+              <p>Principal conector operacional hoje: pedidos, carrinhos, catálogo e extrato.</p>
+            </li>
+            <li class="conexao anima-alvo" style="--d:60ms">
+              <div class="conexao__nome"><b>Meta Ads</b><span class="acesso">Leitura</span></div>
+              <p>Desempenho dos anúncios.</p>
+            </li>
+            <li class="conexao anima-alvo" style="--d:120ms">
+              <div class="conexao__nome"><b>Google Ads</b><span class="acesso">Leitura</span></div>
+              <p>Desempenho e gasto das campanhas.</p>
+            </li>
+            <li class="conexao anima-alvo" style="--d:180ms">
+              <div class="conexao__nome"><b>Google Analytics</b><span class="acesso">Somente leitura</span></div>
+              <p>Comportamento e conversão no site.</p>
+            </li>
+            <li class="conexao anima-alvo" style="--d:240ms">
+              <div class="conexao__nome"><b>WhatsApp</b><span class="acesso acesso--envio">Envio configurado pela loja</span></div>
+              <p>Comunicação e relacionamento com clientes.</p>
+            </li>
+          </ul>
         </div>
 
         <div class="privacidade">
@@ -895,7 +960,7 @@
         <img class="fecho__simbolo" src="/assets/oria/oria-simbolo.png" alt="" width="53" height="42" loading="lazy" />
         <span class="fecho__assinatura">Mais marca. Menos operação.</span>
         <h2 class="titulo" id="titulo-fecho">Sua próxima fase merece uma operação <em>à altura.</em></h2>
-        <p class="lead">Um workspace Oria para a sua loja Reserva Ink, com os dados e acessos dela. Conte como a sua operação funciona hoje.</p>
+        <p class="lead">Um workspace Oria para a sua loja, com os dados e acessos dela. Comece pelo seu canal principal e centralize a leitura do negócio em um só lugar.</p>
         <div class="fecho__acoes">
           <a class="botao botao--principal" href="mailto:tomazi.brand@gmail.com?subject=Quero%20conhecer%20o%20Oria">
             Conhecer o Oria
@@ -1086,7 +1151,7 @@
       seguro(function () { abas(document.querySelectorAll('.visoes [role="tab"]'), 0); });
       seguro(function () { abas(document.querySelectorAll('#clientes [role="tab"]'), 0); });
 
-      // 06 · Variações de cor e de formato em ciclo lento; pausa fora da tela e em reduced motion.
+      // 06 · Criativos: Feed e Story se alternam em destaque, em ciclo lento; pausa fora da tela e em reduced motion.
       seguro(function () {
         if (reduzir || !('IntersectionObserver' in window)) return;
         function ciclo(container, seletor, ms) {
@@ -1097,11 +1162,22 @@
             } else if (!en[0].isIntersecting && timer) { clearInterval(timer); timer = null; }
           }).observe(container);
         }
-        ciclo(document.getElementById('camisetas'), '.camiseta', 1400);
-        ciclo(document.getElementById('formatos'), '.formato', 1800);
+        ciclo(document.getElementById('criativos'), '.criativo--feed, .criativo--story', 2200);
       });
 
-      // Micro-nav: o capítulo em leitura fica marcado no topo.
+      // 06 · Categorias em lote: o HTML já traz o estado final (tudo criado, barra cheia). Ao entrar na
+      // tela, a sequência é tocada uma vez; nenhum estado "antes" é aplicado de antemão.
+      seguro(function () {
+        if (reduzir || !('IntersectionObserver' in window)) return;
+        var lote = document.getElementById('lote');
+        if (lote.getBoundingClientRect().top < window.innerHeight) return;
+        var obs = new IntersectionObserver(function (en) {
+          if (en[0].isIntersecting) { lote.classList.add('rodando'); obs.disconnect(); }
+        }, { rootMargin: '0px 0px -15% 0px' });
+        obs.observe(lote);
+      });
+
+            // Micro-nav: o capítulo em leitura fica marcado no topo.
       seguro(function () {
         if (!('IntersectionObserver' in window)) return;
         var links = document.querySelectorAll('.topo__nav a');

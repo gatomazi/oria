@@ -12,7 +12,14 @@ const fs = require('fs');
 const path = require('path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'oria.html'), 'utf8');
-const semTags = (s) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+// Só o texto que o visitante vê: sem <script>, <style> e comentários HTML.
+const semTags = (s) => s
+  .replace(/<script[\s\S]*?<\/script>/g, ' ')
+  .replace(/<style[\s\S]*?<\/style>/g, ' ')
+  .replace(/<!--[\s\S]*?-->/g, ' ')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
 
 test('landing · um único H1, e ele começa pelo nome do app', () => {
   const h1s = html.match(/<h1[\s\S]*?<\/h1>/g) || [];
@@ -51,9 +58,11 @@ test('landing · usa a marca oficial servida pela allowlist', () => {
   }
 });
 
-test('landing · sem scripts externos e sem dados ilustrativos sem aviso', () => {
+// As demos usam dados fictícios por regra interna (comentário no HTML). O aviso não aparece na
+// interface pública por decisão de produto (Home V3), mas a regra continua escrita na página.
+test('landing · sem scripts externos; regra interna de dados fictícios registrada', () => {
   assert.doesNotMatch(html, /<script[^>]+src=/, 'nenhum script de terceiros na página pública');
-  assert.match(semTags(html), /Demonstração ilustrativa · dados fictícios/);
+  assert.match(html, /<!-- Regra interna \(QA\/produção\): toda demo desta página usa dados fictícios/);
 });
 
 test('landing · só funcionalidades liberadas: nada de afiliados, multi-loja ou promessa sem lastro', () => {
@@ -65,6 +74,8 @@ test('landing · só funcionalidades liberadas: nada de afiliados, multi-loja ou
     'afiliad', 'parceri', 'todas as suas lojas', 'várias lojas', 'multi-loja', 'depoimento',
     'tempo real', 'instantâne', 'automaticamente', 'envio automático', 'revisão antes do envio',
     'feed de catálogo', 'controle de estoque', 'ia inclusa', 'grátis', 'gratuit',
+    // Posicionamento (Home V3): a Reserva Ink é o principal conector hoje, não o limite da marca.
+    'criado para quem opera uma loja reserva ink', 'para lojas reserva ink', 'dados fictícios',
   ];
   for (const proibido of proibidos) {
     assert.ok(!texto.includes(proibido), `a landing não menciona "${proibido}"`);

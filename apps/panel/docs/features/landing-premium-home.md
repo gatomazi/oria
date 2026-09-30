@@ -1,8 +1,17 @@
-# Landing pública do Oria (`oria.html`) — V2 pós-auditoria
+# Landing pública do Oria (`oria.html`) — V3
 
 Redesign da página pública (`/` e `/oria`) a partir da auditoria de produto de 30/09/2026 e do briefing
 "Oria Home V2". Só a landing mudou: nenhuma rota, API, banco, OAuth, fluxo autenticado ou tela do painel.
 Sem deploy de produção.
+
+## V3 (ajustes do dono sobre a V2)
+
+- **Posicionamento:** a Reserva Ink passa a ser "o principal conector operacional hoje", não o público da marca. Saíram "Criado para quem opera uma loja Reserva Ink" e o "Reserva Ink" da meta description. O teste de contrato veta essas frases.
+- **"Menos trabalho repetido":** o catálogo deixa de ser argumento principal. O foco passa a ser a criação de categorias em lote e a associação em massa com prévia antes/depois e nova tentativa do que falhou (`ModalCriarCategoriasEmLote`, `server.js:3685-4040`). O wizard de produto não aparece mais.
+- **Criativos:** foto do produto → anúncio Feed 4:5 → Story 9:16, com molduras de post e story. Cada `.criativo__arte` é um slot para a arte final (`<img>` no lugar do SVG de fallback; tamanhos 1:1, 4:5 e 9:16).
+- **Integrações:** bloco "Como o Oria se conecta", com nome, função e tipo de acesso em cartões compactos. O bloco do Google continua igual.
+- **Avisos "dados fictícios":** saíram da interface pública. A regra virou interna, escrita num comentário no topo do `<main>` e travada pelo teste.
+- **Animação de categorias:** o HTML já traz o estado final. A sequência só toca ao entrar na tela; nada é esmaecido de antemão.
 
 ## Matriz de promessas (o que a página afirma × evidência)
 
