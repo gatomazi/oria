@@ -21,9 +21,12 @@ interface KpiCardProps {
   sparkline?: number[];
   // Definição/denominador do número, sob demanda (ícone "i" ao lado do rótulo).
   info?: ReactNode;
+  // Modo discreto (Visão geral): o valor não é renderizado — só um marcador de largura estável. Quem
+  // chama também deve omitir delta/sparkline/helper que revelem o número.
+  oculto?: boolean;
 }
 
-export function KpiCard({ title, value, helper, delta, trend, icon, sparkline, info }: KpiCardProps) {
+export function KpiCard({ title, value, helper, delta, trend, icon, sparkline, info, oculto }: KpiCardProps) {
   // Estado em palavra ("Indisponível", "Conectado") não é número: sai em tamanho de texto, sem cortar.
   const textual = typeof value === 'string' && value.length > 1 && !/\d/.test(value);
   return (
@@ -53,7 +56,14 @@ export function KpiCard({ title, value, helper, delta, trend, icon, sparkline, i
         )}
       </p>
       <div className="ds-kpi__value-row">
-        <strong className={['ds-kpi__value', textual ? 'ds-kpi__value--texto' : null].filter(Boolean).join(' ')}>{value != null ? String(value) : '—'}</strong>
+        {oculto ? (
+          <strong className="ds-kpi__value ds-kpi__value--oculto">
+            <span aria-hidden="true">R$ •••••</span>
+            <span className="ds-sr-only">valor oculto</span>
+          </strong>
+        ) : (
+          <strong className={['ds-kpi__value', textual ? 'ds-kpi__value--texto' : null].filter(Boolean).join(' ')}>{value != null ? String(value) : '—'}</strong>
+        )}
       </div>
       {(delta || helper) && (
         <div className="ds-kpi__footer-row">

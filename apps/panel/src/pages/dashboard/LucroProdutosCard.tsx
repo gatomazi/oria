@@ -3,13 +3,17 @@ import { Link } from 'react-router-dom';
 import { Button, Callout, Card, EmptyState, ErrorState, Skeleton, TabList } from '../../components/ds';
 import { formatValor, plural } from '../../lib/format';
 import { getDashboardLucroProdutos, type AgrupamentoLucro, type DashboardLucroProdutosData } from '../../api/dashboard';
+import { useModoDiscreto, ValorOculto } from './ModoDiscreto';
 
 import '../../analytics.css';
 
 const VISIVEIS_INICIAL = 10;
 
-// Ranking de lucro operacional por produto ou por modelo de peça no período (pedidos pagos, sem
-// troca). Lista com barra e não DataTable: a comparação entre as linhas é a leitura principal. A
+// Ranking de lucro bruto por produto ou por modelo de peça no período (pedidos pagos, sem troca).
+// "Lucro bruto" = venda − desconto rateado − custo de produção, ANTES da mídia e das despesas (campo
+// lucro_operacional do servidor; o rótulo antigo dizia "operacional", o que sugeria descontar mídia).
+// Modo discreto: valores, lucro por peça e barras (proporcionais ao lucro) saem, e a ordem passa a
+// ser por peças — manter a ordem por lucro revelaria o ranking financeiro. Lista com barra e não DataTable: a comparação entre as linhas é a leitura principal. A
 // barra é relativa ao 1º colocado; o rótulo acessível diz a fatia do lucro total.
 export function LucroProdutosCard({ startDate, endDate, escopo, rotuloPeriodo }: { startDate: string; endDate: string; escopo: string; rotuloPeriodo: string }) {
   const [agrupar, setAgrupar] = useState<AgrupamentoLucro>('produto');
@@ -28,14 +32,16 @@ export function LucroProdutosCard({ startDate, endDate, escopo, rotuloPeriodo }:
     return () => { ativo = false; };
   }, [startDate, endDate, escopo, agrupar]);
 
-  const itens = dados?.itens || [];
+  const { oculto } = useModoDiscreto();
+  const itensBrutos = dados?.itens || [];
+  const itens = oculto ? [...itensBrutos].sort((a, b) => b.pecas - a.pecas) : itensBrutos;
   const lucroTotal = itens.reduce((acc, i) => acc + Math.max(i.lucroOperacional, 0), 0);
   const maiorLucro = Math.max(...itens.map((i) => i.lucroOperacional), 0);
   const visiveis = mostrarTodos ? itens : itens.slice(0, VISIVEIS_INICIAL);
 
   return (
     <Card
-      title={`Lucro por ${agrupar === 'produto' ? 'produto' : 'modelo'} — ${rotuloPeriodo}`}
+      title={`${oculto ? 'Peças' : 'Lucro bruto'} por ${agrupar === 'produto' ? 'produto' : 'modelo'} — ${rotuloPeriodo}`}
       action={
         <TabList
           label="Agrupar lucro por"
@@ -76,7 +82,7 @@ export function LucroProdutosCard({ startDate, endDate, escopo, rotuloPeriodo }:
                 <span>Participação</span>
                 <span>Peças</span>
                 <span className="ga-lista__metrica--opcional">Lucro/peça</span>
-                <span>Lucro operacional</span>
+                <span>Lucro bruto</span>
               </div>
               <ul className="ga-lista">
                 {visiveis.map((item) => {
@@ -86,15 +92,19 @@ export function LucroProdutosCard({ startDate, endDate, escopo, rotuloPeriodo }:
                   return (
                     <li className="ga-lista__item" key={item.chave}>
                       <span className="ga-lista__nome" title={nome}>{nome}</span>
-                      <span className="ga-barra" role="img" aria-label={`${Math.round(fatia * 100)}% do lucro operacional`}>
-                        <span className="ga-barra__preenchimento ga-barra__preenchimento--sucesso" style={{ transform: `scaleX(${escala})` }} />
-                      </span>
+                      {oculto ? (
+                        <span className="ga-barra ga-barra--oculta" aria-hidden="true" />
+                      ) : (
+                        <span className="ga-barra" role="img" aria-label={`${Math.round(fatia * 100)}% do lucro bruto`}>
+                          <span className="ga-barra__preenchimento ga-barra__preenchimento--sucesso" style={{ transform: `scaleX(${escala})` }} />
+                        </span>
+                      )}
                       <span className="ga-lista__metrica">{item.pecas.toLocaleString('pt-BR')}</span>
                       <span className="ga-lista__metrica ga-lista__metrica--opcional">
-                        {item.pecas > 0 ? formatValor(item.lucroOperacional / item.pecas) : '—'}
+                        {oculto ? <ValorOculto /> : item.pecas > 0 ? formatValor(item.lucroOperacional / item.pecas) : '—'}
                       </span>
                       <span className="ga-lista__metrica">
-                        <strong>{formatValor(item.lucroOperacional)}</strong>
+                        {oculto ? <ValorOculto /> : <strong>{formatValor(item.lucroOperacional)}</strong>}
                       </span>
                     </li>
                   );
