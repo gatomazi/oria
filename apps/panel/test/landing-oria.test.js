@@ -53,12 +53,36 @@ test('landing · usa a marca oficial servida pela allowlist', () => {
 
 test('landing · sem scripts externos e sem dados ilustrativos sem aviso', () => {
   assert.doesNotMatch(html, /<script[^>]+src=/, 'nenhum script de terceiros na página pública');
-  assert.match(semTags(html), /Prévia ilustrativa · dados fictícios/);
+  assert.match(semTags(html), /Demonstração ilustrativa · dados fictícios/);
 });
 
-test('landing · só funcionalidades liberadas: nada de afiliados nem visão multi-loja', () => {
+test('landing · só funcionalidades liberadas: nada de afiliados, multi-loja ou promessa sem lastro', () => {
   const texto = semTags(html).toLowerCase();
-  for (const proibido of ['afiliad', 'parceri', 'todas as suas lojas', 'várias lojas', 'multi-loja', 'depoimento']) {
+  // Cada item daqui tem motivo na auditoria de 30/09 (docs fora do repo): afiliados em flag, 1 loja
+  // por workspace, webhook Ink desligado (nada é "tempo real"), automações por evento e follow-up de
+  // Pix ainda não rodam em Store nativa, modo manual da API Meta sem tela de revisão.
+  const proibidos = [
+    'afiliad', 'parceri', 'todas as suas lojas', 'várias lojas', 'multi-loja', 'depoimento',
+    'tempo real', 'instantâne', 'automaticamente', 'envio automático', 'revisão antes do envio',
+    'feed de catálogo', 'controle de estoque', 'ia inclusa', 'grátis', 'gratuit',
+  ];
+  for (const proibido of proibidos) {
     assert.ok(!texto.includes(proibido), `a landing não menciona "${proibido}"`);
   }
+});
+
+test('landing · diz para quem é acima da dobra', () => {
+  const heroi = html.slice(html.indexOf('<section class="heroi"'), html.indexOf('</section>'));
+  assert.match(semTags(heroi), /Reserva Ink/);
+  assert.match(semTags(heroi), /Oria é um painel de gestão para lojas/);
+});
+
+// Regressão da versão anterior: `.js .revela { opacity: 0 }` deixava tudo abaixo do herói invisível
+// em captura de página inteira e quando o script quebrava. Conteúdo tem que ser visível no HTML puro.
+test('landing · nenhum conteúdo nasce invisível à espera de JS', () => {
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  assert.doesNotMatch(css, /opacity:\s*0\s*[;}]/, 'nenhuma regra deixa conteúdo com opacity 0');
+  assert.doesNotMatch(css, /from\s*\{[^}]*opacity:\s*0\s*[;}]/, 'nenhuma animação parte de opacity 0');
+  assert.doesNotMatch(html, /role="tabpanel"[^>]*\shidden/, 'painéis de abas não nascem ocultos (o script é quem oculta)');
+  assert.doesNotMatch(html, /class="js"|classList\.add\('js'\)/, 'sem gatilho global de ocultação no <head>');
 });
