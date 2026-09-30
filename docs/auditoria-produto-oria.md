@@ -189,7 +189,7 @@ Análise por leitura de código + testes + navegação de produção em modo lei
 
 **Dependências.** Decisão do dono (aumentar volume). **Não validado nesta rodada** (sem acesso ao Railway).
 
-**Atualização 2026-09-28 — status: `BLOQUEADO POR ACESSO À INFRA`.** Reanálise do código de `origin/main` (`902cc96`): o bootstrap já não reescreve identities sem mudança (`d173ff2`), `per_product`/`derived`/poda existem e o cooldown após falha é de 6 h; faltava um portão — o vigia só logava. Adicionado `storage_critical` ao início de todo full sync (>80 %), na branch `fix/oria-p0-storage`. Capacidade, WAL, modos ativos e último sync **de produção não foram observados** (leitura via Railway negada; não contornada). Checklist de coleta e critério de encerramento: [`docs/operations/p0-storage-closure-2026-09.md`](operations/p0-storage-closure-2026-09.md).
+**Atualização 2026-09-30 — status: `RESOLVIDO`.** Produção observada em modo leitura (Railway, 12:46–12:54 UTC): volume de 19 GB com **17 % usado** (15,9 GB livres), `pg_wal` 465 MB, banco 2,54 GiB; `PRODUCT_IDENTITY_VARIANT_MODE=derived` + `CATALOG_SYNC_VARIANT_SWEEP=per_product`; dois syncs completos `success` (29/09 e 30/09) sem `No space left`, com variantes gravadas == novas; `PG_VOLUME_CAPACITY_GB=19` coerente com o volume (18,25 GiB reais) e vigia medindo (–1,6 % vs `df`); gate pré-sync em produção (PR #49). Lacunas declaradas: 10 maiores relações não coletadas (consulta SQL de produção negada pelo ambiente) e espelho = 0 inferido; fail-open do gate é aceitável hoje mas não como política (recomendação de fail-closed no doc). Detalhes: [`docs/operations/p0-storage-closure-2026-09.md`](operations/p0-storage-closure-2026-09.md).
 
 ## 9. Achados P1
 

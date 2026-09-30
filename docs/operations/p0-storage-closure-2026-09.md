@@ -1,193 +1,204 @@
 # ORIA-P0-001 — Fechamento do risco de storage
 
-> Validado em **2026-09-28** sobre `origin/main` @ `902cc96`. Branch da entrega: `fix/oria-p0-storage`.
-> Nenhuma operação foi feita em produção. A leitura de produção pelo Railway CLI foi **negada** pelo classificador do
-> ambiente (`Production Reads`) e **não foi contornada**.
+> Coleta de produção em **2026-09-30 12:46–12:54 UTC**, somente leitura, autorizada por escrito pelo dono para esta finalidade.
+> Código auditado: `origin/main` (gate mergeado no PR #49, `8c08e0e`; painel em produção no deploy `191c4a0c`, commit `c5a015b`, PR #50).
+> Nada foi alterado em produção. Consultas SQL ao Postgres de produção foram **negadas pelo classificador do ambiente** e **não foram
+> contornadas** (ver §4).
 
 ## 1. Status
 
 ```text
-BLOQUEADO POR ACESSO À INFRA
+RESOLVIDO
 ```
 
-O código atual está correto e ganhou um portão que faltava (§9). Mas o P0 nasceu de um fato **de produção** (volume a 96 %) e nenhum
-dado atual de produção foi observado. Testes locais passando não fecham o item.
+com duas lacunas de observação declaradas (§12): a lista das 10 maiores relações **não foi coletada**, e "espelho de variante = 0" é
+**inferido** dos logs do vigia, não consultado no banco. Nenhuma das duas está entre os critérios de fechamento.
 
 ## 2. Resumo executivo
 
-- **Causa:** o full sync do catálogo (~658 k variantes) mais o bootstrap de identities reescreviam ~3,68 M linhas e ~11 GB de WAL por
-  ciclo num volume de ~5 GB (ENOSPC em 26/09 02:44 UTC).
-- **O que o código já corrigia antes desta entrega:** bootstrap sem reescrita inútil (`d173ff2`), varredura `per_product`,
-  modo `derived`, cooldown de 6 h após falha, kill switch `CATALOG_SYNC_DISABLED`, script de poda com backup/ensaio.
-- **O que faltava (lacuna de código, corrigida aqui):** o vigia de armazenamento **só logava**. Nada impedia o sync de começar com o
-  volume crítico. Agora `syncCommerceCatalog` consulta o vigia antes de tudo e devolve `storage_critical` (> 80 %).
-- **O que só produção responde:** capacidade real, `PG_VOLUME_CAPACITY_GB`, modos ativos (`derived`/`per_product`), último sync,
-  se a janela de migração do runbook foi executada. **Nada disso está registrado no repositório.**
+- **Produção está saudável:** volume de 19 GB com **17 % usado** (3,04 GiB), 15,9 GB livres, `pg_wal` 465 MB, banco 2,54 GiB.
+- **Produção roda o modo seguro:** `PRODUCT_IDENTITY_VARIANT_MODE=derived` + `CATALOG_SYNC_VARIANT_SWEEP=per_product`; o espelho parece ter sido podado
+  (banco de ~3,5 GB em 26/09 → 2,18 GiB em 28/09) e o volume foi ampliado (de ~5 GB para 19 GB) — **inferido** dos números, sem registro
+  no repositório da execução da janela.
+- **Dois syncs completos após a mudança, ambos `success`, sem `No space left`:** 29/09 03:07 UTC e 30/09 05:19 UTC. No de 30/09,
+  `variantes gravadas` (700.931) é **exatamente** o acréscimo de variantes vistas (4.301.458 → 5.002.389) → **zero reescrita de linha
+  inalterada**; o de 29/09 (528.100 gravadas) é compatível, mas o total do sync anterior não está nos logs. Pico de `db+wal` = 3,54 GiB (18,6 % da capacidade configurada), de uma base de 2,47 GiB.
+- **O gate novo está em produção** (PR #49) e mede corretamente (`pg_ls_waldir` legível, sem fallback para o teto).
+- **Causa raiz confirmada e eliminada:** reescrita total de ~3,68 M identities + ~11 GB de WAL por ciclo num volume de ~5 GB.
 
 ## 3. Estado atual da capacidade
 
-**Não observado.** Último dado conhecido (26/09 03:08 UTC, `storage-audit-2026-09.md`): volume 96 %, 4,4 GB usados, 194 MB livres,
-`pg_wal` 833 MB, banco 3.548 MB. Nenhum documento do repositório registra ampliação do volume depois disso.
+```text
+AMBIENTE = PRODUÇÃO   (Railway project "oria", environment "production")
+CAPACIDADE TOTAL:   19.138.976 KiB  (≈ 18,25 GiB · "19 GB" no Railway)   volume postgres-volume, /dev/zd1840
+USADO:              3.184.900 KiB   (≈ 3,04 GiB)
+LIVRE:              15.937.692 KiB  (≈ 15,20 GiB)
+PERCENTUAL:         17 %
+PG_VOLUME_CAPACITY_GB: 19
+CONFIGURAÇÃO COERENTE: SIM (com ressalva: o vigia usa 19 × 1024³ = 18,99 GiB; o filesystem tem 18,25 GiB → o vigia superestima a
+                        capacidade em ~4 %; recomenda-se 18)
+```
+
+Outros volumes: `oria-panel-volume` (uploads, `/app/storage`) não medido; `Postgres-KIav` (banco do serviço WhatsApp) com 4,5 GB,
+**2 % usado**, `pg_wal` 33 MB — **fora do alcance do vigia** (só o banco do painel é monitorado).
 
 ## 4. Estado atual do Postgres
 
-**Não observado** (tamanhos de banco/tabelas/índices/WAL atuais). Referência de 26/09: `product_external_identities` ≈ 3,68 M linhas
-de espelho de variante; poda ensaiada em cópia (3 min 11 s, 1,38 GB de WAL, tabela final ~2,2 GB).
+| Item | Valor | Fonte |
+|---|---|---|
+| Serviço do painel | `Postgres` (`postgres.railway.internal`), `DATABASE_URL` do painel aponta para ele | variáveis (host apenas) |
+| `pg_database_size` | **2,54 GiB** | log `[STORAGE_GUARD]` (consulta do próprio painel) |
+| `pg_wal` | **0,45 GiB** no log; **465 MB / 31 segmentos** no disco; pico observado **1,00 GiB** | log + `du` |
+| `du pgdata` | 3,1 GB (banco + WAL + outros bancos) | `railway ssh` |
+| Crescimento | 2,18 → 2,39 (29/09) → 2,54 GiB (30/09): **+0,21 e +0,15 GiB por sync** | logs do vigia, 200 amostras |
+| 10 maiores relações / índices | **NÃO COLETADO** | consultas ao Postgres de produção via `railway ssh … psql` foram negadas pelo classificador; não reenviei em pedaços |
+
+Para completar, o dono pode rodar (somente leitura):
+
+```sql
+SELECT n.nspname||'.'||c.relname AS relacao, pg_size_pretty(pg_total_relation_size(c.oid)) AS total
+  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE c.relkind IN ('r','m') AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast')
+ ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 10;
+SELECT count(*) AS espelho_variante FROM product_external_identities WHERE source='commerce_sync' AND namespace LIKE '%.variant_id';
+SELECT status, started_at, finished_at, pages_processed, variants_seen, variants_inserted, variants_updated, error_code
+  FROM commerce_catalog_sync_logs ORDER BY started_at DESC LIMIT 5;
+```
 
 ## 5. Estado do sync de catálogo
 
-**Estado de produção não observado.** Comportamento do código atual (`origin/main`):
+Logs do painel cobrem **2026-09-28 13:00 UTC → agora** (deploys anteriores foram removidos; não há log antes disso).
 
-| Item | Código atual | Evidência |
-|---|---|---|
-| Frequência | tick de 1 h + uma rodada 5 min após o boot; cada tick só age se `catalogSyncNecessario` | `server.js` `JOBS.agendar('catalogo-canonico', 60*60*1000…)` |
-| Necessidade | último sucesso mais velho que 24 h; nunca sincronizado; `running` além do TTL de 3 h | `composition.js` `catalogSyncNecessario`, `catalogSyncMaxAgeMs` |
-| Após falha | espera 6 h (era 1 h) — `CATALOG_SYNC_RETRY_COOLDOWN_HOURS` | `composition.js` |
-| Retry no mesmo tick | nenhum; 429 repete a MESMA página até 6× (`CATALOG_SYNC_RATE_LIMIT_RETRIES`) | `catalog-sync.js` |
-| Paginação/lote | 1 `INSERT … ON CONFLICT` por página (produtos e variantes); tombstones em lotes | `catalog-sync.js` |
-| Concorrência | lease por `(job, organizationId)`: `commerce-scan:reserva_ink` (compartilhado com o crawl legado) + `commerce-catalog-sync:reserva_ink`; no Postgres (vale entre instâncias); TTL 3 h; run `running` órfão vira `ABANDONED` ao obter o lease; job runner processa **uma Organization por vez** | `composition.js`, `catalog-sync.js`, `lib/platform/leases.js` |
-| Todos os gatilhos passam por `syncCommerceCatalog` | agendador, boot, disparo pós-conexão da Ink e botão manual | `server.js` (4 chamadores) → **ponto único** |
-| Modo padrão de variantes | `last_seen` (regrava **toda** variante vista a cada sync); `per_product` só por env | `catalog-sync.js`, `composition.js` |
-| Modo padrão de identity | `materialized` (grava o espelho); `derived` só por env | `product-identity-resolver.js` |
+| Horário (UTC) | Status | Páginas | Variantes vistas | Gravadas | Desativadas | WAL (cluster) | Erro |
+|---|---|---:|---:|---:|---:|---:|---|
+| 2026-09-29 03:07 | success | 1.150 | 4.301.458 | 528.100 | 0 | ≈ 2.810 MB | — |
+| 2026-09-30 05:19 | success | 1.378 | 5.002.389 | 700.931 | 0 | ≈ 3.195 MB | — |
 
-## 6. Causa raiz reconstruída
+- Nenhum `partial_failure`, nenhum `No space left on device`/`ENOSPC`, nenhuma linha `[CATALOG_SYNC_SCHEDULER]` de erro e nenhum
+  log de nível `error` na janela observada.
+- Frequência: 1 sync a cada ~24 h (`catalogSyncMaxAgeMs`), tick de 1 h com guarda; após falha, 6 h (`CATALOG_SYNC_RETRY_COOLDOWN_HOURS=6`).
+- Duração e identities processadas: **não observadas** (o log de conclusão não traz início; `bootstrapCommerceIdentities` não loga contagem).
+  Em `derived` o bootstrap não grava identity de variante por desenho.
+- `CATALOG_SYNC_DISABLED`: **ausente** → sync habilitado. Nenhum sync foi disparado por mim.
+- Sem alertas `[STORAGE_GUARD] tenant:` (espelho reintroduzido ou run órfão) em nenhuma das 200 amostras → **espelho = 0 inferido**.
 
-1. **Processo:** o full sync agendado (02:44:16 UTC) + o `bootstrapCommerceIdentities` que roda logo após um sync com sucesso.
-2. **Crescimento:** combinação — **WAL** (~11 GB por ciclo medido na POC; `pg_wal` 177 → 833 MB durante o run), **tabela + índices** de
-   `product_external_identities` (re-upsert dobra heap e índices: +865 MB na POC) e reescrita não-HOT das variantes.
-3. **Por que ~3,68 M identities:** o bootstrap fazia `ON CONFLICT DO UPDATE` **sem** `IS DISTINCT FROM`; toda linha era regravada mesmo sem
-   mudança. **Corrigido em `d173ff2` (26/09 12:06 −03)** para produtos, variantes e SKU — confirmado no código de `origin/main`.
-4. **Ainda existe?** A reescrita de identities: **não** (corrigida). A reescrita de variantes por sync: **sim, no modo padrão
-   `last_seen`** — cada run regrava as ~658 k variantes só para carimbar `last_seen_sync_id`. Só `per_product` evita.
-5. **Roda de hora em hora?** O tick sim, o sync não: no máximo 1×/24 h após sucesso e 1×/6 h após falha.
-6. **Concorrência:** protegida por lease em banco (ver §5). Um clique manual durante um run recebe `locked`. Não há N syncs em paralelo
-   (o runner é sequencial por Organization).
-7. **Sync full ainda é necessário?** Sim para desativar produtos/variantes que sumiram da Ink; `per_product` só grava o que mudou e
-   aplica tombstones só depois do run inteiro com sucesso.
-8. **`derived`/`per_product` aplicados?** **Desconhecido** — dependem de env de produção (§8).
-9. **O vigia teria evitado o incidente?** **Não.** Só logava e rodava a cada 10 min; o sync inteiro do incidente durou ~2 min 24 s.
-10. **Atua cedo o bastante?** Antes desta entrega, não (só observação). Agora o gate mede no instante de iniciar e nega acima de 80 %;
-    **não interrompe** um run já em andamento (§12).
-11. **Outro tenant pode repetir?** **Sim.** O disco é único e compartilhado; qualquer Organization com Ink conectada dispara um full
-    sync na conexão (`server.js`, disparo pós-conexão). O gate agora vale para todas, mas a capacidade é global.
+## 6. Causa raiz confirmada
+
+1. **Processo:** full sync agendado (26/09 02:44 UTC) + `bootstrapCommerceIdentities` logo depois.
+2. **Volume:** combinação de WAL, tabela e índices de `product_external_identities` (~3,68 M linhas de espelho de variante) e
+   reescrita não-HOT de variantes, num volume de ~5 GB com 96 % de uso.
+3. **Reescrita total:** `ON CONFLICT DO UPDATE` sem `IS DISTINCT FROM` (corrigido em `d173ff2`) e varredura `last_seen` que regrava toda
+   variante vista (substituída por `per_product`).
+4. **Situação atual:** o catálogo completo tem ~**5,0 milhões de variantes** (o run de 26/09 parou na página 144 de 1.378, por isso o
+   número "658 mil" da auditoria inicial); **cresce ~0,5–0,7 M variantes/dia**. Com `per_product` só essas linhas novas são gravadas.
+5. **Correção efetiva:** (a) espelho podado e modo `derived`; (b) `per_product`; (c) volume ampliado para 19 GB; (d) cooldown de 6 h;
+   (e) vigia de armazenamento; (f) **gate pré-sync** (PR #49, nesta rodada de entregas).
 
 ## 7. Storage guard
 
-Auditado em `lib/platform/storage-guard.js` (origem `origin/main`).
-
-| Pergunta | Resposta |
+| Pergunta | Resposta (produção observada) |
 |---|---|
-| Fail-open/closed | **Fail-open** por desenho: só observa. Agora o gate nega no crítico; sem capacidade ou com leitura falha **libera** (§9) |
-| Origem da métrica | `pg_database_size(current_database())` + WAL (`pg_ls_waldir()`, ou o teto `max_wal_size` se a role não puder ler) contra `PG_VOLUME_CAPACITY_GB`. **Aproximação declarada**: não enxerga `df` do volume nem outros arquivos |
-| `PG_VOLUME_CAPACITY_GB` ausente | percentual desconhecido → nível `ok`, log "não configurada". Gate: libera **e avisa a cada tentativa** |
-| Consulta de uso falha | `verificarVolume` propaga o erro ao job; gate libera e loga o motivo |
-| Limiares (mantidos) | aviso > 70 %, crítico > 80 %, WAL > 1,5 GB (aviso) — os do runbook, não alterados |
-| Quem chama | job `storage-guard` a cada 10 min (`verificarVolume` no máx. 1×/5 min + `verificarTenant`) **e**, novo, `syncCommerceCatalog` |
-| Bloqueia | **novo:** início de qualquer full sync do catálogo canônico |
-| Não bloqueia | escritas comuns (pedidos, sessões…), o crawl legado `produtos_ink`, jobs de outros módulos, e um sync **já em andamento** |
-| Logs | `[STORAGE_GUARD] banco=… wal=… capacidade=…GB uso~…%` (`warn`/`error` por nível); `[CATALOG_SYNC] … BLOQUEADO pelo vigia` |
-| Testes | antes: limiares, crítico com teto de WAL, `verificarTenant`. **Agora:** saudável/aviso/crítico, liberação após normalizar, capacidade ausente, erro de leitura, sync bloqueado sem lease/log/chamada à Ink |
+| Ativo? | **Sim** — 200 linhas `[STORAGE_GUARD]` entre 28/09 13:00 e 30/09 12:45, a cada 10 min |
+| Mede bem? | **Sim** — WAL medido por `pg_ls_waldir` (nenhuma linha com sufixo `(teto)`); banco 2,54 + WAL 0,45 = 2,99 GiB contra `df` 3,04 GiB (**–1,6 %**) |
+| Limiares | aviso > 70 %, crítico > 80 %, WAL > 1,5 GB (inalterados) |
+| Decisão do gate hoje | **PERMITE** (15,8 % calculado, 17 % real) |
+| Gate é chamado? | sim, por `syncCommerceCatalog`; o sync de 30/09 05:19 (primeiro após o deploy do PR #49) passou por ele (uso 18,5 % no início); o de 29/09 03:07 rodou antes do gate |
+| Bloqueia | início de full sync do catálogo canônico; **não** bloqueia escritas comuns nem um sync já em andamento |
+| Fail-open aceitável? | ver §9 |
 
-**Risco de configuração:** se `PG_VOLUME_CAPACITY_GB` estiver com o valor de exemplo do runbook (19) e o volume real for ~5 GB, o gate
-**nunca** dispara. Confirmar (§13).
+```text
+USO REAL DO VOLUME:          3,04 GiB / 18,25 GiB = 16,6 %  (df: 17 %)
+USO ESTIMADO PELO GUARD:     2,99 GiB / 18,99 GiB = 15,8 %
+DIFERENÇA:                   ~1 ponto percentual (subestima; denominador 4 % maior + ~0,05 GiB de outros bancos)
+DECISÃO DO GATE:             PERMITE
+```
+
+O guard **representa adequadamente o risco** para o painel (cobre o banco e o WAL, que foram a causa), mas **não enxerga** o volume de
+uploads, os logs do Postgres, o banco `postgres`/templates, nem o volume do `Postgres-KIav`.
 
 ## 8. Modo derived / per_product
 
+Nomes reais no código (os do roteiro da entrega não existem): `PRODUCT_IDENTITY_VARIANT_MODE` e `CATALOG_SYNC_VARIANT_SWEEP`.
+
 ```text
-MODO ATUAL:    NÃO OBSERVADO em produção (env não lida).
-               Padrões do código: PRODUCT_IDENTITY_VARIANT_MODE=materialized · CATALOG_SYNC_VARIANT_SWEEP=last_seen
-MODO ESPERADO: derived + per_product (runbook, passos 6 e 8), após backup e poda (passo 7)
-DIFERENÇA:     desconhecida; o repositório não registra que a janela do runbook tenha sido executada
-IMPACTO:       em materialized/last_seen o próximo full sync volta a gravar milhares de linhas de espelho/variantes
-               e ~GBs de WAL; só o gate novo impede que isso comece com o volume crítico
+PRODUCT_IDENTITY_VARIANT_MODE = derived        (esperado: derived)
+CATALOG_SYNC_VARIANT_SWEEP    = per_product    (esperado: per_product)
+
+VARIANT STORAGE MODE:  derived
+IDENTITY STORAGE MODE: per_product  (varredura de variantes; não há modo `last_seen` ativo)
+
+MODO ATUAL:       derived + per_product
+MODO RECOMENDADO: derived + per_product
+RISCO:            baixo — confirmado pelo sync de 30/09 (gravadas == novas)
 ```
 
-O código de `derived`, `per_product`, poda e verificação de equivalência **existe, está testado** (suíte 2.416/2.416 registrada em
-26/09) e **não foi reimplementado**.
+Outras variáveis relevantes em produção: `PG_VOLUME_CAPACITY_GB=19`, `CATALOG_SYNC_RETRY_COOLDOWN_HOURS=6`,
+`CATALOG_SYNC_RATE_LIMIT_RETRIES=6`. `CATALOG_SYNC_DISABLED`, `CATALOG_SYNC_PAGE_DELAY_MS`, `PUBLIC_SITE_URL` e `SITE_BASE_URL`: ausentes
+(os dois últimos pertencem ao P1-005, fora de escopo).
 
-## 9. Mudanças realizadas
+## 9. Fail-open
 
-Mínimas, restritas ao P0-001 (branch `fix/oria-p0-storage`):
+```text
+FAIL-OPEN É ACEITÁVEL EM PRODUÇÃO?  NÃO  (como política permanente)
+```
 
-| Arquivo | Mudança |
-|---|---|
-| `apps/panel/lib/platform/storage-guard.js` | novo `podeIniciarEscritaPesada()`: nega só no nível crítico; sem capacidade → libera + `warn`; leitura falha → libera + `warn` |
-| `apps/panel/lib/product-analytics/composition.js` | opção `storageGate`; `syncCommerceCatalog` consulta antes do lease e devolve `{ status: 'storage_critical' }` |
-| `apps/panel/server.js` | liga o portão ao vigia (ligação tardia, pois o vigia é criado depois da composição) |
-| `apps/panel/test/storage-guard.test.js` | +4 testes |
-| `apps/panel/test/invariants/catalog-sync-necessario.test.js` | +1 teste (sync bloqueado sem lease, sem log, sem Ink) |
-| `docs/operations/p0-storage-closure-2026-09.md`, `docs/auditoria-produto-oria.md` | documentação |
+Hoje é inofensivo porque a variável existe e a medição funciona. Mas "sem `PG_VOLUME_CAPACITY_GB` o portão libera" significa que remover
+ou errar a variável desliga a proteção sem ninguém perceber, exatamente a condição que o P0 quer impedir.
 
-Decisões: nenhum limiar alterado; nenhum comportamento de produção mudou enquanto o volume estiver < 80 % ou sem capacidade configurada.
-Achado durante a entrega: com capacidade **não** configurada o primeiro desenho consultava o banco mesmo assim e a latência extra expôs
-uma corrida já existente no polling de `product-analytics-http.test.js` ("M · POST /catalog-sync/cancelar…"); por isso o gate
-curto-circuita sem capacidade (nada a comparar). A corrida do teste em si **não foi alterada** (registrada como dívida).
+**Recomendação de código (não implementada aqui, sem mudança de código nesta rodada):** em `NODE_ENV=production`, escrita pesada de
+catálogo deve ser **fail-closed** quando a capacidade estiver ausente, não numérica ou ≤ 0, e (opcionalmente) quando a medição falhar
+repetidamente — devolvendo `storage_unconfigured`. Fora de produção, manter o comportamento atual. Complementar com validação no boot
+(`PG_VOLUME_CAPACITY_GB` obrigatório em produção, no padrão dos demais fail-fast do `server.js`).
 
-## 10. Testes executados
+## 10. Threshold e margem
 
-| Comando (em `apps/panel`) | Resultado |
-|---|---|
-| `node --test test/storage-guard.test.js` | 7/7 ✔ |
-| Grupo pertinente com Postgres efêmero (22 arquivos: `catalog-*`, `jobs-*`, `lease*`, `storage-*`, `product-analytics-*`, `desempenho-*`, `jornada-*`, `composition`, `boot-*`, `http-safety`, `feature-routes`, `entitle*`) | **228/228 ✔** |
-| `product-analytics-http.test.js` isolado, 4 execuções na versão final | 4/4 ✔ (na versão intermediária: 1 de 2 falhou — corrida descrita em §9) |
-| `negative-controls-cobertura` + `navegacao-painel` | 33/33 ✔ |
-| `tsc -p tsconfig.app.json --noEmit` | 0 erros |
-| `vite build` | ✔ |
-| `git diff --check` | limpo |
+```text
+THRESHOLD ATUAL:               crítico > 80 % de PG_VOLUME_CAPACITY_GB (19 GiB) = 15,2 GiB de db+wal
+ESPAÇO LIVRE NO THRESHOLD:     18,25 − 15,2 ≈ 3,05 GiB reais (o volume real é menor que a capacidade configurada)
+CHURN/WAL OBSERVADO POR CICLO: db +0,15 a +0,21 GiB; pg_wal até 1,00 GiB; db+wal de 2,47 → 3,54 GiB (+1,07 GiB de pico)
+                               WAL total do sync: 2.810–3.195 MB, mas o diretório não passa de ~1 GiB (checkpoint/reciclagem)
+MARGEM SUFICIENTE:             SIM
+```
 
-Não repeti os 2.416 testes do painel: a mudança é isolada em vigia/composição, sem tocar tenancy, jobs ou leases.
+- Pico observado (~1,07 GiB) é ~**3×** menor que o espaço livre no limiar (3,05 GiB).
+- Ressalva: o pico medido é de um sync que gravou 0,5–0,7 M variantes novas. Um tenant novo com catálogo de ~5 M variantes gravaria
+  tudo como novo (~+1,1 GiB de banco + ~1 GiB de WAL ≈ **+2,1 GiB**) — ainda abaixo de 3,05 GiB, mas com folga apertada se dois tenants
+  grandes sincronizarem em sequência.
+- **Sem evidência para alterar o limiar.** Recomendação futura (opcional): critério composto `> 80 % OU livre < 4 GiB` (piso absoluto),
+  e corrigir `PG_VOLUME_CAPACITY_GB` para 18 (tamanho real do filesystem).
 
 ## 11. Evidências
 
-- Código: `storage-guard.js`, `composition.js` (`syncCommerceCatalog`, `catalogSyncNecessario`), `catalog-sync.js`, `product-identity-resolver.js`, `server.js` (jobs `catalogo-canonico`, `storage-guard`).
-- Histórico: `d173ff2` (bootstrap sem reescrita, 26/09), `3a0e928` (varredura incremental), `644b0c2` (sync operacionalmente seguro), `78093b6` (poda guardada), `23c110c` (backup/restore/ensaio).
-- Docs: `storage-audit-2026-09.md`, `storage-migration-window-2026-09.md` (runbook §Sequência, rollback e evidências pré-mutação).
-- Ausência de evidência: nenhum commit ou doc após 26/09 registra ampliação de volume, ativação de `derived`/`per_product` ou execução da poda.
+- Ambiente: `railway status` → project `oria`, environment `production`; serviços `oria-panel`, `Postgres`, `Postgres-KIav`, `oria-whatsapp`, `oria-admin`, `oria-creatives`.
+- Deploy: `191c4a0c` (2026-09-29 21:54 −03), commit `c5a015b` (PR #50); anterior `8c08e0e` (PR #49 — gate de storage).
+- Variáveis: `railway variables --service oria-panel` (apenas as relevantes; nenhum segredo exibido).
+- Volume: `railway ssh --service Postgres -- df …` → `/dev/zd1840 19.138.976 / 3.184.900 / 15.937.692 KiB, 17 %`; `du pg_wal` 465M, 31 segmentos.
+- Logs: `railway logs -s oria-panel -d --since … --filter …` (filtros `CATALOG_SYNC`, `STORAGE_GUARD`, `ENOSPC`, `No space left`, `@level:error`) em 6 deploys.
+- Bloqueado: `railway ssh … psql` (classificador "Production Reads"); `railway variables` e `df` foram permitidos, SQL não.
 
 ## 12. Riscos residuais
 
-1. **Estado de produção desconhecido** (capacidade, WAL, modos, último sync, se a janela foi executada).
-2. **Gate é pré-início, não contínuo:** um sync que começa a 79 % pode encher o volume durante o run (o incidente cresceu ~650 MB de WAL em ~2,5 min).
-3. **Métrica aproximada:** não vê `df`, logs do Postgres nem outros arquivos do volume; exige `PG_VOLUME_CAPACITY_GB` correta.
-4. **Modo padrão do código continua o pesado** (`materialized` + `last_seen`); a proteção real é ambiental.
-5. **Disco compartilhado:** um tenant com catálogo grande afeta todos; sem quota por Organization.
-6. **Não bloqueia escritas comuns:** com o volume cheio por outro motivo, o painel inteiro falha do mesmo jeito.
-7. Corrida preexistente no polling de `product-analytics-http.test.js`.
+1. **Lacunas de observação:** 10 maiores relações/índices não coletadas; espelho = 0 é inferido; sem log anterior a 28/09 13:00 UTC
+   (não dá para provar ausência de `ENOSPC` entre 26/09 e 28/09, só que o estado atual e os dois últimos syncs estão limpos).
+2. **Fail-open** por ausência/erro de configuração (§9) — recomendação de código pendente.
+3. **Gate pré-início, não contínuo** (§10).
+4. **Crescimento:** ~0,15–0,2 GiB/dia de banco com o catálogo atual → ~55 dias até 80 % do volume; o catálogo cresce ~0,5–0,7 M
+   variantes/dia. Precisa de acompanhamento, não de ação agora.
+5. **Vigia não cobre** o volume de uploads nem o `Postgres-KIav` (2 % hoje).
+6. `PG_VOLUME_CAPACITY_GB=19` superestima em ~4 %.
+7. Corrida preexistente no polling de `product-analytics-http.test.js` (teste, não produção).
 
-## 13. Ações manuais necessárias
+## 13. Ações manuais recomendadas (nenhuma bloqueia o fechamento)
 
-Somente leitura, para o dono executar e devolver a saída (nomes de serviço entre `<>` a confirmar no Railway):
-
-```bash
-# 1) Variáveis (imprime só as relevantes)
-railway variables --service oria-panel --kv | grep -E '^(PG_VOLUME_CAPACITY_GB|PRODUCT_IDENTITY_VARIANT_MODE|CATALOG_SYNC_[A-Z_]+)='
-
-# 2) Logs do vigia e do sync (últimas ocorrências)
-railway logs --service oria-panel | grep -E 'STORAGE_GUARD|CATALOG_SYNC' | tail -60
-
-# 3) Disco real do volume e do WAL (no container do Postgres)
-railway ssh --service <postgres> -- df -h /var/lib/postgresql/data
-railway ssh --service <postgres> -- du -sh /var/lib/postgresql/data/pgdata/pg_wal
-
-# 4) SQL somente leitura (psql no Postgres do painel)
-SELECT pg_size_pretty(pg_database_size(current_database())) AS banco;
-SELECT relname, pg_size_pretty(pg_total_relation_size(oid)) AS total
-  FROM pg_class WHERE relname IN ('product_external_identities','commerce_product_variants','commerce_products') ORDER BY pg_total_relation_size(oid) DESC;
-SELECT status, started_at, finished_at, pages_processed, variants_seen, variants_updated, error_code
-  FROM commerce_catalog_sync_logs ORDER BY started_at DESC LIMIT 5;
-SELECT count(*) AS espelho_variante FROM product_external_identities
- WHERE source = 'commerce_sync' AND namespace LIKE '%.variant_id';   -- derived aplicado ⇒ 0
-SELECT slot_name, active, pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS retido FROM pg_replication_slots;
-```
-
-Interpretação para encerrar como **RESOLVIDO**: livre ≥ 2 GB e uso < 70 %; `PG_VOLUME_CAPACITY_GB` = tamanho **real** do volume;
-último sync `success` recente sem `No space left`; `PRODUCT_IDENTITY_VARIANT_MODE=derived` e `CATALOG_SYNC_VARIANT_SWEEP=per_product`
-(ou espelho = 0); nenhum `[CATALOG_SYNC] … BLOQUEADO` recorrente.
-
-Se o volume ainda estiver > 80 %: **AINDA ABERTO** — ampliar o volume (decisão do dono) e/ou seguir o runbook (janela única); manter
-`CATALOG_SYNC_DISABLED=1` até lá. Nada disso foi executado.
+1. `PG_VOLUME_CAPACITY_GB=18` no `oria-panel` (tamanho real do filesystem).
+2. Rodar as três consultas do §4 e anexar a saída (completa a lista das maiores relações e confirma espelho = 0).
+3. Reavaliar em ~7 dias a curva de crescimento do banco (linha `[STORAGE_GUARD]` mais recente) e o próximo `CATALOG_SYNC` (esperado
+   ~05:19 UTC de 01/10, com `gravadas` ≈ acréscimo de variantes).
+4. Aprovar a rodada de código do fail-closed em produção (§9) e, se quiser, o piso absoluto de 4 GiB (§10).
 
 ## 14. Critério para liberar a próxima etapa
 
-**PRÓXIMA ETAPA LIBERADA: NÃO** — até o dono devolver a saída do §13 e ela satisfazer o critério de **RESOLVIDO**, ou aceitar por
-escrito o risco de seguir com produção não verificada. O PR desta entrega pode ser mergeado independentemente: ele só adiciona o portão.
+**PRÓXIMA ETAPA LIBERADA: SIM.** Critérios de RESOLVIDO atendidos: capacidade saudável (17 %); capacidade configurada coerente com o
+volume real; nenhum erro de falta de espaço na janela observada; último sync `success`; vigia mede corretamente; modo
+`derived` + `per_product`; margem suficiente; sem condição concreta de recorrência imediata. As lacunas do §12 não impedem o
+fechamento, mas o item 1 (fail-closed) deve entrar no backlog de hardening.
