@@ -6,6 +6,7 @@ import { useLojaAtiva } from '../../auth/AuthContext';
 import { mesmaLoja, porEscopo } from './escopoLoja';
 import { avisoDeMidiaComProblema, avisoDeMidiaFora, estadoDaMidia, type MidiaFonte } from './estadoMidia';
 import { decomporResultado } from './decomposicaoResultado';
+import { BotaoModoDiscreto, ModoDiscretoProvider, useModoDiscreto, ValorOculto } from './ModoDiscreto';
 import { adminStores } from '../../state/adminStores';
 import {
   getDashboardAbandonedCarts,
@@ -66,7 +67,7 @@ interface Fetched<T> {
 // Fila de atenção: um Callout por assunto, na ordem de urgência. O CTA leva pra tela que resolve.
 function AttentionBanner({ carrinhos, pedidosProblema, errosIntegracao }: { carrinhos: DashboardCarrinho[]; pedidosProblema: number; errosIntegracao: number }) {
   const recuperaveis = carrinhos.filter((c) => c.contactable).length;
-  const avisos: { tom: 'warning' | 'danger'; titulo: string; descricao: string; href: string; cta: string }[] = [];
+  const avisos: { tom: 'info' | 'warning' | 'danger'; titulo: string; descricao: string; href: string; cta: string }[] = [];
   if (errosIntegracao > 0) {
     avisos.push({
       tom: 'danger',
@@ -86,8 +87,10 @@ function AttentionBanner({ carrinhos, pedidosProblema, errosIntegracao }: { carr
     });
   }
   if (recuperaveis > 0) {
+    // Oportunidade, não problema: tom `info` para não competir com o aviso de pagamento (âmbar),
+    // que é o que pede ação primeiro. Ordem de urgência: integração > pagamento > carrinhos.
     avisos.push({
-      tom: 'warning',
+      tom: 'info',
       titulo: `${plural(recuperaveis, 'carrinho recuperável', 'carrinhos recuperáveis')}`,
       descricao: 'Clientes que demonstraram interesse e podem ser recuperados via WhatsApp.',
       href: '/admin/recuperacao',
@@ -139,6 +142,7 @@ function Kpis({
   const deltaReceita = calcularDelta(receitaHoje, receitaOntem);
   const recuperaveis = carrinhos.filter((c) => c.contactable).length;
   const taxaRecuperacao = recuperacao && recuperacao.taxaConversao != null ? `${Math.round(recuperacao.taxaConversao * 100)}%` : '—';
+  const { oculto } = useModoDiscreto();
 
   return (
     <KpiStrip label="Indicadores de hoje">
@@ -153,10 +157,11 @@ function Kpis({
       <KpiCard
         title="Receita estimada hoje"
         value={formatValor(receitaHoje) || 'R$ 0,00'}
-        delta={deltaReceita?.delta}
-        trend={deltaReceita?.trend}
-        helper={deltaReceita ? 'vs. ontem até esta hora' : undefined}
-        sparkline={sparklineReceita}
+        oculto={oculto}
+        delta={oculto ? undefined : deltaReceita?.delta}
+        trend={oculto ? undefined : deltaReceita?.trend}
+        helper={!oculto && deltaReceita ? 'vs. ontem até esta hora' : undefined}
+        sparkline={oculto ? undefined : sparklineReceita}
       />
       <KpiCard title="Carrinhos recuperáveis" value={recuperaveis} helper="Com contato disponível agora" />
       <KpiCard
@@ -218,6 +223,7 @@ function ResultadoPeriodo({
     () => (linhas ? serieLucroOperacional(linhas, Math.max(dias, 7), midia, endDate) : []),
     [linhas, dias, midia, endDate]
   );
+  const { oculto } = useModoDiscreto();
 
   if (erro) {
     return <Callout tone="info" title="Resultado financeiro indisponível">{erro}</Callout>;
@@ -272,15 +278,17 @@ function ResultadoPeriodo({
           <KpiCard
             title="Faturamento"
             value={formatValor(atual.faturamento) || 'R$ 0,00'}
-            delta={deltaFaturamento?.delta}
-            trend={deltaFaturamento?.trend}
+            oculto={oculto}
+            delta={oculto ? undefined : deltaFaturamento?.delta}
+            trend={oculto ? undefined : deltaFaturamento?.trend}
             helper={`${plural(atual.pedidos, 'pedido pago', 'pedidos pagos')} · ${rotuloPeriodo}`}
           />
-          <KpiCard title="Receita líquida" value={formatValor(atual.lucroBruto) || 'R$ 0,00'} helper="Sem frete, já com descontos" />
+          <KpiCard title="Receita líquida" value={formatValor(atual.lucroBruto) || 'R$ 0,00'} oculto={oculto} helper="Sem frete, já com descontos" />
           <KpiCard
             title="Custo de produção"
             value={formatValor(atual.custoProducao) || 'R$ 0,00'}
-            helper={pesoCusto ? `${pesoCusto} da receita líquida` : 'Retido pela Reserva Ink'}
+            oculto={oculto}
+            helper={!oculto && pesoCusto ? `${pesoCusto} da receita líquida` : 'Retido pela Reserva Ink'}
           />
           {/* Lucro bruto = venda menos custo de produção, ANTES da mídia — o mesmo número que o painel
               da Ink chama de "Lucro Bruto". Com mídia conhecida ele é um degrau intermediário (célula);
@@ -289,31 +297,39 @@ function ResultadoPeriodo({
             <KpiCard
               title="Mídia"
               value={formatValor(atual.midia) || 'R$ 0,00'}
+              oculto={oculto}
               helper={avisoConexao || (atual.midia > 0 ? 'Gasto real nas plataformas' : 'Sem gasto registrado no período')}
             />
           ) : (
             <KpiCard title="Mídia" value="Não entra na conta" helper={avisoMidia ? `Sem gasto conhecido · ${avisoMidia}` : 'Sem gasto conhecido no período'} />
           )}
         </div>
-        <div className={['ad-resultado__sobra', final < 0 ? 'ad-resultado__sobra--negativa' : null].filter(Boolean).join(' ')}>
+        <div className={['ad-resultado__sobra', !oculto && final < 0 ? 'ad-resultado__sobra--negativa' : null].filter(Boolean).join(' ')}>
           <p className="ad-resultado__sobra-titulo">
             {temMidia ? 'Lucro após mídia' : 'Lucro bruto'}
-            {sparkline.length > 1 && (
+            {!oculto && sparkline.length > 1 && (
               <span className="ad-resultado__sobra-linha" aria-hidden="true">
                 <MiniSparkline values={sparkline.slice(-7)} width={88} height={24} />
               </span>
             )}
           </p>
-          <strong className="ad-resultado__sobra-valor">{formatValor(final) || 'R$ 0,00'}</strong>
+          <strong className="ad-resultado__sobra-valor">{oculto ? <ValorOculto /> : formatValor(final) || 'R$ 0,00'}</strong>
           <div className="ad-resultado__sobra-rodape">
-            {deltaLucro && <span className={`ds-kpi__delta ds-kpi__delta--${deltaLucro.trend === 'down' ? 'down' : 'up'}`}>{deltaLucro.delta}</span>}
+            {!oculto && deltaLucro && <span className={`ds-kpi__delta ds-kpi__delta--${deltaLucro.trend === 'down' ? 'down' : 'up'}`}>{deltaLucro.delta}</span>}
             <span>
-              {margemFinal ? `Margem de ${margemFinal} sobre o faturamento` : temMidia ? 'Lucro bruto − mídia' : 'Venda menos custo de produção'}
+              {oculto ? 'Margem oculta' : margemFinal ? `Margem de ${margemFinal} sobre o faturamento` : temMidia ? 'Lucro bruto − mídia' : 'Venda menos custo de produção'}
             </span>
           </div>
           {!temMidia && avisoMidia && <p className="ad-resultado__sobra-aviso">Antes da mídia: {avisoMidia}.</p>}
         </div>
-        {decomposicao.partes.length > 0 && (
+        {oculto && decomposicao.partes.length > 0 && (
+          // Proporções também revelam a economia da loja: a barra vira um trilho neutro, sem fatias.
+          <div className="ad-resultado__decomposicao">
+            <div className="ad-decomposicao ad-decomposicao--oculta" aria-hidden="true"><i /></div>
+            <p className="ad-decomposicao__legenda ad-decomposicao__legenda--oculta">Proporções ocultas</p>
+          </div>
+        )}
+        {!oculto && decomposicao.partes.length > 0 && (
           <div className="ad-resultado__decomposicao">
             <div className="ad-decomposicao" role="img" aria-label={`Para onde foi o faturamento: ${decomposicao.partes.map((p) => `${p.rotulo} ${Math.round(p.fracao * 100)}%`).join(', ')}`}>
               {decomposicao.partes.map((p) => (
@@ -388,6 +404,7 @@ function IntegrationHealth({ erros, escopo, integracoes }: { erros: { loja: stri
 }
 
 function HotCartsList({ carrinhos }: { carrinhos: DashboardCarrinho[] }) {
+  const { oculto } = useModoDiscreto();
   const quentes = carrinhos
     .filter((c) => c.contactable)
     .slice()
@@ -421,7 +438,7 @@ function HotCartsList({ carrinhos }: { carrinhos: DashboardCarrinho[] }) {
                     {tempo ? ` · há ${tempo.texto}` : ''}
                   </span>
                 </div>
-                <span className="ad-hotcart-valor">{formatValor(c.valor) || '—'}</span>
+                <span className="ad-hotcart-valor">{oculto ? <ValorOculto /> : formatValor(c.valor) || '—'}</span>
                 {link && (
                   <a
                     href={link}
@@ -500,6 +517,7 @@ function AcaoPedido({ pedido, onVinculado }: { pedido: DashboardPedido; onVincul
 
 function RecentOrdersTable({ pedidos, mostrarLoja, onVinculado }: { pedidos: DashboardPedido[]; mostrarLoja: boolean; onVinculado: (index: number, hotpageId: string) => void }) {
   const visiveis = pedidos.slice(0, 8);
+  const { oculto } = useModoDiscreto();
   return (
     <Card
       title="Últimos pedidos"
@@ -521,7 +539,7 @@ function RecentOrdersTable({ pedidos, mostrarLoja, onVinculado }: { pedidos: Das
           columns={[
             ...(mostrarLoja ? [{ key: 'loja', label: 'Loja', muted: true, render: (p: DashboardPedido) => adminStores.name(p.loja) }] : []),
             { key: 'cliente', label: 'Cliente', truncate: true, width: mostrarLoja ? 150 : 200, render: (p) => p.cliente || '—' },
-            { key: 'valor', label: 'Valor', align: 'right', render: (p) => formatValor(p.valor) || '—' },
+            { key: 'valor', label: 'Valor', align: 'right', render: (p) => (oculto ? <ValorOculto /> : formatValor(p.valor) || '—') },
             {
               key: 'status',
               label: 'Status',
@@ -550,7 +568,18 @@ function RecentOrdersTable({ pedidos, mostrarLoja, onVinculado }: { pedidos: Das
   );
 }
 
+// O provider envolve a tela inteira: a preferência (oculto/visível) é lida antes do primeiro render
+// de qualquer valor financeiro.
 export function DashboardPage() {
+  return (
+    <ModoDiscretoProvider>
+      <VisaoGeral />
+    </ModoDiscretoProvider>
+  );
+}
+
+function VisaoGeral() {
+  const { oculto } = useModoDiscreto();
   const escopo = useLojaAtiva() ?? '';
   // Seletor de período GLOBAL (src/lib/periodoGlobal.ts) — compartilhado e persistido entre
   // Dashboard/Desempenho de Produtos/Jornada de Compra; startDate/endDate são explícitos e podem
@@ -647,6 +676,13 @@ export function DashboardPage() {
   }
 
   const carregando = !pedidos.data && !pedidos.erro && !carrinhos.data && !carrinhos.erro;
+  // Frescor: os pedidos chegam por sincronização (o webhook da Ink não é garantido), então a tela diz
+  // de quando é o dado financeiro em vez de sugerir tempo real.
+  const sincronizado = tempoDesde(financeiro.data?.sincronizadoEm);
+  const descricaoCabecalho = sincronizado
+    ? `Resumo da operação da sua loja · financeiro sincronizado há ${sincronizado.texto}`
+    : 'Resumo da operação da sua loja.';
+  const whatsappConectado = integracoes ? integracoes.whatsapp?.conectado === true : null;
   // A lacuna do gráfico do período é a do fetch do PERÍODO (não a da lista "recente" de sempre).
   const lacuna = pedidosPeriodoFetch.data?.lojasComLacuna || [];
 
@@ -654,8 +690,13 @@ export function DashboardPage() {
     <PageStack className="ad-dashboard">
       <PageHeader
         title="Visão geral"
-        description="Resumo da operação da sua loja."
-        actions={<PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />}
+        description={descricaoCabecalho}
+        actions={
+          <div className="ad-cabecalho-acoes">
+            <BotaoModoDiscreto />
+            <PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />
+          </div>
+        }
       />
 
       {carregando && (
@@ -697,8 +738,16 @@ export function DashboardPage() {
               action={
                 <div className="ad-chart-legenda">
                   <span className="ad-chart-legenda__item ad-chart-legenda__item--barra">{serieFinanceira ? 'Pedidos pagos' : 'Pedidos'}</span>
-                  <span className="ad-chart-legenda__item ad-chart-legenda__item--linha">{serieFinanceira ? 'Faturamento' : 'Receita'}</span>
-                  {serieFinanceira && <span className="ad-chart-legenda__item ad-chart-legenda__item--lucro">Lucro operacional</span>}
+                  {oculto ? (
+                    <span className="ad-chart-legenda__item ad-chart-legenda__item--oculto">Valores ocultos</span>
+                  ) : (
+                    <>
+                      <span className="ad-chart-legenda__item ad-chart-legenda__item--linha">{serieFinanceira ? 'Faturamento' : 'Receita'}</span>
+                      {/* "Lucro bruto" (venda − custo de produção, antes da mídia): é o campo lucroOperacional
+                          do cache, o MESMO número do KPI "Lucro bruto" — o rótulo antigo dizia "operacional". */}
+                      {serieFinanceira && <span className="ad-chart-legenda__item ad-chart-legenda__item--lucro">Lucro bruto</span>}
+                    </>
+                  )}
                   {!serieFinanceira && !!lacuna.length && (
                     <InfoTooltip
                       content={`${lacuna.map((l) => adminStores.name(l)).join(', ')}: volume alto no período. O gráfico usa os pedidos mais recentes e pode faltar dado no meio (a Reserva Ink entrega no máximo 100 pedidos por página).`}
@@ -711,14 +760,14 @@ export function DashboardPage() {
                 !serieFinanceira.some((d) => d.pedidos > 0) ? (
                   <EmptyState title="Ainda não há pedidos pagos neste período" />
                 ) : (
-                  <OrdersRevenueChart dados={serieFinanceira} />
+                  <OrdersRevenueChart dados={serieFinanceira} ocultarValores={oculto} />
                 )
               ) : pedidos.erro ? (
                 <ErrorState description="Não foi possível carregar pedidos." />
               ) : !seriePeriodo.some((d) => d.pedidos > 0) ? (
                 <EmptyState title="Ainda não há dados suficientes neste período" />
               ) : (
-                <OrdersRevenueChart dados={seriePeriodo} />
+                <OrdersRevenueChart dados={seriePeriodo} ocultarValores={oculto} />
               )}
             </Card>
 
@@ -738,7 +787,20 @@ export function DashboardPage() {
               ) : !recuperacao.data ? (
                 <Skeleton rows={2} />
               ) : recuperacao.data.mensagensEnviadas === 0 ? (
-                <EmptyState title="Ainda não há mensagens de recuperação registradas" />
+                // Sem histórico: se o WhatsApp da loja ainda não foi conectado, a próxima ação é conectar;
+                // se já está conectado, explica quando o histórico aparece. Nada aqui afirma bloqueio.
+                whatsappConectado === false ? (
+                  <EmptyState
+                    title="WhatsApp ainda não conectado"
+                    description="Conecte o número da loja e vincule os modelos de recuperação para o histórico aparecer aqui."
+                    action={<Link className="ds-btn ds-btn--secondary ds-btn--sm" to="/admin/integracoes?provedor=whatsapp">Configurar WhatsApp</Link>}
+                  />
+                ) : (
+                  <EmptyState
+                    title="Ainda não há mensagens de recuperação"
+                    description="Quando a recuperação de carrinho ou de Pix enviar mensagens, o volume por dia e as conversões aparecem aqui."
+                  />
+                )
               ) : (
                 <div className="ad-recuperacao">
                   <dl className="ad-recuperacao-numeros">
@@ -758,7 +820,7 @@ export function DashboardPage() {
                     </div>
                     <div>
                       <dt>Receita recuperada</dt>
-                      <dd>{formatValor(recuperacao.data.receitaRecuperada) || 'R$ 0,00'}</dd>
+                      <dd>{oculto ? <ValorOculto /> : formatValor(recuperacao.data.receitaRecuperada) || 'R$ 0,00'}</dd>
                     </div>
                   </dl>
                   <div className="ad-recuperacao-grafico">
