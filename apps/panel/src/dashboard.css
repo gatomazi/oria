@@ -124,3 +124,69 @@
 
 /* Financeiro: 2 saldos não precisam da largura toda */
 .ad-kpi-strip--estreita { max-width: 560px; }
+
+/* ═══ Evolução visual — Fase 1 (2026-09) ═══════════════════════════════════
+   Escopo: só esta tela (.ad-dashboard). Fase 2 leva o que funcionar para o DS.
+   Ver DESIGN.md › "Evolução visual 2026-09". */
+
+/* Profundidade mínima dos painéis em repouso (token --shadow-painel). */
+.ad-dashboard .ds-card, .ad-dashboard .ds-kpi-strip, .ad-resultado { box-shadow: var(--shadow-painel); }
+
+/* Valores entram assentando (240ms, só opacity/transform). Zerado por prefers-reduced-motion
+   (regra global em tokens-base.css). Nunca parte de opacidade zero. */
+@keyframes ad-valor-entra { from { opacity: .45; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.ad-dashboard .ds-kpi__value, .ad-resultado__sobra-valor { animation: ad-valor-entra var(--motion-slow) var(--ease-out) both; }
+
+/* ── Resultado do período ── */
+.ad-resultado {
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  background: var(--surface-1); border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  overflow: hidden; min-width: 0; container: resultado / inline-size;
+}
+.ad-resultado__fluxo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
+.ad-resultado__sobra {
+  display: flex; flex-direction: column; gap: var(--space-2); justify-content: center; min-width: 0;
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  background: var(--glow-resultado), var(--surface-1);
+  box-shadow: -1px 0 0 var(--border-subtle), 0 -1px 0 var(--border-subtle);
+}
+.ad-resultado__sobra-titulo { display: flex; align-items: center; gap: var(--space-2); margin: 0; font: 500 13px/18px var(--font-sans); color: var(--text-secondary); }
+.ad-resultado__sobra-linha { display: flex; margin-left: auto; }
+.ad-resultado__sobra-linha .ds-sparkline { color: var(--success); }
+.ad-resultado__sobra-valor { font: 600 36px/42px var(--font-sans); letter-spacing: -0.02em; color: var(--success); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-resultado__sobra--negativa { background: var(--surface-1); }
+.ad-resultado__sobra--negativa .ad-resultado__sobra-valor { color: var(--danger); }
+.ad-resultado__sobra--negativa .ad-resultado__sobra-linha .ds-sparkline { color: var(--danger); }
+.ad-resultado__sobra-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1-5); font: var(--type-caption); color: var(--text-muted); }
+.ad-resultado__sobra-aviso { margin: 0; font: var(--type-caption); color: var(--warning); }
+.ad-resultado__decomposicao { grid-column: 1 / -1; padding: var(--space-3) var(--space-4) var(--space-4); box-shadow: 0 -1px 0 var(--border-subtle); }
+
+/* Barra "para onde foi o faturamento": saídas em tons neutros de comparação, sobra em success
+   (a mesma cor do lucro nos gráficos — chartTheme.ts). */
+.ad-decomposicao { display: flex; gap: 2px; height: 10px; }
+.ad-decomposicao__parte { flex-basis: 0; border-radius: 2px; transform-origin: left; animation: ad-barra-cresce 700ms var(--ease-out) both; }
+@keyframes ad-barra-cresce { from { transform: scaleX(.2); } to { transform: none; } }
+.ad-decomposicao__parte--frete { background: var(--chart-neutral-suave); }
+.ad-decomposicao__parte--producao { background: var(--chart-neutral); }
+.ad-decomposicao__parte--midia { background: var(--chart-neutral-claro); }
+.ad-decomposicao__parte--sobra { background: var(--success); }
+.ad-decomposicao__legenda { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: var(--space-2) 0 0; padding: 0; list-style: none; font: var(--type-caption); color: var(--text-muted); }
+.ad-decomposicao__item { display: inline-flex; align-items: center; gap: var(--space-1-5); }
+.ad-decomposicao__item b { color: var(--text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ad-decomposicao__item::before { content: ''; width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.ad-decomposicao__item--frete::before { background: var(--chart-neutral-suave); }
+.ad-decomposicao__item--producao::before { background: var(--chart-neutral); }
+.ad-decomposicao__item--midia::before { background: var(--chart-neutral-claro); }
+.ad-decomposicao__item--sobra::before { background: var(--success); }
+
+@media (min-width: 1024px) {
+  .ad-resultado { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+  .ad-resultado__sobra { padding: var(--space-5) var(--space-6); }
+  .ad-resultado__sobra-valor { font-size: 40px; line-height: 46px; }
+}
+/* Tela muito larga: as 4 saídas cabem numa linha sem cortar valor. */
+@container resultado (min-width: 1440px) { .ad-resultado__fluxo { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 719px) {
+  .ad-resultado__sobra { padding: var(--space-4); }
+  .ad-resultado__sobra-valor { font-size: 30px; line-height: 36px; }
+}
