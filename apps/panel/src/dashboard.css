@@ -190,3 +190,15 @@
   .ad-resultado__sobra { padding: var(--space-4); }
   .ad-resultado__sobra-valor { font-size: 30px; line-height: 36px; }
 }
+
+/* ── Modo discreto (valores financeiros ocultos) ─────────────────────────
+   O valor não é renderizado: só um marcador de largura estável. Sem blur. */
+.ad-cabecalho-acoes { display: flex; align-items: center; gap: var(--space-2); }
+.ad-olho { width: var(--control-h); min-width: var(--control-h); padding: 0; justify-content: center; }
+.ad-oculto { color: var(--text-muted); letter-spacing: 0.08em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ds-kpi__value.ds-kpi__value--oculto { color: var(--text-muted); letter-spacing: 0.06em; }
+.ad-resultado__sobra-valor .ad-oculto { color: var(--text-secondary); }
+.ad-decomposicao--oculta i { flex: 1; border-radius: 2px; background: var(--surface-2); }
+.ad-decomposicao__legenda--oculta { display: block; }
+.ad-chart-legenda__item--oculto { color: var(--text-muted); }
+.ga-barra.ga-barra--oculta { background: var(--surface-2); }
