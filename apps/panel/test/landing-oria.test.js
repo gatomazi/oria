@@ -48,6 +48,13 @@ test('landing · política, painel e contato apontam para destinos reais', () =>
   assert.match(html, /href="\/politica-de-privacidade"/);
   assert.match(html, /href="\/admin"/);
   assert.match(html, /href="mailto:tomazi\.brand@gmail\.com/);
+  // CTA comercial vai para o WhatsApp (decisão do dono, 30/09/2026); nenhum CTA de conversão usa mailto.
+  const ctas = html.match(/<a [^>]*>\s*Conhecer o Oria/g) || [];
+  assert.ok(ctas.length >= 3, 'CTAs "Conhecer o Oria" presentes');
+  for (const cta of ctas) {
+    assert.match(cta, /href="https:\/\/wa\.me\/5548996889411\?text=/, 'CTA abre o WhatsApp comercial');
+    assert.match(cta, /rel="noopener noreferrer"/);
+  }
   assert.match(semTags(html), /O Oria é operado pelo Orgulho Regional/);
 });
 
