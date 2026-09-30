@@ -497,6 +497,18 @@ Firmes e discretos. Quem indica prioridade é a hierarquia, não o tamanho.
 - **Diálogo centralizado** usa keyframes que preservam o `translate(-50%, -50%)`; nunca um `scale()` genérico por cima de um posicionamento por transform.
 - **Movimento reduzido:** `prefers-reduced-motion: reduce` zera animações e transições no painel inteiro (regra global em `tokens-base.css`); o estado final aparece na hora.
 
+## Evolução visual 2026-09 (Fase 1 — Dashboard)
+
+Emenda deliberada às regras acima, pedida junto com a nova home pública: o painel ganha um pouco da profundidade e do movimento da home, sem virar vitrine. **Vale só na tela Visão geral (`.ad-dashboard`)** até a Fase 2 decidir o que sobe para o design system.
+
+- **Painel em repouso** pode ter `--shadow-painel`: um fio de luz no topo e uma sombra curta de contato. Não é a sombra de overlay; ela só assenta o painel no fundo. Emenda a *Flat-At-Rest Rule*.
+- **Brilho de resultado** (`--glow-resultado`): tinta radial suave e verde, reservada ao número que fecha a conta (lucro após mídia, ou lucro bruto sem mídia). Um por tela. Emenda a regra de "sem glow".
+- **O resultado é texto `success`**, em 36–40px, e vira `danger` quando há prejuízo. Sucesso continua nunca sendo superfície preenchida.
+- **Barra de decomposição** do faturamento (frete e descontos, produção, mídia, sobra) segue o vocabulário de gráfico: saídas em tons de `chart-neutral`, sobra em `success`. Conta em `decomposicaoResultado.ts`.
+- **Movimento de entrada** só em valores de KPI (240ms, `opacity .45 → 1` + 3px) e na barra de decomposição (`scaleX`, 700ms). Nunca parte de opacidade zero, e é zerado por `prefers-reduced-motion`. Emenda "KPIs não animam na entrada" só nesta tela.
+- **Área sob a série principal** do gráfico de faturamento: gradiente vertical de `info` de 22% → 0%. É a única área preenchida permitida em gráfico.
+- Continua proibido: glassmorphism, `backdrop-filter`, glow em card comum, cor decorativa e animação em loop.
+
 ## Do's and Don'ts
 
 ### Do:

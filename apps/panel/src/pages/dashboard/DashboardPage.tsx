@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Callout, Card, DataTable, EmptyState, ErrorState, Icon, InfoTooltip, KpiCard, KpiStrip, PageHeader, PageStack, Skeleton, StatusBadge } from '../../components/ds';
+import { Button, Callout, Card, DataTable, EmptyState, ErrorState, Icon, InfoTooltip, KpiCard, KpiStrip, MiniSparkline, PageHeader, PageStack, Skeleton, StatusBadge } from '../../components/ds';
 import { copiar, formatValor, plural, tempoDesde, waLink } from '../../lib/format';
 import { useLojaAtiva } from '../../auth/AuthContext';
 import { mesmaLoja, porEscopo } from './escopoLoja';
 import { avisoDeMidiaComProblema, avisoDeMidiaFora, estadoDaMidia, type MidiaFonte } from './estadoMidia';
+import { decomporResultado } from './decomposicaoResultado';
 import { adminStores } from '../../state/adminStores';
 import {
   getDashboardAbandonedCarts,
@@ -229,9 +230,6 @@ function ResultadoPeriodo({
   const comparavel = dias > 1 && anterior.semFinanceiro === 0;
   const deltaFaturamento = comparavel ? calcularDelta(atual.faturamento, anterior.faturamento) : null;
   const deltaLucro = comparavel ? calcularDelta(atual.lucroAposMidia, anterior.lucroAposMidia) : null;
-  // Margem sobre o FATURAMENTO, não sobre o lucro bruto: "margem de 51%" lida contra a receita é o
-  // número que as pessoas comparam entre si, e é assim que a DRE do Meta Ads também calcula.
-  const margem = formatPercentual(atual.lucroAposMidia, atual.faturamento);
   // Conta de anúncios da loja conectada = a mídia entra na conta, MESMO com gasto zero no período
   // (isso é "gasto zero" de verdade). Sem conta da loja o painel não sabe quanto foi gasto: não
   // mostra "Mídia R$ 0,00" como se soubesse, e o lucro diz por que não desconta mídia.
@@ -240,6 +238,15 @@ function ResultadoPeriodo({
   const avisoMidia = avisoDeMidiaFora(estadoMidia);
   const avisoConexao = avisoDeMidiaComProblema(estadoMidia);
   const pesoCusto = formatPercentual(atual.custoProducao, atual.lucroBruto);
+  // O número que fecha a linha: lucro após mídia quando a mídia é conhecida, senão o lucro bruto.
+  const final = temMidia ? atual.lucroAposMidia : atual.lucroOperacional;
+  // Margem sobre o FATURAMENTO, não sobre o lucro bruto: "margem de 51%" lida contra a receita é o
+  // número que as pessoas comparam entre si, e é assim que a DRE do Meta Ads também calcula.
+  const margemFinal = formatPercentual(final, atual.faturamento);
+  const decomposicao = decomporResultado(
+    { faturamento: atual.faturamento, receitaLiquida: atual.lucroBruto, custoProducao: atual.custoProducao, midia: atual.midia, resultado: final },
+    temMidia
+  );
 
   return (
     <div className="ds-stack">
@@ -256,52 +263,73 @@ function ResultadoPeriodo({
           Ficam fora do faturamento e do lucro abaixo até o sync de hora em hora ou o backfill de pedidos passar por eles.
         </Callout>
       )}
-      <KpiStrip label="Resultado do período">
-        <KpiCard
-          title="Faturamento"
-          value={formatValor(atual.faturamento) || 'R$ 0,00'}
-          delta={deltaFaturamento?.delta}
-          trend={deltaFaturamento?.trend}
-          helper={`${plural(atual.pedidos, 'pedido pago', 'pedidos pagos')} · ${rotuloPeriodo}`}
-        />
-        <KpiCard title="Receita líquida" value={formatValor(atual.lucroBruto) || 'R$ 0,00'} helper="Sem frete, já com descontos" />
-        <KpiCard
-          title="Custo de produção"
-          value={formatValor(atual.custoProducao) || 'R$ 0,00'}
-          helper={pesoCusto ? `${pesoCusto} da receita líquida` : 'Retido pela Reserva Ink'}
-        />
-        {/* Lucro bruto = venda menos custo de produção, ANTES da mídia — o mesmo número que o painel
-            da Ink chama de "Lucro Bruto". Sem mídia conhecida ele é o resultado final do período, então
-            leva o delta e a sparkline; com mídia, quem fecha a linha é o "Lucro após mídia". */}
-        <KpiCard
-          title="Lucro bruto"
-          value={formatValor(atual.lucroOperacional) || 'R$ 0,00'}
-          delta={temMidia ? undefined : deltaLucro?.delta}
-          trend={temMidia ? undefined : deltaLucro?.trend}
-          helper={temMidia ? 'Venda menos custo de produção' : avisoMidia ? `Venda menos custo de produção · ${avisoMidia}` : 'Venda menos custo de produção'}
-          sparkline={temMidia ? undefined : sparkline.slice(-7)}
-        />
-        {/* Mídia só aparece quando existe conta de anúncios atribuída a alguma loja do escopo —
-            um card zerado sugeriria que a operação não investe, o que é diferente de "o painel não
-            sabe quanto foi investido". */}
-        {temMidia && (
+      {/* Resultado do período: a linha de chegada (o que sobra) ganha destaque próprio, e as saídas
+          ficam numa grade de 4 células — com 6 células numa linha só os valores eram cortados
+          ("R$ 38.233,…") em 1440px com a sidebar aberta. A barra embaixo é a mesma conta em
+          proporção (decomposicaoResultado.ts). */}
+      <section className="ad-resultado" aria-label="Resultado do período">
+        <div className="ad-resultado__fluxo" role="group" aria-label="Como se chega ao resultado">
           <KpiCard
-            title="Mídia"
-            value={formatValor(atual.midia) || 'R$ 0,00'}
-            helper={avisoConexao || (atual.midia > 0 ? 'Gasto real nas plataformas' : 'Sem gasto registrado no período')}
+            title="Faturamento"
+            value={formatValor(atual.faturamento) || 'R$ 0,00'}
+            delta={deltaFaturamento?.delta}
+            trend={deltaFaturamento?.trend}
+            helper={`${plural(atual.pedidos, 'pedido pago', 'pedidos pagos')} · ${rotuloPeriodo}`}
           />
-        )}
-        {temMidia && (
+          <KpiCard title="Receita líquida" value={formatValor(atual.lucroBruto) || 'R$ 0,00'} helper="Sem frete, já com descontos" />
           <KpiCard
-            title="Lucro após mídia"
-            value={formatValor(atual.lucroAposMidia) || 'R$ 0,00'}
-            delta={deltaLucro?.delta}
-            trend={deltaLucro?.trend}
-            helper={margem ? `Margem de ${margem} sobre o faturamento` : 'Lucro bruto − mídia'}
-            sparkline={sparkline.slice(-7)}
+            title="Custo de produção"
+            value={formatValor(atual.custoProducao) || 'R$ 0,00'}
+            helper={pesoCusto ? `${pesoCusto} da receita líquida` : 'Retido pela Reserva Ink'}
           />
+          {/* Lucro bruto = venda menos custo de produção, ANTES da mídia — o mesmo número que o painel
+              da Ink chama de "Lucro Bruto". Com mídia conhecida ele é um degrau intermediário (célula);
+              sem mídia ele é o resultado final e vai para o destaque ao lado. */}
+          {temMidia ? (
+            <KpiCard
+              title="Mídia"
+              value={formatValor(atual.midia) || 'R$ 0,00'}
+              helper={avisoConexao || (atual.midia > 0 ? 'Gasto real nas plataformas' : 'Sem gasto registrado no período')}
+            />
+          ) : (
+            <KpiCard title="Mídia" value="Não entra na conta" helper={avisoMidia ? `Sem gasto conhecido · ${avisoMidia}` : 'Sem gasto conhecido no período'} />
+          )}
+        </div>
+        <div className={['ad-resultado__sobra', final < 0 ? 'ad-resultado__sobra--negativa' : null].filter(Boolean).join(' ')}>
+          <p className="ad-resultado__sobra-titulo">
+            {temMidia ? 'Lucro após mídia' : 'Lucro bruto'}
+            {sparkline.length > 1 && (
+              <span className="ad-resultado__sobra-linha" aria-hidden="true">
+                <MiniSparkline values={sparkline.slice(-7)} width={88} height={24} />
+              </span>
+            )}
+          </p>
+          <strong className="ad-resultado__sobra-valor">{formatValor(final) || 'R$ 0,00'}</strong>
+          <div className="ad-resultado__sobra-rodape">
+            {deltaLucro && <span className={`ds-kpi__delta ds-kpi__delta--${deltaLucro.trend === 'down' ? 'down' : 'up'}`}>{deltaLucro.delta}</span>}
+            <span>
+              {margemFinal ? `Margem de ${margemFinal} sobre o faturamento` : temMidia ? 'Lucro bruto − mídia' : 'Venda menos custo de produção'}
+            </span>
+          </div>
+          {!temMidia && avisoMidia && <p className="ad-resultado__sobra-aviso">Antes da mídia: {avisoMidia}.</p>}
+        </div>
+        {decomposicao.partes.length > 0 && (
+          <div className="ad-resultado__decomposicao">
+            <div className="ad-decomposicao" role="img" aria-label={`Para onde foi o faturamento: ${decomposicao.partes.map((p) => `${p.rotulo} ${Math.round(p.fracao * 100)}%`).join(', ')}`}>
+              {decomposicao.partes.map((p) => (
+                <i key={p.chave} className={`ad-decomposicao__parte ad-decomposicao__parte--${p.chave}`} style={{ flexGrow: p.fracao }} />
+              ))}
+            </div>
+            <ul className="ad-decomposicao__legenda" aria-hidden="true">
+              {decomposicao.partes.map((p) => (
+                <li key={p.chave} className={`ad-decomposicao__item ad-decomposicao__item--${p.chave}`}>
+                  {p.rotulo} <b>{Math.round(p.fracao * 100)}%</b>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
-      </KpiStrip>
+      </section>
     </div>
   );
 }
@@ -623,10 +651,10 @@ export function DashboardPage() {
   const lacuna = pedidosPeriodoFetch.data?.lojasComLacuna || [];
 
   return (
-    <PageStack>
+    <PageStack className="ad-dashboard">
       <PageHeader
         title="Visão geral"
-        description="Resumo da operação da sua loja em tempo real."
+        description="Resumo da operação da sua loja."
         actions={<PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />}
       />
 

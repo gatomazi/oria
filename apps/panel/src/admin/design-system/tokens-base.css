@@ -53,6 +53,8 @@
   --premium-tint: rgba(139, 92, 246, 0.14);
   --neutral-tint: rgba(169, 180, 192, 0.12);
   --chart-neutral: #5C6F84;
+  --chart-neutral-claro: #8394A8;              /* 2ª saída numa decomposição (ex.: mídia) */
+  --chart-neutral-suave: rgba(92, 111, 132, 0.45); /* 3ª saída, a mais leve (ex.: frete e descontos) */
 
   /* ── Tipografia — DM Sans integral; Fraunces só em wordmark do tenant ── */
   --font-sans: 'DM Sans', Inter, system-ui, -apple-system, sans-serif;
@@ -90,6 +92,12 @@
 
   /* ── Elevação (plano em repouso; sombra só no que flutua) ── */
   --shadow-overlay: 0 12px 32px rgba(3, 7, 11, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  /* Evolução visual (Fase 1, 2026-09): profundidade mínima para painel EM REPOUSO — um fio de luz
+     no topo e uma sombra curta de contato. Não é a sombra de overlay: não flutua, só assenta o painel
+     no fundo. Por ora usada só no Dashboard (DESIGN.md › Elevation & Depth › Evolução). */
+  --shadow-painel: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(3, 7, 11, 0.35);
+  /* Brilho de resultado: tinta radial suave, reservada ao número que fecha a conta (o que sobra). */
+  --glow-resultado: radial-gradient(120% 140% at 100% 0%, rgba(53, 208, 127, 0.10), transparent 62%);
   --shadow-tooltip: 0 4px 12px rgba(3, 7, 11, 0.45);
 
   /* ── Controles e layout ── */
