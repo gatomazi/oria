@@ -17222,9 +17222,13 @@ app.get('/hotpix/:id', (req, res) => {
 // disponível — sem Postgres não há RLS, e sem RLS estes serviços não têm o que ler com segurança.
 const { createProductAnalyticsComposition } = require('./lib/product-analytics/composition');
 const { createProductAnalyticsRouter } = require('./lib/product-analytics/http-routes');
+// Portão de armazenamento do full sync (P0-001): o vigia (`STORAGE_GUARD`, mais abaixo) é criado depois desta composição,
+// então o portão é ligado tarde. Antes de o vigia existir (só durante o boot) o portão permite.
+let portaoDeArmazenamento = null;
 const PRODUCT_ANALYTICS = pgPool
   ? createProductAnalyticsComposition({
     pool: pgPool, keyring: CHAVEIRO,
+    storageGate: () => (portaoDeArmazenamento ? portaoDeArmazenamento() : Promise.resolve({ permitido: true })),
     googleClientId: process.env.GOOGLE_CLIENT_ID, googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
     // Rodada M · mesma proteção de concorrência que JOBS já usa (linha ~183) — instância própria,
     // segura de duplicar (o lease em si vive no Postgres, nunca em memória do processo).
@@ -17348,6 +17352,7 @@ if (pgPool) {
     capacidadeBytes: envNumeroPositivo('PG_VOLUME_CAPACITY_GB') * 1024 ** 3,
     modoVariante: process.env.PRODUCT_IDENTITY_VARIANT_MODE || 'materialized',
   });
+  portaoDeArmazenamento = () => STORAGE_GUARD.podeIniciarEscritaPesada();
   let ultimoVolumeEm = 0;
   JOBS.agendar('storage-guard', 10 * 60 * 1000, async () => {
     if (Date.now() - ultimoVolumeEm > 5 * 60 * 1000) { // global: uma vez por tick, não uma por Organization

@@ -60,6 +60,27 @@ function createStorageGuard({ pool, logger = console, capacidadeBytes = 0, modoV
     return { ...r, dbBytes: Number(bytes), walBytes: wal.bytes };
   }
 
+  // Portão de escrita pesada (P0-001): só o nível CRÍTICO (> criticoPct, padrão 80 %) nega — mesmos limiares do aviso,
+  // nenhum número novo. Sem `PG_VOLUME_CAPACITY_GB` o percentual é desconhecido e o portão permite (declarado, e
+  // `verificarVolume` já avisa "não configurada"); falha ao ler o tamanho também permite: com o banco doente o próprio
+  // sync falha alto, e travar para sempre por uma leitura ruim seria pior.
+  async function podeIniciarEscritaPesada() {
+    if (!(capacidadeBytes > 0)) {
+      // Sem capacidade não há percentual para comparar: nada a medir. O aviso deixa a lacuna visível no log a cada tentativa.
+      logger.warn('[STORAGE_GUARD] PG_VOLUME_CAPACITY_GB não configurada — o portão de escrita pesada não consegue negar; configure a capacidade do volume');
+      return { permitido: true, nivel: 'sem_capacidade', pct: null, motivo: null };
+    }
+    let r;
+    try {
+      r = await verificarVolume();
+    } catch (err) {
+      logger.warn(`[STORAGE_GUARD] não foi possível medir o volume (${err.message}) — escrita pesada liberada`);
+      return { permitido: true, nivel: 'desconhecido', pct: null, motivo: null };
+    }
+    if (r.nivel === 'critico') return { permitido: false, nivel: r.nivel, pct: r.pct, motivo: r.alertas.join('; ') };
+    return { permitido: true, nivel: r.nivel, pct: r.pct, motivo: null };
+  }
+
   // Por tenant (dentro de comContexto da Organization).
   async function verificarTenant() {
     const alertas = [];
@@ -75,7 +96,7 @@ function createStorageGuard({ pool, logger = console, capacidadeBytes = 0, modoV
     return { espelho, orfaos, alertas };
   }
 
-  return Object.freeze({ verificarVolume, verificarTenant });
+  return Object.freeze({ verificarVolume, verificarTenant, podeIniciarEscritaPesada });
 }
 
 module.exports = { avaliarArmazenamento, createStorageGuard };

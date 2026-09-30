@@ -88,6 +88,10 @@ function createProductAnalyticsComposition({
   // pós-conexão e botão manual passam por `syncCommerceCatalog`, que devolve `disabled` sem tocar na Ink
   // nem no banco. Existe para janelas de manutenção — o boot nunca "reprograma" uma varredura sozinho.
   syncDisabled = false,
+  // Portão de armazenamento (storage-guard.podeIniciarEscritaPesada): função async → { permitido, motivo }. O full sync
+  // reescreve milhões de linhas e gera GBs de WAL; com o volume em nível crítico ele não começa (agendador, boot,
+  // pós-conexão e botão manual passam todos por `syncCommerceCatalog`). Ausente = sem portão (testes antigos).
+  storageGate = null,
   // Depois de um run que NÃO fechou em sucesso (falha parcial, 429, ENOSPC…), o agendador espera isto
   // antes de tentar de novo — antes era 1 h, o que repetia a falha em cima do mesmo limite/disco.
   catalogSyncRetryCooldownMs = 6 * 60 * 60 * 1000,
@@ -177,6 +181,13 @@ function createProductAnalyticsComposition({
     if (syncDisabled) {
       console.warn(`[CATALOG_SYNC] ${COMMERCE_PROVIDER}: sync canônico DESABILITADO (CATALOG_SYNC_DISABLED) — nada foi feito`);
       return { status: 'disabled', syncRunId: null, pagesProcessed: 0 };
+    }
+    if (storageGate) {
+      const portao = await storageGate();
+      if (!portao.permitido) {
+        console.error(`[CATALOG_SYNC] ${COMMERCE_PROVIDER}: sync BLOQUEADO pelo vigia de armazenamento (${portao.motivo}) — libere espaço no volume; nada foi feito`);
+        return { status: 'storage_critical', syncRunId: null, pagesProcessed: 0 };
+      }
     }
     const varredura = `commerce-scan:${COMMERCE_PROVIDER}`;
     if (leases && !(await leases.adquirir(varredura, organizationId, catalogSyncLeaseTtlMs))) {
