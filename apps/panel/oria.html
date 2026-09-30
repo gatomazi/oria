@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0B121A" />
 
   <title>Oria — Painel de gestão para lojas</title>
-  <meta name="description" content="Oria reúne pedidos, resultado financeiro, recuperação de carrinho e desempenho de anúncios da sua loja em um só painel." />
+  <meta name="description" content="Oria é um painel de gestão para lojas: pedidos e produção, resultado financeiro, recuperação de carrinho e desempenho de anúncios no mesmo lugar." />
   <link rel="canonical" href="https://orgulhoregional.com.br/oria" />
   <meta name="robots" content="index, follow" />
 
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://orgulhoregional.com.br/oria" />
-  <meta property="og:title" content="Oria — Painel de gestão para lojas" />
-  <meta property="og:description" content="Pedidos, financeiro, recuperação de carrinho e anúncios da sua loja em um só lugar." />
+  <meta property="og:title" content="Oria — Mais marca. Menos operação." />
+  <meta property="og:description" content="Pedidos, financeiro, recuperação de carrinho e anúncios da sua loja em um só painel." />
   <meta property="og:locale" content="pt_BR" />
   <meta property="og:site_name" content="Oria" />
   <meta property="og:image" content="https://orgulhoregional.com.br/assets/oria/oria-logo.png" />
@@ -21,335 +22,1079 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400..700&display=swap" rel="stylesheet" />
+
+  <!-- Liga as animações de entrada só quando há JS. Sem JS (ou com o script atrasado), nada começa
+       escondido: título, CTAs e texto são HTML puro e aparecem direto. -->
+  <script>document.documentElement.classList.add('js');</script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* Mesmos tokens do painel (src/admin/design-system/tokens-base.css): esta página é a face
-       pública do Oria, então precisa parecer o produto — e o verde é o mesmo do logotipo que está
-       na tela de consentimento do Google. Consistência de marca é parte do que a verificação olha. */
+    /* Base: os tokens do painel (src/admin/design-system/tokens-base.css) — esta página é a face
+       pública do Oria e o mockup precisa parecer o produto. O menta (--marca) é tirado do próprio
+       logotipo (assets/oria/oria-logo.png), o mesmo símbolo da tela de consentimento do Google:
+       consistência de marca é parte do que a verificação olha. */
     :root {
-      --bg-app:       #0B121A;
-      --bg-deep:      #070C11;
-      --surface-1:    #111A24;
-      --surface-2:    #16212D;
-      --border-subtle: rgba(255, 255, 255, 0.06);
+      --bg-deep:        #070C11;
+      --bg-app:         #0B121A;
+      --bg-band:        #0D1620;
+      --surface-1:      #111A24;
+      --surface-2:      #16212D;
+      --surface-3:      #1B2734;
+      --border-subtle:  rgba(255, 255, 255, 0.06);
       --border-default: rgba(255, 255, 255, 0.09);
-      --text-primary: #F3F6F9;
+      --border-strong:  rgba(255, 255, 255, 0.14);
+      --text-primary:   #F3F6F9;
       --text-secondary: #A9B4C0;
-      --text-muted:   #8390A0;
-      --accent:       #35D07F;
-      --accent-hover: #4FD98F;
-      --accent-tint:  rgba(53, 208, 127, 0.12);
-      --on-accent:    #06140C;
-      --info:         #34B7EB;
-      --font-sans: 'DM Sans', Inter, system-ui, -apple-system, sans-serif;
-      --font-wordmark: 'Fraunces', Georgia, serif;
+      --text-muted:     #8390A0;
+
+      --marca:          #3FE9C5;
+      --marca-hover:    #7AF1D7;
+      --marca-tint:     rgba(63, 233, 197, 0.12);
+      --marca-linha:    rgba(63, 233, 197, 0.32);
+      --on-marca:       #03201A;
+
+      /* Semânticas do painel — só dentro do mockup, com o sentido que têm lá. */
+      --ok:       #35D07F;
+      --ok-tint:  rgba(53, 208, 127, 0.14);
+      --info:     #34B7EB;
+      --info-tint: rgba(52, 183, 235, 0.14);
+      --aviso:    #F2A516;
+      --aviso-tint: rgba(242, 165, 22, 0.14);
+
+      --font-sans: 'DM Sans', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --largura: 1240px;
+      --gutter: clamp(16px, 4vw, 40px);
+      --topo-altura: 68px;
+      --ease-out: cubic-bezier(.2, .8, .2, 1);
       color-scheme: dark;
     }
+
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--topo-altura) + 16px); }
 
     body {
       background: var(--bg-app);
       color: var(--text-primary);
       font-family: var(--font-sans);
       font-size: 16px;
-      line-height: 1.65;
+      line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      text-rendering: optimizeLegibility;
     }
 
-    a { color: var(--accent); }
-    a:hover, a:focus-visible { color: var(--accent-hover); }
+    img, svg { display: block; max-width: 100%; }
+    a { color: var(--marca); text-underline-offset: 3px; }
+    a:hover { color: var(--marca-hover); }
+    :focus-visible { outline: 2px solid var(--marca); outline-offset: 3px; border-radius: 4px; }
+    ::selection { background: var(--marca); color: var(--on-marca); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; color: var(--text-primary); }
 
-    .envoltorio { margin: 0 auto; max-width: 880px; padding-inline: 24px; }
-
-    /* ── Topo ───────────────────────────────────────────────────────────── */
-    .topo {
-      align-items: center;
-      border-bottom: 1px solid var(--border-subtle);
-      display: flex;
-      gap: 12px;
-      padding-block: 20px;
+    .pular {
+      background: var(--marca); color: var(--on-marca); font-weight: 600; left: 16px; padding: 10px 16px;
+      position: absolute; top: -60px; z-index: 100; border-radius: 8px; text-decoration: none;
     }
+    .pular:focus { top: 12px; }
 
-    .marca {
-      align-items: center;
-      display: flex;
-      gap: 10px;
-      text-decoration: none;
+    .envoltorio { margin-inline: auto; max-width: calc(var(--largura) + var(--gutter) * 2); padding-inline: var(--gutter); }
+
+    /* ── Tipografia editorial ─────────────────────────────────────────────── */
+    .rotulo {
+      align-items: center; color: var(--marca); display: inline-flex; font-size: 12px; font-weight: 600;
+      gap: 12px; letter-spacing: .16em; text-transform: uppercase;
     }
+    .rotulo::before { background: currentColor; content: ""; height: 1px; width: 22px; }
 
-    /* O mesmo símbolo que está na tela de consentimento do Google — a verificação compara a marca
-       dos dois lados. */
-    .marca__simbolo { display: block; height: 32px; width: auto; }
-
-    .marca__nome {
-      color: var(--text-primary);
-      font-family: var(--font-wordmark);
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.01em;
+    .titulo-secao {
+      font-size: clamp(2rem, 4.4vw, 3.5rem); font-weight: 600; letter-spacing: -.04em; line-height: 1.06;
+      text-wrap: balance;
     }
+    .titulo-secao em { color: var(--marca); font-style: normal; }
+    .texto-secao { color: var(--text-secondary); font-size: clamp(1rem, 1.3vw, 1.075rem); line-height: 1.75; max-width: 52ch; }
 
-    /* ── Herói ──────────────────────────────────────────────────────────── */
-    .heroi { padding-block: 72px 56px; }
-
-    .heroi h1 {
-      font-size: clamp(32px, 6vw, 46px);
-      font-weight: 600;
-      letter-spacing: -0.025em;
-      line-height: 1.12;
-      max-width: 17ch;
-    }
-
-    .heroi h1 em { color: var(--accent); font-style: normal; }
-
-    .heroi p {
-      color: var(--text-secondary);
-      font-size: clamp(17px, 2.4vw, 19px);
-      margin-top: 20px;
-      max-width: 60ch;
-    }
-
-    .acoes { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
-
+    /* ── Botões ───────────────────────────────────────────────────────────── */
     .botao {
-      border-radius: 8px;
-      display: inline-block;
-      font-size: 15px;
-      font-weight: 600;
-      padding: 11px 20px;
-      text-decoration: none;
-      transition: background-color .15s ease, border-color .15s ease;
+      align-items: center; border: 1px solid transparent; border-radius: 10px; display: inline-flex;
+      font-size: 15px; font-weight: 600; gap: 10px; justify-content: center; line-height: 1.2; min-height: 48px;
+      padding: 13px 22px; text-decoration: none; transition: transform .2s var(--ease-out), background-color .2s, border-color .2s, box-shadow .2s;
+      white-space: nowrap;
     }
-    .botao--principal { background: var(--accent); color: var(--on-accent); }
-    .botao--principal:hover, .botao--principal:focus-visible { background: var(--accent-hover); color: var(--on-accent); }
-    .botao--secundario { border: 1px solid var(--border-default); color: var(--text-primary); }
-    .botao--secundario:hover, .botao--secundario:focus-visible { border-color: var(--accent); color: var(--text-primary); }
+    .botao:active { transform: scale(.98); }
+    .botao--principal { background: var(--marca); box-shadow: 0 10px 34px -12px rgba(63, 233, 197, .55); color: var(--on-marca); }
+    .botao--principal:hover { background: var(--marca-hover); color: var(--on-marca); transform: translateY(-1px); }
+    .botao--secundario { background: rgba(255, 255, 255, .02); border-color: var(--border-strong); color: var(--text-primary); }
+    .botao--secundario:hover { border-color: var(--marca-linha); background: rgba(63, 233, 197, .05); color: var(--text-primary); }
+    .botao--compacto { font-size: 14px; min-height: 40px; padding: 9px 16px; }
+    .botao svg { height: 16px; width: 16px; flex: none; }
 
-    /* ── Seções ─────────────────────────────────────────────────────────── */
-    section { padding-block: 44px; }
-    section + section { border-top: 1px solid var(--border-subtle); }
-
-    h2 {
-      font-size: clamp(22px, 3.4vw, 27px);
-      font-weight: 600;
-      letter-spacing: -0.015em;
+    /* ── Topo (sticky) ────────────────────────────────────────────────────── */
+    .topo {
+      background: rgba(11, 18, 26, .72); border-bottom: 1px solid transparent; position: sticky; top: 0; z-index: 50;
+      -webkit-backdrop-filter: saturate(140%) blur(14px); backdrop-filter: saturate(140%) blur(14px);
+      transition: background-color .3s, border-color .3s;
     }
+    .topo.rolou { background: rgba(9, 15, 21, .9); border-bottom-color: var(--border-subtle); }
+    .topo__linha { align-items: center; display: flex; gap: 24px; height: var(--topo-altura); }
 
-    .subtitulo { color: var(--text-secondary); margin-top: 12px; max-width: 62ch; }
+    .marca { align-items: center; display: inline-flex; gap: 10px; text-decoration: none; }
+    .marca__simbolo { height: 28px; width: auto; }
+    .marca__nome { height: 15px; width: auto; }
 
-    .grade {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      margin-top: 28px;
+    .topo__nav { display: flex; gap: 30px; margin-left: 28px; }
+    .topo__nav a, .topo__entrar { color: var(--text-secondary); font-size: 14px; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .topo__nav a:hover, .topo__entrar:hover { color: var(--text-primary); }
+    .topo__acoes { align-items: center; display: flex; gap: 22px; margin-left: auto; }
+
+    .topo__menu {
+      align-items: center; background: transparent; border: 1px solid var(--border-default); border-radius: 10px;
+      color: var(--text-primary); cursor: pointer; display: none; height: 42px; justify-content: center; margin-left: auto; width: 42px;
     }
+    .topo__menu svg { height: 20px; width: 20px; }
+    .topo__menu .x { display: none; }
+    .topo__menu[aria-expanded="true"] .x { display: block; }
+    .topo__menu[aria-expanded="true"] .tres { display: none; }
 
-    .cartao {
-      background: var(--surface-1);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: 22px;
+    .menu-movel { border-top: 1px solid var(--border-subtle); display: none; padding: 12px var(--gutter) 24px; }
+    .menu-movel.aberto { display: block; }
+    .menu-movel a:not(.botao) {
+      border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); display: block; font-size: 17px;
+      font-weight: 500; padding: 14px 0; text-decoration: none;
     }
+    .menu-movel .botao { margin-top: 20px; width: 100%; }
 
-    .cartao h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 8px;
+    /* ── Herói ────────────────────────────────────────────────────────────── */
+    .heroi { isolation: isolate; overflow: clip; padding-block: clamp(48px, 8vw, 104px) clamp(72px, 9vw, 120px); position: relative; }
+    /* Grade técnica quase imperceptível + um único brilho localizado, estático. */
+    .heroi::before {
+      background-image: linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
+      background-size: 72px 72px; content: ""; inset: 0; position: absolute; z-index: -2;
+      -webkit-mask-image: radial-gradient(ellipse 70% 65% at 70% 40%, #000 20%, transparent 75%);
+              mask-image: radial-gradient(ellipse 70% 65% at 70% 40%, #000 20%, transparent 75%);
     }
-
-    .cartao p { color: var(--text-secondary); font-size: 15px; }
-
-    .lista { list-style: none; margin-top: 22px; }
-    .lista li {
-      border-left: 2px solid var(--accent-tint);
-      color: var(--text-secondary);
-      margin-bottom: 16px;
-      padding-left: 18px;
+    .heroi::after {
+      background: radial-gradient(closest-side, rgba(63, 233, 197, .16), transparent); content: ""; height: 820px;
+      position: absolute; right: -180px; top: -160px; width: 980px; z-index: -1; pointer-events: none;
     }
-    .lista strong { color: var(--text-primary); font-weight: 600; }
+    .heroi__grade { align-items: center; display: grid; gap: clamp(48px, 5vw, 72px); grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
 
-    /* Bloco dos dados do Google: é o que a verificação lê com mais atenção, então fica destacado
-       do resto em vez de diluído entre as features. */
-    .destaque {
-      background: var(--surface-2);
-      border: 1px solid var(--border-default);
-      border-radius: 12px;
-      margin-top: 26px;
-      padding: 26px;
+    /* A manchete começa com o nome sozinho, sem o artigo "O" antes. A reprovação anterior da
+       verificação do Google foi por "o nome do app não corresponde ao da página inicial", e quem
+       revisa pode não ler português: "O Oria" corre o risco de ser lido como se o nome fosse
+       "O Oria". Por isso "Oria" é o primeiro texto do H1 (na linha de sobretítulo), antes do slogan. */
+    .heroi__titulo { font-weight: 600; letter-spacing: -.05em; line-height: .98; }
+    .heroi__sobre {
+      color: var(--marca); display: block; font-size: 12.5px; font-weight: 600; letter-spacing: .16em; line-height: 1.5;
+      margin-bottom: 26px; text-transform: uppercase;
     }
-    .destaque h3 { font-size: 17px; font-weight: 600; margin-bottom: 10px; }
-    .destaque p { color: var(--text-secondary); }
+    .heroi__sobre b { color: var(--text-primary); font-weight: 700; letter-spacing: .12em; }
+    .heroi__linha { display: block; font-size: clamp(2.5rem, 11.4vw, 4.4rem); }
+    .heroi__linha--acento {
+      background: linear-gradient(100deg, #7AF1D7 0%, var(--marca) 45%, #22C7A9 100%);
+      -webkit-background-clip: text; background-clip: text; color: var(--marca); -webkit-text-fill-color: transparent;
+      padding-bottom: .04em;
+    }
+    .heroi__texto { color: var(--text-secondary); font-size: clamp(1.05rem, 1.35vw, 1.2rem); line-height: 1.7; margin-top: 28px; max-width: 34em; }
+    .heroi__texto strong { color: var(--text-primary); font-weight: 600; }
+    .heroi__acoes { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+    .heroi__nota { align-items: center; color: var(--text-muted); display: flex; font-size: 14px; gap: 10px; margin-top: 30px; }
+    .ponto { background: var(--marca); border-radius: 50%; box-shadow: 0 0 0 4px var(--marca-tint); flex: none; height: 7px; width: 7px; }
+
+    /* ── Mockup do painel (HTML/CSS, dados ilustrativos) ───────────────────── */
+    .palco { position: relative; }
+    .palco__cena { perspective: 1600px; }
+    .janela {
+      aspect-ratio: 16 / 11; background: var(--bg-app); border: 1px solid var(--border-strong); border-radius: 14px;
+      box-shadow: 0 50px 120px -30px rgba(0, 0, 0, .75), 0 0 0 1px rgba(63, 233, 197, .05), inset 0 1px 0 rgba(255,255,255,.05);
+      display: grid; font-size: 12px; grid-template-columns: 148px minmax(0, 1fr); grid-template-rows: 34px minmax(0, 1fr);
+      line-height: 1.35; overflow: hidden; transform-origin: 60% 50%; transition: transform 1s var(--ease-out);
+    }
+    /* Profundidade leve só onde há mouse de verdade; toque recebe a janela estável. */
+    @media (hover: hover) and (pointer: fine) and (min-width: 1024px) {
+      .janela { transform: rotateY(-8deg) rotateX(3deg); }
+      .palco:hover .janela { transform: rotateY(-4deg) rotateX(1.5deg) translateY(-4px); }
+    }
+    .janela__barra { align-items: center; background: var(--bg-deep); border-bottom: 1px solid var(--border-subtle); display: flex; gap: 6px; grid-column: 1 / -1; padding-inline: 14px; }
+    .janela__barra i { background: #26313D; border-radius: 50%; height: 9px; width: 9px; }
+    .janela__url { background: var(--surface-1); border-radius: 6px; color: var(--text-muted); font-size: 10.5px; margin-inline: auto; padding: 3px 14px; }
+
+    .lateral { background: var(--bg-deep); border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 2px; padding: 14px 10px; }
+    .lateral__marca { align-items: center; display: flex; gap: 7px; margin: 0 6px 14px; }
+    .lateral__marca img { height: 16px; width: auto; }
+    .lateral__marca img + img { height: 8px; }
+    .lateral__grupo { color: var(--text-muted); font-size: 9.5px; font-weight: 600; letter-spacing: .1em; margin: 10px 8px 4px; text-transform: uppercase; }
+    .lateral__item { align-items: center; border-radius: 6px; color: var(--text-secondary); display: flex; gap: 8px; padding: 6px 8px; }
+    .lateral__item svg { flex: none; height: 13px; opacity: .8; width: 13px; }
+    .lateral__item.ativo { background: var(--surface-2); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--ok); }
+
+    .conteudo { display: grid; gap: 12px; grid-template-rows: auto auto minmax(0, 1fr); padding: 16px 18px; min-width: 0; }
+    .conteudo__topo { align-items: center; display: flex; justify-content: space-between; gap: 12px; }
+    .conteudo__topo strong { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+    .conteudo__topo small { color: var(--text-muted); display: block; font-size: 10.5px; }
+    .chip { background: var(--surface-2); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-secondary); font-size: 10.5px; padding: 4px 9px; white-space: nowrap; }
+
+    .kpis { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .kpi { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: 8px; min-width: 0; padding: 10px 12px; }
+    .kpi span { color: var(--text-muted); display: block; font-size: 10.5px; }
+    .kpi strong { display: block; font-size: 18px; font-weight: 600; letter-spacing: -.02em; margin-top: 3px; white-space: nowrap; }
+
+    .paineis { display: grid; gap: 10px; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); min-height: 0; }
+    .painel { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 12px; }
+    .painel__titulo { align-items: baseline; display: flex; font-size: 11.5px; font-weight: 600; justify-content: space-between; gap: 8px; }
+    .painel__titulo small { color: var(--text-muted); font-size: 10px; font-weight: 400; }
+    .grafico { flex: 1; margin-top: 8px; min-height: 60px; position: relative; }
+    .grafico svg { height: 100%; inset: 0; position: absolute; width: 100%; }
+    .grafico__eixo { color: var(--text-muted); display: flex; font-size: 9.5px; justify-content: space-between; margin-top: 4px; }
+
+    .pedido { align-items: center; border-bottom: 1px solid var(--border-subtle); display: flex; gap: 8px; justify-content: space-between; padding: 7px 0; }
+    .pedido:last-child { border-bottom: 0; }
+    .pedido b { display: block; font-size: 11px; font-weight: 600; }
+    .pedido > div { min-width: 0; }
+    .pedido span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pedido span { color: var(--text-muted); display: block; font-size: 10px; }
+    .status { border-radius: 999px; font-style: normal; font-size: 9.5px; font-weight: 600; padding: 3px 8px; white-space: nowrap; }
+    .status--ok { background: var(--ok-tint); color: var(--ok); }
+    .status--info { background: var(--info-tint); color: var(--info); }
+    .status--aviso { background: var(--aviso-tint); color: var(--aviso); }
+    .status--neutro { background: rgba(169, 180, 192, .12); color: var(--text-secondary); }
+
+    .flutuante {
+      background: rgba(22, 33, 45, .92); border: 1px solid var(--border-strong); border-radius: 12px;
+      box-shadow: 0 28px 60px -18px rgba(0, 0, 0, .7); padding: 14px 16px; position: absolute; width: 214px; z-index: 2;
+      -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    }
+    .flutuante--fin { right: -22px; top: -44px; }
+    .flutuante--ped { bottom: -38px; left: -34px; }
+    .flutuante__cab { align-items: center; color: var(--text-secondary); display: flex; font-size: 12px; font-weight: 600; gap: 9px; }
+    .flutuante__icone { align-items: center; background: var(--marca-tint); border-radius: 7px; color: var(--marca); display: inline-flex; height: 26px; justify-content: center; width: 26px; }
+    .flutuante__icone svg { height: 14px; width: 14px; }
+    .flutuante__linhas { display: grid; gap: 6px; margin-top: 12px; }
+    .flutuante__linha { align-items: center; display: grid; font-size: 11px; gap: 8px; grid-template-columns: 74px 1fr auto; color: var(--text-secondary); }
+    .flutuante__linha i { background: var(--surface-3); border-radius: 3px; height: 6px; overflow: hidden; position: relative; }
+    .flutuante__linha i::after { background: var(--c, var(--ok)); border-radius: 3px; content: ""; inset: 0; position: absolute; transform: scaleX(var(--p, .5)); transform-origin: left; }
+    .flutuante__linha b { color: var(--text-primary); font-weight: 600; }
+    .palco__selo { color: var(--text-muted); font-size: 12.5px; letter-spacing: .02em; margin-top: 56px; text-align: right; }
+    .palco__selo::before { content: "◆ "; color: var(--marca); font-size: 9px; vertical-align: 2px; }
+
+    /* ── Faixa de posicionamento + fluxo ───────────────────────────────────── */
+    .faixa { background: var(--bg-band); border-block: 1px solid var(--border-subtle); padding-block: clamp(72px, 9vw, 120px); }
+    .faixa__frase { font-size: clamp(1.75rem, 3.6vw, 3rem); font-weight: 500; letter-spacing: -.035em; line-height: 1.15; max-width: 22ch; text-wrap: balance; }
+    .faixa__frase span { color: var(--text-muted); }
+    .fluxo { counter-reset: etapa; display: grid; gap: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin-top: clamp(48px, 6vw, 72px); position: relative; }
+    .fluxo__etapa { padding-right: 28px; position: relative; }
+    .fluxo__marcador { align-items: center; display: flex; gap: 14px; margin-bottom: 22px; }
+    .fluxo__no {
+      align-items: center; background: var(--bg-app); border: 1px solid var(--marca-linha); border-radius: 50%; color: var(--marca);
+      display: inline-flex; flex: none; font-size: 12px; font-weight: 700; height: 38px; justify-content: center; width: 38px;
+    }
+    .fluxo__trilho { background: var(--border-default); flex: 1; height: 1px; overflow: hidden; position: relative; }
+    .fluxo__trilho::after { background: linear-gradient(90deg, var(--marca), rgba(63, 233, 197, .2)); content: ""; inset: 0; position: absolute; transform-origin: left; }
+    .fluxo__etapa:last-child .fluxo__trilho { visibility: hidden; }
+    .fluxo__etapa h3 { font-size: 1.35rem; font-weight: 600; letter-spacing: -.02em; }
+    .fluxo__etapa p { color: var(--text-secondary); font-size: 15px; margin-top: 8px; max-width: 30ch; }
+
+    /* ── Recursos (bento) ─────────────────────────────────────────────────── */
+    .secao { padding-block: clamp(80px, 10vw, 136px); }
+    .secao__cab { align-items: end; display: grid; gap: 28px 64px; grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); margin-bottom: clamp(40px, 5vw, 64px); }
+    .secao__cab .rotulo { grid-column: 1 / -1; }
+
+    .bento { display: grid; gap: 16px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .bloco {
+      background: linear-gradient(160deg, var(--surface-1), rgba(17, 26, 36, .55)); border: 1px solid var(--border-subtle); border-radius: 18px;
+      display: flex; flex-direction: column; gap: 28px; min-width: 0; overflow: hidden; padding: clamp(24px, 2.6vw, 34px); position: relative;
+      transition: border-color .3s, transform .3s var(--ease-out);
+    }
+    .bloco:hover { border-color: var(--border-strong); }
+    .bloco--largo { grid-column: span 4; }
+    .bloco--estreito { grid-column: span 2; }
+    .bloco--destaque { background: radial-gradient(120% 90% at 100% 0%, rgba(63, 233, 197, .09), transparent 55%), linear-gradient(160deg, var(--surface-1), rgba(17, 26, 36, .55)); }
+    .bloco__num { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: .14em; }
+    .bloco h3 { font-size: clamp(1.3rem, 1.8vw, 1.6rem); font-weight: 600; letter-spacing: -.025em; line-height: 1.2; margin-top: 10px; }
+    .bloco p { color: var(--text-secondary); font-size: 15px; line-height: 1.7; margin-top: 10px; max-width: 46ch; }
+    .bloco__visual { margin-top: auto; }
+    .bloco--largo { flex-direction: row; align-items: stretch; }
+    .bloco--largo > div:first-child { flex: 1 1 42%; min-width: 0; }
+    .bloco--largo .bloco__visual { flex: 1 1 58%; margin-top: 0; min-width: 0; }
+
+    /* Microvisuais — pedaços de interface, não ilustrações genéricas. */
+    .mini { background: var(--bg-app); border: 1px solid var(--border-default); border-radius: 12px; font-size: 12.5px; padding: 14px; }
+    .mini__cab { color: var(--text-muted); display: flex; font-size: 11px; justify-content: space-between; margin-bottom: 10px; }
+    .etapas { display: grid; gap: 6px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 12px; }
+    .etapas div { background: var(--surface-1); border-radius: 8px; padding: 9px 10px; }
+    .etapas span { color: var(--text-muted); display: block; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .etapas b { display: block; font-size: 17px; font-weight: 600; margin-top: 2px; }
+    .etapas div:nth-child(1) b { color: var(--aviso); }
+    .etapas div:nth-child(2) b { color: var(--ok); }
+    .etapas div:nth-child(3) b { color: var(--info); }
+
+    .cascata { display: grid; gap: 7px; }
+    .cascata__linha { align-items: center; display: grid; gap: 10px; grid-template-columns: 96px minmax(0, 1fr) 62px; }
+    .cascata__linha span { color: var(--text-secondary); font-size: 11.5px; }
+    .cascata__linha b { font-size: 11.5px; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+    .cascata__barra { background: var(--surface-1); border-radius: 4px; height: 10px; position: relative; }
+    .cascata__barra::after { background: var(--c, var(--ok)); border-radius: 4px; content: ""; inset: 0 auto 0 var(--i, 0%); position: absolute; width: var(--w, 50%); }
+    .cascata__linha--total { border-top: 1px dashed var(--border-strong); margin-top: 4px; padding-top: 9px; }
+    .cascata__linha--total b { color: var(--marca); }
+
+    .campanhas { display: grid; gap: 0; }
+    .campanha { align-items: center; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; padding: 8px 0; }
+    .campanha:last-child { border-bottom: 0; }
+    .campanha b { display: block; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .campanha span { color: var(--text-muted); font-size: 10.5px; }
+    .campanha em { color: var(--text-secondary); font-size: 11.5px; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
+    .campanha em small { color: var(--text-muted); display: block; font-size: 10px; }
+
+    .conversa { display: grid; gap: 10px; }
+    .balao { background: #13342B; border-radius: 12px 12px 4px 12px; color: #D5F5E7; font-size: 12.5px; justify-self: end; line-height: 1.5; max-width: 88%; padding: 10px 12px; }
+    .balao small { color: #8CC7AE; display: block; font-size: 10px; margin-top: 4px; text-align: right; }
+    .carrinhos { display: grid; gap: 6px; }
+    .carrinho { align-items: center; background: var(--surface-1); border-radius: 8px; display: flex; font-size: 11.5px; gap: 8px; justify-content: space-between; padding: 8px 10px; }
+    .carrinho span { color: var(--text-secondary); }
+
+    .nota-plano { color: var(--text-muted); font-size: 14px; margin-top: 20px; }
+
+    /* ── Vitrine (tabs) ───────────────────────────────────────────────────── */
+    .vitrine { background: linear-gradient(180deg, var(--bg-app), var(--bg-band) 30%, var(--bg-band) 70%, var(--bg-app)); }
+    .vitrine__grade { align-items: start; display: grid; gap: clamp(40px, 6vw, 88px); grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); }
+    .vitrine__texto .titulo-secao { margin-top: 22px; }
+    .vitrine__texto .texto-secao { margin-top: 20px; }
+    .abas { border-left: 1px solid var(--border-default); display: grid; gap: 4px; margin-top: 40px; }
+    .aba {
+      background: transparent; border: 0; border-left: 2px solid transparent; color: var(--text-muted); cursor: pointer; font: inherit;
+      margin-left: -1px; padding: 14px 0 14px 22px; text-align: left; transition: color .25s, border-color .25s;
+    }
+    .aba strong { color: inherit; display: block; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+    .aba span { display: block; font-size: 14.5px; line-height: 1.6; margin-top: 4px; }
+    .aba:hover { color: var(--text-secondary); }
+    .aba[aria-selected="true"] { border-left-color: var(--marca); color: var(--text-primary); }
+    .aba[aria-selected="true"] span { color: var(--text-secondary); }
+
+    .tela {
+      background: radial-gradient(120% 80% at 100% 0%, rgba(63, 233, 197, .08), transparent 55%), var(--surface-1);
+      border: 1px solid var(--border-default); border-radius: 20px; box-shadow: 0 40px 100px -40px rgba(0, 0, 0, .8);
+      display: grid; padding: clamp(18px, 2.4vw, 28px); position: sticky; top: calc(var(--topo-altura) + 32px);
+    }
+    .tela__painel { grid-area: 1 / 1; min-width: 0; }
+    .tela__cab { align-items: center; border-bottom: 1px solid var(--border-subtle); display: flex; gap: 12px; justify-content: space-between; padding-bottom: 16px; }
+    .tela__cab strong { font-size: 16px; font-weight: 600; }
+    .tela__cab .chip { font-size: 11.5px; }
+    .tela__corpo { display: grid; gap: 14px; padding-top: 18px; }
+    .tela__kpis { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tela__kpis .kpi strong { font-size: clamp(16px, 1.8vw, 22px); }
+    .tela__kpis .kpi span { font-size: 11.5px; }
+    .tela__rodape { color: var(--text-muted); display: flex; font-size: 12.5px; gap: 12px; justify-content: space-between; padding-top: 4px; }
+    .tela .mini { font-size: 13px; }
+    .tela .pedido b { font-size: 12.5px; }
+    .tela .pedido span { font-size: 11.5px; }
+    .tela .status { font-size: 11px; }
+    .tela .campanha b { font-size: 13px; }
+    .tela .campanha em { font-size: 12.5px; }
+    .tela .cascata__linha span, .tela .cascata__linha b { font-size: 12.5px; }
+    .tela .cascata__linha { grid-template-columns: 124px minmax(0, 1fr) 76px; }
+    .tela .carrinho { font-size: 12.5px; }
+    .tela__painel-titulo { display: none; }
+
+    /* ── Integrações e privacidade ────────────────────────────────────────── */
+    .conexoes { display: grid; gap: 14px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .conexao { grid-column: span 2; }
+    .conexao--principal, .conexao:nth-child(2) { grid-column: span 3; }
+    .conexao { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: 16px; display: flex; flex-direction: column; gap: 10px; padding: 24px; }
+    .conexao h3 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+    .conexao p { color: var(--text-secondary); font-size: 14.5px; line-height: 1.65; }
+    .acesso { align-self: flex-start; border: 1px solid var(--marca-linha); border-radius: 999px; color: var(--marca); font-size: 11.5px; font-weight: 600; letter-spacing: .04em; padding: 3px 10px; }
+    .acesso--envio { border-color: rgba(52, 183, 235, .4); color: var(--info); }
+
+    .privacidade { display: grid; gap: clamp(28px, 4vw, 56px); grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); margin-top: clamp(40px, 5vw, 64px); }
+    .privacidade__intro h3 { font-size: clamp(1.35rem, 2vw, 1.7rem); font-weight: 600; letter-spacing: -.025em; line-height: 1.25; }
+    .privacidade__intro p { color: var(--text-secondary); margin-top: 14px; }
+    .privacidade__intro p strong { color: var(--text-primary); font-weight: 600; }
+    /* Bloco dos dados do Google: é o que a verificação lê com mais atenção, então fica destacado do
+       resto em vez de diluído entre as features. O TEXTO é o mesmo que já estava publicado — não
+       reescrever sem revisar o sentido (escopo, Uso Limitado, link da política). */
+    .destaque { background: var(--surface-2); border: 1px solid var(--border-default); border-radius: 18px; padding: clamp(22px, 3vw, 34px); }
+    .destaque h3 { align-items: center; display: flex; font-size: 18px; font-weight: 600; gap: 10px; margin-bottom: 12px; }
+    .destaque p { color: var(--text-secondary); font-size: 15.5px; line-height: 1.75; }
     .destaque p + p { margin-top: 12px; }
+    .destaque strong { color: var(--text-primary); font-weight: 600; }
 
-    .etiqueta {
-      background: var(--accent-tint);
-      border-radius: 999px;
-      color: var(--accent);
-      display: inline-block;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      margin-bottom: 14px;
-      padding: 4px 11px;
-      text-transform: uppercase;
-    }
+    /* ── Uma loja, um painel ──────────────────────────────────────────────── */
+    .loja { display: grid; gap: clamp(32px, 5vw, 72px); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; }
+    .loja__frase { font-size: clamp(1.7rem, 3.2vw, 2.6rem); font-weight: 500; letter-spacing: -.03em; line-height: 1.2; text-wrap: balance; }
+    .loja__frase em { color: var(--marca); font-style: normal; }
+    .garantias { display: grid; gap: 0; list-style: none; }
+    .garantias li { border-top: 1px solid var(--border-subtle); color: var(--text-secondary); display: grid; gap: 16px; grid-template-columns: 28px 1fr; padding: 18px 0; }
+    .garantias li:last-child { border-bottom: 1px solid var(--border-subtle); }
+    .garantias svg { color: var(--marca); height: 20px; margin-top: 3px; width: 20px; }
+    .garantias strong { color: var(--text-primary); font-weight: 600; }
+    .operador { color: var(--text-muted); font-size: 15px; margin-top: 28px; max-width: 60ch; }
 
-    /* ── Rodapé ─────────────────────────────────────────────────────────── */
-    .rodape {
-      background: var(--bg-deep);
-      border-top: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      font-size: 14px;
-      margin-top: 40px;
-      padding-block: 32px;
+    /* ── CTA final ────────────────────────────────────────────────────────── */
+    .fecho { isolation: isolate; overflow: clip; padding-block: clamp(96px, 12vw, 160px); position: relative; text-align: center; }
+    .fecho::before {
+      background: radial-gradient(closest-side, rgba(63, 233, 197, .14), transparent); bottom: -360px; content: ""; height: 640px;
+      left: 50%; position: absolute; transform: translateX(-50%); width: min(1100px, 140vw); z-index: -1;
     }
-    .rodape__linhas { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; }
+    .fecho__simbolo { height: 44px; margin: 0 auto 28px; width: auto; }
+    .fecho .titulo-secao { margin-inline: auto; max-width: 16ch; }
+    .fecho .texto-secao { margin: 20px auto 0; }
+    .fecho__acoes { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 36px; }
+    .fecho__cliente { color: var(--text-muted); font-size: 15px; margin-top: 22px; }
+
+    /* ── Rodapé ───────────────────────────────────────────────────────────── */
+    .rodape { background: var(--bg-deep); border-top: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 14px; padding-block: 36px; }
+    .rodape__linha { align-items: center; display: flex; flex-wrap: wrap; gap: 20px 32px; justify-content: space-between; }
+    .rodape nav { display: flex; flex-wrap: wrap; gap: 12px 26px; }
     .rodape a { color: var(--text-secondary); text-decoration: none; }
-    .rodape a:hover, .rodape a:focus-visible { color: var(--accent); }
-    .rodape nav { display: flex; flex-wrap: wrap; gap: 20px; }
+    .rodape a:hover { color: var(--marca); }
 
-    @media (max-width: 600px) {
-      .heroi { padding-block: 48px 40px; }
-      section { padding-block: 34px; }
+    /* ── Movimento ────────────────────────────────────────────────────────── */
+    /* Entrada do herói: CSS puro, sem esperar JS. Só transform/opacity. */
+    @keyframes subir { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    @keyframes surgir { from { opacity: 0; transform: translateY(28px) scale(.985); } to { opacity: 1; transform: none; } }
+    .entra { animation: subir .7s var(--ease-out) both; animation-delay: var(--d, 0ms); }
+    /* Título e parágrafo são candidatos a LCP: entram só com deslocamento, sem começar invisíveis —
+       opacidade zero atrasaria o LCP até o fim da animação. */
+    @keyframes deslizar { from { transform: translateY(14px); } to { transform: none; } }
+    .heroi__linha.entra, .heroi__texto.entra { animation-name: deslizar; }
+    .palco { animation: surgir 1s var(--ease-out) 260ms both; }
+    .palco .kpi, .palco .painel, .palco .flutuante { animation: subir .6s var(--ease-out) both; }
+    .palco .kpi:nth-child(1) { animation-delay: 520ms; }
+    .palco .kpi:nth-child(2) { animation-delay: 600ms; }
+    .palco .kpi:nth-child(3) { animation-delay: 680ms; }
+    .palco .painel:nth-child(1) { animation-delay: 760ms; }
+    .palco .painel:nth-child(2) { animation-delay: 840ms; }
+    .palco .flutuante--fin { animation-delay: 1000ms; }
+    .palco .flutuante--ped { animation-delay: 1100ms; }
+    .grafico__linha { stroke-dasharray: 1; stroke-dashoffset: 0; }
+    @keyframes tracar { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+    .palco .grafico__linha { animation: tracar 1.4s var(--ease-out) 900ms both; }
+
+    /* Revelação na rolagem: só com JS (html.js), e uma vez. */
+    .js .revela { opacity: 0; transform: translateY(22px); transition: opacity .8s var(--ease-out), transform .8s var(--ease-out); transition-delay: var(--d, 0ms); }
+    .js .revela.visivel { opacity: 1; transform: none; }
+    .js .fluxo__trilho::after { transform: scaleX(0); transition: transform 1.1s var(--ease-out); transition-delay: var(--d, 0ms); }
+    .js .fluxo.visivel .fluxo__trilho::after { transform: scaleX(1); }
+    .no-js .fluxo__trilho::after, html:not(.js) .fluxo__trilho::after { transform: none; }
+
+    /* Vitrine: sem JS, os quatro painéis aparecem empilhados com título; com JS viram abas. */
+    html:not(.js) .topo__menu { display: none; }
+    html:not(.js) .abas { display: none; }
+    html:not(.js) .tela { gap: 32px; position: static; }
+    html:not(.js) .tela__painel { grid-area: auto; }
+    html:not(.js) .tela__painel-titulo { color: var(--marca); display: block; font-size: 13px; font-weight: 600; letter-spacing: .12em; margin-bottom: 10px; text-transform: uppercase; }
+    .js .tela__painel { opacity: 0; transform: translateY(10px); transition: opacity .45s var(--ease-out), transform .45s var(--ease-out); visibility: hidden; }
+    .js .tela__painel.ativo { opacity: 1; transform: none; visibility: visible; }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; transition-delay: 0ms !important; }
+      .js .revela { opacity: 1; transform: none; }
+      .janela, .palco:hover .janela { transform: none !important; }
+      .botao:hover, .botao:active { transform: none; }
+      .js .tela__painel { transform: none; }
+    }
+
+    /* ── Responsivo ───────────────────────────────────────────────────────── */
+    @media (min-width: 1100px) {
+      .heroi__linha { font-size: clamp(3.4rem, 4.9vw, 4.6rem); white-space: nowrap; }
+    }
+    @media (max-width: 1099px) {
+      .heroi__grade { grid-template-columns: minmax(0, 1fr); }
+      .heroi__copia { max-width: 44rem; }
+      .palco { margin-inline: auto; max-width: 720px; width: 100%; }
+      .flutuante--fin { right: -8px; }
+      .flutuante--ped { left: -8px; }
+      .conexoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .conexao, .conexao--principal, .conexao:nth-child(2) { grid-column: auto; }
+      .conexao:last-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 959px) {
+      .topo__nav, .topo__acoes { display: none; }
+      .topo__menu { display: inline-flex; }
+      .secao__cab, .vitrine__grade, .privacidade, .loja { grid-template-columns: minmax(0, 1fr); }
+      .bento { grid-template-columns: minmax(0, 1fr); }
+      .bloco--largo, .bloco--estreito { grid-column: auto; }
+      .tela { position: relative; top: 0; }
+      .abas { border-left: 0; border-bottom: 1px solid var(--border-default); display: flex; gap: 4px; margin: 28px calc(var(--gutter) * -1) 20px; overflow-x: auto; padding-inline: var(--gutter); scrollbar-width: none; }
+      .abas::-webkit-scrollbar { display: none; }
+      .aba { border-bottom: 2px solid transparent; border-left: 0; flex: none; margin: 0 0 -1px; padding: 10px 14px; }
+      .aba strong { font-size: 15px; }
+      .aba span { display: none; }
+      .aba[aria-selected="true"] { border-bottom-color: var(--marca); }
+    }
+    @media (max-width: 767px) {
+      .bloco--largo { flex-direction: column; }
+      .fluxo { grid-template-columns: minmax(0, 1fr); gap: 0; }
+      .fluxo__etapa { display: grid; gap: 0 18px; grid-template-columns: 38px minmax(0, 1fr); padding: 0 0 28px; }
+      .fluxo__marcador { flex-direction: column; grid-row: 1 / span 2; margin: 0; gap: 8px; height: 100%; }
+      .fluxo__trilho { height: auto; width: 1px; }
+      .fluxo__trilho::after { background: linear-gradient(180deg, var(--marca), rgba(63, 233, 197, .2)); transform-origin: top; }
+      .js .fluxo__trilho::after { transform: scaleY(0); }
+      .js .fluxo.visivel .fluxo__trilho::after { transform: scaleY(1); }
+      .fluxo__etapa h3 { margin-top: 6px; }
+    }
+    @media (max-width: 639px) {
+      .heroi__acoes .botao { flex: 1 1 100%; }
+      .fecho__acoes .botao { flex: 1 1 100%; }
+      .conexoes { grid-template-columns: minmax(0, 1fr); }
+
+      /* Mockup do herói reorganizado para o celular (não é o desktop encolhido): sem barra lateral,
+         dois indicadores, gráfico e pedidos empilhados, e os dois cartões saem do absoluto e viram
+         uma linha abaixo da janela. */
+      .janela { aspect-ratio: auto; grid-template-columns: minmax(0, 1fr); font-size: 12px; }
+      .lateral { display: none; }
+      .conteudo { padding: 14px; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .kpis .kpi:nth-child(3) { display: none; }
+      .paineis { grid-template-columns: minmax(0, 1fr); }
+      .grafico { height: 96px; flex: none; }
+      .palco .pedido:nth-child(n+4) { display: none; }
+      .heroi__sobre { letter-spacing: .1em; }
+      .palco__flutuantes { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-top: 12px; }
+      .flutuante { position: static; width: auto; padding: 12px; }
+      .flutuante__linha { grid-template-columns: 1fr auto; }
+      .flutuante__linha i { display: none; }
+      .palco__selo { margin-top: 16px; text-align: left; }
+      .tela__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .tela__kpis .kpi:nth-child(3) { display: none; }
+      .tela .cascata__linha { grid-template-columns: 92px minmax(0, 1fr) 64px; }
+      .etapas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .rodape__linha { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 380px) {
+      .flutuante__cab { font-size: 11px; }
+      .flutuante__icone { display: none; }
+      .cascata__linha { grid-template-columns: 80px minmax(0, 1fr) 58px; }
     }
   </style>
 </head>
 <body>
-  <header class="topo">
-    <div class="envoltorio" style="display:flex;align-items:center;gap:12px;width:100%">
-      <a class="marca" href="/oria">
-        <img class="marca__simbolo" src="/assets/oria/oria-simbolo.png" alt="" width="41" height="32" />
-        <span class="marca__nome">Oria</span>
+  <a class="pular" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="topo" id="topo">
+    <div class="envoltorio topo__linha">
+      <a class="marca" href="/oria" aria-label="Oria — página inicial">
+        <img class="marca__simbolo" src="/assets/oria/oria-simbolo.png" alt="" width="36" height="28" />
+        <img class="marca__nome" src="/assets/oria/oria-wordmark.png" alt="Oria" width="58" height="15" />
       </a>
+      <nav class="topo__nav" aria-label="Seções da página">
+        <a href="#recursos">Recursos</a>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#integracoes">Integrações</a>
+      </nav>
+      <div class="topo__acoes">
+        <a class="topo__entrar" href="/admin">Entrar no painel</a>
+        <a class="botao botao--principal botao--compacto" href="mailto:tomazi.brand@gmail.com?subject=Quero%20conhecer%20o%20Oria">Conhecer o Oria</a>
+      </div>
+      <button class="topo__menu" type="button" aria-expanded="false" aria-controls="menu-movel" aria-label="Abrir menu">
+        <svg class="tres" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        <svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
     </div>
+    <nav class="menu-movel" id="menu-movel" aria-label="Menu">
+      <a href="#recursos">Recursos</a>
+      <a href="#como-funciona">Como funciona</a>
+      <a href="#integracoes">Integrações</a>
+      <a href="/admin">Entrar no painel</a>
+      <a class="botao botao--principal" href="mailto:tomazi.brand@gmail.com?subject=Quero%20conhecer%20o%20Oria">Conhecer o Oria</a>
+    </nav>
   </header>
 
-  <main>
-    <div class="envoltorio">
-      <section class="heroi">
-        <!-- A manchete começa com o nome sozinho, sem o artigo "O" antes. A reprovação anterior foi
-             por "o nome do app não corresponde ao da página inicial", e quem revisa pode não ler
-             português: "O Oria" corre o risco de ser lido como se o nome fosse "O Oria". -->
-        <h1><em>Oria</em> reúne a operação da sua loja em um só painel.</h1>
-        <p>
-          <strong>Oria é um painel de gestão para lojas.</strong> Pedidos, resultado financeiro,
-          recuperação de carrinho abandonado e desempenho dos anúncios — lado a lado, no mesmo
-          lugar. Em vez de abrir cinco ferramentas para entender um dia de vendas, você abre uma.
-        </p>
-        <div class="acoes">
-          <a class="botao botao--principal" href="/admin">Entrar no painel</a>
-          <a class="botao botao--secundario" href="/politica-de-privacidade">Política de Privacidade</a>
-        </div>
-      </section>
-
-      <section>
-        <h2>O que o Oria faz</h2>
-        <p class="subtitulo">
-          É um painel de gestão de uso restrito: cada loja acessa apenas os próprios dados, com
-          login e senha.
-        </p>
-        <div class="grade">
-          <article class="cartao">
-            <h3>Pedidos e produção</h3>
-            <p>
-              Todos os pedidos da loja em uma lista só, com status de pagamento, de produção e de
-              entrega — sem depender de abrir a plataforma de vendas.
-            </p>
-          </article>
-          <article class="cartao">
-            <h3>Resultado financeiro</h3>
-            <p>
-              Faturamento, custo de produção, gasto com mídia e o que sobra de fato. Por período e
-              por produto.
-            </p>
-          </article>
-          <article class="cartao">
-            <h3>Recuperação de carrinho</h3>
-            <p>
-              Identifica quem deixou o carrinho para trás e envia uma mensagem por WhatsApp — e nunca
-              envia para quem já comprou.
-            </p>
-          </article>
-          <article class="cartao">
-            <h3>Desempenho de anúncios</h3>
-            <p>
-              Investimento, alcance e retorno das campanhas, comparados com as vendas reais do mesmo
-              período.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section>
-        <span class="etiqueta">Integrações</span>
-        <h2>Como o Oria usa dados de contas conectadas</h2>
-        <p class="subtitulo">
-          Todas as integrações são opcionais, autorizadas pela própria pessoa responsável pela loja e
-          sempre em modo de <strong>somente leitura</strong>. Podem ser desconectadas a qualquer
-          momento.
-        </p>
-
-        <div class="destaque">
-          <h3>Google Analytics</h3>
-          <p>
-            Quando a loja conecta a conta Google, o Oria lê as métricas da propriedade escolhida no
-            Google Analytics — sessões, origens de tráfego e conversões — e as exibe no painel, ao
-            lado dos pedidos e do investimento em anúncios. É essa junção que permite responder “de
-            onde veio a venda de ontem” sem alternar entre ferramentas.
+  <main id="conteudo">
+    <!-- ── Herói ─────────────────────────────────────────────────────────── -->
+    <section class="heroi" aria-labelledby="titulo-heroi">
+      <div class="envoltorio heroi__grade">
+        <div class="heroi__copia">
+          <h1 class="heroi__titulo" id="titulo-heroi">
+            <span class="heroi__sobre entra"><b>Oria</b> — a operação da sua loja, conectada.</span>
+            <span class="heroi__linha heroi__linha--acento entra" style="--d:80ms">Mais marca.</span>
+            <span class="heroi__linha entra" style="--d:160ms">Menos operação.</span>
+          </h1>
+          <p class="heroi__texto entra" style="--d:260ms">
+            <strong>Oria é um painel de gestão para lojas.</strong> Pedidos, resultado financeiro,
+            anúncios e recuperação de carrinho em um só lugar — para vender sem perder o controle da
+            operação.
           </p>
-          <p>
-            O acesso pedido é <strong>somente leitura</strong> (<code>analytics.readonly</code>) mais
-            o endereço de e-mail da conta, usado apenas para mostrar qual conta está conectada. O
-            Oria <strong>não altera, não cria e não apaga</strong> nada na conta Google, não
-            compartilha esses dados com terceiros e não os usa para publicidade nem para treinar
-            modelos de inteligência artificial.
-          </p>
-          <p>
-            O uso das informações recebidas das APIs do Google obedece à
-            <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Política de Dados do Usuário dos Serviços de API do Google</a>,
-            incluindo os requisitos de Uso Limitado. Os detalhes estão na
-            <a href="/politica-de-privacidade">Política de Privacidade</a>.
-          </p>
+          <div class="heroi__acoes entra" style="--d:360ms">
+            <a class="botao botao--principal" href="mailto:tomazi.brand@gmail.com?subject=Quero%20conhecer%20o%20Oria">
+              Conhecer o Oria
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+            </a>
+            <a class="botao botao--secundario" href="#recursos">Explorar os recursos</a>
+          </div>
+          <p class="heroi__nota entra" style="--d:460ms"><span class="ponto" aria-hidden="true"></span>Um painel por loja, com os dados e acessos dela.</p>
         </div>
 
-        <ul class="lista">
+        <figure class="palco" aria-label="Prévia ilustrativa do painel Oria, com dados fictícios">
+          <div class="palco__cena">
+            <div class="janela" aria-hidden="true">
+              <div class="janela__barra"><i></i><i></i><i></i><span class="janela__url">Oria · Visão geral</span></div>
+              <aside class="lateral">
+                <div class="lateral__marca"><img src="/assets/oria/oria-simbolo.png" alt="" width="20" height="16" /><img src="/assets/oria/oria-wordmark.png" alt="" width="31" height="8" /></div>
+                <div class="lateral__item ativo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Visão geral</div>
+                <div class="lateral__grupo">Operação</div>
+                <div class="lateral__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Pedidos</div>
+                <div class="lateral__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h2l2.5 10h11L21 8H7"/><circle cx="9" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/></svg>Recuperação</div>
+                <div class="lateral__grupo">Resultados</div>
+                <div class="lateral__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Financeiro</div>
+                <div class="lateral__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>Anúncios</div>
+              </aside>
+              <div class="conteudo">
+                <div class="conteudo__topo">
+                  <div><strong>Visão geral</strong><small>Sua loja</small></div>
+                  <span class="chip">Últimos 30 dias</span>
+                </div>
+                <div class="kpis">
+                  <div class="kpi"><span>Faturamento</span><strong>R$ 48.320</strong></div>
+                  <div class="kpi"><span>Pedidos</span><strong>312</strong></div>
+                  <div class="kpi"><span>Ticket médio</span><strong>R$ 154,87</strong></div>
+                </div>
+                <div class="paineis">
+                  <div class="painel">
+                    <div class="painel__titulo">Vendas no período <small>por dia</small></div>
+                    <div class="grafico">
+                      <svg viewBox="0 0 300 100" preserveAspectRatio="none">
+                        <defs><linearGradient id="g-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#35D07F" stop-opacity=".28"/><stop offset="1" stop-color="#35D07F" stop-opacity="0"/></linearGradient></defs>
+                        <path d="M0 78 C20 74 28 60 44 64 S72 76 88 56 S118 60 136 50 S166 62 186 38 S212 48 230 30 S266 34 300 14 L300 100 L0 100Z" fill="url(#g-area)"/>
+                        <path class="grafico__linha" pathLength="1" d="M0 78 C20 74 28 60 44 64 S72 76 88 56 S118 60 136 50 S166 62 186 38 S212 48 230 30 S266 34 300 14" fill="none" stroke="#35D07F" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                    <div class="grafico__eixo"><span>01</span><span>08</span><span>15</span><span>22</span><span>30</span></div>
+                  </div>
+                  <div class="painel">
+                    <div class="painel__titulo">Pedidos recentes</div>
+                    <div class="pedido"><div><b>#10482</b><span>Camiseta essencial</span></div><em class="status status--ok">Produzido</em></div>
+                    <div class="pedido"><div><b>#10481</b><span>Moletom canguru</span></div><em class="status status--aviso">Aguardando Pix</em></div>
+                    <div class="pedido"><div><b>#10480</b><span>Camiseta oversized</span></div><em class="status status--info">Despachado</em></div>
+                    <div class="pedido"><div><b>#10479</b><span>Ecobag</span></div><em class="status status--neutro">Entregue</em></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="palco__flutuantes" aria-hidden="true">
+            <div class="flutuante flutuante--fin">
+              <div class="flutuante__cab"><span class="flutuante__icone"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 13V7M6 13V3M10 13V9M14 13V5"/></svg></span>Visão financeira</div>
+              <div class="flutuante__linhas">
+                <div class="flutuante__linha"><span>Vendas</span><i style="--p:1"></i><b>48,3k</b></div>
+                <div class="flutuante__linha"><span>Produção</span><i style="--p:.42;--c:var(--aviso)"></i><b>20,1k</b></div>
+                <div class="flutuante__linha"><span>Mídia</span><i style="--p:.18;--c:var(--info)"></i><b>8,7k</b></div>
+              </div>
+            </div>
+            <div class="flutuante flutuante--ped">
+              <div class="flutuante__cab"><span class="flutuante__icone"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h12M2 8h12M2 12h7"/></svg></span>Pedidos em andamento</div>
+              <div class="flutuante__linhas">
+                <div class="flutuante__linha"><span>Pagamento</span><i style="--p:.25;--c:var(--aviso)"></i><b>9</b></div>
+                <div class="flutuante__linha"><span>Produção</span><i style="--p:.7"></i><b>24</b></div>
+                <div class="flutuante__linha"><span>Despacho</span><i style="--p:.45;--c:var(--info)"></i><b>15</b></div>
+              </div>
+            </div>
+          </div>
+          <figcaption class="palco__selo">Prévia ilustrativa · dados fictícios</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ── Posicionamento ────────────────────────────────────────────────── -->
+    <section class="faixa" id="como-funciona" aria-labelledby="titulo-faixa">
+      <div class="envoltorio">
+        <span class="rotulo revela">Como funciona</span>
+        <h2 class="faixa__frase revela" id="titulo-faixa" style="margin-top:22px">A ferramenta certa não cria mais trabalho. <span>Ela conecta o que você já faz.</span></h2>
+        <ol class="fluxo revela" data-observa>
+          <li class="fluxo__etapa">
+            <div class="fluxo__marcador"><span class="fluxo__no">01</span><span class="fluxo__trilho" aria-hidden="true"></span></div>
+            <div><h3>Venda</h3><p>O pedido entra pela sua plataforma de vendas, como sempre entrou.</p></div>
+          </li>
+          <li class="fluxo__etapa" style="--d:250ms">
+            <div class="fluxo__marcador"><span class="fluxo__no">02</span><span class="fluxo__trilho" aria-hidden="true" style="--d:250ms"></span></div>
+            <div><h3>Operação</h3><p>O Oria lê pedidos, status e carrinhos e mostra a operação inteira em um painel só.</p></div>
+          </li>
+          <li class="fluxo__etapa">
+            <div class="fluxo__marcador"><span class="fluxo__no">03</span><span class="fluxo__trilho" aria-hidden="true"></span></div>
+            <div><h3>Decisão</h3><p>Vendas, custos e anúncios do mesmo período lado a lado, para decidir com contexto.</p></div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ── Recursos ──────────────────────────────────────────────────────── -->
+    <section class="secao" id="recursos" aria-labelledby="titulo-recursos">
+      <div class="envoltorio">
+        <div class="secao__cab">
+          <span class="rotulo revela">Recursos</span>
+          <h2 class="titulo-secao revela" id="titulo-recursos">Sua operação finalmente <em>conversa entre si.</em></h2>
+          <p class="texto-secao revela" style="--d:120ms">Em vez de abrir cinco ferramentas para entender um dia de vendas, você abre uma. Cada módulo lê os dados da sua própria loja.</p>
+        </div>
+
+        <div class="bento">
+          <article class="bloco bloco--largo bloco--destaque revela">
+            <div>
+              <span class="bloco__num">01 · OPERAÇÃO</span>
+              <h3>Pedidos e produção</h3>
+              <p>Todos os pedidos da loja em uma lista só, com o status de pagamento, a etapa do pedido — produção, envio, entrega — e o rastreio, sem depender de abrir a plataforma de vendas.</p>
+            </div>
+            <div class="bloco__visual" aria-hidden="true">
+              <div class="mini">
+                <div class="mini__cab"><span>Pedidos · hoje</span><span>Prévia ilustrativa</span></div>
+                <div class="etapas">
+                  <div><span>Pagamento</span><b>9</b></div>
+                  <div><span>Produção</span><b>24</b></div>
+                  <div><span>Despachado</span><b>15</b></div>
+                  <div><span>Entregue</span><b>58</b></div>
+                </div>
+                <div class="pedido"><div><b>#10482 · Ana P.</b><span>2 itens · Pix</span></div><em class="status status--ok">Aguardando produção</em></div>
+                <div class="pedido"><div><b>#10481 · Bruno S.</b><span>1 item · Pix</span></div><em class="status status--aviso">Aguardando pagamento</em></div>
+                <div class="pedido"><div><b>#10480 · Carla M.</b><span>3 itens · Cartão</span></div><em class="status status--info">Despachado</em></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="bloco bloco--estreito revela" style="--d:100ms">
+            <div>
+              <span class="bloco__num">02 · RESULTADO</span>
+              <h3>Resultado financeiro</h3>
+              <p>Faturamento, custo de produção e gasto com mídia do período — e o que sobra de fato, com lucro e margem.</p>
+            </div>
+            <div class="bloco__visual mini" aria-hidden="true">
+              <div class="cascata">
+                <div class="cascata__linha"><span>Faturamento</span><i class="cascata__barra" style="--w:100%"></i><b>48,3k</b></div>
+                <div class="cascata__linha"><span>Produção</span><i class="cascata__barra" style="--w:42%;--i:58%;--c:var(--aviso)"></i><b>−20,1k</b></div>
+                <div class="cascata__linha"><span>Mídia</span><i class="cascata__barra" style="--w:18%;--i:40%;--c:var(--info)"></i><b>−8,7k</b></div>
+                <div class="cascata__linha cascata__linha--total"><span>Resultado</span><i class="cascata__barra" style="--w:40%;--c:var(--marca)"></i><b>19,5k</b></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="bloco bloco--estreito revela">
+            <div>
+              <span class="bloco__num">03 · ANÚNCIOS</span>
+              <h3>Desempenho de anúncios</h3>
+              <p>Métricas das campanhas de Meta Ads e Google Ads ao lado das vendas reais do mesmo período. O Oria só lê: não cria nem altera campanhas.</p>
+            </div>
+            <div class="bloco__visual mini" aria-hidden="true">
+              <div class="campanhas">
+                <div class="campanha"><div><b>Coleção de inverno</b><span>Meta Ads</span></div><em>R$ 3.240<small>investido</small></em></div>
+                <div class="campanha"><div><b>Remarketing 7 dias</b><span>Meta Ads</span></div><em>R$ 1.180<small>investido</small></em></div>
+                <div class="campanha"><div><b>Pesquisa · marca</b><span>Google Ads</span></div><em>R$ 640<small>investido</small></em></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="bloco bloco--largo revela" style="--d:100ms">
+            <div>
+              <span class="bloco__num">04 · RECUPERAÇÃO</span>
+              <h3>Recuperação de carrinho</h3>
+              <p>Identifica carrinhos abandonados e Pix pendentes e envia a mensagem pelo WhatsApp da loja — automática ou revisada, como a loja configurar. Por padrão, não envia para quem já comprou.</p>
+            </div>
+            <div class="bloco__visual" aria-hidden="true">
+              <div class="mini conversa">
+                <div class="mini__cab"><span>WhatsApp · recuperação</span><span>Prévia ilustrativa</span></div>
+                <div class="balao">Oi, Marina! Seu carrinho ainda está guardado. Quer ajuda para finalizar o pedido?<small>10:42 ✓✓</small></div>
+                <div class="carrinhos">
+                  <div class="carrinho"><span>Marina R. · 2 itens</span><em class="status status--info">Mensagem enviada</em></div>
+                  <div class="carrinho"><span>Diego A. · 1 item</span><em class="status status--ok">Já comprou · não enviar</em></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p class="nota-plano revela">Os módulos disponíveis variam conforme a configuração de cada loja.</p>
+      </div>
+    </section>
+
+    <!-- ── Vitrine ───────────────────────────────────────────────────────── -->
+    <section class="secao vitrine" aria-labelledby="titulo-vitrine">
+      <div class="envoltorio vitrine__grade">
+        <div class="vitrine__texto">
+          <span class="rotulo revela">O produto por dentro</span>
+          <h2 class="titulo-secao revela" id="titulo-vitrine">Veja a operação <em>de outro jeito.</em></h2>
+          <p class="texto-secao revela">Quatro situações do dia a dia, do jeito que aparecem no painel. As telas ilustram a interface com dados fictícios — não são uma demonstração do sistema em funcionamento.</p>
+          <div class="abas" role="tablist" aria-label="Situações do painel">
+            <button class="aba" role="tab" id="aba-pedidos" aria-controls="tela-pedidos" aria-selected="true"><strong>Pedidos</strong><span>Em que etapa está cada pedido, sem abrir outra ferramenta.</span></button>
+            <button class="aba" role="tab" id="aba-financeiro" aria-controls="tela-financeiro" aria-selected="false" tabindex="-1"><strong>Financeiro</strong><span>O que vendeu, quanto custou e o que sobrou no período.</span></button>
+            <button class="aba" role="tab" id="aba-campanhas" aria-controls="tela-campanhas" aria-selected="false" tabindex="-1"><strong>Campanhas</strong><span>Indicadores dos anúncios ao lado das vendas do período.</span></button>
+            <button class="aba" role="tab" id="aba-carrinhos" aria-controls="tela-carrinhos" aria-selected="false" tabindex="-1"><strong>Carrinhos</strong><span>Quem ficou para trás e o que já foi feito para recuperar.</span></button>
+          </div>
+        </div>
+
+        <div class="tela revela" style="--d:120ms">
+          <div class="tela__painel ativo" id="tela-pedidos" role="tabpanel" aria-labelledby="aba-pedidos" tabindex="0">
+            <span class="tela__painel-titulo">Pedidos</span>
+            <div class="tela__cab"><strong>Pedidos em andamento</strong><span class="chip">Prévia ilustrativa</span></div>
+            <div class="tela__corpo">
+              <div class="tela__kpis">
+                <div class="kpi"><span>Aguardando pagamento</span><strong>9</strong></div>
+                <div class="kpi"><span>Em produção</span><strong>24</strong></div>
+                <div class="kpi"><span>Despachados</span><strong>15</strong></div>
+              </div>
+              <div class="mini">
+                <div class="pedido"><div><b>#10482 · Ana P.</b><span>Camiseta essencial · 2 itens</span></div><em class="status status--ok">Aguardando produção</em></div>
+                <div class="pedido"><div><b>#10481 · Bruno S.</b><span>Moletom canguru · 1 item</span></div><em class="status status--aviso">Aguardando Pix</em></div>
+                <div class="pedido"><div><b>#10480 · Carla M.</b><span>Camiseta oversized · 3 itens</span></div><em class="status status--info">Despachado</em></div>
+                <div class="pedido"><div><b>#10479 · Davi L.</b><span>Ecobag · 1 item</span></div><em class="status status--neutro">Entregue</em></div>
+              </div>
+              <div class="tela__rodape"><span>Pagamento, etapa do pedido e entrega na mesma linha.</span></div>
+            </div>
+          </div>
+
+          <div class="tela__painel" id="tela-financeiro" role="tabpanel" aria-labelledby="aba-financeiro" tabindex="0">
+            <span class="tela__painel-titulo">Financeiro</span>
+            <div class="tela__cab"><strong>Resultado do período</strong><span class="chip">Prévia ilustrativa</span></div>
+            <div class="tela__corpo">
+              <div class="tela__kpis">
+                <div class="kpi"><span>Faturamento</span><strong>R$ 48,3k</strong></div>
+                <div class="kpi"><span>Custos</span><strong>R$ 28,8k</strong></div>
+                <div class="kpi"><span>Resultado</span><strong>R$ 19,5k</strong></div>
+              </div>
+              <div class="mini cascata">
+                <div class="cascata__linha"><span>Faturamento</span><i class="cascata__barra" style="--w:100%"></i><b>48.320</b></div>
+                <div class="cascata__linha"><span>Custo de produção</span><i class="cascata__barra" style="--w:42%;--i:58%;--c:var(--aviso)"></i><b>−20.140</b></div>
+                <div class="cascata__linha"><span>Mídia</span><i class="cascata__barra" style="--w:18%;--i:40%;--c:var(--info)"></i><b>−8.690</b></div>
+                <div class="cascata__linha cascata__linha--total"><span>Resultado</span><i class="cascata__barra" style="--w:40%;--c:var(--marca)"></i><b>19.490</b></div>
+              </div>
+              <div class="tela__rodape"><span>Por período, com lucro e margem — e por produto.</span></div>
+            </div>
+          </div>
+
+          <div class="tela__painel" id="tela-campanhas" role="tabpanel" aria-labelledby="aba-campanhas" tabindex="0">
+            <span class="tela__painel-titulo">Campanhas</span>
+            <div class="tela__cab"><strong>Anúncios no período</strong><span class="chip">Prévia ilustrativa</span></div>
+            <div class="tela__corpo">
+              <div class="tela__kpis">
+                <div class="kpi"><span>Investimento</span><strong>R$ 5.060</strong></div>
+                <div class="kpi"><span>Vendas reais no período</span><strong>R$ 48,3k</strong></div>
+                <div class="kpi"><span>MER</span><strong>9,5×</strong></div>
+              </div>
+              <div class="mini campanhas">
+                <div class="campanha"><div><b>Coleção de inverno</b><span>Meta Ads · ativa</span></div><em>R$ 3.240<small>investido</small></em></div>
+                <div class="campanha"><div><b>Remarketing 7 dias</b><span>Meta Ads · ativa</span></div><em>R$ 1.180<small>investido</small></em></div>
+                <div class="campanha"><div><b>Pesquisa · marca</b><span>Google Ads · ativa</span></div><em>R$ 640<small>investido</small></em></div>
+              </div>
+              <div class="tela__rodape"><span>Métricas lidas das plataformas, separadas do resultado real da loja.</span></div>
+            </div>
+          </div>
+
+          <div class="tela__painel" id="tela-carrinhos" role="tabpanel" aria-labelledby="aba-carrinhos" tabindex="0">
+            <span class="tela__painel-titulo">Carrinhos</span>
+            <div class="tela__cab"><strong>Recuperação de carrinho</strong><span class="chip">Prévia ilustrativa</span></div>
+            <div class="tela__corpo">
+              <div class="tela__kpis">
+                <div class="kpi"><span>Carrinhos abertos</span><strong>12</strong></div>
+                <div class="kpi"><span>Mensagens enviadas</span><strong>7</strong></div>
+                <div class="kpi"><span>Já compraram</span><strong>3</strong></div>
+              </div>
+              <div class="mini carrinhos">
+                <div class="carrinho"><span>Marina R. · 2 itens · há 2 h</span><em class="status status--info">Mensagem enviada</em></div>
+                <div class="carrinho"><span>Diego A. · 1 item · há 5 h</span><em class="status status--ok">Já comprou · não enviar</em></div>
+                <div class="carrinho"><span>Paula T. · 3 itens · há 1 dia</span><em class="status status--aviso">Aguardando</em></div>
+              </div>
+              <div class="tela__rodape"><span>Mensagens pelo WhatsApp da própria loja, automáticas ou revisadas.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Integrações e privacidade ─────────────────────────────────────── -->
+    <section class="secao" id="integracoes" aria-labelledby="titulo-integracoes">
+      <div class="envoltorio">
+        <div class="secao__cab">
+          <span class="rotulo revela">Integrações</span>
+          <h2 class="titulo-secao revela" id="titulo-integracoes">Conexões úteis. <em>Controle na sua mão.</em></h2>
+          <p class="texto-secao revela" style="--d:120ms">Todas as integrações são opcionais, autorizadas pela própria pessoa responsável pela loja e podem ser desconectadas a qualquer momento.</p>
+        </div>
+
+        <div class="conexoes">
+          <article class="conexao conexao--principal revela">
+            <span class="acesso">Conexão principal</span>
+            <h3>Plataforma de vendas</h3>
+            <p>Leitura dos pedidos, itens, carrinhos e status para montar o painel. Hoje o Oria se conecta à Reserva Ink.</p>
+          </article>
+          <article class="conexao revela" style="--d:60ms">
+            <span class="acesso">Somente leitura</span>
+            <h3>Google Analytics</h3>
+            <p>Sessões, origens de tráfego e conversões da propriedade escolhida, ao lado dos pedidos.</p>
+          </article>
+          <article class="conexao revela" style="--d:120ms">
+            <span class="acesso">Leitura</span>
+            <h3>Meta (Facebook e Instagram)</h3>
+            <p>Leitura do desempenho das campanhas de anúncios. O Oria não cria, não pausa e não edita campanhas.</p>
+          </article>
+          <article class="conexao revela" style="--d:180ms">
+            <span class="acesso">Leitura</span>
+            <h3>Google Ads</h3>
+            <p>Leitura das métricas das campanhas. O Oria só consulta — não cria nem altera anúncios.</p>
+          </article>
+          <article class="conexao revela" style="--d:240ms">
+            <span class="acesso acesso--envio">Envio autorizado</span>
+            <h3>WhatsApp</h3>
+            <p>Envio de mensagens sobre o pedido e de recuperação de carrinho, para o número que o comprador informou na compra — pelo número que a própria loja conectou.</p>
+          </article>
+        </div>
+
+        <div class="privacidade">
+          <div class="privacidade__intro revela">
+            <h3>Como o Oria usa dados de contas conectadas</h3>
+            <p>O Oria só lê o que a loja autorizou, para mostrar no painel dela. Nada disso é vendido, compartilhado com terceiros ou usado para publicidade.</p>
+            <p>Os detalhes estão na <a href="/politica-de-privacidade">Política de Privacidade</a>.</p>
+          </div>
+          <div class="destaque revela" style="--d:120ms">
+            <h3>Google Analytics</h3>
+            <p>
+              Quando a loja conecta a conta Google, o Oria lê as métricas da propriedade escolhida no
+              Google Analytics — sessões, origens de tráfego e conversões — e as exibe no painel, ao
+              lado dos pedidos e do investimento em anúncios. É essa junção que permite responder “de
+              onde veio a venda de ontem” sem alternar entre ferramentas.
+            </p>
+            <p>
+              O acesso pedido é <strong>somente leitura</strong> (<code>analytics.readonly</code>) mais
+              o endereço de e-mail da conta, usado apenas para mostrar qual conta está conectada. O
+              Oria <strong>não altera, não cria e não apaga</strong> nada na conta Google, não
+              compartilha esses dados com terceiros e não os usa para publicidade nem para treinar
+              modelos de inteligência artificial.
+            </p>
+            <p>
+              O uso das informações recebidas das APIs do Google obedece à
+              <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Política de Dados do Usuário dos Serviços de API do Google</a>,
+              incluindo os requisitos de Uso Limitado. Os detalhes estão na
+              <a href="/politica-de-privacidade">Política de Privacidade</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Uma loja, um painel ───────────────────────────────────────────── -->
+    <section class="secao faixa" aria-labelledby="titulo-loja">
+      <div class="envoltorio loja">
+        <div>
+          <span class="rotulo revela">Individual por loja</span>
+          <h2 class="loja__frase revela" id="titulo-loja" style="margin-top:22px">Um painel para a operação da sua loja, <em>com os dados e acessos dela.</em></h2>
+          <p class="operador revela">
+            O Oria é operado pelo Orgulho Regional, que também o utiliza na própria loja. Dúvidas sobre
+            o app, sobre dados ou sobre privacidade:
+            <a href="mailto:tomazi.brand@gmail.com">tomazi.brand@gmail.com</a>.
+          </p>
+        </div>
+        <ul class="garantias revela" style="--d:120ms">
           <li>
-            <strong>Meta (Facebook e Instagram):</strong> leitura do desempenho das campanhas de
-            anúncios. O Oria não cria, não pausa e não edita campanhas.
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <span><strong>Uso restrito.</strong> Cada loja acessa apenas os próprios dados, com login e senha.</span>
           </li>
           <li>
-            <strong>WhatsApp:</strong> envio de mensagens sobre o pedido e de recuperação de
-            carrinho, para o número que o comprador informou na compra.
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20H3z"/><path d="M9 20v-6h6v6"/></svg>
+            <span><strong>Um workspace, uma loja.</strong> A configuração, as integrações e os números são da loja — sem misturar com outras.</span>
           </li>
           <li>
-            <strong>Plataforma de vendas:</strong> leitura dos pedidos, itens e status para montar o
-            painel.
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+            <span><strong>Você decide o que conectar.</strong> Integrações opcionais, que a loja liga e desliga quando quiser.</span>
           </li>
         </ul>
-      </section>
+      </div>
+    </section>
 
-      <section>
-        <h2>Quem opera o Oria</h2>
-        <p class="subtitulo">
-          O Oria é operado pelo Orgulho Regional, que também o utiliza na própria loja. Dúvidas sobre
-          o app, sobre dados ou sobre privacidade:
-          <a href="mailto:tomazi.brand@gmail.com">tomazi.brand@gmail.com</a>.
-        </p>
-      </section>
-    </div>
+    <!-- ── CTA final ─────────────────────────────────────────────────────── -->
+    <section class="fecho" aria-labelledby="titulo-fecho">
+      <div class="envoltorio">
+        <img class="fecho__simbolo revela" src="/assets/oria/oria-simbolo.png" alt="" width="56" height="44" loading="lazy" />
+        <h2 class="titulo-secao revela" id="titulo-fecho">Sua próxima fase merece uma operação <em>à altura.</em></h2>
+        <p class="texto-secao revela">Conte como sua loja funciona hoje e veja se o Oria faz sentido para a sua operação.</p>
+        <div class="fecho__acoes revela">
+          <a class="botao botao--principal" href="mailto:tomazi.brand@gmail.com?subject=Quero%20conhecer%20o%20Oria">
+            Conhecer o Oria
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+          </a>
+        </div>
+        <p class="fecho__cliente revela">Já usa o Oria? <a href="/admin">Entrar no painel</a></p>
+      </div>
+    </section>
   </main>
 
   <footer class="rodape">
-    <div class="envoltorio rodape__linhas">
+    <div class="envoltorio rodape__linha">
+      <a class="marca" href="/oria" aria-label="Oria — página inicial">
+        <img class="marca__simbolo" src="/assets/oria/oria-simbolo.png" alt="" width="36" height="28" loading="lazy" />
+        <img class="marca__nome" src="/assets/oria/oria-wordmark.png" alt="Oria" width="58" height="15" loading="lazy" />
+      </a>
       <span>© 2026 Oria</span>
-      <nav>
+      <nav aria-label="Rodapé">
         <a href="/politica-de-privacidade">Política de Privacidade</a>
         <a href="/admin">Entrar no painel</a>
         <a href="mailto:tomazi.brand@gmail.com">Contato</a>
       </nav>
     </div>
   </footer>
+
+  <script>
+    (function () {
+      var raiz = document.documentElement;
+      var reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // Topo: muda opacidade/borda depois de rolar. Um listener passivo e um rAF.
+      var topo = document.getElementById('topo');
+      var agendado = false;
+      function marcarRolagem() {
+        agendado = false;
+        topo.classList.toggle('rolou', window.scrollY > 8);
+      }
+      window.addEventListener('scroll', function () {
+        if (!agendado) { agendado = true; requestAnimationFrame(marcarRolagem); }
+      }, { passive: true });
+      marcarRolagem();
+
+      // Menu móvel acessível: aria-expanded, fecha no Esc e ao escolher um link.
+      var botaoMenu = topo.querySelector('.topo__menu');
+      var menu = document.getElementById('menu-movel');
+      function abrirMenu(aberto) {
+        botaoMenu.setAttribute('aria-expanded', String(aberto));
+        botaoMenu.setAttribute('aria-label', aberto ? 'Fechar menu' : 'Abrir menu');
+        menu.classList.toggle('aberto', aberto);
+      }
+      botaoMenu.addEventListener('click', function () { abrirMenu(botaoMenu.getAttribute('aria-expanded') !== 'true'); });
+      menu.addEventListener('click', function (e) { if (e.target.closest('a')) abrirMenu(false); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && botaoMenu.getAttribute('aria-expanded') === 'true') { abrirMenu(false); botaoMenu.focus(); }
+      });
+      window.matchMedia('(min-width: 960px)').addEventListener('change', function (m) { if (m.matches) abrirMenu(false); });
+
+      // Revelação na rolagem, uma vez por elemento.
+      var alvos = document.querySelectorAll('.revela');
+      if (reduzir || !('IntersectionObserver' in window)) {
+        alvos.forEach(function (el) { el.classList.add('visivel'); });
+      } else {
+        var observador = new IntersectionObserver(function (entradas) {
+          entradas.forEach(function (entrada) {
+            if (entrada.isIntersecting) { entrada.target.classList.add('visivel'); observador.unobserve(entrada.target); }
+          });
+        }, { rootMargin: '0px 0px -10% 0px', threshold: 0.12 });
+        alvos.forEach(function (el) { observador.observe(el); });
+      }
+
+      // Abas da vitrine (padrão WAI-ARIA: setas, Home/End, ativação automática).
+      var abas = Array.prototype.slice.call(document.querySelectorAll('.aba'));
+      function ativar(aba, focar) {
+        abas.forEach(function (a) {
+          var sel = a === aba;
+          a.setAttribute('aria-selected', String(sel));
+          a.tabIndex = sel ? 0 : -1;
+          document.getElementById(a.getAttribute('aria-controls')).classList.toggle('ativo', sel);
+        });
+        if (focar) aba.focus();
+      }
+      abas.forEach(function (aba, i) {
+        aba.addEventListener('click', function () { ativar(aba, false); });
+        aba.addEventListener('keydown', function (e) {
+          var destino = null;
+          if (e.key === 'ArrowDown' || e.key === 'ArrowRight') destino = abas[(i + 1) % abas.length];
+          else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') destino = abas[(i - 1 + abas.length) % abas.length];
+          else if (e.key === 'Home') destino = abas[0];
+          else if (e.key === 'End') destino = abas[abas.length - 1];
+          if (destino) { e.preventDefault(); ativar(destino, true); }
+        });
+      });
+      // Os painéis inativos saem da árvore de acessibilidade via visibility:hidden (CSS).
+      raiz.classList.add('abas-prontas');
+    })();
+  </script>
 </body>
 </html>
