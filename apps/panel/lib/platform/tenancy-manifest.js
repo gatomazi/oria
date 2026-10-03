@@ -337,6 +337,10 @@ const TABELAS_PLATAFORMA = Object.freeze([
   Object.freeze({ tabela: 'partner_benefit_ledger', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'partnership_audit_events', colunaTenant: 'organization_id' }),
   Object.freeze({ tabela: 'partner_preview_links', colunaTenant: 'organization_id' }),
+  // Sync de Categorias (migration 0047): cache das collections da Reserva Ink e o estado da varredura, por
+  // Store. Nativas (organization_id/store_id explícitos, sem `loja`), irmãs do cache do catálogo de produtos.
+  Object.freeze({ tabela: 'categorias_ink', colunaTenant: 'organization_id' }),
+  Object.freeze({ tabela: 'categorias_ink_sync', colunaTenant: 'organization_id' }),
 ]);
 
 // Globais DECLARADAS. Não recebem RLS. A role da aplicação acessa só as de identidade

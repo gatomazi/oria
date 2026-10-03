@@ -117,6 +117,9 @@ async function valoresPara(tabela, chave) {
       namespace: 'sku', external_id: `sku-${chave}`, source: 'manual', confidence: 'exact',
     });
   }
+  // Sync de Categorias (migration 0047): nativas, store_id NOT NULL com FK composta para a Store REAL; intervalo com CHECK.
+  if (tabela === 'categorias_ink') Object.assign(v, { store_id: o.storeId, categoria_id: 100, name: `Categoria ${chave}`, product_count: 0, kit_ids: '{}', sincronizado_em: new Date().toISOString() });
+  if (tabela === 'categorias_ink_sync') Object.assign(v, { store_id: o.storeId, intervalo_horas: 6, paginas: 0 });
   // Parcerias/Afiliados (migration 0044): tabelas nativas com CHECKs de vocabulário fechado e FKs compostas por Organization.
   // Valores explícitos e válidos (o gerador genérico violaria os CHECKs); os pais são as linhas da MESMA Organization.
   if (tabela.startsWith('partner_') || tabela.startsWith('partnership_')) Object.assign(v, valoresDeParcerias(tabela, chave, o));

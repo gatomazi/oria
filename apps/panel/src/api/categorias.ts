@@ -20,6 +20,47 @@ export interface ListaDeCategorias {
   page?: number;
   totalPages?: number;
   totalCount?: number | null;
+  /** 'cache' = sync de Categorias (depois da 1ª varredura concluída); 'ink' = leitura ao vivo. */
+  fonte?: 'cache' | 'ink';
+  /** Só com `fonte: 'cache'`: quando o cache foi atualizado pela última vez. */
+  sincronizadoEm?: string | null;
+}
+
+// ── Sync de Categorias (cache das collections da Ink) ──────────────────
+export interface CategoriasCacheStatus {
+  storeId: string;
+  configurado: boolean;
+  total: number;
+  iniciadoEm: string | null;
+  concluidoEm: string | null;
+  paginas: number;
+  erro: string | null;
+  sincronizando: boolean;
+  autoPausado: boolean;
+  intervaloHoras: number;
+  intervalosHoras: number[];
+}
+
+export function getCategoriasCacheStatus() {
+  return api<CategoriasCacheStatus>('/api/admin/categorias/cache/status');
+}
+
+// Responde na hora; o progresso vem do polling de getCategoriasCacheStatus.
+export function sincronizarCategoriasCache() {
+  return api<{ ok: true; jaRodando: boolean }>('/api/admin/categorias/cache/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+}
+
+// Só o agendamento da renovação automática — não interrompe varredura em andamento.
+export function salvarCategoriasCacheConfig(config: { pausado?: boolean; intervaloHoras?: number }) {
+  return api<{ ok: true; autoPausado: boolean; intervaloHoras: number }>('/api/admin/categorias/cache/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...config }),
+  });
 }
 
 /** Sem `opts` devolve a lista de sempre (seletores); com `opts.page` devolve só aquela página e os totais. */

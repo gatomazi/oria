@@ -3344,6 +3344,245 @@ function paginaDaQuery(query, { padrao = 25, maximo = 100 } = {}) {
   return { paginado: true, page: Number(query.page), perPage };
 }
 
+// ── Sync de Categorias (cache das collections da Ink, migration 0047) ────
+// Irmão do cache do catálogo de produtos: uma varredura em segundo plano espelha as categorias da Store
+// em `categorias_ink`, e a listagem passa a responder dali — sem baixar os `product_ids` de cada categoria
+// (a maior tem ~100 mil) a cada abertura da tela. Só a LISTAGEM lê o cache: detalhe, edição de produtos e
+// vitrine continuam lendo a Ink, porque `product_ids` é substituição total e nunca pode partir de um estado
+// local possivelmente velho. Toda escrita vai à Ink primeiro; o cache só é atualizado depois do sucesso,
+// sempre sem derrubar a resposta (falha no cache vira log — a próxima varredura corrige).
+const CATEGORIAS_CACHE_INTERVALO_PADRAO_HORAS = 6;
+const CATEGORIAS_CACHE_INTERVALOS_HORAS = [6, 12, 24, 48, 72, 168]; // o CHECK da 0047 é esta mesma lista
+const CATEGORIAS_CACHE_PER_PAGE = 100;
+// Rede de segurança contra total_pages estranho: 50 páginas = 5 mil categorias, muito acima de qualquer loja real.
+const CATEGORIAS_CACHE_MAX_PAGINAS = 50;
+const categoriasEmSincronizacao = new Set();
+
+function linhaDeCategoria(c) {
+  return {
+    id: numeroOuNull(c.id),
+    name: typeof c.name === 'string' ? c.name : '',
+    description: c.description ?? null,
+    isAvailable: typeof c.is_available === 'boolean' ? c.is_available : null,
+    position: Number.isInteger(c.position) ? c.position : null,
+    productCount: Array.isArray(c.product_ids) ? c.product_ids.length : (Number.isInteger(c.product_count) ? c.product_count : 0),
+    kitIds: JSON.stringify(Array.isArray(c.kit_ids) ? c.kit_ids.map(Number).filter(Number.isFinite) : []),
+    updatedAt: c.updated_at || null,
+  };
+}
+
+// Upsert de categorias da Store do contexto. `sincronizadoEm` marca a linha como vista por esta varredura
+// (ou escrita agora pelo painel) — a limpeza do fim da varredura remove o que a Ink não devolveu mais.
+async function gravarCategoriasNoCache(categorias, sincronizadoEm) {
+  const linhas = categorias.map(linhaDeCategoria).filter((l) => l.id !== null);
+  if (!linhas.length) return;
+  const col = (campo) => linhas.map((r) => r[campo]);
+  await pgPool.query(
+    `INSERT INTO categorias_ink (organization_id, store_id, categoria_id, name, description, is_available, position,
+       product_count, kit_ids, updated_at, sincronizado_em)
+     SELECT $1::uuid, $2::uuid, x.categoria_id, x.name, x.description, x.is_available, x.position, x.product_count,
+       ARRAY(SELECT jsonb_array_elements_text(x.kit_ids::jsonb)::bigint), x.updated_at, $3
+     FROM unnest($4::bigint[], $5::text[], $6::text[], $7::boolean[], $8::integer[], $9::integer[], $10::text[], $11::timestamptz[])
+       AS x(categoria_id, name, description, is_available, position, product_count, kit_ids, updated_at)
+     ON CONFLICT (organization_id, store_id, categoria_id) DO UPDATE SET
+       name = EXCLUDED.name, description = EXCLUDED.description, is_available = EXCLUDED.is_available,
+       position = EXCLUDED.position, product_count = EXCLUDED.product_count, kit_ids = EXCLUDED.kit_ids,
+       updated_at = EXCLUDED.updated_at, sincronizado_em = EXCLUDED.sincronizado_em`,
+    [orgDoContexto(), storeDoContexto(), sincronizadoEm, col('id'), col('name'), col('description'), col('isAvailable'),
+      col('position'), col('productCount'), col('kitIds'), col('updatedAt')]
+  );
+}
+
+// Depois de uma escrita bem-sucedida na Ink. Nunca lança: o cache é derivado, a Ink é a verdade.
+async function refletirCategoriasNoCache({ gravar = [], remover = [], marcar = [] } = {}) {
+  if (!pgPool) return;
+  try {
+    if (gravar.length) await gravarCategoriasNoCache(gravar, new Date());
+    if (remover.length) {
+      await pgPool.query('DELETE FROM categorias_ink WHERE organization_id = $1 AND store_id = $2 AND categoria_id = ANY($3::bigint[])',
+        [orgDoContexto(), storeDoContexto(), remover]);
+    }
+    // Só o campo que a escrita mudou (bulk-ativar não recebe a categoria inteira de volta).
+    for (const { ids, isAvailable } of marcar) {
+      if (!ids.length) continue;
+      await pgPool.query(
+        'UPDATE categorias_ink SET is_available = $4, sincronizado_em = now() WHERE organization_id = $1 AND store_id = $2 AND categoria_id = ANY($3::bigint[])',
+        [orgDoContexto(), storeDoContexto(), ids, isAvailable]
+      );
+    }
+  } catch (err) {
+    console.error(`[CATEGORIAS_CACHE] falha ao refletir escrita no cache da store ${storeDoContexto()}: ${err.message}`);
+  }
+}
+
+async function sincronizarCategoriasInk() {
+  if (!pgPool) return { pulado: 'sem Postgres configurado' };
+  if (!(await inkConectada())) return { pulado: 'esta organization não tem token INK configurado' };
+  const storeId = storeDoContexto();
+  if (categoriasEmSincronizacao.has(storeId)) return { pulado: 'sincronização já em andamento' };
+  categoriasEmSincronizacao.add(storeId);
+  const org = orgDoContexto();
+  const inicio = new Date();
+  try {
+    await pgPool.query(
+      `INSERT INTO categorias_ink_sync (organization_id, store_id, iniciado_em, concluido_em, paginas, erro)
+       VALUES ($1, $2, $3, NULL, 0, NULL)
+       ON CONFLICT (organization_id, store_id) DO UPDATE SET iniciado_em = EXCLUDED.iniciado_em, concluido_em = NULL, paginas = 0, erro = NULL`,
+      [org, storeId, inicio]
+    );
+    const vistas = new Set();
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const data = await comRetryInk(() => inkApiRequestDaStore(`/v1/stores/collections?page=${page}&per_page=${CATEGORIAS_CACHE_PER_PAGE}`));
+      const categorias = data.collections || [];
+      await gravarCategoriasNoCache(categorias, inicio);
+      for (const c of categorias) vistas.add(String(c.id));
+      totalPages = Math.min(data.total_pages || 1, CATEGORIAS_CACHE_MAX_PAGINAS);
+      await pgPool.query('UPDATE categorias_ink_sync SET paginas = $3 WHERE organization_id = $1 AND store_id = $2', [org, storeId, page]);
+      page += 1;
+    } while (page <= totalPages);
+
+    // Diferente do catálogo de produtos, zero categorias é uma loja possível (nada criado ainda): a varredura
+    // concluída é a prova, e a limpeza abaixo zera o cache de acordo.
+    const { rowCount: removidas } = await pgPool.query(
+      'DELETE FROM categorias_ink WHERE organization_id = $1 AND store_id = $2 AND sincronizado_em < $3',
+      [org, storeId, inicio]
+    );
+    await pgPool.query(
+      'UPDATE categorias_ink_sync SET concluido_em = now(), total = $3, erro = NULL WHERE organization_id = $1 AND store_id = $2',
+      [org, storeId, vistas.size]
+    );
+    console.log(`[CATEGORIAS_CACHE] store ${storeId}: ${vistas.size} categoria(s) no cache, ${removidas} removida(s)`);
+    return { total: vistas.size, removidas };
+  } catch (err) {
+    console.error(`[CATEGORIAS_CACHE] falha ao sincronizar as categorias da store ${storeId}: ${err.message}`);
+    await pgPool.query(
+      `INSERT INTO categorias_ink_sync (organization_id, store_id, iniciado_em, erro) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (organization_id, store_id) DO UPDATE SET erro = EXCLUDED.erro`,
+      [org, storeId, inicio, String(err.message).slice(0, 500)]
+    ).catch(() => {});
+    throw err;
+  } finally {
+    categoriasEmSincronizacao.delete(storeId);
+  }
+}
+
+async function sincronizarCategoriasInkDaOrganizacao({ apenasVencidos = false } = {}) {
+  if (!pgPool) return;
+  if (CATALOG_SYNC_DISABLED && apenasVencidos) return; // o mesmo kill switch das varreduras agendadas do catálogo
+  for (const { storeId } of await storesInkDoContexto()) {
+    if (apenasVencidos) {
+      const { rows: [cfg] } = await pgPool.query(
+        'SELECT concluido_em, auto_pausado, intervalo_horas FROM categorias_ink_sync WHERE organization_id = $1 AND store_id = $2',
+        [orgDoContexto(), storeId]
+      );
+      if (cfg && cfg.auto_pausado) continue;
+      const intervaloMs = ((cfg && cfg.intervalo_horas) || CATEGORIAS_CACHE_INTERVALO_PADRAO_HORAS) * 60 * 60 * 1000;
+      if (cfg && cfg.concluido_em && Date.now() - new Date(cfg.concluido_em).getTime() < intervaloMs) continue;
+    }
+    try {
+      await sincronizarCategoriasInk();
+    } catch { /* já logado e gravado em categorias_ink_sync */ }
+  }
+}
+
+// O cache só responde depois de UMA varredura concluída nesta Store: antes disso, linhas avulsas gravadas por
+// escritas do painel não são a lista inteira. `total` só é gravado no sucesso e nunca é zerado ao recomeçar —
+// durante uma re-sincronização (`concluido_em` volta a NULL) a tela continua servida pelo cache.
+async function categoriasDoCache({ paginado, page, perPage }) {
+  if (!pgPool) return null;
+  const org = orgDoContexto();
+  const storeId = storeDoContexto();
+  const { rows: [sync] } = await pgPool.query(
+    'SELECT concluido_em FROM categorias_ink_sync WHERE organization_id = $1 AND store_id = $2 AND total IS NOT NULL',
+    [org, storeId]
+  );
+  if (!sync) return null;
+  const { rows: [t] } = await pgPool.query('SELECT count(*)::int AS n, max(sincronizado_em) AS em FROM categorias_ink WHERE organization_id = $1 AND store_id = $2', [org, storeId]);
+  const { rows } = await pgPool.query(
+    `SELECT categoria_id, name, description, is_available, position, product_count, kit_ids, updated_at
+       FROM categorias_ink WHERE organization_id = $1 AND store_id = $2
+      ORDER BY position NULLS LAST, categoria_id
+      ${paginado ? 'LIMIT $3 OFFSET $4' : ''}`,
+    paginado ? [org, storeId, perPage, (page - 1) * perPage] : [org, storeId]
+  );
+  return {
+    categorias: rows.map((r) => ({
+      id: Number(r.categoria_id), name: r.name, description: r.description, is_available: r.is_available, position: r.position,
+      product_count: r.product_count, kit_ids: (r.kit_ids || []).map(Number), updated_at: r.updated_at,
+    })),
+    page: paginado ? page : 1,
+    totalPages: paginado ? Math.max(1, Math.ceil(t.n / perPage)) : 1,
+    totalCount: t.n,
+    fonte: 'cache',
+    sincronizadoEm: t.em || sync.concluido_em,
+  };
+}
+
+app.get('/api/admin/categorias/cache/status', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'o cache de categorias exige Postgres configurado' });
+  try {
+    const storeId = storeDoContexto();
+    const { rows: [t] } = await pgPool.query('SELECT count(*)::int AS n FROM categorias_ink WHERE organization_id = $1 AND store_id = $2', [orgDoContexto(), storeId]);
+    const { rows: [s] } = await pgPool.query(
+      'SELECT iniciado_em, concluido_em, total, paginas, erro, auto_pausado, intervalo_horas FROM categorias_ink_sync WHERE organization_id = $1 AND store_id = $2',
+      [orgDoContexto(), storeId]
+    );
+    res.json({
+      storeId,
+      configurado: await inkConectada(),
+      total: t.n,
+      iniciadoEm: s ? s.iniciado_em : null,
+      concluidoEm: s ? s.concluido_em : null,
+      paginas: s ? Number(s.paginas || 0) : 0,
+      erro: s ? s.erro : null,
+      sincronizando: categoriasEmSincronizacao.has(storeId),
+      autoPausado: s ? !!s.auto_pausado : false,
+      intervaloHoras: s ? Number(s.intervalo_horas) : CATEGORIAS_CACHE_INTERVALO_PADRAO_HORAS,
+      intervalosHoras: CATEGORIAS_CACHE_INTERVALOS_HORAS,
+    });
+  } catch (err) {
+    console.error(`[CATEGORIAS_CACHE] falha ao ler status: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível ler o status do cache de categorias' });
+  }
+});
+
+// Dispara e responde na hora — quem acompanha é o polling de /cache/status.
+app.post('/api/admin/categorias/cache/sync', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'o cache de categorias exige Postgres configurado' });
+  if (!(await storesInkDoContexto()).length) return res.status(503).json({ error: 'esta loja não tem token INK configurado' });
+  const jaRodando = categoriasEmSincronizacao.has(storeDoContexto());
+  if (!jaRodando) sincronizarCategoriasInk().catch(() => {});
+  res.json({ ok: true, jaRodando });
+});
+
+// Pausa/retoma a renovação automática e ajusta o intervalo. Não interrompe uma varredura em andamento.
+app.put('/api/admin/categorias/cache/config', requireAdmin, async (req, res) => {
+  if (!pgPool) return res.status(503).json({ error: 'o cache de categorias exige Postgres configurado' });
+  const body = req.body || {};
+  const temPausado = body.pausado !== undefined;
+  const temIntervalo = body.intervaloHoras !== undefined;
+  if (!temPausado && !temIntervalo) return res.status(400).json({ error: 'nada para atualizar' });
+  if (temPausado && typeof body.pausado !== 'boolean') return res.status(400).json({ error: 'pausado deve ser booleano' });
+  if (temIntervalo && !CATEGORIAS_CACHE_INTERVALOS_HORAS.includes(body.intervaloHoras)) return res.status(400).json({ error: 'intervalo inválido' });
+  try {
+    const { rows: [r] } = await pgPool.query(
+      `INSERT INTO categorias_ink_sync (organization_id, store_id, auto_pausado, intervalo_horas)
+       VALUES ($1, $2, COALESCE($3::boolean, false), COALESCE($4::integer, ${CATEGORIAS_CACHE_INTERVALO_PADRAO_HORAS}))
+       ON CONFLICT (organization_id, store_id) DO UPDATE SET
+         auto_pausado = COALESCE($3::boolean, categorias_ink_sync.auto_pausado),
+         intervalo_horas = COALESCE($4::integer, categorias_ink_sync.intervalo_horas)
+       RETURNING auto_pausado, intervalo_horas`,
+      [orgDoContexto(), storeDoContexto(), temPausado ? body.pausado : null, temIntervalo ? body.intervaloHoras : null]
+    );
+    res.json({ ok: true, autoPausado: r.auto_pausado, intervaloHoras: Number(r.intervalo_horas) });
+  } catch (err) {
+    console.error(`[CATEGORIAS_CACHE] falha ao salvar config: ${err.message}`);
+    res.status(500).json({ error: 'não foi possível salvar a configuração do cache de categorias' });
+  }
+});
+
 // ── Catálogo — Categorias (Fase 8.2, ver docs/plan.md) ──────────────────
 // Único módulo de catálogo com CRUD completo de verdade (a API documenta DELETE aqui, ao
 // contrário de produtos). `product_ids`/`kit_ids` são substituição TOTAL do array (não soma) —
@@ -3353,6 +3592,14 @@ app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
   const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
     const { paginado, page, perPage } = paginaDaQuery(req.query);
+    // Sync de Categorias: depois da 1ª varredura concluída a lista sai do cache; `fonte=ink` força a leitura ao vivo.
+    if (req.query.fonte !== 'ink') {
+      const doCache = await categoriasDoCache({ paginado, page, perPage }).catch((err) => {
+        console.error(`[CATEGORIAS_CACHE] falha ao ler o cache, caindo na Ink: ${err.message}`);
+        return null;
+      });
+      if (doCache) return res.json(doCache);
+    }
     const data = await inkApiRequestDaStore(paginado
       ? `/v1/stores/collections?page=${page}&per_page=${perPage}`
       : '/v1/stores/collections?per_page=100');
@@ -3363,7 +3610,7 @@ app.get('/api/admin/categorias', requireAdmin, async (req, res) => {
       ...resto,
       product_count: Array.isArray(ids) ? ids.length : 0,
     }));
-    res.json({ categorias, page: paginado ? page : 1, totalPages: data.total_pages || 1, totalCount: data.total_count ?? null });
+    res.json({ categorias, page: paginado ? page : 1, totalPages: data.total_pages || 1, totalCount: data.total_count ?? null, fonte: 'ink' });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao listar (${loja}): ${err.message}`);
     res.status(err.status || 500).json({ error: err.message || 'não foi possível listar as categorias' });
@@ -3435,6 +3682,7 @@ app.post('/api/admin/categorias', requireAdmin, async (req, res) => {
 
   try {
     const data = await inkApiPostDaStore('/v1/stores/collections', body, { 'Idempotency-Key': crypto.randomUUID() });
+    if (data.collection) await refletirCategoriasNoCache({ gravar: [data.collection] });
     res.status(201).json({ loja, categoria: data.collection });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao criar categoria (${loja}): ${err.message}`);
@@ -3457,6 +3705,7 @@ app.patch('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
 
   try {
     const data = await inkApiPatchDaStore(`/v1/stores/collections/${id}`, body, { 'Idempotency-Key': crypto.randomUUID() });
+    if (data.collection) await refletirCategoriasNoCache({ gravar: [data.collection] });
     res.json({ loja, categoria: data.collection });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao atualizar categoria ${loja}/${id}: ${err.message}`);
@@ -3469,6 +3718,7 @@ app.delete('/api/admin/categorias/:id', requireAdmin, async (req, res) => {
   const loja = lojaLegadaDoContextoOuNula(); // só rótulo/compatibilidade: nula na Store nativa
   try {
     await inkApiDeleteDaStore(`/v1/stores/collections/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
+    if (/^\d+$/.test(String(id))) await refletirCategoriasNoCache({ remover: [Number(id)] });
     res.status(204).end();
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao excluir categoria ${loja}/${id}: ${err.message}`);
@@ -3489,6 +3739,7 @@ app.post('/api/admin/categorias/:id/adicionar-produto', requireAdmin, async (req
     const productIds = Array.from(new Set([...(atual.collection.product_ids || []), productId]));
     if (productIds.length > 100) return res.status(400).json({ error: 'categoria já está no limite de 100 produtos (limite da Ink)' });
     const data = await inkApiPatchDaStore(`/v1/stores/collections/${id}`, { product_ids: productIds }, { 'Idempotency-Key': crypto.randomUUID() });
+    if (data.collection) await refletirCategoriasNoCache({ gravar: [data.collection] });
     res.json({ loja, categoria: data.collection });
   } catch (err) {
     console.error(`[CATEGORIAS] falha ao adicionar produto ${productId} à categoria ${loja}/${id}: ${err.message}`);
@@ -3595,6 +3846,7 @@ app.post('/api/admin/categorias/bulk-create', requireAdmin, async (req, res) => 
     try {
       const data = await inkApiPostDaStore('/v1/stores/collections', body, { 'Idempotency-Key': crypto.randomUUID() });
       const categoria = data.collection;
+      if (categoria) await refletirCategoriasNoCache({ gravar: [categoria] });
       resultados.push({ nome, status: 'criada', id: categoria && categoria.id });
       if (categoria && categoria.id != null) mapaIds[nome] = categoria.id;
     } catch (err) {
@@ -3643,6 +3895,7 @@ app.post('/api/admin/categorias/bulk-ativar', requireAdmin, async (req, res) => 
     }
   }
 
+  await refletirCategoriasNoCache({ marcar: [{ ids: resultados.filter((r) => r.status === rotulo).map((r) => r.id), isAvailable: disponivel }] });
   res.json({
     resultados,
     resumo: { ativadas: resultados.filter((r) => r.status === rotulo).length, falharam: resultados.filter((r) => r.status === 'falhou').length },
@@ -3661,6 +3914,7 @@ async function excluirCategoriasEmLote(loja, ids) {
     try {
       await inkApiDeleteDaStore(`/v1/stores/collections/${id}`, { 'Idempotency-Key': crypto.randomUUID() });
       resultados.push({ id, status: 'excluida' });
+      await refletirCategoriasNoCache({ remover: [id] });
     } catch (err) {
       console.error(`[CATEGORIAS_LOTE] falha ao excluir categoria ${id} (${loja}): ${err.message}`);
       resultados.push({ id, status: 'falhou', error: err.message || 'erro desconhecido' });
@@ -15763,6 +16017,10 @@ async function processarBulkCategoryJobs() {
   bulkCatJobsEmProcessamento.add(job.id);
   try {
     await processarLoteBulkCategoryJob(job);
+    // A associação em massa muda a contagem de produtos de várias categorias de uma vez: quando o job termina,
+    // re-sincroniza o cache de categorias (poucas requests) em vez de tentar refletir item a item.
+    const { rows: [fim] } = await pgPool.query('SELECT status FROM bulk_category_jobs WHERE id = $1', [job.id]);
+    if (fim && !['queued', 'running'].includes(fim.status)) sincronizarCategoriasInk().catch(() => {});
   } finally {
     bulkCatJobsEmProcessamento.delete(job.id);
   }
@@ -15787,6 +16045,10 @@ JOBS.agendarUmaVez('produtos-feed-boot', 60 * 1000, () => sincronizarProdutosFee
 // 5 min depois do boot, e só se estiver vencido — o crawl são centenas de requests à Ink e não
 // pode competir com a subida do processo nem repetir a cada restart de deploy.
 JOBS.agendarUmaVez('catalogo-ink-boot', 5 * 60 * 1000, () => sincronizarCatalogoInkDaOrganizacao({ apenasVencidos: true }));
+// Sync de Categorias: mesmo tick de hora em hora com o guard de "vencidos" (intervalo da Store, pausa respeitada).
+// São poucas requests (100 categorias por página), então o boot pode rodar mais cedo que o do catálogo.
+JOBS.agendar('categorias-ink', 60 * 60 * 1000, () => sincronizarCategoriasInkDaOrganizacao({ apenasVencidos: true }));
+JOBS.agendarUmaVez('categorias-ink-boot', 2 * 60 * 1000, () => sincronizarCategoriasInkDaOrganizacao({ apenasVencidos: true }));
 JOBS.agendar('carrinhos-persistencia', CARRINHO_FOLLOWUP_INTERVAL_MS, () => persistirCarrinhosAbandonadosDaOrganizacao());
 // Rodada inicial logo após o boot (antes era chamada direta, sem escopo).
 JOBS.agendarUmaVez('boot-redes-de-seguranca', 5 * 1000, async () => {
