@@ -385,6 +385,13 @@ def build_provenance(*, request: dict, plan: dict, brand: dict, niche: dict, sem
     return dict(sorted(out.items())), dict(sorted(sources.items()))
 
 
+def _with_wearers(fields: dict, subjects: list) -> dict:
+    """Marks a composition where one product is worn by 2+ people (multi-wearer). Absent otherwise, so every plan
+    without a shared product keeps exactly the composition it always had."""
+    shared = comp.wearers_by_product(subjects)
+    return {**fields, "multi_wearer": True, "wearers_by_product": shared} if shared else fields
+
+
 def objective_for(strategy: str) -> str:
     return _OBJECTIVES[strategy]
 
@@ -429,6 +436,13 @@ def build(
         if limits.get("max", 1) == 0:
             raise GenerationError("INVALID_INPUT", {"errors": [f"subjects: {angle_id} is a product-only angle and takes no people"]})
         subjects, source = comp.explicit_subjects(requested, products), "explicit"
+    elif request.get("multi_wearer") and people_needed > 0:
+        # One product, several wearers (or a group cast over several products): the planner proposes the cast and who
+        # wears what — same standing as a semantic recommendation (`recommended`): replayable, never a hidden choice.
+        subjects, supporting_info = comp.multi_wearer_cast(
+            options=request["multi_wearer"], products=products, persona=persona, persona_source=persona_source, pool=pool,
+            pool_source=_pool_origin(brand, niche), people_needed=people_needed, seed=seed)
+        source = "recommended"
     else:
         recommended = comp.recommend(angle_id=angle_id, products=products, persona=persona,
                                      persona_is_custom=request.get("persona_mode") == "custom", pool=pool, seed=seed,
@@ -496,7 +510,7 @@ def build(
                       "interaction_detail": interaction, "interaction_source": interaction_source,
                       "scene_mode": scene_mode,
                       "composition_source": source},
-            "composition": composition(angle_id, count, picks, interaction),
+            "composition": _with_wearers(composition(angle_id, count, picks, interaction), subjects),
             "minor_safety": safety,
             "semantics": {"products": semantic_products, "supporting": supporting_info, "warnings": structured_warnings},
             "resolved_inputs": {

@@ -82,5 +82,9 @@
       "lighting": "Iluminação",
       "composition": "Composição"
     }
+  },
+  "shared_wear": {
+    "_doc": "Compiler version 4 — multi-wearer: one product worn by two or more people of the subjects contract. Appended to the people contract only when a product is shared, so every other plan compiles exactly as in version 3. It also disambiguates the fidelity rule 'nunca duplique produtos': each person wears their own unit of the SAME product, which is not a duplicated or invented product.",
+    "line": "  · MESMA PEÇA EM VÁRIAS PESSOAS: {names} vestem a MESMA peça — {product}. Mesma estampa, mesmas cores, mesmo modelo e mesma posição da arte em todas, fiéis à referência; cada pessoa veste a sua própria unidade, no tamanho proporcional ao seu corpo, com a estampa inteira e visível em cada uma. Isto não é duplicar nem inventar produto."
   }
 }

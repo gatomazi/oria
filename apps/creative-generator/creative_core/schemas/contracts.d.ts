@@ -218,6 +218,13 @@ export interface FunnelOptions {
   text_density?: "minimal" | "balanced" | "commercial";
   cta_emphasis?: "subtle" | "medium" | "strong";
   clean_mode?: boolean;
+  preset?: "promo_offer";
+  discount?: string;
+}
+
+export interface MultiWearerOptions {
+  group?: "one" | "pair" | "family";
+  share?: "auto" | "all" | "primary_only";
 }
 
 export interface CopyOptions {
@@ -271,6 +278,7 @@ export interface CreativeRequest {
   angle_family_hint?: Record<string, unknown> | null;
   custom_angle?: CustomAngle | null;
   angle_intent_hint?: string;
+  multi_wearer?: MultiWearerOptions;
 }
 
 export interface KitRef {
@@ -301,6 +309,8 @@ export interface OverlaySpec {
   text_density?: "minimal" | "balanced" | "commercial" | null;
   cta_emphasis?: "subtle" | "medium" | "strong" | null;
   clean: boolean;
+  preset?: "promo_offer" | null;
+  discount?: string | null;
 }
 
 export interface ReferenceRole {
@@ -376,6 +386,8 @@ export interface PlanComposition {
   people_count: number;
   pose_risk: "low" | "medium" | "high";
   risk_reasons: Array<string>;
+  multi_wearer?: boolean;
+  wearers_by_product?: Record<string, unknown>;
 }
 
 export interface MinorSafety {

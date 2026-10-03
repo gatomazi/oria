@@ -26,8 +26,8 @@ INTERNAL_PROMPT_BANK_VERSION = 1
 # text, order or source changes, so a persisted plan can always be recompiled with the compiler that produced it.
 PLAN_SCHEMA_V2 = 2
 SUPPORTED_PLAN_SCHEMA_VERSIONS = (1, 2)
-SUPPORTED_COMPILER_VERSIONS = (1, 2, 3)
-COMPILER_VERSION = 3  # 3 (Fase D.1): custom_angle_direction section. 2 (Fase C1, frozen): interaction section, angle frames. 1 = Fase B, kept compilable.
+SUPPORTED_COMPILER_VERSIONS = (1, 2, 3, 4)
+COMPILER_VERSION = 4  # 4: multi-wearer line in the people contract (same product on several people). 3 (Fase D.1): custom_angle_direction section. 2 (Fase C1, frozen): interaction section, angle frames. 1 = Fase B, kept compilable.
 
 # Default schema/revision for kits and context profiles created by the core.
 BRAND_KIT_SCHEMA_VERSION = 1

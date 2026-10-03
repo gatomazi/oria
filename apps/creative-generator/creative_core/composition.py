@@ -378,3 +378,129 @@ def recommend(*, angle_id: str, products: list, persona: dict | None, persona_is
                  prominence="secondary", source=supporting_origin),
     ]
     return subjects, {"role": role, "source": "product", "matched_role": role, "recommended": True}
+
+
+# ------------------------------------------------------------------ multi-wearer (one product, several wearers)
+GROUP_SIZES = {"one": 1, "pair": 2, "family": 3}
+
+
+def multi_wearer_people(options: dict | None, product_count: int) -> int | None:
+    """People a multi-wearer request asks for: the group size, never fewer than one wearer per product. None when the
+    request has no multi_wearer (or no group): the angle/engine decides the count exactly as before."""
+    if not options or not options.get("group"):
+        return None
+    return max(GROUP_SIZES[options["group"]], product_count)
+
+
+def _wearable(product: dict, band: str) -> bool:
+    """An infant garment is wearable only by the bands it is made for; anything else by anyone."""
+    return not infant_product(product) or band in infant_bands(product)
+
+
+def _cast_child(products: list) -> tuple[dict, str]:
+    """The child of a family cast: sized to the infant garment when there is one (a body is for a baby/toddler)."""
+    allowed = set().union(*(infant_bands(p) for p in products if infant_product(p))) if any(infant_product(p) for p in products) else None
+    wearers = DATA["roles"]["wearer_personas"]
+    person = wearers["child"] if not allowed or "child_6_9" in allowed else wearers["baby"]
+    return dict(person), person["age_band"]
+
+
+def multi_wearer_cast(*, options: dict, products: list, persona: dict | None, persona_source: str, pool: list,
+                      pool_source: str, people_needed: int, seed: int) -> tuple[list[dict], dict]:
+    """The cast of a multi-wearer request without explicit subjects: who is in the scene and who wears what.
+
+    Cast: the request's persona is the primary (a child garment with an adult automatic persona gets a child
+    primary instead); a family adds a partner and a child to an adult, or mother and father to a child; a pair adds
+    the product's recommended supporting role, else a person from the brand pool (a child when a garment is infant).
+
+    Wear, per person in cast order: a product nobody wears yet first (every product shows up); then, by `share`,
+    the same product again — `all` (whoever may), `auto` (only when the product's wearer_roles fit the person's
+    age; no wearer_roles = fits) or `primary_only` (nobody else). Infant garments are never offered to an adult;
+    `enforce_infant_wearers` still runs after this as the structural guard."""
+    share = options.get("share") or "auto"
+    semantic = next((p.get("semantic_context") for p in products if p.get("semantic_context")), None) or {}
+    all_infant = all(infant_product(p) for p in products)
+    has_infant = any(infant_product(p) for p in products)
+    roles = DATA["roles"]
+    labels = roles["person_labels"]
+
+    primary = dict(persona or {"label": "uma pessoa"})
+    band, age_source = detect_age(primary)
+    primary_source = persona_source
+    # An adult automatic persona cannot wear a child garment: the child becomes the primary. A persona the USER chose
+    # is never replaced — it stays in the scene as support and the garment goes to the child cast next to it.
+    if all_infant and band not in infant_bands(products[0]) and persona_source != "user":
+        primary, band = _cast_child(products)
+        age_source, primary_source = "persona.age_band", "product"
+    if band == "unknown":
+        band, age_source = ("child", "product.type") if all_infant else ("adult", "planner_default")
+
+    def adult(role: str) -> tuple[dict, str, str | None, str | None, str]:
+        # The relation is structured (relation_to_primary prints "parceiro ou parceira da Pessoa 1"): the label only
+        # says who the person is, never the relation again.
+        label = labels[role] if role in ("mother", "father") else "pessoa adulta"
+        return {"label": label, "source": "automatic"}, "adult", role, None, "planner_default"
+
+    def from_pool(relation: str | None = None) -> tuple[dict, str, str | None, str | None, str] | None:
+        """An adult from the brand/niche pool (better than a neutral label: it carries the brand's look)."""
+        candidates = [p for p in pool if p.get("label") != primary.get("label") and detect_age(p)[0] in ADULT_BANDS]
+        if not candidates:
+            return None
+        person = dict(candidates[seed % len(candidates)])
+        hint = role_hint(person.get("label") or "")
+        return person, detect_age(person)[0], relation or (hint if hint in RELATION_TYPES else None), None, pool_source
+
+    def child() -> tuple[dict, str, str | None, str | None, str]:
+        person, child_band = _cast_child(products)
+        return person, child_band, "custom", "filho ou filha", "planner_default"
+
+    extra: list = []
+    if is_minor_band(band):
+        parents = [adult("mother"), adult("father")]
+        extra = parents if people_needed >= 3 else [parents[seed % 2]]
+    else:
+        recommended = [r for r in semantic.get("recommended_supporting_roles") or [] if r in labels and r != "_doc"]
+        if people_needed >= 3:
+            extra = [from_pool("partner") or adult("partner"), child()]
+        elif has_infant:
+            extra = [child()]
+        elif recommended:
+            role = recommended[0]
+            extra = [({"label": labels[role], "source": "automatic"}, "child" if role == "sibling" else "adult", role, None,
+                      field_origin(semantic, "recommended_supporting_roles") or "product")]
+        else:
+            extra = [from_pool() or adult("friend")]
+    while len(extra) < people_needed - 1:  # beyond a family of three: more adults from the pool, then neutral adults
+        extra.append(from_pool() or adult("friend"))
+    extra = extra[: max(people_needed - 1, 0)]
+
+    cast = [(primary, band, age_source, None, None, primary_source)] + [
+        (person, b, "persona.age_band" if person.get("age_band") else "planner_default", relation, relation_label, source)
+        for person, b, relation, relation_label, source in extra]
+
+    worn: set = set()
+    subjects = []
+    for index, (person, b, a_source, relation, relation_label, source) in enumerate(cast):
+        compatible = [p for p in products if _wearable(p, b)]
+        fresh = [p for p in compatible if p.get("id") not in worn]
+        product = None
+        if fresh:
+            product = fresh[0]
+        elif compatible and (share == "all" or (share == "auto" and _fit(b, (compatible[0].get("semantic_context") or {}).get("wearer_roles") or []) is not False)):
+            product = compatible[0]
+        if product:
+            worn.add(product.get("id"))
+        subjects.append(_subject(index, person, role="primary" if index == 0 else "supporting", band=b, age_source=a_source,
+                                 relation=relation if index else None, relation_label=relation_label if index else None,
+                                 product=product, prominence="hero" if index == 0 else "secondary", source=source))
+    info = {"role": None, "source": "multi_wearer", "matched_role": None, "group": options.get("group"), "share": share}
+    return subjects, info
+
+
+def wearers_by_product(subjects: list) -> dict:
+    """{product_id: [subject ids]} for every product worn by two or more people — empty when nobody shares one."""
+    by_product: dict = {}
+    for subject in subjects:
+        if subject["product_use"] != "none" and subject["product_id"]:
+            by_product.setdefault(subject["product_id"], []).append(subject["id"])
+    return {pid: ids for pid, ids in by_product.items() if len(ids) > 1}

@@ -85,6 +85,14 @@ SUBJECT_PROMINENCE = ("hero", "secondary", "background")
 PLAN_MODES = ("creative",)
 OBJECTIVES = ("clean_creative", "remarketing", "funnel_visual")
 FEEDBACK_VERDICTS = ("liked", "disliked")
+# Funil por Criativo · presets (additive: a funnel without `preset` is exactly the stage-driven funnel of before).
+# promo_offer = performance ad with an offer — people/product photo + offer + discount/price + benefit + CTA.
+FUNNEL_PRESETS = ("promo_offer",)
+# Multi-wearer: ONE product worn by several people of the scene (not multi-product). `group` = how many people
+# (one/pair/family = 1/2/3); `share` = who wears it: `all` (everyone who may), `primary_only` (the others are
+# support), `auto` (the planner decides from product type, age band and the product's wearer_roles).
+MULTI_WEARER_GROUPS = ("one", "pair", "family")
+MULTI_WEARER_SHARES = ("auto", "all", "primary_only")
 
 
 @dataclass(frozen=True)
@@ -388,6 +396,17 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "text_density": S(enum=TEXT_DENSITIES),
         "cta_emphasis": S(enum=CTA_EMPHASES),
         "clean_mode": B(),
+        # Preset promo_offer: headline = the offer ("Leve 3"), benefits = the secondary badge ("Frete grátis"),
+        # cta = the button. `discount` is the one field with no equivalent: the discount/price that is the
+        # LARGEST text of the piece ("15% OFF", "A partir de R$ 199"). Only what the caller wrote is printed.
+        "preset": S(enum=FUNNEL_PRESETS),
+        "discount": S(max_length=40),
+    },
+    # Who wears a single product when the scene has several people (see MULTI_WEARER_*). Only for a request
+    # without explicit `subjects` — explicit subjects already say it per person (`wears_product_id`).
+    "MultiWearerOptions": {
+        "group": S(enum=MULTI_WEARER_GROUPS),
+        "share": S(enum=MULTI_WEARER_SHARES),
     },
     "CopyOptions": {
         "generate": B(required=True),
@@ -449,6 +468,7 @@ CONTRACTS: dict[str, dict[str, F]] = {
         # when both are given (a custom angle already names its own family/preset).
         "custom_angle": R("CustomAngle", nullable=True),
         "angle_intent_hint": S(max_length=40),  # seam for a future GPT-authored brief (Fase D §5) — today a plain literal like "creator", never inferred
+        "multi_wearer": R("MultiWearerOptions"),  # plan_schema_version 2 only
     },
     "KitRef": {
         "id": S(required=True),
@@ -476,6 +496,9 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "text_density": S(nullable=True, enum=TEXT_DENSITIES),
         "cta_emphasis": S(nullable=True, enum=CTA_EMPHASES),
         "clean": B(required=True),
+        # Only present on a promo_offer funnel plan (every other plan keeps the exact overlay of before).
+        "preset": S(nullable=True, enum=FUNNEL_PRESETS),
+        "discount": S(nullable=True),
     },
     "ReferenceRole": {
         "ref": S(required=True),
@@ -543,6 +566,10 @@ CONTRACTS: dict[str, dict[str, F]] = {
         "people_count": I(required=True, minimum=0),
         "pose_risk": S(required=True, enum=POSE_RISKS),
         "risk_reasons": A(S(), required=True),
+        # Only present when one product is worn by 2+ subjects: {product_id: [subject ids]}. Derived from the
+        # subjects (explicit or planned), never a second source of truth.
+        "multi_wearer": B(),
+        "wearers_by_product": O(),
     },
     "MinorSafety": {
         "applies": B(required=True),

@@ -233,9 +233,22 @@ def _name(plan: dict, index: int, count: int) -> str:
     return ("Pessoa A", "Pessoa B")[index] if gift else f"Pessoa {index + 1}"
 
 
-def _people_v2(plan: dict) -> tuple[str, str, str, list | None]:
+def _shared_wear(plan: dict, names: list[str]) -> list[str]:
+    """Compiler v4: one line per product worn by 2+ people (multi-wearer), read from the subjects themselves."""
+    products = {p["id"]: p for p in plan["products"]}
+    index = {s["id"]: i for i, s in enumerate(plan["subjects"])}
+    lines = []
+    for product_id, ids in (plan.get("composition") or {}).get("wearers_by_product", {}).items():
+        who = [names[index[i]] for i in ids if i in index]
+        joined = ", ".join(who[:-1]) + " e " + who[-1] if len(who) > 1 else "".join(who)
+        lines.append(TEXT["shared_wear"]["line"].format(names=joined, product=_product_label(products[product_id])))
+    return lines
+
+
+def _people_v2(plan: dict, version: int = 3) -> tuple[str, str, str, list | None]:
     """The subjects contract: how many people, and for each one its role, age, relation to the primary and what it
-    wears — then, only where a persona says more than its label, a details block. Nothing here is inferred from text."""
+    wears — then, only where a persona says more than its label, a details block. Nothing here is inferred from text.
+    Version 4 adds, when one product is worn by several people, the line that says it is the SAME piece on each."""
     subjects = plan["subjects"]
     if not subjects:
         return "", "planner_default", "0", None
@@ -262,6 +275,8 @@ def _people_v2(plan: dict) -> tuple[str, str, str, list | None]:
         use = cfg["uses"][subject["product_use"]].format(product=_product_label(products[subject["product_id"]]) if subject["product_id"] else "")
         lines.append(sub["line"].format(name=names[i], role=cfg["roles"][subject["role"]], label=subject["label"],
                                         age=age, relation=phrase, use=use))
+    if version >= 4:
+        lines += _shared_wear(plan, names)
     contract = sub["header"].format(count=count) + "\n" + "\n".join(lines)
     angle_id = plan["angle"]["id"]
     detail_lines = []
@@ -326,6 +341,8 @@ def _builders(plan: dict, version: int) -> dict:
         builders["scene_action"] = lambda: _scene_v2(plan)
     if version >= 3:
         builders["custom_angle_direction"] = lambda: _custom_angle_direction(plan)
+    if version >= 4:
+        builders["people_composition_contract"] = lambda: _people_v2(plan, version)
     return builders
 
 
