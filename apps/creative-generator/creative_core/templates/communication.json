@@ -99,7 +99,7 @@
           "id": "promo_offer_split",
           "zones": [
             "subject_zone: esquerda e centro (cerca de 60% da largura) — pessoas e produto, rostos e estampa livres de qualquer texto;",
-            "offer_zone: terço direito, metade superior — destaque + oferta principal, alinhados à esquerda da coluna;",
+            "offer_zone: terço direito, metade superior — o bloco da oferta (só os textos listados acima), alinhado à esquerda da coluna;",
             "benefit_zone: terço direito, logo abaixo da oferta — selo do benefício;",
             "cta_zone: terço direito, parte inferior, com margem confortável da borda."
           ]
@@ -107,7 +107,7 @@
         "STORY_9X16": {
           "id": "promo_offer_stacked",
           "zones": [
-            "offer_zone: faixa superior, abaixo dos 14% do topo (área da interface do Stories) — destaque + oferta principal, centralizados;",
+            "offer_zone: faixa superior, abaixo dos 14% do topo (área da interface do Stories) — o bloco da oferta (só os textos listados acima), centralizado;",
             "benefit_zone: logo abaixo da oferta, ainda acima das cabeças — selo do benefício;",
             "subject_zone: centro da imagem, do meio para baixo — pessoas e produto, rostos e estampa livres de qualquer texto;",
             "cta_zone: faixa inferior, acima dos 20% finais (área da interface do Stories), sobre fundo limpo e nunca sobre a estampa."
