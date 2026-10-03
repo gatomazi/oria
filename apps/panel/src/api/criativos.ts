@@ -126,7 +126,10 @@ export interface PlanSummary {
   funnel_stage: FunnelStage | null;
   remarketing_intent: RemarketingIntent | null;
   layout: string | null;
-  overlay: { allowed: boolean; headline: string | null; subheadline: string | null; cta: string | null; badges: string[]; benefits: string[]; text_density: string | null; cta_emphasis: string | null; clean: boolean };
+  // `preset`/`discount` só existem num plano do preset Oferta/Promoção (ausentes em qualquer outro).
+  overlay: { allowed: boolean; headline: string | null; subheadline: string | null; cta: string | null; badges: string[]; benefits: string[]; text_density: string | null; cta_emphasis: string | null; clean: boolean; preset?: FunnelPreset | null; discount?: string | null };
+  // Multi-wearer: {product_id: [subject ids]} quando a mesma peça é vestida por 2+ pessoas; null/ausente caso contrário.
+  wearers_by_product?: Record<string, string[]> | null;
   warnings: string[];
 }
 
@@ -205,6 +208,14 @@ export interface JobInput {
   custom_angle_replay_of?: string;
   // Fase E (§7) — outra forma de "auto": família escolhida por cartão, sem ângulo customizado.
   angle_family_hint?: { family: AngleFamilyId; preset?: string };
+  // Multi-wearer ("Quem usa a peça?"): ausente = automático do motor. Só no plano v2.
+  multi_wearer?: MultiWearer;
+}
+
+export type FunnelPreset = 'promo_offer';
+export interface MultiWearer {
+  group?: 'one' | 'pair' | 'family';
+  share?: 'auto' | 'all' | 'primary_only';
 }
 
 // Ângulos personalizados (Fase D) — CRUD em /angles. `definition` é o texto que de fato muda o prompt

@@ -35,10 +35,14 @@ const INPUT_KEYS = new Set([
   // Fase E · família de ângulo (§7): outra forma de "auto" — o usuário escolheu uma família (cartão), não um
   // ângulo customizado nem um id legado. O core resolve pra o legacy angle_id daquela família.
   'angle_family_hint',
+  // Multi-wearer: UMA peça vestida por várias pessoas da cena (não é multipeça). {group, share}; o core monta o elenco.
+  'multi_wearer',
 ]);
 const GAZE_MODES = ['auto', 'camera', 'off_camera', 'product', 'interaction'];
 const INTERACTION_RE = /^[a-z_]{2,40}$/;
 const PICK_NAME_RE = /^[a-z_]{1,40}$/;
+const MULTI_WEARER_GROUPS = ['one', 'pair', 'family'];
+const MULTI_WEARER_SHARES = ['auto', 'all', 'primary_only'];
 const SUBJECT_KEYS = new Set(['id', 'role', 'persona', 'age_band', 'relation_to_primary', 'relation_label', 'wears_product_id', 'prominence']);
 const MAX_SUBJECTS = 4;
 const MAX_SUBJECTS_BYTES = 8_000;
@@ -172,6 +176,13 @@ function normalizeJobInput(raw) {
   }
 
   if (raw.subjects !== undefined) input.subjects = normalizeSubjects(raw.subjects, input.product_ids);
+  if (raw.multi_wearer !== undefined) {
+    const mw = raw.multi_wearer;
+    exigir(objetoSimples(mw) && Object.keys(mw).every((k) => k === 'group' || k === 'share'), 'quem usa a peça: formato inválido');
+    exigir(mw.group === undefined || MULTI_WEARER_GROUPS.includes(mw.group), 'quem usa a peça: escolha uma pessoa, duas pessoas ou família');
+    exigir(mw.share === undefined || MULTI_WEARER_SHARES.includes(mw.share), 'quem usa a peça: compartilhamento inválido');
+    input.multi_wearer = { ...(mw.group ? { group: mw.group } : {}), ...(mw.share ? { share: mw.share } : {}) };
+  }
   if (raw.interaction !== undefined) {
     exigir(typeof raw.interaction === 'string' && INTERACTION_RE.test(raw.interaction), 'interação inválida');
     input.interaction = raw.interaction;
@@ -299,6 +310,7 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, pla
   if (input.remarketing) base.remarketing = input.remarketing;
   if (input.copy) base.copy = input.copy;
   if (input.subjects) base.subjects = input.subjects;
+  if (input.multi_wearer) base.multi_wearer = input.multi_wearer;
   if (input.interaction) base.interaction = input.interaction;
   if (input.gaze_mode && input.gaze_mode !== 'auto') base.gaze_mode = input.gaze_mode;
   if (input.scene_picks) base.scene_picks = input.scene_picks;
@@ -331,7 +343,7 @@ async function buildRequests(input, { store, tenantId, hints, promptVersion, pla
     base.angle_family_hint = input.angle_family_hint;
   }
   // Cena com pessoas/interação só existe no plano v2 (o core recusa no v1). Diga antes de enfileirar, em português.
-  if ((input.subjects || input.interaction || input.scene_picks || base.custom_angle) && planSchemaVersion !== 2) {
+  if ((input.subjects || input.multi_wearer || input.interaction || input.scene_picks || base.custom_angle) && planSchemaVersion !== 2) {
     throw new InputError('a composição de cena (pessoas, interação, ângulo personalizado) exige o plano v2, que ainda não está habilitado nesta conta');
   }
   if (input.scene_picks && promptVersion !== 2) {
@@ -426,6 +438,8 @@ function planSummary(plan) {
     compiler_version: plan.compiler ? plan.compiler.version : null,
     gaze: plan.scene && plan.scene.gaze ? { mode: plan.scene.gaze.mode, source: plan.scene.gaze.source } : null,
     people_count: plan.composition ? plan.composition.people_count : null,
+    // Multi-wearer: {product_id: [subject ids]} quando uma mesma peça é vestida por 2+ pessoas; null caso contrário.
+    wearers_by_product: plan.composition && plan.composition.multi_wearer ? plan.composition.wearers_by_product : null,
     pose_risk: plan.composition ? plan.composition.pose_risk : null,
     minor_safety_applied: plan.minor_safety ? plan.minor_safety.applies : null,
     // Fase E: a recomendação REAL do motor (não algo que a UI inventa) — presente em qualquer versão de plano

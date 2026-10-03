@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Callout,
@@ -19,6 +19,8 @@ import {
   Textarea,
 } from '../../components/ds';
 import {
+  type FunnelPreset,
+  type MultiWearer,
   createAngle,
   createJob,
   gerarSlug,
@@ -46,9 +48,10 @@ import {
 import { plural } from '../../lib/format';
 import { ENGINE_LABEL, FUNNEL_STAGE_LABEL, INTENT_DESCRICAO, INTENT_LABEL, type TextoMotor } from './criativosMotores';
 import {
-  CHAVES_FUNIL, CHAVES_REMARKETING, erroDeInteracaoIncompativel, funnelOptions, geografiaDisponivel, intentsDisponiveis, interacaoCabe, limiteDeProdutos,
-  lista_de, MAX_SUBJECTS_EDITAVEIS, overridesAoTrocarDeMotor, pessoasDaCena, remarketingOptions, restoDe, subjectsComOverride,
-  texto_de, textoAviso, textoInteracaoIncompativel, textoPersonaPadrao, TEXTO_MOTOR_VAZIO,
+  aplicarObjetivoFunil, CHAVES_FUNIL, CHAVES_REMARKETING, erroDeInteracaoIncompativel, funnelOptions, geografiaDisponivel, intentsDisponiveis, interacaoCabe, limiteDeProdutos,
+  lista_de, MAX_SUBJECTS_EDITAVEIS, multiWearerInput, objetivoFunil, overridesAoTrocarDeMotor, perguntaMesmaPeca, pessoasDaCena, PRESET_PROMO, promoTemOferta,
+  QUEM_USA_LABEL, remarketingOptions, restoDe, resumoPromo, subjectsComOverride, texto_de, textoAviso, textoInteracaoIncompativel, textoPersonaPadrao,
+  textoPessoas, textoUso, TEXTO_MOTOR_VAZIO,
 } from './criativosMotorInput.mjs';
 
 // Fase E — UI V2 do gerador (Ângulos Limpos, produto único): "backend rico, planner inteligente, UI simples".
@@ -89,7 +92,7 @@ const GAZE_LABEL: Record<GazeMode, string> = { camera: 'para a câmera', interac
 // tela. `null`/vazio = "nenhum texto na arte" (Ângulos Limpos, ou modo limpo ativo).
 function resumoOverlay(overlay: PlanSummary['overlay']): string | null {
   if (!overlay.allowed) return null;
-  const partes = [overlay.headline, overlay.subheadline, overlay.cta].filter(Boolean);
+  const partes = [overlay.discount, overlay.headline, overlay.subheadline, ...(overlay.preset ? overlay.benefits : []), overlay.cta].filter(Boolean);
   return partes.length ? partes.join(' · ') : null;
 }
 
@@ -198,6 +201,11 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
   // usa nenhum dos dois: o motor não aceita `remarketing`/`funnel` (o core recusa com INVALID_INPUT).
   const [intent, setIntent] = useState<RemarketingIntent>('site_visitor');
   const [stage, setStage] = useState<FunnelStage>('TOFU');
+  // Funil · preset Oferta/Promoção ('' = funil por etapa, como sempre). Uma escolha só na tela, ao lado das etapas.
+  const [preset, setPreset] = useState<FunnelPreset | ''>('');
+  // "Quem usa a peça?" (multi-wearer, só Funil): 'auto' não manda nada — o motor decide como sempre.
+  const [quemUsa, setQuemUsa] = useState<keyof typeof QUEM_USA_LABEL>('auto');
+  const [mesmaPeca, setMesmaPeca] = useState(true);
   const [texto, setTexto] = useState<TextoMotor>(TEXTO_MOTOR_VAZIO);
   const [extras, setExtras] = useState<{ remarketing?: Record<string, unknown>; funnel?: Record<string, unknown> }>({});
   // G.2 — "quem veste o quê": vazio = nenhuma edição humana, o request não carrega `subjects`
@@ -250,11 +258,15 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     const fonte = f.engine === 'REMARKETING' ? r : fu;
     setIntent((r.intent as RemarketingIntent) ?? 'site_visitor');
     setStage(f.funnel_stage ?? 'TOFU');
+    setPreset(f.engine === 'FUNNEL_VISUAL' && fu.preset === PRESET_PROMO ? PRESET_PROMO : '');
+    // O elenco do criativo original volta explícito (overrides acima): "Quem usa a peça?" fica no automático.
+    setQuemUsa('auto');
     setTexto({
       headline: texto_de(fonte.headline), subheadline: texto_de(fonte.subheadline), cta: texto_de(fonte.cta),
       benefits: lista_de(fonte.benefits), badges: lista_de(fu.badges), chips: lista_de(fu.chips), search: texto_de(fu.search_bar_text),
       density: texto_de(fonte.text_density), emphasis: texto_de(fonte.cta_emphasis),
       cleanMode: f.engine === 'REMARKETING' ? texto_de(r.clean_mode) : fu.clean_mode === true ? 'always' : '',
+      discount: texto_de(fu.discount),
     });
     setExtras({ remarketing: f.remarketing as Record<string, unknown> | undefined, funnel: f.funnel as Record<string, unknown> | undefined });
     setPersonalizar(true);
@@ -305,14 +317,20 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
       });
     }
     if (engine === 'FUNNEL_VISUAL') {
+      // Oferta/Promoção sem nenhum texto de oferta: sem prévia (o core recusa — a oferta nunca é inventada).
+      if (preset === PRESET_PROMO && !promoTemOferta(texto)) return null;
       base.funnel_stage = stage;
-      base.funnel = funnelOptions(texto, stage, restoDe(extras.funnel, CHAVES_FUNIL));
+      base.funnel = funnelOptions(texto, stage, restoDe(extras.funnel, CHAVES_FUNIL), preset);
     }
     // "Quem veste o quê" (G.2): só entra no request se o lojista de fato editou alguma linha — sem
     // edição, o core decide sozinho a mesma atribuição que a prévia já mostrou (nunca uma segunda
     // fonte de verdade). Baseado nos `subjects` da ÚLTIMA prévia real, nunca reconstruído à mão.
     const subjects = subjectsComOverride(preview?.first.subjects, overridesElenco);
     if (subjects) base.subjects = subjects as CenaPessoa[];
+    // "Quem usa a peça?" (multi-wearer): o motor monta o elenco e quem veste. Com "Quem veste o quê" editado, as
+    // linhas explícitas já dizem tudo — mandar os dois seria pedir duas coisas (o core ignoraria este com aviso).
+    const multiWearer = engine === 'FUNNEL_VISUAL' && personaMode !== 'none' && !subjects ? multiWearerInput(quemUsa, mesmaPeca) as MultiWearer | undefined : undefined;
+    if (multiWearer) base.multi_wearer = multiWearer;
     return base;
   }
 
@@ -353,7 +371,7 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     }, 350);
     return () => { ignorar = true; clearTimeout(temporizador); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, productMode, productIds, brandInput, escolha, interaction, personaMode, contextMode, geo, gazeMode, placements, quantity, intent, stage, texto, overridesElenco, cesta, origem]);
+  }, [engine, productMode, productIds, brandInput, escolha, interaction, personaMode, contextMode, geo, gazeMode, placements, quantity, intent, stage, preset, quemUsa, mesmaPeca, texto, overridesElenco, cesta, origem]);
 
   function gerar() {
     const input = montarInput();
@@ -392,6 +410,8 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     setEngine(novo);
     setIntent('site_visitor');
     setStage('TOFU');
+    setPreset('');
+    setQuemUsa('auto');
     setTexto(TEXTO_MOTOR_VAZIO);
     setExtras({});
     setOverridesElenco(overridesAoTrocarDeMotor());
@@ -419,6 +439,22 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
     // se o lojista já tinha esse intent escolhido e muda para multipeça, ele deixa de ser uma opção
     // válida; volta ao padrão em vez de deixar o card selecionado sumir sem explicação.
     if (modo === 'multi_product' && intent === 'product_view') setIntent('site_visitor');
+  }
+
+  // Mudar quem usa a peça muda a cena de verdade (quantas pessoas, quem veste): edições antigas de "Quem veste o
+  // quê" nunca passam para a cena nova em silêncio, e uma interação de outra quantidade de pessoas volta ao padrão.
+  function escolherQuemUsa(valor: keyof typeof QUEM_USA_LABEL, mesma = mesmaPeca) {
+    setQuemUsa(valor);
+    setMesmaPeca(mesma);
+    setOverridesElenco({});
+    setInteraction('');
+  }
+
+  function escolherObjetivoFunil(valor: FunnelStage | FunnelPreset) {
+    const { stage: novaEtapa, preset: novoPreset } = aplicarObjetivoFunil(valor);
+    setStage(novaEtapa as FunnelStage);
+    setPreset(novoPreset as FunnelPreset | '');
+    setPersonalizar(false);
   }
 
   function alternarProduto(id: string) {
@@ -541,12 +577,41 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
         )}
         {pronto && engine === 'FUNNEL_VISUAL' && !origem && (
           <FormSection title="3. Objetivo">
-            <RadioCardGroup<FunnelStage>
+            <RadioCardGroup<FunnelStage | FunnelPreset>
               name="stage" legend="Etapa do funil" hideLegend columns={1}
-              value={stage}
-              onChange={(v) => { setStage(v); setPersonalizar(false); }}
-              options={catalog.catalog.funnel_stages.map((s) => ({ value: s, title: FUNNEL_STAGE_LABEL[s].title, description: FUNNEL_STAGE_LABEL[s].description }))}
+              value={objetivoFunil(stage, preset)}
+              onChange={escolherObjetivoFunil}
+              options={[
+                ...catalog.catalog.funnel_stages.map((s) => ({ value: s, title: FUNNEL_STAGE_LABEL[s].title, description: FUNNEL_STAGE_LABEL[s].description })),
+                { value: PRESET_PROMO, title: 'Oferta / Promoção', description: 'anúncio de performance: pessoas com o produto + oferta, desconto, benefício e CTA' },
+              ]}
             />
+            {preset === PRESET_PROMO && (
+              // Só o que o lojista escrever vai para a arte — o gerador nunca inventa desconto, frete, preço ou prazo.
+              <>
+                <FormGrid>
+                  <Field label="Oferta" optional hint="ex.: Leve 3, Kit família"><Input maxLength={120} value={texto.headline} onChange={(e) => setTexto({ ...texto, headline: e.target.value })} /></Field>
+                  <Field label="Desconto ou preço" optional hint="o maior texto da peça — ex.: 15% OFF"><Input maxLength={40} value={texto.discount} onChange={(e) => setTexto({ ...texto, discount: e.target.value })} /></Field>
+                  <Field label="Benefício" optional hint="ex.: Frete grátis"><Input maxLength={80} value={texto.benefits} onChange={(e) => setTexto({ ...texto, benefits: e.target.value })} /></Field>
+                  <Field label="CTA" optional hint="ex.: Eu quero"><Input maxLength={60} value={texto.cta} onChange={(e) => setTexto({ ...texto, cta: e.target.value })} /></Field>
+                </FormGrid>
+                {!promoTemOferta(texto) && <p className="criativos-v2__sugestao-nota">Preencha pelo menos um campo — o gerador não inventa oferta.</p>}
+              </>
+            )}
+          </FormSection>
+        )}
+        {pronto && engine === 'FUNNEL_VISUAL' && !origem && personaMode !== 'none' && (
+          <FormSection title="4. Quem usa a peça?">
+            <RadioCardGroup<keyof typeof QUEM_USA_LABEL>
+              name="quem_usa" legend="Quem usa a peça" hideLegend columns={2}
+              value={quemUsa}
+              onChange={(v) => escolherQuemUsa(v)}
+              options={(Object.keys(QUEM_USA_LABEL) as (keyof typeof QUEM_USA_LABEL)[]).map((v) => ({ value: v, title: QUEM_USA_LABEL[v] }))}
+            />
+            {perguntaMesmaPeca(quemUsa) && (
+              <Checkbox label="Usar a mesma peça em mais de uma pessoa" description="Desmarcado, só a pessoa principal veste; as outras aparecem como apoio. Peça infantil nunca vai em adulto."
+                checked={mesmaPeca} onChange={() => escolherQuemUsa(quemUsa, !mesmaPeca)} />
+            )}
           </FormSection>
         )}
 
@@ -591,7 +656,21 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               </Disclosure>
             </FormSection>
 
-            {(engine === 'REMARKETING' || engine === 'FUNNEL_VISUAL') && (
+            {engine === 'FUNNEL_VISUAL' && preset === PRESET_PROMO && (
+              <FormSection title="Detalhes da oferta" description="Oferta, desconto, benefício e CTA ficam em Objetivo. Nada aqui tem texto padrão.">
+                <FormGrid>
+                  <Field label="Apoio da oferta" optional hint="uma linha curta abaixo da oferta"><Input maxLength={200} value={texto.subheadline} onChange={(e) => setTexto({ ...texto, subheadline: e.target.value })} /></Field>
+                  <Field label="Ênfase do CTA" optional>
+                    <Select value={texto.emphasis} onChange={(e) => setTexto({ ...texto, emphasis: e.target.value })}>
+                      <option value="">Forte (padrão da oferta)</option>
+                      {catalog.catalog.cta_emphases.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </Select>
+                  </Field>
+                </FormGrid>
+              </FormSection>
+            )}
+
+            {(engine === 'REMARKETING' || (engine === 'FUNNEL_VISUAL' && preset !== PRESET_PROMO)) && (
               <FormSection title="Texto e detalhes" description="Vazio usa o texto padrão do motor para este objetivo. Benefícios, selos e chips só entram se você informar.">
                 <FormGrid>
                   <Field label="Headline" optional><Input maxLength={120} value={texto.headline} onChange={(e) => setTexto({ ...texto, headline: e.target.value })} /></Field>
@@ -758,11 +837,14 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               <dt>Ângulo</dt><dd>{preview.first.angle?.label}</dd>
               {rec?.family && <><dt>Família</dt><dd>{familias.find((f) => f.id === rec.family)?.label || rec.family}</dd></>}
               {anguloEscolhido && <><dt>Ângulo personalizado</dt><dd>{anguloEscolhido.name} (v{anguloEscolhido.version})</dd></>}
-              {preview.first.funnel_stage && (<><dt>Etapa do funil</dt><dd>{FUNNEL_STAGE_LABEL[preview.first.funnel_stage].title} · {FUNNEL_STAGE_LABEL[preview.first.funnel_stage].description}</dd></>)}
+              {preview.first.overlay.preset === PRESET_PROMO && (<><dt>Preset</dt><dd>Oferta / Promoção</dd></>)}
+              {preview.first.funnel_stage && preview.first.overlay.preset !== PRESET_PROMO && (<><dt>Etapa do funil</dt><dd>{FUNNEL_STAGE_LABEL[preview.first.funnel_stage].title} · {FUNNEL_STAGE_LABEL[preview.first.funnel_stage].description}</dd></>)}
               {preview.first.remarketing_intent && (<><dt>Intenção</dt><dd>{INTENT_LABEL[preview.first.remarketing_intent]}</dd></>)}
-              {preview.first.layout && (<><dt>Layout</dt><dd>{preview.first.layout}</dd></>)}
+              {preview.first.layout && preview.first.overlay.preset !== PRESET_PROMO && (<><dt>Layout</dt><dd>{preview.first.layout}</dd></>)}
               <dt>Formato</dt><dd>{preview.first.placement}</dd>
               <dt>Cena</dt><dd>{preview.first.scene} <StatusBadge tone="info" label={preview.first.context_provider} /></dd>
+              {textoPessoas(preview.first, quemUsa) && (<><dt>Pessoas</dt><dd>{textoPessoas(preview.first, quemUsa)}</dd></>)}
+              {textoUso(preview.first) && (<><dt>Uso</dt><dd>{textoUso(preview.first)}</dd></>)}
               {subjectsDaPrevia.length >= 2 ? (
                 <>
                   <dt>Quem veste o quê</dt>
@@ -777,7 +859,8 @@ export function GerarTabV2({ status, catalog, copia, onCopiaLida, onJobCriado }:
               ) : (
                 <><dt>Persona</dt><dd>{preview.first.persona || '—'}</dd></>
               )}
-              <dt>Texto na imagem</dt><dd>{resumoOverlay(preview.first.overlay) || 'nenhum (imagem limpa)'}</dd>
+              {resumoPromo(preview.first.overlay).map(([rotulo, valor]) => (<Fragment key={rotulo}><dt>{rotulo}</dt><dd>{valor}</dd></Fragment>))}
+              {preview.first.overlay.preset !== PRESET_PROMO && <><dt>Texto na imagem</dt><dd>{resumoOverlay(preview.first.overlay) || 'nenhum (imagem limpa)'}</dd></>}
               <dt>Quantidade</dt><dd>{preview.total}</dd>
             </dl>
           )}

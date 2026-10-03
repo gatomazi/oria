@@ -185,6 +185,9 @@
     "angle_intent_hint": {
       "type": "string",
       "maxLength": 40
+    },
+    "multi_wearer": {
+      "$ref": "#/$defs/MultiWearerOptions"
     }
   },
   "$defs": {
@@ -842,6 +845,16 @@
         },
         "clean_mode": {
           "type": "boolean"
+        },
+        "preset": {
+          "type": "string",
+          "enum": [
+            "promo_offer"
+          ]
+        },
+        "discount": {
+          "type": "string",
+          "maxLength": 40
         }
       }
     },
@@ -896,6 +909,29 @@
         "style": {
           "type": "string",
           "maxLength": 60
+        }
+      }
+    },
+    "MultiWearerOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "group": {
+          "type": "string",
+          "enum": [
+            "one",
+            "pair",
+            "family"
+          ]
+        },
+        "share": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "all",
+            "primary_only"
+          ]
         }
       }
     },

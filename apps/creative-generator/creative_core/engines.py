@@ -34,6 +34,7 @@ from .domain.remarketing import (
     resolver_etapa,
 )
 
+from . import composition as comp
 from . import model_router as mr
 from . import planner_v2, prompt_v2
 from .compiler import compile_prompt, prompt_info
@@ -181,11 +182,73 @@ def _remarketing_parts(request: dict, products: list, angle: dict, apparel: bool
 
 
 # ------------------------------------------------------------------ funnel
+_PROMO_FIELDS = ("discount", "headline", "subheadline", "benefits", "cta")
+
+
+def _promo_parts(request: dict, stage: str, opts: dict):
+    """Preset promo_offer: a performance ad with an offer. Prints ONLY what the caller wrote — no field has a
+    default, so an absent discount/price/benefit is never invented. The communication carries the commercial
+    hierarchy and the per-placement zones (subject/offer/benefit/cta) that keep text off faces and the print."""
+    errors = []
+    if stage == "TOFU":
+        errors.append("funnel.preset: promo_offer is a decision piece (MOFU/BOFU) — TOFU forbids price, discount and coupons in the image")
+    if opts.get("clean_mode"):
+        errors.append("funnel.clean_mode: promo_offer is a piece with text; turn clean_mode off")
+    errors += [f"funnel.{k}: not used by preset promo_offer" for k in ("badges", "chips", "search_bar_text") if opts.get(k)]
+    texts = {k: (opts.get(k) or "").strip() for k in ("discount", "headline", "subheadline", "cta")}
+    benefits = [b.strip() for b in opts.get("benefits") or [] if b and b.strip()]
+    if not any(texts.values()) and not benefits:
+        errors.append("funnel: promo_offer needs at least one of discount, headline, benefits or cta — the offer is never invented")
+    if errors:
+        raise GenerationError("INVALID_INPUT", {"errors": errors})
+    cfg = COMMUNICATION["funnel"]["promo"]
+    layout = cfg["layouts"][request["placement_id"]]
+    emphasis = opts.get("cta_emphasis") or cfg["default_cta_emphasis"]
+    lines, ranking = [], [cfg["hierarchy"]["photo"]]
+    for field in _PROMO_FIELDS:
+        if field == "benefits":
+            if benefits:
+                lines.append(cfg["lines"]["benefits"].format(items=" | ".join(f'"{b}"' for b in benefits)))
+                ranking.append(cfg["hierarchy"]["benefits"])
+        elif texts[field]:
+            lines.append(cfg["lines"][field].format(value=texts[field]))
+            ranking.append(cfg["hierarchy"][field].format(value=texts[field]))
+    parts = [
+        cfg["direction"],
+        cfg["texts_header"] + "\n" + "\n".join(lines),
+        cfg["hierarchy_header"] + " " + "; ".join(f"{i}) {r}" for i, r in enumerate(ranking, 1)) + ".\n"
+        + "\n".join(f"  · {r}" for r in cfg["rules"]),
+        cfg["zones_header"] + "\n" + "\n".join(f"  · {z}" for z in layout["zones"]),
+        bloco_cta(emphasis) if texts["cta"] else "",
+    ]
+    overlay = {
+        "allowed": True,
+        "headline": texts["headline"] or None,
+        "subheadline": texts["subheadline"] or None,
+        "cta": texts["cta"] or None,
+        "badges": [],
+        "benefits": benefits,
+        "search_bar_text": None,
+        "chips": [],
+        "text_density": "commercial",
+        "cta_emphasis": emphasis,
+        "clean": False,
+        "preset": "promo_offer",
+        "discount": texts["discount"] or None,
+    }
+    return {"stage": stage, "overlay": overlay, "communication": "\n\n".join(p for p in parts if p),
+            "text_rule": COMMUNICATION["text_rule"], "layout": layout["id"]}
+
+
 def _funnel_parts(request: dict, products: list):
     stage = request.get("funnel_stage")
     if not stage:
         raise GenerationError("INVALID_INPUT", {"errors": ["funnel_stage: required for FUNNEL_VISUAL"]})
     opts = request.get("funnel") or {}
+    if opts.get("preset") == "promo_offer":
+        return _promo_parts(request, stage, opts)
+    if opts.get("discount"):
+        raise GenerationError("INVALID_INPUT", {"errors": ["funnel.discount: only used by preset promo_offer"]})
     clean = bool(opts.get("clean_mode"))
     profile = perfil_texto(stage, "", clean, opts.get("text_density"), opts.get("cta_emphasis"))
     defaults = COMMUNICATION["funnel"]["defaults"][request["product_mode"]][stage]
@@ -226,7 +289,7 @@ def _funnel_parts(request: dict, products: list):
         "clean": clean,
     }
     return {"stage": stage, "overlay": overlay, "communication": "\n\n".join(p for p in parts if p),
-            "text_rule": COMMUNICATION["text_rule"]}
+            "text_rule": COMMUNICATION["text_rule"], "layout": None}
 
 
 # ------------------------------------------------------------------ plan
@@ -292,6 +355,8 @@ def _resolve_angle_id(request: dict, products: list, product_mode: str, brand: d
         "subjects": request.get("subjects"), "interaction": request.get("interaction"),
         "persona_mode": request.get("persona_mode"), "products": products,
         "intent_hint": request.get("angle_intent_hint"),
+        # A multi-wearer group asks for N people up front: the auto angle must be one that takes them.
+        "people_count_hint": comp.multi_wearer_people(request.get("multi_wearer"), len(products)),
     }, brand=brand, niche=niche)
     if recommendation["angle_id"] is None:
         # Duas causas bem diferentes, nunca confundidas: a família não tem NENHUMA rota de geração
@@ -390,13 +455,23 @@ def plan_creative(
         if request.get("remarketing"):
             raise GenerationError("INVALID_INPUT", {"errors": ["remarketing: not accepted by FUNNEL_VISUAL"]})
         engine = _funnel_parts(request, products)
-        stage, intent, layout = engine["stage"], None, None
+        stage, intent, layout = engine["stage"], None, engine["layout"]
         people_needed = len(products) if angle["uses_person"] and len(products) > 1 else int(angle["uses_person"])
 
     prompt_version = prompt_v2.resolve_prompt_version(
         request.get("prompt_version"), default_prompt_version, angle_id, people_needed, strategy)
     if prompt_version == 2:
         people_needed = prompt_v2.people_needed(angle_id, len(products), people_needed)
+    multi_wearer = request.get("multi_wearer")
+    if multi_wearer:
+        if request.get("persona_mode") == "none":
+            raise GenerationError("INVALID_INPUT", {"errors": ["multi_wearer: needs people in the scene (persona_mode is none)"]})
+        if request.get("subjects"):
+            warnings.append("multi_wearer_ignored:explicit_subjects")  # each subject already says what it wears
+        elif people_needed == 0:
+            warnings.append(f"multi_wearer_ignored:no_person_scene:{angle_id}")  # product-only angle/layout
+        else:
+            people_needed = comp.multi_wearer_people(multi_wearer, len(products))
     core_rules, apparel = _core_rules(products, stage, strategy)
     if prompt_version == 2:
         core_rules = prompt_v2.narrow_model_rule(core_rules, angle_id, len(products))
@@ -433,7 +508,7 @@ def plan_creative(
     if plan_schema != PLAN_SCHEMA_V2:
         # Who is in the scene and what they do only exists in a v2 plan. A v1 plan cannot honor these, and dropping
         # them would silently change the creative (or its minor-safety input): refuse instead.
-        needing = [k for k in ("subjects", "interaction", "scene_picks") if request.get(k)]
+        needing = [k for k in ("subjects", "interaction", "scene_picks", "multi_wearer") if request.get(k)]
         if needing:
             raise GenerationError("INVALID_INPUT", {"errors": [f"{k}: requires plan_schema_version 2" for k in needing]})
     if request.get("scene_picks") and prompt_version != 2:

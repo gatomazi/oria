@@ -65,6 +65,56 @@
       "badges": "BADGES (selos pequenos, texto literal, no máximo 3, alinhados e discretos, nunca sobre o produto): {itens}",
       "search_bar": "BARRA DE BUSCA estilizada (campo arredondado com ícone de lupa) contendo o texto literal: \"{texto}\"",
       "chips": "CHIPS (pílulas pequenas lado a lado, texto literal): {itens}"
+    },
+    "promo": {
+      "_doc": "Preset promo_offer do Funil por Criativo: anúncio de performance (Meta) com oferta. Só imprime o texto que o lojista escreveu — nada aqui é texto padrão de oferta. As zonas são direção interna de composição, por formato; nunca expostas ao usuário.",
+      "direction": "PRESET OFERTA / PROMOÇÃO — anúncio de performance para Meta Ads, não banner institucional. A fotografia lifestyle continua sendo o foco principal: pessoas e produto reais, naturais, com a estampa nítida e inteira. A oferta convive com a foto numa composição comercial limpa, com hierarquia clara — a foto é planejada desde o início com espaço livre para o texto.",
+      "texts_header": "TEXTO NO CRIATIVO (literal — reproduza EXATAMENTE, com todos os acentos; nenhum outro texto além destes):",
+      "lines": {
+        "discount": "  · DESTAQUE (o MAIOR texto da peça, tipografia bold de alto impacto): \"{value}\"",
+        "headline": "  · OFERTA PRINCIPAL (grande, colada ao destaque, formando um bloco único): \"{value}\"",
+        "subheadline": "  · APOIO DA OFERTA (pequeno, uma linha, logo abaixo da oferta): \"{value}\"",
+        "benefits": "  · BENEFÍCIO (selo ou card pequeno, secundário, perto da oferta): {items}",
+        "cta": "  · CTA (botão destacado, abaixo da oferta principal e do benefício): \"{value}\""
+      },
+      "hierarchy_header": "HIERARQUIA VISUAL (da maior para a menor atenção):",
+      "hierarchy": {
+        "photo": "pessoas e produto — o foco da fotografia",
+        "discount": "o destaque \"{value}\"",
+        "headline": "a oferta principal \"{value}\"",
+        "subheadline": "o apoio da oferta",
+        "benefits": "o selo do benefício",
+        "cta": "o botão do CTA"
+      },
+      "rules": [
+        "Nenhum texto, selo ou botão cobre rostos, mãos em interação ou a estampa/produto — a peça aparece inteira e legível em quem a veste.",
+        "Reserve espaço negativo real na zona de texto (parede, fundo liso, desfoque) já na composição da foto: as pessoas não ocupam essa área.",
+        "Toda a oferta fica agrupada num único bloco coeso na zona de texto — nunca espalhada pela imagem.",
+        "Visual limpo: no máximo 2 estilos tipográficos, 1 cor de destaque com alto contraste com o fundo; sem confetes, explosões, molduras de banner, setas gigantes ou ícones decorativos.",
+        "Não acrescente preço, prazo, urgência, estoque, cupom, percentual ou qualquer promessa que não esteja na lista de texto acima."
+      ],
+      "zones_header": "ZONAS DA COMPOSIÇÃO (direção interna de layout — não escreva estes rótulos na imagem):",
+      "layouts": {
+        "FEED_4X5": {
+          "id": "promo_offer_split",
+          "zones": [
+            "subject_zone: esquerda e centro (cerca de 60% da largura) — pessoas e produto, rostos e estampa livres de qualquer texto;",
+            "offer_zone: terço direito, metade superior — o bloco da oferta (só os textos listados acima), alinhado à esquerda da coluna;",
+            "benefit_zone: terço direito, logo abaixo da oferta — selo do benefício;",
+            "cta_zone: terço direito, parte inferior, com margem confortável da borda."
+          ]
+        },
+        "STORY_9X16": {
+          "id": "promo_offer_stacked",
+          "zones": [
+            "offer_zone: faixa superior, abaixo dos 14% do topo (área da interface do Stories) — o bloco da oferta (só os textos listados acima), centralizado;",
+            "benefit_zone: logo abaixo da oferta, ainda acima das cabeças — selo do benefício;",
+            "subject_zone: centro da imagem, do meio para baixo — pessoas e produto, rostos e estampa livres de qualquer texto;",
+            "cta_zone: faixa inferior, acima dos 20% finais (área da interface do Stories), sobre fundo limpo e nunca sobre a estampa."
+          ]
+        }
+      },
+      "default_cta_emphasis": "strong"
     }
   },
   "copy": {

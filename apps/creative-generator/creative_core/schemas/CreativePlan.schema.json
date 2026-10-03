@@ -897,6 +897,29 @@
         },
         "clean": {
           "type": "boolean"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "promo_offer"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "discount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -1017,6 +1040,13 @@
           "items": {
             "type": "string"
           }
+        },
+        "multi_wearer": {
+          "type": "boolean"
+        },
+        "wearers_by_product": {
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
