@@ -6,7 +6,7 @@
 // "Copiar dados": o que o formulário sabe editar. O resto do que veio (chaves que a tela não mostra)
 // volta intacto no pedido — nunca perdido silenciosamente.
 export const CHAVES_REMARKETING = ['intent', 'headline', 'subheadline', 'cta', 'benefits', 'text_density', 'cta_emphasis', 'clean_mode', 'products_source'];
-export const CHAVES_FUNIL = ['headline', 'subheadline', 'cta', 'benefits', 'badges', 'chips', 'search_bar_text', 'text_density', 'cta_emphasis', 'clean_mode'];
+export const CHAVES_FUNIL = ['headline', 'subheadline', 'cta', 'benefits', 'badges', 'chips', 'search_bar_text', 'text_density', 'cta_emphasis', 'clean_mode', 'preset', 'discount'];
 
 export function restoDe(obj, conhecidas) {
   return Object.fromEntries(Object.entries(obj || {}).filter(([k]) => !conhecidas.includes(k)));
@@ -16,7 +16,7 @@ export const lista_de = (v) => (Array.isArray(v) ? v.map(String).join('\n') : ''
 export const linhas = (t) => t.split('\n').map((l) => l.trim()).filter(Boolean);
 
 export const TEXTO_MOTOR_VAZIO = {
-  headline: '', subheadline: '', cta: '', benefits: '', badges: '', chips: '', search: '', density: '', emphasis: '', cleanMode: '',
+  headline: '', subheadline: '', cta: '', benefits: '', badges: '', chips: '', search: '', density: '', emphasis: '', cleanMode: '', discount: '',
 };
 
 // Monta `remarketing` a partir do estado de texto comum — campo vazio nunca entra no request (o motor
@@ -38,7 +38,8 @@ export function remarketingOptions(texto, intent, extra = {}) {
 // enum auto/always/never do Remarketing — mesma assimetria já tratada assim na V1). badges/chips/busca
 // só fazem sentido fora do TOFU (o core os ignora em TOFU de qualquer forma; a tela evita mandar o que
 // o motor vai descartar, para a prévia nunca prometer algo que não aparece).
-export function funnelOptions(texto, stage, extra = {}) {
+export function funnelOptions(texto, stage, extra = {}, preset = '') {
+  if (preset === PRESET_PROMO) return promoOptions(texto, extra);
   const out = { ...extra };
   if (texto.headline) out.headline = texto.headline;
   if (texto.subheadline) out.subheadline = texto.subheadline;
@@ -53,6 +54,80 @@ export function funnelOptions(texto, stage, extra = {}) {
     if (texto.search) out.search_bar_text = texto.search;
   }
   return out;
+}
+
+// ------------------------------------------------------------------ Funil · preset Oferta / Promoção
+// Mesmo contrato do Funil (FunnelOptions do core), sem campo duplicado: Oferta = `headline`, Benefício =
+// `benefits`, CTA = `cta`; `discount` é o único campo novo (o maior texto da peça: "15% OFF", "A partir de R$ 199").
+// Nada aqui tem valor padrão: o core NUNCA inventa oferta, e a tela também não — campo vazio não vai no request.
+export const PRESET_PROMO = 'promo_offer';
+
+export function promoOptions(texto, extra = {}) {
+  const out = { ...extra, preset: PRESET_PROMO };
+  if (texto.headline) out.headline = texto.headline;
+  if (texto.discount) out.discount = texto.discount;
+  if (texto.subheadline) out.subheadline = texto.subheadline;
+  if (texto.benefits) out.benefits = linhas(texto.benefits);
+  if (texto.cta) out.cta = texto.cta;
+  if (texto.emphasis) out.cta_emphasis = texto.emphasis;
+  return out;
+}
+
+// Oferta/Promoção é um objetivo ao lado das etapas (uma escolha só na tela), mas no contrato é preset + etapa:
+// a peça de oferta é de decisão (BOFU) — o core recusa TOFU, que proíbe desconto/cupom na arte.
+export function objetivoFunil(stage, preset) {
+  return preset === PRESET_PROMO ? PRESET_PROMO : stage;
+}
+export function aplicarObjetivoFunil(valor) {
+  return valor === PRESET_PROMO ? { stage: 'BOFU', preset: PRESET_PROMO } : { stage: valor, preset: '' };
+}
+
+// O preset precisa de pelo menos um texto de oferta (o core recusa um preset vazio em vez de inventar um).
+export function promoTemOferta(texto) {
+  return Boolean(texto.headline || texto.discount || linhas(texto.benefits || '').length || texto.cta);
+}
+
+// O que a prévia mostra da oferta, tal como o plano REAL devolveu (overlay) — nunca o estado da tela.
+export function resumoPromo(overlay) {
+  if (!overlay || overlay.preset !== PRESET_PROMO) return [];
+  return [
+    ['Oferta', overlay.headline],
+    ['Desconto', overlay.discount],
+    ['Apoio', overlay.subheadline],
+    ['Benefício', (overlay.benefits || []).join(' · ')],
+    ['CTA', overlay.cta],
+  ].filter(([, valor]) => Boolean(valor));
+}
+
+// ------------------------------------------------------------------ multi-wearer: "Quem usa a peça?"
+// Uma MESMA peça em várias pessoas (não é multipeça). 'auto' = nada no request: o motor decide como sempre.
+export const QUEM_USA_LABEL = { auto: 'Automático', one: 'Uma pessoa', pair: 'Duas pessoas', family: 'Família / grupo' };
+
+export function multiWearerInput(quemUsa, mesmaPeca) {
+  if (!quemUsa || quemUsa === 'auto') return undefined;
+  if (quemUsa === 'one') return { group: 'one' };
+  return { group: quemUsa, share: mesmaPeca ? 'all' : 'primary_only' };
+}
+
+// A caixa "Usar a mesma peça em mais de uma pessoa" só faz sentido com 2+ pessoas pedidas.
+export function perguntaMesmaPeca(quemUsa) {
+  return quemUsa === 'pair' || quemUsa === 'family';
+}
+
+// "Pessoas" e "Uso" da prévia — lidos do plano real (subjects + wearers_by_product), nunca do que a tela pediu.
+export function textoPessoas(resumo, quemUsa) {
+  const n = Array.isArray(resumo?.subjects) ? resumo.subjects.length : 0;
+  if (n === 0) return null;
+  if (n === 1) return 'Uma pessoa';
+  return quemUsa === 'family' ? `Família de ${n}` : `${n} pessoas`;
+}
+
+export function textoUso(resumo) {
+  const n = Array.isArray(resumo?.subjects) ? resumo.subjects.length : 0;
+  const compartilhadas = Object.values(resumo?.wearers_by_product || {});
+  if (!n || !compartilhadas.length) return null;
+  const maior = Math.max(...compartilhadas.map((ids) => ids.length));
+  return maior === n ? `Mesma peça nas ${n} pessoas` : `Mesma peça em ${maior} de ${n} pessoas`;
 }
 
 // Estado de texto a preservar ao trocar de motor: nenhum. Campos de texto (headline/CTA/benefícios/etc.)

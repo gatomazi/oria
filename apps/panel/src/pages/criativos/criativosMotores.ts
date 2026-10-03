@@ -53,4 +53,6 @@ export interface TextoMotor {
   density: string;
   emphasis: string;
   cleanMode: string;
+  // Só no preset Oferta/Promoção do Funil: o maior texto da peça ("15% OFF", "A partir de R$ 199").
+  discount: string;
 }
