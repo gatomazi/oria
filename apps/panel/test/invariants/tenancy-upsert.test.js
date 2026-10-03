@@ -270,7 +270,8 @@ test('upsert · todo ON CONFLICT com alvo em tabela tenant-owned começa por org
   // variant_id, sku) e persistRuleMatches, todos ON CONFLICT (organization_id, store_id, namespace, external_id).
   // Parcerias/Afiliados: + 7 em lib/afiliados/ (partnership_settings, review_items, attributions, commission_ledger, benefit_ledger e o ON CONFLICT DO NOTHING de
   // gravação idempotente do ledger/atribuição), todos com organization_id como primeiro alvo (asserção `ruins` abaixo).
-  assert.equal(total, 48, 'número de alvos mudou — revise a lista de famílias');
+  // Sync de Categorias: + 4 em server.js (categorias_ink e categorias_ink_sync), todos ON CONFLICT (organization_id, store_id, ...).
+  assert.equal(total, 52, 'número de alvos mudou — revise a lista de famílias');
   assert.deepEqual(ruins, []);
 });
 

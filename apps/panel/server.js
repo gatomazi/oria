@@ -3394,9 +3394,16 @@ async function gravarCategoriasNoCache(categorias, sincronizadoEm) {
 }
 
 // Depois de uma escrita bem-sucedida na Ink. Nunca lança: o cache é derivado, a Ink é a verdade.
+// Antes da 1ª varredura concluída não há cache a manter (a tela ainda lê a Ink ao vivo): nada é gravado, para não
+// deixar linha avulsa que pareça uma lista.
 async function refletirCategoriasNoCache({ gravar = [], remover = [], marcar = [] } = {}) {
   if (!pgPool) return;
   try {
+    const { rows: [existe] } = await pgPool.query(
+      'SELECT 1 FROM categorias_ink_sync WHERE organization_id = $1 AND store_id = $2 AND total IS NOT NULL',
+      [orgDoContexto(), storeDoContexto()]
+    );
+    if (!existe) return;
     if (gravar.length) await gravarCategoriasNoCache(gravar, new Date());
     if (remover.length) {
       await pgPool.query('DELETE FROM categorias_ink WHERE organization_id = $1 AND store_id = $2 AND categoria_id = ANY($3::bigint[])',
