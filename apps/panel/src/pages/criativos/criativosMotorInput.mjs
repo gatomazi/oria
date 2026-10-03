@@ -223,6 +223,9 @@ const TEXTO_AVISO = {
   geographic_city_unrecognized_used_neutral_context: 'A cidade cadastrada no produto não está no catálogo de contextos regionais — a cena usou um ambiente neutro (nunca o cenário de outro estado). Para escolher um contexto específico, use "Personalizar" → Ambiente → Geográfico e informe a região manualmente.',
 };
 export function textoAviso(codigo) {
+  // Cena com 3+ pessoas (família/grupo): risco maior de mãos/rostos estranhos — informativo, nunca bloqueia.
+  const pessoas = /^people_count_risk:(\d+)$/.exec(codigo || '');
+  if (pessoas) return `Cena com ${pessoas[1]} pessoas: o risco de mãos ou rostos estranhos é maior — confira a imagem gerada com atenção.`;
   return TEXTO_AVISO[codigo] || codigo;
 }
 

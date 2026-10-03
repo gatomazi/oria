@@ -142,3 +142,8 @@ test('planSummary: expõe wearers_by_product só quando a mesma peça é vestida
   const resumo = planSummary({ ...base, composition: { people_count: 3, multi_wearer: true, wearers_by_product: { p1: ['s1', 's2', 's3'] } } });
   assert.deepEqual(resumo.wearers_by_product, { p1: ['s1', 's2', 's3'] });
 });
+
+test('aviso de família/grupo (3+ pessoas) é traduzido; código desconhecido continua cru', () => {
+  assert.match(mod.textoAviso('people_count_risk:3'), /^Cena com 3 pessoas/);
+  assert.equal(mod.textoAviso('algo_novo'), 'algo_novo');
+});
