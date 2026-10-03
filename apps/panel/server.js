@@ -3478,7 +3478,8 @@ async function sincronizarCategoriasInk() {
 async function sincronizarCategoriasInkDaOrganizacao({ apenasVencidos = false } = {}) {
   if (!pgPool) return;
   if (CATALOG_SYNC_DISABLED && apenasVencidos) return; // o mesmo kill switch das varreduras agendadas do catálogo
-  for (const { storeId } of await storesInkDoContexto()) {
+  const storesComInk = await storesInkDoContexto(); // a Store do contexto, com ou sem chave legada
+  for (const { storeId } of storesComInk) {
     if (apenasVencidos) {
       const { rows: [cfg] } = await pgPool.query(
         'SELECT concluido_em, auto_pausado, intervalo_horas FROM categorias_ink_sync WHERE organization_id = $1 AND store_id = $2',
