@@ -777,7 +777,8 @@ test('migrations 0044/0045/0046 descem e sobem de novo num banco descartável', 
   const d = await h.criarBancoDescartavel('oria_afil_rev');
   try {
     assert.equal(h.migrar(d.url).status, 0);
-    const down = h.migrar(d.url, { comando: 'down', posicionais: ['3'] }); // 0046 + 0045 + 0044 (as 3 últimas)
+    // 0047 (categorias, não é de afiliados) + 0046 + 0045 + 0044: o down é posicional, conta a partir da última.
+    const down = h.migrar(d.url, { comando: 'down', posicionais: ['4'] });
     assert.equal(down.status, 0, `${down.stdout.slice(-1500)}${down.stderr}`);
     const p = h.abrirPoolDescartavel(d.url, { max: 1 });
     try {

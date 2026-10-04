@@ -24,6 +24,8 @@ export function CategoriasPage() {
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalCategorias, setTotalCategorias] = useState<number | null>(null);
+  // Sync de Categorias: de onde veio a lista (cache do Oria ou Ink ao vivo) e quando o cache foi atualizado.
+  const [origem, setOrigem] = useState<{ fonte?: 'cache' | 'ink'; sincronizadoEm?: string | null }>({});
   const [erro, setErro] = useState('');
   const [modalAberto, setModalAberto] = useState(false);
   const [modalLoteAberto, setModalLoteAberto] = useState(false);
@@ -44,6 +46,7 @@ export function CategoriasPage() {
         setCategorias(lista.slice().sort((a, b) => a.position - b.position));
         setTotalPaginas(data.totalPages ?? 1);
         setTotalCategorias(data.totalCount ?? null);
+        setOrigem({ fonte: data.fonte, sincronizadoEm: data.sincronizadoEm });
       })
       .catch((err: Error) => setErro(err.message));
   }
@@ -81,7 +84,9 @@ export function CategoriasPage() {
     carregar();
   }
 
-  const descricao = 'Categorias da sua loja Reserva Ink.';
+  const descricao = origem.fonte === 'cache'
+    ? `Categorias da sua loja Reserva Ink — sincronizadas em ${formatData(origem.sincronizadoEm ?? null)}. Edições feitas aqui entram na hora.`
+    : 'Categorias da sua loja Reserva Ink.';
 
   return (
     <>

@@ -357,6 +357,89 @@ test('catálogo · pausar a renovação automática e ler o estado, na Store nat
   await c.req('PUT', '/api/admin/produtos/catalogo/config', { corpo: { pausado: false } });
 });
 
+// ── Sync de Categorias (cache das collections, migration 0047) ─────────────────────────────────
+
+async function sincronizarCategorias(nav) {
+  const r = await nav.req('POST', '/api/admin/categorias/cache/sync', { corpo: {} });
+  assert.equal(r.status, 200, r.texto);
+  const pronto = await ate(async () => {
+    const s = await nav.req('GET', '/api/admin/categorias/cache/status');
+    return s.json && !s.json.sincronizando && s.json.concluidoEm ? s.json : null;
+  });
+  assert.ok(pronto, 'o sync de categorias não terminou');
+  return pronto;
+}
+
+test('categorias · antes da 1ª varredura a lista é lida ao vivo da Ink, e o status diz "nunca sincronizado"', async () => {
+  const c = await entrar('C');
+  const s = await c.req('GET', '/api/admin/categorias/cache/status');
+  assert.equal(s.status, 200, s.texto);
+  assert.equal(s.json.storeId, store.C);
+  assert.equal(s.json.configurado, true);
+  assert.equal(s.json.concluidoEm, null);
+  assert.equal(s.json.total, 0);
+  const lista = await c.req('GET', '/api/admin/categorias');
+  assert.equal(lista.json.fonte, 'ink');
+});
+
+test('categorias · o sync grava por store_id e a listagem passa a sair do cache, com a contagem e sem product_ids', async () => {
+  const d = await entrar('D');
+  const s = await sincronizarCategorias(d);
+  assert.equal(s.erro, null);
+  assert.equal(s.total, 1);
+  const { rows } = await sup.query('SELECT store_id, categoria_id, name, product_count FROM categorias_ink WHERE organization_id = $1', [ORGS.D]);
+  assert.deepEqual(rows.map((r) => [r.store_id, Number(r.categoria_id), r.name, r.product_count]), [[store.D, 2100, 'Categoria D', 3]]);
+  const lista = await d.req('GET', '/api/admin/categorias');
+  assert.equal(lista.status, 200, lista.texto);
+  assert.equal(lista.json.fonte, 'cache');
+  assert.ok(lista.json.sincronizadoEm, 'a tela mostra quando o cache foi atualizado');
+  assert.deepEqual(lista.json.categorias.map((x) => [x.id, x.product_count]), [[2100, 3]]);
+  assert.ok(!('product_ids' in lista.json.categorias[0]), 'o cache nunca guarda nem devolve os ids completos');
+  const paginada = await d.req('GET', '/api/admin/categorias?page=1&per_page=20');
+  assert.equal(paginada.json.fonte, 'cache');
+  assert.equal(paginada.json.totalCount, 1);
+  assert.equal(paginada.json.totalPages, 1);
+  // `fonte=ink` força a leitura ao vivo (comparar com a Ink sem esperar a próxima varredura).
+  assert.equal((await d.req('GET', '/api/admin/categorias?fonte=ink')).json.fonte, 'ink');
+  // Idempotência: sincronizar de novo não duplica.
+  await sincronizarCategorias(d);
+  const { rows: [n] } = await sup.query('SELECT count(*)::int AS n FROM categorias_ink WHERE organization_id = $1', [ORGS.D]);
+  assert.equal(n.n, 1);
+});
+
+test('categorias · isolamento: C nunca enxerga o cache de D', async () => {
+  const c = await entrar('C');
+  await sincronizarCategorias(c);
+  const lista = await c.req('GET', '/api/admin/categorias');
+  assert.equal(lista.json.fonte, 'cache');
+  assert.deepEqual(lista.json.categorias.map((x) => x.id), [1100], 'C só vê as categorias dela');
+});
+
+test('categorias · criar e excluir pelo Oria refletem no cache na hora, sem esperar a próxima varredura', async () => {
+  const c = await entrar('C');
+  const nova = await c.req('POST', '/api/admin/categorias', { corpo: { name: 'Nova no cache' } });
+  assert.equal(nova.status, 201, nova.texto);
+  const depoisDeCriar = await c.req('GET', '/api/admin/categorias');
+  assert.equal(depoisDeCriar.json.fonte, 'cache');
+  assert.deepEqual(depoisDeCriar.json.categorias.map((x) => x.id).sort(), [1100, 1101]);
+  const excluida = await c.req('DELETE', '/api/admin/categorias/1101');
+  assert.equal(excluida.status, 204, excluida.texto);
+  const depoisDeExcluir = await c.req('GET', '/api/admin/categorias');
+  assert.deepEqual(depoisDeExcluir.json.categorias.map((x) => x.id), [1100]);
+});
+
+test('categorias · pausar a renovação automática e trocar o intervalo; intervalo fora da lista é recusado', async () => {
+  const c = await entrar('C');
+  const pausa = await c.req('PUT', '/api/admin/categorias/cache/config', { corpo: { pausado: true, intervaloHoras: 24 } });
+  assert.equal(pausa.status, 200, pausa.texto);
+  assert.deepEqual([pausa.json.autoPausado, pausa.json.intervaloHoras], [true, 24]);
+  const s = await c.req('GET', '/api/admin/categorias/cache/status');
+  assert.deepEqual([s.json.autoPausado, s.json.intervaloHoras], [true, 24]);
+  assert.equal((await c.req('PUT', '/api/admin/categorias/cache/config', { corpo: { intervaloHoras: 5 } })).status, 400);
+  assert.equal((await c.req('PUT', '/api/admin/categorias/cache/config', { corpo: {} })).status, 400);
+  await c.req('PUT', '/api/admin/categorias/cache/config', { corpo: { pausado: false, intervaloHoras: 6 } });
+});
+
 test('feed legado · não é requisito: status sem erro e sync explicitamente descontinuado (410)', async () => {
   const c = await entrar('C');
   const st = await c.req('GET', '/api/admin/produtos/feed/status');

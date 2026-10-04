@@ -5,6 +5,7 @@ import { adminStores } from '../../state/adminStores';
 import { useEntitlement } from '../../state/entitlements';
 import { BackfillPedidosCard } from './BackfillPedidosCard';
 import { CatalogoCacheCard } from './CatalogoCacheCard';
+import { CategoriasCacheCard } from './CategoriasCacheCard';
 import { CatalogSyncCard } from './CatalogSyncCard';
 import { InkConexaoSecao, InkRecebimentoSecao, useInkCredenciais } from './InkCredenciaisCard';
 import { lojasComTokenInk } from './lojaOpcao';
@@ -78,6 +79,7 @@ export function InkIntegracao({ reservaInk, aba, onAba }: { reservaInk: ReservaI
                 lojas.length ? (
                   <div className="ig-secoes">
                     <CatalogoCacheCard stores={lojas} />
+                    <CategoriasCacheCard lojaNome={nomeDaLoja || 'Sua loja'} />
                     {analisesDeCatalogo && <CatalogSyncCard />}
                   </div>
                 ) : (

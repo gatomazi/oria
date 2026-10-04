@@ -122,6 +122,7 @@ test('migrations · do zero, num banco vazio, aplicam todas na ordem', async (t)
       '1790002900000_partnerships', // Parcerias, Afiliados e Collabs (módulo de afiliados próprio)
       '1790003000000_pedidos-ink-afiliados-campos', // campos de cupom/devolução/entrega do pedido para a apuração de comissões
       '1790003100000_parceiro-preview-links', // link público (capability URL) do parceiro ver as próprias vendas/comissão/saldo
+      '1790003200000_categorias-ink-cache', // sync de Categorias: cache das collections da Ink + estado da varredura por Store
     ]);
     assert.ok((await tabelas(pool)).includes('integration_secrets'));
   } finally { await pool.end(); }
