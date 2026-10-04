@@ -26,7 +26,7 @@ function TooltipContent({ active, payload, label }: { active?: boolean; payload?
   if (!active || !payload || !payload.length) return null;
   const p = payload[0].payload;
   return (
-    <div className="ad-chart-tooltip">
+    <div className="oa-chart-tooltip">
       <strong>{formatarDataCurta(label || '')}</strong>
       <div>Investimento {metaReais(p.spend)}</div>
       <div>Receita Meta {metaReais(p.purchaseValue)}</div>

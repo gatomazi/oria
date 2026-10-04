@@ -27,4 +27,4 @@
   font-size: 13px;
 }
 .pr-variantes li:last-child { border-bottom: none; }
-.ad-produto-drawer__kv { margin-bottom: var(--space-4); }
+.oa-produto-drawer__kv { margin-bottom: var(--space-4); }

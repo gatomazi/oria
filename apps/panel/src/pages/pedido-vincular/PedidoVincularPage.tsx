@@ -171,7 +171,7 @@ export function PedidoVincularPage() {
 
       {resultadoUrl && <ResultadoLink url={resultadoUrl} />}
 
-      <div className="ad-vincular-grid">
+      <div className="oa-vincular-grid">
         <PendentesCard vincular={vincular} />
         <InkFormCard vincular={vincular} />
       </div>

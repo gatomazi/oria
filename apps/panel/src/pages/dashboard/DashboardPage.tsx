@@ -273,8 +273,8 @@ function ResultadoPeriodo({
           ficam numa grade de 4 células — com 6 células numa linha só os valores eram cortados
           ("R$ 38.233,…") em 1440px com a sidebar aberta. A barra embaixo é a mesma conta em
           proporção (decomposicaoResultado.ts). */}
-      <section className="ad-resultado" aria-label="Resultado do período">
-        <div className="ad-resultado__fluxo" role="group" aria-label="Como se chega ao resultado">
+      <section className="oa-resultado" aria-label="Resultado do período">
+        <div className="oa-resultado__fluxo" role="group" aria-label="Como se chega ao resultado">
           <KpiCard
             title="Faturamento"
             value={formatValor(atual.faturamento) || 'R$ 0,00'}
@@ -304,41 +304,41 @@ function ResultadoPeriodo({
             <KpiCard title="Mídia" value="Não entra na conta" helper={avisoMidia ? `Sem gasto conhecido · ${avisoMidia}` : 'Sem gasto conhecido no período'} />
           )}
         </div>
-        <div className={['ad-resultado__sobra', !oculto && final < 0 ? 'ad-resultado__sobra--negativa' : null].filter(Boolean).join(' ')}>
-          <p className="ad-resultado__sobra-titulo">
+        <div className={['oa-resultado__sobra', !oculto && final < 0 ? 'oa-resultado__sobra--negativa' : null].filter(Boolean).join(' ')}>
+          <p className="oa-resultado__sobra-titulo">
             {temMidia ? 'Lucro após mídia' : 'Lucro bruto'}
             {!oculto && sparkline.length > 1 && (
-              <span className="ad-resultado__sobra-linha" aria-hidden="true">
+              <span className="oa-resultado__sobra-linha" aria-hidden="true">
                 <MiniSparkline values={sparkline.slice(-7)} width={88} height={24} />
               </span>
             )}
           </p>
-          <strong className="ad-resultado__sobra-valor">{oculto ? <ValorOculto /> : formatValor(final) || 'R$ 0,00'}</strong>
-          <div className="ad-resultado__sobra-rodape">
+          <strong className="oa-resultado__sobra-valor">{oculto ? <ValorOculto /> : formatValor(final) || 'R$ 0,00'}</strong>
+          <div className="oa-resultado__sobra-rodape">
             {!oculto && deltaLucro && <span className={`ds-kpi__delta ds-kpi__delta--${deltaLucro.trend === 'down' ? 'down' : 'up'}`}>{deltaLucro.delta}</span>}
             <span>
               {oculto ? 'Margem oculta' : margemFinal ? `Margem de ${margemFinal} sobre o faturamento` : temMidia ? 'Lucro bruto − mídia' : 'Venda menos custo de produção'}
             </span>
           </div>
-          {!temMidia && avisoMidia && <p className="ad-resultado__sobra-aviso">Antes da mídia: {avisoMidia}.</p>}
+          {!temMidia && avisoMidia && <p className="oa-resultado__sobra-aviso">Antes da mídia: {avisoMidia}.</p>}
         </div>
         {oculto && decomposicao.partes.length > 0 && (
           // Proporções também revelam a economia da loja: a barra vira um trilho neutro, sem fatias.
-          <div className="ad-resultado__decomposicao">
-            <div className="ad-decomposicao ad-decomposicao--oculta" aria-hidden="true"><i /></div>
-            <p className="ad-decomposicao__legenda ad-decomposicao__legenda--oculta">Proporções ocultas</p>
+          <div className="oa-resultado__decomposicao">
+            <div className="oa-decomposicao oa-decomposicao--oculta" aria-hidden="true"><i /></div>
+            <p className="oa-decomposicao__legenda oa-decomposicao__legenda--oculta">Proporções ocultas</p>
           </div>
         )}
         {!oculto && decomposicao.partes.length > 0 && (
-          <div className="ad-resultado__decomposicao">
-            <div className="ad-decomposicao" role="img" aria-label={`Para onde foi o faturamento: ${decomposicao.partes.map((p) => `${p.rotulo} ${Math.round(p.fracao * 100)}%`).join(', ')}`}>
+          <div className="oa-resultado__decomposicao">
+            <div className="oa-decomposicao" role="img" aria-label={`Para onde foi o faturamento: ${decomposicao.partes.map((p) => `${p.rotulo} ${Math.round(p.fracao * 100)}%`).join(', ')}`}>
               {decomposicao.partes.map((p) => (
-                <i key={p.chave} className={`ad-decomposicao__parte ad-decomposicao__parte--${p.chave}`} style={{ flexGrow: p.fracao }} />
+                <i key={p.chave} className={`oa-decomposicao__parte oa-decomposicao__parte--${p.chave}`} style={{ flexGrow: p.fracao }} />
               ))}
             </div>
-            <ul className="ad-decomposicao__legenda" aria-hidden="true">
+            <ul className="oa-decomposicao__legenda" aria-hidden="true">
               {decomposicao.partes.map((p) => (
-                <li key={p.chave} className={`ad-decomposicao__item ad-decomposicao__item--${p.chave}`}>
+                <li key={p.chave} className={`oa-decomposicao__item oa-decomposicao__item--${p.chave}`}>
                   {p.rotulo} <b>{Math.round(p.fracao * 100)}%</b>
                 </li>
               ))}
@@ -358,12 +358,12 @@ function OrderFlow({ pedidos }: { pedidos: DashboardPedido[] }) {
   if (!total) return null;
   return (
     <Card title="Fluxo de pedidos">
-      <ol className="ad-flow-row">
+      <ol className="oa-flow-row">
         {ESTAGIOS_PIPELINE.map((estagio, i) => (
-          <li className="ad-flow-item" key={estagio.key} style={{ ['--estagio-cor' as string]: estagio.color, ['--estagio-opacidade' as string]: String(estagio.opacidade) }}>
-            <span className="ad-flow-label">{estagio.label}</span>
-            <span className="ad-flow-valor">{contagens[i].toLocaleString('pt-BR')}</span>
-            <span className="ad-flow-pct">{Math.round((contagens[i] / total) * 100)}%</span>
+          <li className="oa-flow-item" key={estagio.key} style={{ ['--estagio-cor' as string]: estagio.color, ['--estagio-opacidade' as string]: String(estagio.opacidade) }}>
+            <span className="oa-flow-label">{estagio.label}</span>
+            <span className="oa-flow-valor">{contagens[i].toLocaleString('pt-BR')}</span>
+            <span className="oa-flow-pct">{Math.round((contagens[i] / total) * 100)}%</span>
           </li>
         ))}
       </ol>
@@ -378,23 +378,23 @@ function IntegrationHealth({ erros, escopo, integracoes }: { erros: { loja: stri
   const temErro = erros.some((e) => mesmaLoja(e.loja, escopo));
   return (
     <Card title="Canais e integrações">
-      <ul className="ad-saude-lista">
-        <li className="ad-saude-item">
-          <span className={`ad-status-dot ad-status-dot--${temErro ? 'erro' : 'ok'}`} />
+      <ul className="oa-saude-lista">
+        <li className="oa-saude-item">
+          <span className={`oa-status-dot oa-status-dot--${temErro ? 'erro' : 'ok'}`} />
           <span>{loja ? `Reserva Ink · ${loja.name}` : 'Reserva Ink'}</span>
-          <span className="ad-saude-status">{temErro ? 'Atenção' : 'OK'}</span>
+          <span className="oa-saude-status">{temErro ? 'Atenção' : 'OK'}</span>
         </li>
         {integracoes && (
           <>
-            <li className="ad-saude-item">
-              <span className={`ad-status-dot ad-status-dot--${integracoes.whatsapp.conectado ? 'ok' : 'erro'}`} />
+            <li className="oa-saude-item">
+              <span className={`oa-status-dot oa-status-dot--${integracoes.whatsapp.conectado ? 'ok' : 'erro'}`} />
               <span>WhatsApp</span>
-              <span className="ad-saude-status">{integracoes.whatsapp.conectado ? 'Conectado' : 'Não conectado'}</span>
+              <span className="oa-saude-status">{integracoes.whatsapp.conectado ? 'Conectado' : 'Não conectado'}</span>
             </li>
-            <li className="ad-saude-item">
-              <span className="ad-status-dot ad-status-dot--pendente" />
+            <li className="oa-saude-item">
+              <span className="oa-status-dot oa-status-dot--pendente" />
               <span>Instagram</span>
-              <span className="ad-saude-status">Não conectado</span>
+              <span className="oa-saude-status">Não conectado</span>
             </li>
           </>
         )}
@@ -423,28 +423,28 @@ function HotCartsList({ carrinhos }: { carrinhos: DashboardCarrinho[] }) {
       {!quentes.length ? (
         <EmptyState title="Nenhum carrinho recuperável agora" description="Quando um cliente abandonar o carrinho com contato disponível, ele aparece aqui." />
       ) : (
-        <ul className="ad-hotcarts">
+        <ul className="oa-hotcarts">
           {quentes.map((c, i) => {
             const tempo = tempoDesde(c.updatedAt);
             const primeiroNome = c.buyerName ? c.buyerName.split(' ')[0] : '';
             const mensagem = `Olá${primeiroNome ? ' ' + primeiroNome : ''}! Vi que você deixou ${c.itemsCount || 'alguns'} item(ns) no carrinho. Posso te ajudar a finalizar a compra? 😊`;
             const link = waLink(c.buyerPhone, mensagem);
             return (
-              <li className="ad-hotcart-row" key={i}>
-                <div className="ad-hotcart-info">
+              <li className="oa-hotcart-row" key={i}>
+                <div className="oa-hotcart-info">
                   <strong>{c.buyerName || 'Cliente sem nome'}</strong>
                   <span>
                     {adminStores.name(c.loja)} · {plural(c.itemsCount || 0, 'item', 'itens')}
                     {tempo ? ` · há ${tempo.texto}` : ''}
                   </span>
                 </div>
-                <span className="ad-hotcart-valor">{oculto ? <ValorOculto /> : formatValor(c.valor) || '—'}</span>
+                <span className="oa-hotcart-valor">{oculto ? <ValorOculto /> : formatValor(c.valor) || '—'}</span>
                 {link && (
                   <a
                     href={link}
                     target="_blank"
                     rel="noopener"
-                    className="ds-btn ds-btn--secondary ds-btn--sm ad-hotcart-btn"
+                    className="ds-btn ds-btn--secondary ds-btn--sm oa-hotcart-btn"
                     aria-label={`Enviar WhatsApp para ${c.buyerName || 'o cliente'} (abre em nova aba)`}
                   >
                     <Icon name="phone" size={14} />
@@ -687,12 +687,12 @@ function VisaoGeral() {
   const lacuna = pedidosPeriodoFetch.data?.lojasComLacuna || [];
 
   return (
-    <PageStack className="ad-dashboard">
+    <PageStack className="oa-dashboard">
       <PageHeader
         title="Visão geral"
         description={descricaoCabecalho}
         actions={
-          <div className="ad-cabecalho-acoes">
+          <div className="oa-cabecalho-acoes">
             <BotaoModoDiscreto />
             <PeriodoGlobalSelect value={periodoGlobal} onChange={setPeriodoGlobal} />
           </div>
@@ -702,7 +702,7 @@ function VisaoGeral() {
       {carregando && (
         <>
           <Skeleton rows={1} height="112px" />
-          <div className="ad-analytic-grid">
+          <div className="oa-analytic-grid">
             <Skeleton rows={1} height="320px" />
             <Skeleton rows={1} height="320px" />
             <Skeleton rows={1} height="320px" />
@@ -731,21 +731,21 @@ function VisaoGeral() {
             startDate={startDate} endDate={endDate} dias={dias} rotuloPeriodo={rotuloPeriodo}
           />
 
-          <div className="ad-analytic-grid">
+          <div className="oa-analytic-grid">
             <Card
               title={serieFinanceira ? `Faturamento e lucro — ${rotuloPeriodo}` : `Pedidos e receita — ${rotuloPeriodo}`}
-              className="ad-analytic-grid__principal"
+              className="oa-analytic-grid__principal"
               action={
-                <div className="ad-chart-legenda">
-                  <span className="ad-chart-legenda__item ad-chart-legenda__item--barra">{serieFinanceira ? 'Pedidos pagos' : 'Pedidos'}</span>
+                <div className="oa-chart-legenda">
+                  <span className="oa-chart-legenda__item oa-chart-legenda__item--barra">{serieFinanceira ? 'Pedidos pagos' : 'Pedidos'}</span>
                   {oculto ? (
-                    <span className="ad-chart-legenda__item ad-chart-legenda__item--oculto">Valores ocultos</span>
+                    <span className="oa-chart-legenda__item oa-chart-legenda__item--oculto">Valores ocultos</span>
                   ) : (
                     <>
-                      <span className="ad-chart-legenda__item ad-chart-legenda__item--linha">{serieFinanceira ? 'Faturamento' : 'Receita'}</span>
+                      <span className="oa-chart-legenda__item oa-chart-legenda__item--linha">{serieFinanceira ? 'Faturamento' : 'Receita'}</span>
                       {/* "Lucro bruto" (venda − custo de produção, antes da mídia): é o campo lucroOperacional
                           do cache, o MESMO número do KPI "Lucro bruto" — o rótulo antigo dizia "operacional". */}
-                      {serieFinanceira && <span className="ad-chart-legenda__item ad-chart-legenda__item--lucro">Lucro bruto</span>}
+                      {serieFinanceira && <span className="oa-chart-legenda__item oa-chart-legenda__item--lucro">Lucro bruto</span>}
                     </>
                   )}
                   {!serieFinanceira && !!lacuna.length && (
@@ -771,7 +771,7 @@ function VisaoGeral() {
               )}
             </Card>
 
-            <Card title="Status dos pedidos" className="ad-analytic-grid__status">
+            <Card title="Status dos pedidos" className="oa-analytic-grid__status">
               {pedidos.erro ? (
                 <ErrorState description="Não foi possível carregar status." />
               ) : !pedidosPeriodo.length ? (
@@ -781,7 +781,7 @@ function VisaoGeral() {
               )}
             </Card>
 
-            <Card title="Recuperação via WhatsApp" className="ad-analytic-grid__recuperacao">
+            <Card title="Recuperação via WhatsApp" className="oa-analytic-grid__recuperacao">
               {recuperacao.erro ? (
                 <ErrorState description="Não foi possível carregar recuperação." />
               ) : !recuperacao.data ? (
@@ -802,8 +802,8 @@ function VisaoGeral() {
                   />
                 )
               ) : (
-                <div className="ad-recuperacao">
-                  <dl className="ad-recuperacao-numeros">
+                <div className="oa-recuperacao">
+                  <dl className="oa-recuperacao-numeros">
                     <div>
                       <dt>Mensagens enviadas</dt>
                       <dd>{recuperacao.data.mensagensEnviadas.toLocaleString('pt-BR')}</dd>
@@ -823,8 +823,8 @@ function VisaoGeral() {
                       <dd>{oculto ? <ValorOculto /> : formatValor(recuperacao.data.receitaRecuperada) || 'R$ 0,00'}</dd>
                     </div>
                   </dl>
-                  <div className="ad-recuperacao-grafico">
-                    <span className="ad-recuperacao-grafico__rotulo">Mensagens por dia</span>
+                  <div className="oa-recuperacao-grafico">
+                    <span className="oa-recuperacao-grafico__rotulo">Mensagens por dia</span>
                     <RecoveryChart dados={recoverySerie} />
                   </div>
                 </div>
@@ -836,7 +836,7 @@ function VisaoGeral() {
 
           <OrderFlow pedidos={pedidosPeriodo} />
 
-          <div className="ad-behavior-grid">
+          <div className="oa-behavior-grid">
             <Card title="Pedidos por dia da semana">
               {!pedidosPeriodo.length ? <EmptyState title="Sem dados neste período" /> : <WeekdayHourlyChart dados={weekdaySerie} />}
             </Card>
@@ -846,7 +846,7 @@ function VisaoGeral() {
             <IntegrationHealth erros={erros} escopo={escopo} integracoes={integracoes} />
           </div>
 
-          <div className="ad-operation-grid">
+          <div className="oa-operation-grid">
             <HotCartsList carrinhos={todosCarrinhos} />
             <RecentOrdersTable pedidos={todosPedidos} mostrarLoja={false} onVinculado={marcarVinculado} />
           </div>

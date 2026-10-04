@@ -123,7 +123,7 @@ function EnvioSwitch({ dados, recarregar }: { dados: AutomationSettings; recarre
       />
       {modoErro && <p className="ds-form-error">{modoErro}</p>}
       <Field label="Janela de horário de envio (exceto pagamento aprovado)">
-        <div className="ad-janela-envio">
+        <div className="oa-janela-envio">
           <NumberField label="Hora de início" value={inicio} onChange={setInicio} min={0} max={23} />
           <span>h até</span>
           <NumberField label="Hora de fim" value={fim} onChange={setFim} min={1} max={24} />
@@ -163,7 +163,7 @@ function cadenciaParaBody(c: Cadencia): Record<string, unknown> {
 
 function CadenciaCampos({ valor, onChange }: { valor: Cadencia; onChange: (c: Cadencia) => void }) {
   return (
-    <div className="ad-vinculo-carrinho">
+    <div className="oa-vinculo-carrinho">
       <p className="pc-nota">Reenvia até o limite abaixo, respeitando o intervalo, e para de reenviar se o cliente já comprou (ou já pagou o Pix).</p>
       <FormGrid min={180}>
         <Field label="Espera antes do 1º envio" hint="Em horas.">
@@ -176,7 +176,7 @@ function CadenciaCampos({ valor, onChange }: { valor: Cadencia; onChange: (c: Ca
           <NumberField value={valor.intervalo} onChange={(v) => onChange({ ...valor, intervalo: v })} min={1} max={720} />
         </Field>
       </FormGrid>
-      <label className="ad-vinculo-checar">
+      <label className="oa-vinculo-checar">
         <input type="checkbox" checked={valor.checarCompra} onChange={(e) => onChange({ ...valor, checarCompra: e.target.checked })} />
         {' '}Não reenviar se o cliente já comprou desde o último envio
       </label>
@@ -211,7 +211,7 @@ function VinculoCard({
   const [salvando, setSalvando] = useState(false);
   const [confirmandoRemocao, setConfirmandoRemocao] = useState(false);
 
-  const listaId = 'ad-vinculo-templates-' + loja + '-' + eventName.replace(/[^a-z0-9]/gi, '_');
+  const listaId = 'oa-vinculo-templates-' + loja + '-' + eventName.replace(/[^a-z0-9]/gi, '_');
   const templateSelecionado = templates.find((t) => t.name === templateNome);
   const textos = templateSelecionado ? extrairTextosComponentes(templateSelecionado.components) : null;
 
@@ -238,10 +238,10 @@ function VinculoCard({
   }
 
   return (
-    <div className="ad-vinculo-card">
-      <div className="ad-vinculo-topo">
+    <div className="oa-vinculo-card">
+      <div className="oa-vinculo-topo">
         <strong>{eventoLabel(eventName)}</strong>
-        {eventoLabel(eventName) !== eventName && <code className="ad-evento-codigo">{eventName}</code>}
+        {eventoLabel(eventName) !== eventName && <code className="oa-evento-codigo">{eventName}</code>}
         <StatusBadge tone={configurado ? 'success' : 'neutral'} label={configurado ? `Template: ${configExistente?.template}` : 'Não configurado'} />
         <Button variant="ghost" onClick={() => setAberto((v) => !v)}>
           {aberto ? 'Esconder' : configurado ? 'Editar' : 'Configurar'}
@@ -249,7 +249,7 @@ function VinculoCard({
       </div>
 
       {aberto && (
-        <div className="ad-vinculo-form">
+        <div className="oa-vinculo-form">
           <Field label="Template">
             <input
               className="ds-input"
@@ -372,10 +372,10 @@ function VinculoCardWeb({
   }
 
   return (
-    <div className="ad-vinculo-card">
-      <div className="ad-vinculo-topo">
+    <div className="oa-vinculo-card">
+      <div className="oa-vinculo-topo">
         <strong>{eventoLabel(eventName)}</strong>
-        {eventoLabel(eventName) !== eventName && <code className="ad-evento-codigo">{eventName}</code>}
+        {eventoLabel(eventName) !== eventName && <code className="oa-evento-codigo">{eventName}</code>}
         <StatusBadge
           tone={configurado ? (vinculada ? 'success' : 'danger') : 'neutral'}
           label={configurado ? (vinculada ? `Mensagem: ${vinculada.nome}` : 'Mensagem excluída') : 'Não configurado'}
@@ -386,7 +386,7 @@ function VinculoCardWeb({
       </div>
 
       {aberto && (
-        <div className="ad-vinculo-form">
+        <div className="oa-vinculo-form">
           {compativeis.length === 0 ? (
             <p className="pc-nota">
               Nenhuma mensagem do tipo "{tipoDoEvento === 'carrinho' ? 'carrinho abandonado' : 'pedido'}" ou "comum" ainda.{' '}
@@ -491,7 +491,7 @@ function LojaSection({
 
   return (
     <Card title={nomeDaLoja(loja)}>
-      <div className="ad-vinculos-lista">
+      <div className="oa-vinculos-lista">
         {!todosNomes.length ? (
           <EmptyState title="Nenhum evento observado ainda pra essa loja" description="Assim que a Reserva Ink enviar um evento, ele aparece aqui. Você também pode adicionar um manualmente abaixo." />
         ) : (
@@ -520,7 +520,7 @@ function LojaSection({
           )
         )}
       </div>
-      <div className="ad-vinculo-add">
+      <div className="oa-vinculo-add">
         <input
           className="ds-input"
           type="text"
@@ -542,14 +542,14 @@ function LojaSection({
 // isso em lugar nenhum) — só um mapa de referência, não usado pra validar nada.
 function FluxoEventosCard() {
   function Chip({ nome, variante }: { nome: string; variante?: 'erro' | 'ok' }) {
-    return <span className={'ad-fluxo-chip' + (variante ? ` ad-fluxo-chip--${variante}` : '')}>{nome}</span>;
+    return <span className={'oa-fluxo-chip' + (variante ? ` oa-fluxo-chip--${variante}` : '')}>{nome}</span>;
   }
   function Ramo({ passos }: { passos: { nome: string; variante?: 'erro' | 'ok' }[] }) {
     return (
-      <div className="ad-fluxo-eventos__ramo">
+      <div className="oa-fluxo-eventos__ramo">
         {passos.map((passo, i) => (
           <Fragment key={passo.nome}>
-            {i > 0 && <span className="ad-fluxo-seta" aria-hidden="true">→</span>}
+            {i > 0 && <span className="oa-fluxo-seta" aria-hidden="true">→</span>}
             <Chip nome={passo.nome} variante={passo.variante} />
           </Fragment>
         ))}
@@ -560,11 +560,11 @@ function FluxoEventosCard() {
   return (
     <Card title="Sequência de eventos (referência)">
       <p className="pc-nota">Decifrado observando os eventos recebidos; a Reserva Ink não documenta isso oficialmente. Se um evento novo não estiver aqui, adicione-o manualmente.</p>
-      <div className="ad-fluxo-eventos">
-        <div className="ad-fluxo-eventos__origem">
+      <div className="oa-fluxo-eventos">
+        <div className="oa-fluxo-eventos__origem">
           <Chip nome="order.created" />
         </div>
-        <div className="ad-fluxo-eventos__ramos">
+        <div className="oa-fluxo-eventos__ramos">
           <Ramo passos={[{ nome: 'payment.card_not_authorized', variante: 'erro' }, { nome: 'order.canceled', variante: 'erro' }]} />
           <Ramo passos={[{ nome: 'payment.pix_boleto_expired', variante: 'erro' }, { nome: 'order.canceled', variante: 'erro' }]} />
           <Ramo passos={[{ nome: 'pix.pendente *' }]} />
@@ -698,7 +698,7 @@ export function AutomacoesPage() {
           <p className="pc-nota">Os vínculos abaixo continuam salvos; a lista de templates volta quando o canal voltar.</p>
         </Callout>
       )}
-      <div className="ad-automacoes-grid">
+      <div className="oa-automacoes-grid">
         <FluxoEventosCard />
         <EnvioSwitch dados={dados.settings} recarregar={carregar} />
         {lojas.map((loja) => (

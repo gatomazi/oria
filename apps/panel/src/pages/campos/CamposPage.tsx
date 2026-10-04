@@ -30,13 +30,13 @@ export function CamposPage() {
       {erro && <ErrorState description={erro} onRetry={carregar} />}
       {!erro && !campos && <Skeleton rows={4} />}
       {!erro && campos && (
-        <div className="ad-campos-grid">
+        <div className="oa-campos-grid">
           <NovoCampoCard recarregar={carregar} />
           <Card title="Campos existentes">
             {!chaves.length ? (
               <EmptyState title="Nenhum campo personalizado ainda" />
             ) : (
-              <div className="ad-campos-lista">
+              <div className="oa-campos-lista">
                 {chaves.map((chave) => (
                   <CampoCard key={chave} chave={chave} campo={campos[chave]} recarregar={carregar} />
                 ))}

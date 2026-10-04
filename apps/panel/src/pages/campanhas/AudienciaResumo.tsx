@@ -21,12 +21,12 @@ export function motivosDeExclusao(b: AudienciaPreviewResultado['breakdown']): { 
 export function RfmFiltroCard({ filtro, preview }: { filtro: AudienciaFiltroRfmValor; preview: AudienciaPreviewResultado | null }) {
   const rfm = preview?.rfm;
   return (
-    <div className="ad-rfm-card">
-      <div className="ad-rfm-card__topo">
+    <div className="oa-rfm-card">
+      <div className="oa-rfm-card__topo">
         <strong>Segmento RFM{rfm ? `: ${rfm.segmentoNome}` : ''}</strong>
         <StatusBadge tone="neutral" label="Condição obrigatória" />
       </div>
-      <ul className="ad-rfm-card__regra" aria-label="Regra do segmento">
+      <ul className="oa-rfm-card__regra" aria-label="Regra do segmento">
         {descreverPredicado(filtro.predicado).map((l) => (
           <li key={l.rotulo}><span>{l.rotulo}</span> {l.texto}</li>
         ))}
@@ -50,10 +50,10 @@ export function AudienciaResumo({ preview, carregando, erro }: ResumoProps) {
   const motivos = preview ? motivosDeExclusao(preview.breakdown) : [];
   const rfm = preview?.rfm;
   return (
-    <div className="ad-segmento-preview" aria-live="polite">
+    <div className="oa-segmento-preview" aria-live="polite">
       {carregando && <span className="pc-nota">Calculando…</span>}
       {erro && !carregando && (
-        <div role="alert" className="ad-preview-erro">
+        <div role="alert" className="oa-preview-erro">
           <span className="ds-form-error">{erro}</span>
           <span className="pc-nota">Nenhuma contagem é exibida: uma audiência que não pôde ser calculada não vira "todos os clientes".</span>
         </div>
@@ -65,10 +65,10 @@ export function AudienciaResumo({ preview, carregando, erro }: ResumoProps) {
             <span className="pc-nota"> — {preview.matched} {rfm ? 'no segmento' : 'encontrados'}, {preview.excluded} excluídos</span>
           </div>
           {motivos.length > 0 && (
-            <p className="pc-nota ad-preview-linha">Excluídos por contato: {motivos.map((m) => `${numero(m.n)} ${m.rotulo}`).join(' · ')}.</p>
+            <p className="pc-nota oa-preview-linha">Excluídos por contato: {motivos.map((m) => `${numero(m.n)} ${m.rotulo}`).join(' · ')}.</p>
           )}
           {rfm && (
-            <p className="pc-nota ad-preview-linha">
+            <p className="pc-nota oa-preview-linha">
               {plural(rfm.universos.segmento, 'pessoa', 'pessoas')} no segmento RFM · {plural(rfm.universos.compradoresValidos, 'comprador válido', 'compradores válidos')} classificados ·{' '}
               {plural(rfm.universos.pessoasComPedido, 'pessoa com pedido', 'pessoas com pedido')} · calculado agora ({dataHora(rfm.asOf)}, regra {rfm.regraVersao}).
             </p>
@@ -121,7 +121,7 @@ export function RfmAproximadoCard({ info, confirmado, onConfirmar }: {
         Esta audiência é a cópia do segmento “{info.nome}”, salvo com filtros genéricos: conta troca paga como compra, usa 24 horas corridas e não aplica a janela de
         365 dias. O público pode ser diferente do que a matriz de Clientes mostra. Nada foi alterado no segmento.
       </p>
-      <label className="ad-checkbox-row">
+      <label className="oa-checkbox-row">
         <input type="checkbox" checked={confirmado} onChange={(e) => onConfirmar(e.target.checked)} />
         Entendo que o público é aproximado e quero usá-lo assim
       </label>

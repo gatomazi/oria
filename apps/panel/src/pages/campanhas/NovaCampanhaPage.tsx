@@ -497,10 +497,10 @@ export function NovaCampanhaPage() {
       {audienciaPreview && revisaoAud?.estado === 'ok' && (
         <>
           {motivosDeExclusao(audienciaPreview.breakdown).length > 0 && (
-            <p className="pc-nota ad-preview-linha">Excluídos por contato: {motivosDeExclusao(audienciaPreview.breakdown).map((m) => `${m.n} ${m.rotulo}`).join(' · ')}.</p>
+            <p className="pc-nota oa-preview-linha">Excluídos por contato: {motivosDeExclusao(audienciaPreview.breakdown).map((m) => `${m.n} ${m.rotulo}`).join(' · ')}.</p>
           )}
           {audienciaPreview.rfm && (
-            <p className="pc-nota ad-preview-linha">
+            <p className="pc-nota oa-preview-linha">
               Segmento RFM {audienciaPreview.rfm.segmentoNome}: {plural(audienciaPreview.rfm.universos.segmento, 'pessoa', 'pessoas')} de {plural(audienciaPreview.rfm.universos.compradoresValidos, 'comprador válido', 'compradores válidos')} ·
               calculado agora, regra {audienciaPreview.rfm.regraVersao}.
             </p>
@@ -532,7 +532,7 @@ export function NovaCampanhaPage() {
 
       {modoResumo && (
         <Card>
-          <div className="ad-revisao">
+          <div className="oa-revisao">
             <div><span className="pc-nota">Campanha</span><strong>{nome || '—'}</strong></div>
             <div><span className="pc-nota">Loja</span><strong>{adminStores.name(loja)}</strong></div>
             <div><span className="pc-nota">Status</span><strong>{lookup(CAMPANHA_STATUS_MAP, statusAtual).label}</strong></div>
@@ -639,9 +639,9 @@ export function NovaCampanhaPage() {
               />
             )}
             {mensagensWeb && mensagensWeb.length > 0 && (
-              <div className="ad-template-lista">
+              <div className="oa-template-lista">
                 {mensagensWeb.map((m) => (
-                  <label key={m.id} className={'ad-template-opcao' + (mensagemWebId === m.id ? ' ad-template-opcao--ativa' : '')}>
+                  <label key={m.id} className={'oa-template-opcao' + (mensagemWebId === m.id ? ' oa-template-opcao--ativa' : '')}>
                     <input type="radio" name="mensagemWeb" checked={mensagemWebId === m.id} onChange={() => setMensagemWebId(m.id)} disabled={!podeEditar} />
                     <div>
                       <strong>{m.nome}</strong>
@@ -705,10 +705,10 @@ export function NovaCampanhaPage() {
                   )}
                   {categorias.map((categoria) => (
                     <div key={categoria}>
-                      <div className="ad-template-grupo-titulo">{CATEGORIA_LABEL[categoria] || categoria}</div>
-                      <div className="ad-template-lista">
+                      <div className="oa-template-grupo-titulo">{CATEGORIA_LABEL[categoria] || categoria}</div>
+                      <div className="oa-template-lista">
                         {filtrados.filter((t) => (t.category || 'OUTROS') === categoria).map((t) => (
-                          <label key={t.name} className={'ad-template-opcao' + (templateNome === t.name ? ' ad-template-opcao--ativa' : '')}>
+                          <label key={t.name} className={'oa-template-opcao' + (templateNome === t.name ? ' oa-template-opcao--ativa' : '')}>
                             <input type="radio" name="template" checked={templateNome === t.name} onChange={() => setTemplateNome(t.name)} disabled={!podeEditar} />
                             <div>
                               <strong>{t.name}</strong>
@@ -761,14 +761,14 @@ export function NovaCampanhaPage() {
                   return (
                     <Field label="Variável do cabeçalho" hint="Texto do cabeçalho aprovado — mostrado aqui só de referência.">
                       {headerTemplateTexto && (
-                        <p className="pc-nota ad-template-preview-corpo">
+                        <p className="pc-nota oa-template-preview-corpo">
                           {headerTemplateTexto.split(/(\{\{[^{}]+\}\})/g).map((parte, i) =>
                             /^\{\{[^{}]+\}\}$/.test(parte) ? <strong key={i}>{parte}</strong> : <span key={i}>{parte}</span>
                           )}
                         </p>
                       )}
                       {v && (
-                        <div className="ad-filtro-row">
+                        <div className="oa-filtro-row">
                           <select
                             className="ds-select"
                             value={v.fonte}
@@ -795,15 +795,15 @@ export function NovaCampanhaPage() {
                 {numVariaveisCorpo > 0 && (
                   <Field label="Variáveis do corpo da mensagem" hint="É o texto real do template escolhido na etapa anterior — mostrado aqui só de referência, não é editável.">
                     {textosTemplate?.corpo && (
-                      <p className="pc-nota ad-template-preview-corpo">
+                      <p className="pc-nota oa-template-preview-corpo">
                         {textosTemplate.corpo.split(/(\{\{[^{}]+\}\})/g).map((parte, i) =>
                           /^\{\{[^{}]+\}\}$/.test(parte) ? <strong key={i}>{parte}</strong> : <span key={i}>{parte}</span>
                         )}
                       </p>
                     )}
-                    <div className="ad-variaveis-lista">
+                    <div className="oa-variaveis-lista">
                       {variaveis.filter((v) => v.alvo === 'corpo').map((v) => (
-                        <div key={v.indice} className="ad-filtro-row">
+                        <div key={v.indice} className="oa-filtro-row">
                           <span>{'{{' + v.indice + '}}'}</span>
                           <select
                             className="ds-select"
@@ -833,7 +833,7 @@ export function NovaCampanhaPage() {
                   return (
                     <Field label={`Variável do botão${botaoDinamicoTexto ? ` "${botaoDinamicoTexto}"` : ''}`} hint="Preenche a parte dinâmica do link do botão de URL.">
                       {v && (
-                        <div className="ad-filtro-row">
+                        <div className="oa-filtro-row">
                           <select
                             className="ds-select"
                             value={v.fonte}
@@ -863,7 +863,7 @@ export function NovaCampanhaPage() {
 
         {etapaAtual === 'revisao' && (
           <div className="tn-form">
-            <div className="ad-revisao">
+            <div className="oa-revisao">
               <div><span className="pc-nota">Campanha</span><strong>{nome || '—'}</strong></div>
               <div><span className="pc-nota">Loja</span><strong>{adminStores.name(loja)}</strong></div>
               <div>

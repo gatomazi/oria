@@ -121,11 +121,11 @@
 /* Achado do refinamento visual: os 2 blocos (pendentes + form manual) empilhavam sempre em
    coluna única, cada um ocupando a largura toda mesmo em telas largas — a tabela de pendentes é
    o conteúdo principal (prioridade), o form manual é o caminho alternativo, mais estreito. */
-.ad-vincular-grid { display: flex; flex-direction: column; gap: 20px; margin-top: 16px; }
+.oa-vincular-grid { display: flex; flex-direction: column; gap: 20px; margin-top: 16px; }
 @media (min-width: 900px) {
-  .ad-vincular-grid { flex-direction: row; align-items: flex-start; }
-  .ad-vincular-grid > *:first-child { flex: 2; min-width: 0; }
-  .ad-vincular-grid > *:last-child { flex: 1; min-width: 280px; }
+  .oa-vincular-grid { flex-direction: row; align-items: flex-start; }
+  .oa-vincular-grid > *:first-child { flex: 2; min-width: 0; }
+  .oa-vincular-grid > *:last-child { flex: 1; min-width: 280px; }
 }
 
 .pa-lista { list-style: none; margin: 0; padding: 0; }

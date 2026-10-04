@@ -80,13 +80,13 @@ export function BotoesEditor({ tipo, value, onChange }: BotoesEditorProps) {
   }
 
   return (
-    <div className="ad-botoes-lista">
+    <div className="oa-botoes-lista">
       {value.map((linha, i) => {
         const ehUrl = linha.tipo === 'URL';
         const ehDinamico = ehUrl && linha.urlTipo === 'DINAMICO';
         const placeholderValor = ehDinamico ? 'https://seusite.com/{{1}}' : ehUrl ? 'https://…' : '5548999998888';
         return (
-          <div className="ad-botao-linha" key={i}>
+          <div className="oa-botao-linha" key={i}>
             <select className="ds-select" aria-label={`Tipo do botão ${i + 1}`} value={linha.tipo} onChange={(e) => atualizar(i, { tipo: e.target.value as BotaoTipoUI })}>
               {TIPO_OPCOES.map(([v, label]) => (
                 <option key={v} value={v}>

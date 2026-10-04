@@ -49,7 +49,7 @@ export function CamposVariaveis({ template, value, onChange }: CamposVariaveisPr
   }
 
   return (
-    <div className="ad-vinculo-vars">
+    <div className="oa-vinculo-vars">
       {numHeaderVars > 0 && (
         <Field label={`Variável do cabeçalho ({{1}}: "${textos.header}")`}>
           <VariavelSelect tipo={tipo} value={value.headerVariavel || ''} onChange={(e) => onChange({ ...value, headerVariavel: e.target.value })} />
@@ -63,7 +63,7 @@ export function CamposVariaveis({ template, value, onChange }: CamposVariaveisPr
       ))}
 
       {textos.botoes.length > 0 && (
-        <div className="ad-vinculo-botoes">
+        <div className="oa-vinculo-botoes">
           {textos.botoes.map((b, i) => {
             if (botaoDinamicoInfo && i === botaoDinamicoInfo.indice) {
               return (
@@ -75,7 +75,7 @@ export function CamposVariaveis({ template, value, onChange }: CamposVariaveisPr
             const descricao =
               b.tipo === 'PHONE_NUMBER' ? `telefone fixo: ${b.valor}` : b.tipo === 'QUICK_REPLY' ? 'resposta rápida' : `link fixo: ${b.valor}`;
             return (
-              <div className="ad-vinculo-botao-fixo" key={i}>
+              <div className="oa-vinculo-botao-fixo" key={i}>
                 Botão "{b.texto}" — {descricao} (sem configuração necessária)
               </div>
             );

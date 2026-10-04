@@ -3,9 +3,9 @@
    statusBadge). Reaproveita .pc-nota de pedidos-central.css.
    ═══════════════════════════════════════════════════════════════════ */
 
-.ad-clientes-filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-.ad-clientes-filtros input,
-.ad-clientes-filtros select { min-width: 200px; }
+.oa-clientes-filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.oa-clientes-filtros input,
+.oa-clientes-filtros select { min-width: 200px; }
 
 /* ═══════════════════════════════════════════════════════════════════
    Clientes 360° — matriz RFM, painel de segmento, lista e drawer.

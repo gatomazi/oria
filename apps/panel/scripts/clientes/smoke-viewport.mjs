@@ -172,7 +172,7 @@ try {
   await page.waitForFunction(() => document.querySelector('input[type="text"]')?.value.startsWith('RFM · '));
   ok('nome da campanha pré-preenchido com o segmento', (await nomeCampo.inputValue()).startsWith('RFM · Novos'));
   await page.getByRole('button', { name: 'Avançar' }).tap();
-  await page.waitForSelector('.ad-rfm-card');
+  await page.waitForSelector('.oa-rfm-card');
   await page.screenshot({ path: path.join(OUT, '08-audiencia.png'), fullPage: true });
   await semRolagemHorizontal('etapa Audiência');
 
@@ -182,21 +182,21 @@ try {
   const salvo = (await api.json()).segmentos.find((s) => s.id === segId);
   ok('segmento persistido é dinâmico, de origem RFM, com versão da regra e data de classificação', salvo && salvo.origem === 'rfm' && salvo.politica === 'dinamico' && /^rfm-v1:[0-9a-f]{8}$/.test(salvo.rfmVersao) && !!salvo.classificadoEm, salvo ? `${salvo.rfmVersao}` : 'não encontrado');
   ok('o segmento persistiu UM filtro `rfm` (predicado com o corte salvo + regra), não filtros genéricos', salvo.filtros.length === 1 && salvo.filtros[0].field === 'rfm' && salvo.filtros[0].value.regraVersao === salvo.rfmVersao, JSON.stringify(salvo.filtros.map((f) => f.field)));
-  const cartao = await page.locator('.ad-rfm-card').innerText();
+  const cartao = await page.locator('.oa-rfm-card').innerText();
   ok('a Audiência mostra o segmento RFM como condição obrigatória, com regra e versão', /Segmento RFM/.test(cartao) && /Condição obrigatória/.test(cartao) && new RegExp(salvo.rfmVersao).test(cartao), cartao.replace(/\s+/g, ' ').slice(0, 140));
   ok('nenhuma linha de filtro genérico aparece no lugar do segmento (nada para descartar sem querer)', (await page.locator('[aria-label="Campo do filtro"]').count()) === 0);
   ok('o aviso de corte (quando existe) fala de regra, data e corte salvo × de hoje', aviso === '' || (/corte/.test(aviso)), aviso.replace(/\s+/g, ' ').slice(0, 120));
   const prevApi = await post('/api/admin/campaigns/audience/preview', { match: salvo.match, filters: salvo.filtros, exclusions: { semOptIn: true, numeroInvalido: true } });
   const esperado = await prevApi.json();
-  await page.waitForFunction(() => { const t = document.querySelector('.ad-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
+  await page.waitForFunction(() => { const t = document.querySelector('.oa-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
   const texto = await page.evaluate(() => document.body.innerText.match(/(\d[\d.]*)\s+clientes? eleg[ií]veis?\s+—\s+(\d[\d.]*)\s+no segmento,\s+(\d[\d.]*)\s+exclu[ií]dos?/i));
   const lido = texto ? texto.slice(1).map((x) => Number(x.replace(/\./g, ''))) : null;
   ok('contagem exibida na Audiência = prévia do servidor com o filtro persistido', lido && lido[0] === esperado.eligible && lido[1] === esperado.matched && lido[2] === esperado.excluded, `tela ${JSON.stringify(lido)} × servidor ${esperado.eligible}/${esperado.matched}/${esperado.excluded}`);
   const { json: resumo } = { json: await (await ctx.request.get(`${BASE}/api/admin/clientes/resumo`)).json() };
   const seg = resumo.rfm.segmentos.find((s) => s.id === 'novos');
   ok('população da Audiência = segmento da matriz (igualdade exata, sem tolerância)', esperado.matched === seg.clientes && esperado.rfm.universos.segmento === seg.clientes, `RFM ${seg.clientes} × Audiência ${esperado.matched}`);
-  await page.waitForFunction(() => { const t = document.querySelector('.ad-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
-  const resumoTela = await page.locator('.ad-segmento-preview').innerText();
+  await page.waitForFunction(() => { const t = document.querySelector('.oa-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
+  const resumoTela = await page.locator('.oa-segmento-preview').innerText();
   ok('a prévia declara universos, asOf e regra (pessoas com pedido ⊃ compradores válidos ⊃ segmento)', /compradores? v[aá]lidos?/.test(resumoTela) && /pessoas? com pedido/.test(resumoTela) && /calculado agora/.test(resumoTela) && new RegExp(salvo.rfmVersao).test(resumoTela), resumoTela.replace(/\s+/g, ' ').slice(0, 200));
   // Nada foi disparado: continua sem campanha criada.
   const camps = await (await ctx.request.get(`${BASE}/api/admin/campaigns`)).json();

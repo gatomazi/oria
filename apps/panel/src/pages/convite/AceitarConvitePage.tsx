@@ -12,7 +12,7 @@ import { Button, Callout, Field, Input } from '../../components/ds';
 // em Referer, nem no histórico do proxy. Ainda assim é apagado da barra assim que lido, para não
 // sobreviver num print de tela ou no histórico do navegador.
 //
-// Visual: o mesmo painel do login e da escolha de workspace (`.ad-login*`, admin-shell.css).
+// Visual: o mesmo painel do login e da escolha de workspace (`.oa-login*`, admin-shell.css).
 
 interface Consulta {
   email: string;
@@ -96,12 +96,12 @@ export function AceitarConvitePage() {
   const precisaEntrar = !!convite && convite.contaExistente && !convite.autenticadoComo;
 
   return (
-    <div className="ad-login-root">
-      <main className="ad-login">
+    <div className="oa-login-root">
+      <main className="oa-login">
         {!convite ? (
-          <form className="ad-login__panel" onSubmit={consultar}>
-            <h1 className="ad-login__title">Aceitar convite</h1>
-            <p className="ad-workspace__texto">
+          <form className="oa-login__panel" onSubmit={consultar}>
+            <h1 className="oa-login__title">Aceitar convite</h1>
+            <p className="oa-workspace__texto">
               Cole abaixo o código de convite que você recebeu de quem administra o Oria.
             </p>
             <Field label="Código do convite">
@@ -116,12 +116,12 @@ export function AceitarConvitePage() {
             <Button type="submit" block disabled={enviando || !token.trim()}>
               Continuar
             </Button>
-            <p className="ad-login__erro" role="alert">{erro}</p>
+            <p className="oa-login__erro" role="alert">{erro}</p>
           </form>
         ) : (
-          <form className="ad-login__panel" onSubmit={aceitar}>
-            <h1 className="ad-login__title">Aceitar convite</h1>
-            <p className="ad-workspace__texto">
+          <form className="oa-login__panel" onSubmit={aceitar}>
+            <h1 className="oa-login__title">Aceitar convite</h1>
+            <p className="oa-workspace__texto">
               Convite para <strong>{convite.email}</strong>
               {convite.organizationNome ? <> entrar em <strong>{convite.organizationNome}</strong></> : null} como{' '}
               {papelLegivel}.
@@ -180,7 +180,7 @@ export function AceitarConvitePage() {
             >
               Usar outro código
             </Button>
-            <p className="ad-login__erro" role="alert">{erro}</p>
+            <p className="oa-login__erro" role="alert">{erro}</p>
           </form>
         )}
       </main>

@@ -154,8 +154,8 @@ export function MensagemWebEditorPage() {
     <>
       <PageHeader title={edicao ? 'Editar mensagem' : 'Nova mensagem'} back={{ to: '/admin/mensagens', label: 'Voltar pra lista' }} />
 
-      <div className="ad-template-novo-layout">
-        <Card className="ad-template-novo-layout__form">
+      <div className="oa-template-novo-layout">
+        <Card className="oa-template-novo-layout__form">
           <FormStack onSubmit={submit}>
           <p className="ds-note">
             No WhatsApp Web não existe cabeçalho, rodapé nem botão: tudo vai no texto. Links podem ir direto no corpo (o WhatsApp deixa clicável).
@@ -247,7 +247,7 @@ export function MensagemWebEditorPage() {
           </FormStack>
         </Card>
 
-        <Card className="ad-template-novo-layout__preview">
+        <Card className="oa-template-novo-layout__preview">
           <PreviewMensagemWeb corpo={corpo} dica={versoes.length > 1 ? `Prévia da versão ${ativa + 1} de ${versoes.length} (com dados de exemplo).` : undefined} />
         </Card>
       </div>

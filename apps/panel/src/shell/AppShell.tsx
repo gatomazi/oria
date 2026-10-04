@@ -48,7 +48,7 @@ function useNavGroupsComParcerias(): NavGroup[] {
   );
 }
 
-function navIcon(key: string, className = 'ad-nav__icon') {
+function navIcon(key: string, className = 'oa-nav__icon') {
   const inner = NAV_ICON_PATHS[key];
   if (!inner) return null;
   return (
@@ -72,10 +72,10 @@ function navIcon(key: string, className = 'ad-nav__icon') {
 function NavLink({ item, activeKey, reduzida }: { item: NavItem; activeKey: string; reduzida?: boolean }) {
   const ativo = item.key === activeKey;
   const link = (
-    <Link to={item.href ?? '#'} className={'ad-nav__item' + (ativo ? ' ad-nav__item--active' : '')} aria-current={ativo ? 'page' : undefined}>
-      {navIcon(item.key) ?? <span className="ad-nav__icon ad-nav__icon--inicial" aria-hidden="true">{item.label.slice(0, 1)}</span>}
+    <Link to={item.href ?? '#'} className={'oa-nav__item' + (ativo ? ' oa-nav__item--active' : '')} aria-current={ativo ? 'page' : undefined}>
+      {navIcon(item.key) ?? <span className="oa-nav__icon oa-nav__icon--inicial" aria-hidden="true">{item.label.slice(0, 1)}</span>}
       {/* Reduzida: o rótulo sai da tela mas continua sendo o nome acessível do link. */}
-      <span className="ad-nav__label">{item.label}</span>
+      <span className="oa-nav__label">{item.label}</span>
     </Link>
   );
   // Sidebar reduzida (só ícones): o nome aparece em tooltip ao passar o mouse OU focar pelo teclado.
@@ -139,7 +139,7 @@ function WorkspaceSelect() {
   if (memberships.length < 2 || !organizacaoAtiva) return null;
   return (
     <Select
-      className="ad-scope"
+      className="oa-scope"
       controlSize="sm"
       aria-label="Loja em que você está trabalhando"
       value={organizacaoAtiva.id}
@@ -200,15 +200,15 @@ function StoreMenu({
   return (
     <RadixDropdown.Root>
       <RadixDropdown.Trigger asChild>
-        <button type="button" className="ad-store-menu" aria-label={rotulo} title={rotulo}>
-          <span className="ad-store-menu__avatar" aria-hidden="true">
+        <button type="button" className="oa-store-menu" aria-label={rotulo} title={rotulo}>
+          <span className="oa-store-menu__avatar" aria-hidden="true">
             {initials(usuario || nome)}
           </span>
           <Icon name="chevron-down" />
         </button>
       </RadixDropdown.Trigger>
       <RadixDropdown.Portal>
-        <RadixDropdown.Content className="ds-dropdown ad-store-menu__content" align="end" sideOffset={6} collisionPadding={8}>
+        <RadixDropdown.Content className="ds-dropdown oa-store-menu__content" align="end" sideOffset={6} collisionPadding={8}>
           <RadixDropdown.Label className="ds-dropdown__label">
             <strong>{nome}</strong>
             {plano && <span>{plano}</span>}
@@ -244,7 +244,7 @@ function Breadcrumb({ info }: { info: RouteInfo }) {
   if (info.parent) crumbs.push({ label: info.parent.label, to: info.parent.href });
   crumbs.push({ label: info.title });
   return (
-    <nav className="ad-breadcrumb" aria-label="Você está em">
+    <nav className="oa-breadcrumb" aria-label="Você está em">
       <ol>
         {crumbs.map((c, i) => {
           const ultimo = i === crumbs.length - 1;
@@ -337,26 +337,26 @@ export function AppShell({ children }: { children: ReactNode }) {
     .filter((g) => g.items.length > 0);
 
   return (
-    <div className={'ad-shell' + (navOpen ? ' ad-shell--nav-open' : '') + (prefs.colapsada ? ' ad-shell--nav-reduzida' : '')}>
-      <aside className="ad-sidebar" id="ad-sidebar" aria-label="Navegação principal">
-        <div className="ad-sidebar__brand">
+    <div className={'oa-shell' + (navOpen ? ' oa-shell--nav-open' : '') + (prefs.colapsada ? ' oa-shell--nav-reduzida' : '')}>
+      <aside className="oa-sidebar" id="oa-sidebar" aria-label="Navegação principal">
+        <div className="oa-sidebar__brand">
           {/* Símbolo oficial do Oria (mesmo arquivo público do site e do favicon), sem redesenho. Decorativo: o nome vem do texto ao lado,
               que na sidebar reduzida fica só para leitores de tela e aparece em tooltip. */}
           {reduzida ? (
             <Tooltip content={nomeProduto} side="right">
-              <img className="ad-sidebar__logo" src={SIMBOLO_ORIA} alt="" width={35} height={28} />
+              <img className="oa-sidebar__logo" src={SIMBOLO_ORIA} alt="" width={35} height={28} />
             </Tooltip>
           ) : (
-            <img className="ad-sidebar__logo" src={SIMBOLO_ORIA} alt="" width={35} height={28} />
+            <img className="oa-sidebar__logo" src={SIMBOLO_ORIA} alt="" width={35} height={28} />
           )}
-          <div className="ad-sidebar__brand-text">
-            <div className="ad-sidebar__brand-nome">{settings ? nomeProduto : <Skeleton rows={1} height="14px" width="120px" />}</div>
-            <div className="ad-sidebar__brand-tagline">Central operacional</div>
+          <div className="oa-sidebar__brand-text">
+            <div className="oa-sidebar__brand-nome">{settings ? nomeProduto : <Skeleton rows={1} height="14px" width="120px" />}</div>
+            <div className="oa-sidebar__brand-tagline">Central operacional</div>
           </div>
           <button
             ref={closeBtnRef}
             type="button"
-            className="ds-icon-btn ad-sidebar__close"
+            className="ds-icon-btn oa-sidebar__close"
             aria-label="Fechar menu de navegação"
             onClick={() => {
               devolverFoco.current = true;
@@ -366,7 +366,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Icon name="close" size={18} />
           </button>
         </div>
-        <nav className="ad-nav">
+        <nav className="oa-nav">
           {NAV_TOP.map((item) => (
             <NavLink key={item.key} item={item} activeKey={routeInfo.activeKey} reduzida={reduzida} />
           ))}
@@ -376,12 +376,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             const aberto = grupoAberto(prefs, group.label);
             const visiveis = itensVisiveis(group.items, aberto, routeInfo.activeKey, reduzida);
             return (
-              <div key={group.label} className="ad-nav__group" role="group" aria-labelledby={labelId}>
-                <div className="ad-nav__group-label" id={labelId}>
+              <div key={group.label} className="oa-nav__group" role="group" aria-labelledby={labelId}>
+                <div className="oa-nav__group-label" id={labelId}>
                   {/* Grupo recolhível: mostra só a página atual quando fechado (a pessoa nunca perde onde está). */}
                   <button
                     type="button"
-                    className="ad-nav__group-toggle"
+                    className="oa-nav__group-toggle"
                     aria-expanded={aberto}
                     aria-controls={listaId}
                     onClick={() => setPrefs((p) => alternarGrupo(p, group.label))}
@@ -390,7 +390,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <Icon name="chevron-down" size={14} />
                   </button>
                 </div>
-                <div id={listaId} className="ad-nav__group-items" hidden={visiveis.length === 0}>
+                <div id={listaId} className="oa-nav__group-items" hidden={visiveis.length === 0}>
                   {visiveis.map((item) => (
                     <NavLink key={item.key} item={item} activeKey={routeInfo.activeKey} reduzida={reduzida} />
                   ))}
@@ -399,14 +399,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="ad-sidebar__footer">
+        <div className="oa-sidebar__footer">
           <Tooltip content={prefs.colapsada ? 'Expandir menu lateral' : 'Recolher menu lateral'} side="right">
             <button
               type="button"
-              className="ds-icon-btn ad-sidebar__collapse"
+              className="ds-icon-btn oa-sidebar__collapse"
               aria-label={prefs.colapsada ? 'Expandir menu lateral' : 'Recolher menu lateral'}
               aria-expanded={!prefs.colapsada}
-              aria-controls="ad-sidebar"
+              aria-controls="oa-sidebar"
               onClick={() => setPrefs(alternarColapso)}
             >
               <Icon name={prefs.colapsada ? 'chevron-right' : 'chevron-left'} size={18} />
@@ -415,24 +415,24 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="ad-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />
+      <div className="oa-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />
 
-      <div className="ad-main" ref={mainRef}>
-        <header className="ad-topbar">
-          <div className="ad-topbar__inner">
+      <div className="oa-main" ref={mainRef}>
+        <header className="oa-topbar">
+          <div className="oa-topbar__inner">
             <button
               ref={menuBtnRef}
               type="button"
-              className="ds-icon-btn ad-topbar__menu"
+              className="ds-icon-btn oa-topbar__menu"
               aria-label="Abrir menu de navegação"
-              aria-controls="ad-sidebar"
+              aria-controls="oa-sidebar"
               aria-expanded={navOpen}
               onClick={() => setNavOpen(true)}
             >
               <Icon name="menu" size={20} />
             </button>
             <Breadcrumb info={routeInfo} />
-            <div className="ad-topbar__actions">
+            <div className="oa-topbar__actions">
               <WorkspaceSelect />
               {settings && <StoreMenu
                   nome={organizacaoAtiva?.nome || nomeProduto}
@@ -444,15 +444,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="ad-content" id="ad-content">
-          <div className="ad-content__inner">
+        <main className="oa-content" id="oa-content">
+          <div className="oa-content__inner">
             {settings ? (
               <>
                 {whatsappProvider === 'whatsapp_web' && <AlertaAppWhatsapp />}
                 {children}
               </>
             ) : (
-              <div className="ad-shell-skeleton">
+              <div className="oa-shell-skeleton">
                 <Skeleton rows={1} height="28px" width="240px" />
                 <Skeleton rows={3} />
               </div>

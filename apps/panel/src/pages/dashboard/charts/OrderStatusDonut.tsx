@@ -8,8 +8,8 @@ export function OrderStatusDonut({ dados }: { dados: StatusPoint[] }) {
   const comDado = dados.filter((d) => d.count > 0);
 
   return (
-    <div className="ad-donut">
-      <div className="ad-donut__chart" role="img" aria-label={`${total} pedidos por estágio: ${comDado.map((d) => `${d.label} ${d.count}`).join(', ')}`}>
+    <div className="oa-donut">
+      <div className="oa-donut__chart" role="img" aria-label={`${total} pedidos por estágio: ${comDado.map((d) => `${d.label} ${d.count}`).join(', ')}`}>
         <ResponsiveContainer width="100%" height={168}>
           <PieChart>
             <Pie data={comDado} dataKey="count" nameKey="label" innerRadius={52} outerRadius={74} paddingAngle={comDado.length > 1 ? 2 : 0} stroke="none" isAnimationActive={false}>
@@ -19,17 +19,17 @@ export function OrderStatusDonut({ dados }: { dados: StatusPoint[] }) {
             </Pie>
           </PieChart>
         </ResponsiveContainer>
-        <div className="ad-donut__centro">
+        <div className="oa-donut__centro">
           <strong>{total.toLocaleString('pt-BR')}</strong>
           <span>{total === 1 ? 'pedido' : 'pedidos'}</span>
         </div>
       </div>
-      <ul className="ad-donut__legenda">
+      <ul className="oa-donut__legenda">
         {comDado.map((d) => (
           <li key={d.status}>
-            <span className="ad-donut__dot" style={{ background: d.color, opacity: d.opacidade }} />
-            <span className="ad-donut__label">{d.label}</span>
-            <span className="ad-donut__valor">
+            <span className="oa-donut__dot" style={{ background: d.color, opacity: d.opacidade }} />
+            <span className="oa-donut__label">{d.label}</span>
+            <span className="oa-donut__valor">
               {d.count} <em>{Math.round((d.count / total) * 100)}%</em>
             </span>
           </li>

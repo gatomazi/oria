@@ -18,17 +18,17 @@ export function InserirVariaveis({
 }) {
   useGruposVariaveis();
   return (
-    <div className="ad-template-referencia">
+    <div className="oa-template-referencia">
       <div className="pa-field-hint">{dica}</div>
-      <div className="ad-template-referencia__corpo">
+      <div className="oa-template-referencia__corpo">
         {(grupos ?? gruposParaTipo(tipo)).map((g) => (
-          <div key={g.grupo} className="ad-template-referencia__grupo">
+          <div key={g.grupo} className="oa-template-referencia__grupo">
             <strong>{g.grupo}</strong>
-            <div className="ad-template-referencia__lista">
+            <div className="oa-template-referencia__lista">
               {g.itens.map((v) => (
-                <button key={v.chave} type="button" className="ad-var-btn" onClick={() => aoClicar(v.chave)}>
-                  <span className="ad-var-btn__label">{v.label}</span>
-                  <span className="ad-var-btn__exemplo">ex: {v.exemplo}</span>
+                <button key={v.chave} type="button" className="oa-var-btn" onClick={() => aoClicar(v.chave)}>
+                  <span className="oa-var-btn__label">{v.label}</span>
+                  <span className="oa-var-btn__exemplo">ex: {v.exemplo}</span>
                 </button>
               ))}
             </div>
