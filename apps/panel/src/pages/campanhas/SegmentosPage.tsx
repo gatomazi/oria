@@ -34,7 +34,7 @@ function SegmentoForm({
   );
 
   return (
-    <div className="ad-segmento-form">
+    <div className="oa-segmento-form">
       <Field label="Nome do segmento">
         <Input type="text" placeholder="ex: Clientes inativos 90 dias" value={nome} onChange={(e) => setNome(e.target.value)} />
       </Field>

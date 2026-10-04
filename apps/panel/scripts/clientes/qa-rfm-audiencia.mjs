@@ -53,9 +53,9 @@ try {
     };
     // A prévia é recalculada com debounce quando a página termina de carregar: espera o texto final, estável (sem "Calculando…").
     const previaPronta = async () => {
-      await page.waitForFunction(() => { const t = document.querySelector('.ad-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
+      await page.waitForFunction(() => { const t = document.querySelector('.oa-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
       await page.waitForTimeout(900);
-      await page.waitForFunction(() => { const t = document.querySelector('.ad-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
+      await page.waitForFunction(() => { const t = document.querySelector('.oa-segmento-preview')?.innerText || ''; return /calculado agora/.test(t) && !/Calculando/.test(t); });
     };
     const previa = async (filtros) => (await ctx.request.post(`${BASE}/api/admin/campaigns/audience/preview`, {
       data: { match: 'ALL', filters: filtros, exclusions: { semOptIn: true, numeroInvalido: true } }, headers: { 'X-CSRF-Token': csrf },
@@ -74,7 +74,7 @@ try {
       const id = new URL(page.url()).searchParams.get('segmento');
       await page.waitForFunction(() => document.querySelector('input[type="text"]')?.value.startsWith('RFM · '));
       await clicar(page.getByRole('button', { name: 'Avançar' }));
-      await page.waitForSelector('.ad-rfm-card');
+      await page.waitForSelector('.oa-rfm-card');
       await previaPronta();
       return id;
     }
@@ -83,10 +83,10 @@ try {
     const salvo1 = await segmentoSalvo(id1);
     const api1 = await previa(salvo1.filtros);
     const seg1 = resumo.rfm.segmentos.find((s) => s.id === 'aguardando_recompra');
-    const cartao1 = await page.locator('.ad-rfm-card').innerText();
+    const cartao1 = await page.locator('.oa-rfm-card').innerText();
     ok('Audiência: cartão obrigatório com a regra do segmento clicado (46 a 90 dias)', /Segmento RFM: Aguardando recompra/.test(cartao1) && /entre 46 e 90 dias/.test(cartao1) && /Condição obrigatória/.test(cartao1), cartao1.replace(/\s+/g, ' ').slice(0, 130));
     ok('população da Audiência = segmento da matriz (igualdade exata)', api1.matched === seg1.clientes && api1.rfm.universos.segmento === seg1.clientes, `Audiência ${api1.matched} × matriz ${seg1.clientes}`);
-    const texto1 = await page.locator('.ad-segmento-preview').innerText();
+    const texto1 = await page.locator('.oa-segmento-preview').innerText();
     const m1 = texto1.match(/(\d[\d.]*)\s+clientes? eleg[ií]veis?\s+—\s+(\d[\d.]*)\s+no segmento,\s+(\d[\d.]*)\s+exclu[ií]dos?/i);
     ok('contagem exibida = prévia do servidor', m1 && Number(m1[1].replace(/\./g, '')) === api1.eligible && Number(m1[2].replace(/\./g, '')) === api1.matched && Number(m1[3].replace(/\./g, '')) === api1.excluded, m1 ? m1.slice(1).join('/') : texto1.slice(0, 80));
     ok('a prévia declara universos (com pedido ⊃ compradores válidos ⊃ segmento), asOf e regra', /pessoas? no segmento RFM/.test(texto1) && /compradores? v[aá]lidos?/.test(texto1) && /pessoas? com pedido/.test(texto1) && /calculado agora/.test(texto1) && texto1.includes(api1.rfm.regraVersao));
@@ -95,7 +95,7 @@ try {
     await semRolagem('Audiência');
     if (AXE) {
       await page.addScriptTag({ path: AXE });
-      const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('#ad-content') || document.body)).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
+      const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('#oa-content') || document.body)).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
       ok('axe-core na Audiência: nenhuma violação serious/critical', viol.length === 0, viol.join(', '));
     }
 
@@ -110,7 +110,7 @@ try {
     await page.waitForTimeout(500);
     await page.getByRole('checkbox', { name: 'Sem opt-in de marketing' }).check(); //  volta à config B (rápida) antes de A responder
     await page.waitForTimeout(2600);
-    const texto2 = await page.locator('.ad-segmento-preview').innerText();
+    const texto2 = await page.locator('.oa-segmento-preview').innerText();
     const m2 = texto2.match(/(\d[\d.]*)\s+clientes? eleg[ií]veis?/i);
     ok('resposta lenta de uma configuração antiga não sobrescreve a atual', m2 && Number(m2[1].replace(/\./g, '')) === api1.eligible, m2 ? m2[1] : texto2.slice(0, 60));
     await page.unroute('**/api/admin/campaigns/audience/preview');
@@ -120,11 +120,11 @@ try {
     page.on('request', (r) => { if (r.url().includes('/audience/preview')) chamadasPrevia += 1; });
     const antes = chamadasPrevia;
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Avançar' })); // Template → Conteúdo/Mensagem → Revisão
-    await page.waitForFunction(() => /Revisão|Resumo|Audiência/.test(document.body.innerText) && document.querySelector('.ad-revisao'));
-    await page.waitForFunction(() => /no segmento/.test(document.querySelector('.ad-revisao')?.innerText || ''));
+    await page.waitForFunction(() => /Revisão|Resumo|Audiência/.test(document.body.innerText) && document.querySelector('.oa-revisao'));
+    await page.waitForFunction(() => /no segmento/.test(document.querySelector('.oa-revisao')?.innerText || ''));
     ok('Revisão: a audiência foi RECALCULADA ao entrar (nova chamada de prévia)', chamadasPrevia > antes, `+${chamadasPrevia - antes} chamada(s)`);
     await page.waitForFunction(() => /calculado agora/.test(document.querySelector('.tn-form')?.innerText || '')); // o detalhe da Revisão chega junto com o "ok" da reavaliação
-    const rev = await page.locator('.ad-revisao').innerText();
+    const rev = await page.locator('.oa-revisao').innerText();
     ok('Revisão mostra a mesma contagem do servidor, com "no segmento" e a regra', new RegExp(`${api1.matched} no segmento`).test(rev) && /calculado agora/.test(await page.locator('.tn-form').innerText()), rev.replace(/\s+/g, ' ').slice(0, 140));
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-02-revisao.png`), fullPage: true });
     await semRolagem('Revisão');
@@ -134,13 +134,13 @@ try {
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Voltar' })); // Revisão → Conteúdo → Template → Audiência
     await page.getByRole('checkbox', { name: 'Números inválidos/sem telefone' }).uncheck(); // muda a configuração → nova prévia (409)
     await page.waitForSelector('[role="alert"]');
-    const textoErro = await page.locator('.ad-segmento-preview').innerText();
+    const textoErro = await page.locator('.oa-segmento-preview').innerText();
     ok('erro da prévia (409): mensagem acionável e NENHUMA contagem exibida', /regra RFM mudou/.test(textoErro) && !/clientes? eleg/i.test(textoErro), textoErro.replace(/\s+/g, ' ').slice(0, 150));
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-03-erro-previa.png`), fullPage: true });
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Avançar' }));
-    await page.waitForSelector('.ad-revisao');
+    await page.waitForSelector('.oa-revisao');
     await page.waitForSelector('.tn-form [role="alert"]');
-    ok('Revisão com prévia em erro: alerta verdadeiro e "Calculando…"/contagem NÃO aparece como se estivesse pronta', /Não foi possível calcular a audiência/.test(await page.locator('.ad-revisao').innerText()) && /bloqueado/.test(await page.locator('.tn-form [role="alert"]').innerText()));
+    ok('Revisão com prévia em erro: alerta verdadeiro e "Calculando…"/contagem NÃO aparece como se estivesse pronta', /Não foi possível calcular a audiência/.test(await page.locator('.oa-revisao').innerText()) && /bloqueado/.test(await page.locator('.tn-form [role="alert"]').innerText()));
     await page.locator('input[type="datetime-local"]').fill('2030-01-01T10:00');
     ok('"Agendar campanha" fica desabilitado enquanto a audiência não pode ser calculada', await page.getByRole('button', { name: 'Agendar campanha' }).isDisabled());
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-04-revisao-erro.png`), fullPage: true });
@@ -148,16 +148,16 @@ try {
 
     // ── 4. Trocar de segmento: a Audiência mostra a regra NOVA, nunca a anterior ──────────────────────
     const id2 = await irParaAudiencia('Novos');
-    const cartao2 = await page.locator('.ad-rfm-card').innerText();
+    const cartao2 = await page.locator('.oa-rfm-card').innerText();
     ok('outro segmento (Novos): cartão com a regra de Novos e nada de "46 e 90"', id2 !== id1 && /Segmento RFM: Novos/.test(cartao2) && /até 45 dias/.test(cartao2) && !/46 e 90/.test(cartao2), cartao2.replace(/\s+/g, ' ').slice(0, 110));
-    const texto3 = await page.locator('.ad-segmento-preview').innerText();
+    const texto3 = await page.locator('.oa-segmento-preview').innerText();
     const seg2 = resumo.rfm.segmentos.find((s) => s.id === 'novos');
     ok('contagem de Novos = matriz (sem resquício do segmento anterior)', new RegExp(`${seg2.clientes} no segmento`).test(texto3), texto3.replace(/\s+/g, ' ').slice(0, 100));
 
     // ── 5. "Montar filtros manualmente" depois de um segmento RFM ─────────────────────────────────────
-    await page.locator('.ad-segmento-form').locator('xpath=ancestor::div[contains(@class,"tn-form")]').first().locator('select').first().selectOption('');
+    await page.locator('.oa-segmento-form').locator('xpath=ancestor::div[contains(@class,"tn-form")]').first().locator('select').first().selectOption('');
     await page.waitForTimeout(700);
-    ok('"Montar filtros manualmente" remove a condição RFM (não fica oculta atrás do seletor) e NÃO vira "todos os clientes"', (await page.locator('.ad-rfm-card').count()) === 0 && (await page.locator('.ad-todos-card').count()) === 1 && !(await page.locator('.ad-todos-card input[type="checkbox"]').isChecked()));
+    ok('"Montar filtros manualmente" remove a condição RFM (não fica oculta atrás do seletor) e NÃO vira "todos os clientes"', (await page.locator('.oa-rfm-card').count()) === 0 && (await page.locator('.oa-todos-card').count()) === 1 && !(await page.locator('.oa-todos-card input[type="checkbox"]').isChecked()));
 
     ok('sem erro de JavaScript', erros.length === 0, erros.slice(0, 2).join(' | '));
     const camps = await (await ctx.request.get(`${BASE}/api/admin/campaigns`)).json();

@@ -29,13 +29,13 @@ export function WorkspacePage() {
   }
 
   return (
-    <div className="ad-login-root">
-      <main className="ad-login">
-        <section className="ad-login__panel" aria-labelledby="ad-workspace-titulo">
-          <h1 id="ad-workspace-titulo" className="ad-login__title">Suas lojas</h1>
-          <p className="ad-workspace__texto">{mensagem}</p>
+    <div className="oa-login-root">
+      <main className="oa-login">
+        <section className="oa-login__panel" aria-labelledby="oa-workspace-titulo">
+          <h1 id="oa-workspace-titulo" className="oa-login__title">Suas lojas</h1>
+          <p className="oa-workspace__texto">{mensagem}</p>
           {podeEscolher && (
-            <ul className="ad-workspace__lista">
+            <ul className="oa-workspace__lista">
               {memberships.map((m) => (
                 <li key={m.organizationId}>
                   <Button
@@ -45,13 +45,13 @@ export function WorkspacePage() {
                     onClick={() => escolher(m.organizationId)}
                   >
                     {m.nome}
-                    <span className="ad-workspace__papel">{m.papel === 'owner' ? 'Responsável' : 'Equipe'}</span>
+                    <span className="oa-workspace__papel">{m.papel === 'owner' ? 'Responsável' : 'Equipe'}</span>
                   </Button>
                 </li>
               ))}
             </ul>
           )}
-          <p className="ad-login__erro" role="alert">{erro}</p>
+          <p className="oa-login__erro" role="alert">{erro}</p>
           <Button variant="ghost" block onClick={() => { logout(); }}>
             Sair{usuario ? ` (${usuario.email})` : ''}
           </Button>

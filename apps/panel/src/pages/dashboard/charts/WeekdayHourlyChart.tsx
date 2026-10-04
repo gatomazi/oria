@@ -18,7 +18,7 @@ export function WeekdayHourlyChart({ dados }: { dados: Ponto[] }) {
           cursor={{ fill: CHART.cursor }}
           content={({ active, payload, label }) =>
             active && payload && payload.length ? (
-              <div className="ad-chart-tooltip">
+              <div className="oa-chart-tooltip">
                 <strong>{label}</strong>
                 <div>{plural(Number(payload[0]?.value ?? 0), 'pedido', 'pedidos')}</div>
               </div>

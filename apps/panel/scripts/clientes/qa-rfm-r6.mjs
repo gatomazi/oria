@@ -48,54 +48,54 @@ try {
     let previas = 0;
     page.on('request', (r) => { if (r.url().includes('/audience/preview')) previas += 1; });
     const semRolagem = async (r) => { const m = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth })); ok(`sem rolagem horizontal (${r})`, m.sw <= m.cw + 1, `${m.sw}/${m.cw}`); };
-    const previaTexto = () => page.locator('.ad-segmento-preview').innerText();
+    const previaTexto = () => page.locator('.oa-segmento-preview').innerText();
 
     // ── 1. audiência sem condição: NÃO é "todos os clientes" ─────────────────────────────────────────
     await page.goto(`${BASE}/admin/campanhas/nova`, { waitUntil: 'networkidle' });
     await page.locator('input[type="text"]').first().fill('QA Rodada 6 (não salvar)');
     await clicar(page.getByRole('button', { name: 'Avançar' }));
-    await page.waitForSelector('.ad-todos-card');
+    await page.waitForSelector('.oa-todos-card');
     const antes = previas;
     await page.waitForTimeout(900);
     ok('sem condição: nenhuma prévia é pedida e nenhuma contagem aparece', previas === antes && !/eleg[ií]veis?/.test(await previaTexto()) && !/Calculando/.test(await previaTexto()));
-    ok('"todos os clientes" começa DESMARCADO, com a explicação de que lista vazia não é "todos"', !(await page.locator('.ad-todos-card input[type="checkbox"]').isChecked()) && /nunca vira "todos os clientes"/.test(await page.locator('.ad-todos-card').innerText()));
+    ok('"todos os clientes" começa DESMARCADO, com a explicação de que lista vazia não é "todos"', !(await page.locator('.oa-todos-card input[type="checkbox"]').isChecked()) && /nunca vira "todos os clientes"/.test(await page.locator('.oa-todos-card').innerText()));
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-01-sem-condicao.png`), fullPage: true });
     await semRolagem('sem condição');
 
     // ── 2. Revisão com audiência incompleta: erro verdadeiro, envio/agendamento bloqueados ───────────
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Avançar' }));
     await page.waitForSelector('.tn-form [role="alert"]');
-    const revisao = await page.locator('.ad-revisao').innerText();
+    const revisao = await page.locator('.oa-revisao').innerText();
     ok('Revisão sem condição: "Não foi possível calcular a audiência" + causa (AUDIENCIA_SEM_FILTRO) e bloqueio', /Não foi possível calcular a audiência/.test(revisao) && /nenhuma condição/i.test(await page.locator('.tn-form [role="alert"]').innerText()) && /bloqueado/.test(await page.locator('.tn-form [role="alert"]').innerText()));
     await page.locator('input[type="datetime-local"]').fill('2030-01-01T10:00');
     ok('"Agendar campanha" e "Enviar agora" desabilitados', (await page.getByRole('button', { name: 'Agendar campanha' }).isDisabled()) && (await page.getByRole('button', { name: 'Enviar agora' }).isDisabled()));
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-02-revisao-sem-condicao.png`), fullPage: true });
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Voltar' }));
-    await page.waitForSelector('.ad-todos-card');
+    await page.waitForSelector('.oa-todos-card');
 
     // ── 3. "todos os clientes" só quando marcado; depois adicionar condição o desmarca ────────────────
-    await clicar(page.locator('.ad-todos-card input[type="checkbox"]'));
-    await page.waitForFunction(() => /eleg[ií]veis?/.test(document.querySelector('.ad-segmento-preview')?.innerText || ''));
+    await clicar(page.locator('.oa-todos-card input[type="checkbox"]'));
+    await page.waitForFunction(() => /eleg[ií]veis?/.test(document.querySelector('.oa-segmento-preview')?.innerText || ''));
     const todos = await previaTexto();
     ok('"todos" explícito: prévia calculada, com as exclusões comerciais valendo', /clientes? eleg[ií]veis?/.test(todos) && /Excluídos por contato/.test(todos), todos.replace(/\s+/g, ' ').slice(0, 130));
     await clicar(page.getByRole('button', { name: '+ Adicionar filtro' }));
-    ok('adicionar uma condição desfaz o "todos" (cartão some, sem ambiguidade)', (await page.locator('.ad-todos-card').count()) === 0 && (await page.locator('[aria-label="Campo do filtro"]').count()) === 1);
+    ok('adicionar uma condição desfaz o "todos" (cartão some, sem ambiguidade)', (await page.locator('.oa-todos-card').count()) === 0 && (await page.locator('[aria-label="Campo do filtro"]').count()) === 1);
 
     // ── 4. linha incompleta NÃO é descartada: erro do servidor, sem contagem ──────────────────────────
-    await page.waitForSelector('.ad-segmento-preview [role="alert"]');
+    await page.waitForSelector('.oa-segmento-preview [role="alert"]');
     const incompleto = await previaTexto();
     ok('condição incompleta: erro acionável do servidor, nenhuma contagem (a linha não foi descartada)', /condição 1/.test(incompleto) && /número/.test(incompleto) && !/clientes? eleg/i.test(incompleto), incompleto.replace(/\s+/g, ' ').slice(0, 160));
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-03-linha-incompleta.png`), fullPage: true });
     await page.getByPlaceholder('valor').fill('45');
-    await page.waitForFunction(() => /clientes? eleg[ií]veis?/.test(document.querySelector('.ad-segmento-preview')?.innerText || ''));
+    await page.waitForFunction(() => /clientes? eleg[ií]veis?/.test(document.querySelector('.oa-segmento-preview')?.innerText || ''));
     ok('recuperação: ao completar a condição a prévia volta', /clientes? eleg[ií]veis?/.test(await previaTexto()));
     // UF inválida (a lista só oferece UFs válidas; o campo de valor de texto não existe para uf) — campo de campanha vazio:
     await page.locator('[aria-label="Campo do filtro"]').selectOption('recebeuCampanha');
-    await page.waitForSelector('.ad-segmento-preview [role="alert"]');
+    await page.waitForSelector('.oa-segmento-preview [role="alert"]');
     ok('"recebeu a campanha" sem id: erro do servidor (campanhaId), nunca ignorado', /campanhaId/.test(await previaTexto()));
     if (AXE) {
       await page.addScriptTag({ path: AXE });
-      const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('#ad-content') || document.body)).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
+      const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('#oa-content') || document.body)).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
       ok('axe-core: nenhuma violação serious/critical', viol.length === 0, viol.join(', '));
     }
 
@@ -126,22 +126,22 @@ try {
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-04-segmento-aproximado.png`), fullPage: true });
     await semRolagem('segmento aproximado');
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Avançar' }));
-    await page.waitForSelector('.ad-revisao');
+    await page.waitForSelector('.oa-revisao');
     await page.locator('input[type="datetime-local"]').fill('2030-01-01T10:00');
     ok('Revisão do segmento aproximado NÃO confirmado: "Agendar campanha" bloqueado', await page.getByRole('button', { name: 'Agendar campanha' }).isDisabled());
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Voltar' }));
     await clicar(page.getByRole('checkbox', { name: /Entendo que o público é aproximado/ }));
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Avançar' }));
-    await page.waitForFunction(() => /no segmento|encontrados/.test(document.querySelector('.ad-revisao')?.innerText || ''));
+    await page.waitForFunction(() => /no segmento|encontrados/.test(document.querySelector('.oa-revisao')?.innerText || ''));
     await page.locator('input[type="datetime-local"]').fill('2030-01-01T10:00');
     ok('depois de confirmar explicitamente, a Revisão calcula e libera "Agendar campanha" (NÃO clicado)', !(await page.getByRole('button', { name: 'Agendar campanha' }).isDisabled()));
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-05-aproximado-confirmado-revisao.png`), fullPage: true });
     for (let i = 0; i < 3; i += 1) await clicar(page.getByRole('button', { name: 'Voltar' }));
     await clicar(page.getByRole('button', { name: 'Recriar na avaliação exata' }));
     await page.waitForURL(/\/admin\/campanhas\/nova\?segmento=\d+/);
-    await page.waitForSelector('.ad-rfm-card'); // já estamos na etapa Audiência: a página recarrega os segmentos e aplica o novo
+    await page.waitForSelector('.oa-rfm-card'); // já estamos na etapa Audiência: a página recarrega os segmentos e aplica o novo
     await page.waitForFunction(() => !document.body.innerText.includes('avaliação aproximada'), null, { timeout: 8000 }).catch(() => {});
-    const nRfm = await page.locator('.ad-rfm-card').count();
+    const nRfm = await page.locator('.oa-rfm-card').count();
     const nAprox = await page.locator('.ds-callout:has-text("avaliação aproximada")').count();
     ok('"Recriar na avaliação exata": novo segmento com o cartão RFM exato e sem aviso de aproximação', nRfm === 1 && nAprox === 0, `cartão RFM ${nRfm}, avisos de aproximação ${nAprox}`);
 

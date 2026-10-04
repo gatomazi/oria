@@ -186,7 +186,7 @@ try {
     ok('a visão escolhida (Visual) é lembrada ao recarregar', (await page.locator('.rfmv-mapa').count()) === 1);
     if (AXE) {
       await page.addScriptTag({ path: AXE });
-      const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('#ad-content') || document.body)).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
+      const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('#oa-content') || document.body)).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
       ok('axe-core: nenhuma violação serious/critical (Visual)', viol.length === 0, viol.join(', '));
     }
     ok('sem erro de JavaScript', erros.length === 0, erros.slice(0, 2).join(' | '));

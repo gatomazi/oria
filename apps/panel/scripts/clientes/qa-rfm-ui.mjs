@@ -100,7 +100,7 @@ async function axeRun(page) {
   if (!AXE) return null;
   await page.addScriptTag({ path: AXE });
   return page.evaluate(async () => {
-    const r = await window.axe.run(document.querySelector('#ad-content') || document.body, { resultTypes: ['violations'] });
+    const r = await window.axe.run(document.querySelector('#oa-content') || document.body, { resultTypes: ['violations'] });
     return r.violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => ({ id: v.id, impacto: v.impact, nos: v.nodes.length, exemplo: (v.nodes[0]?.html || '').slice(0, 120) }));
   });
 }

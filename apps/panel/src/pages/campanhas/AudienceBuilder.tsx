@@ -152,7 +152,7 @@ function FiltroRow({ filtro, onChange, onRemove }: { filtro: FiltroForm; onChang
   const numerico = CAMPOS_NUMERICOS.includes(filtro.field);
   const booleano = CAMPOS_BOOLEANOS.includes(filtro.field);
   return (
-    <div className="ad-filtro-row">
+    <div className="oa-filtro-row">
       <select className="ds-select" aria-label="Campo do filtro" value={filtro.field} onChange={(e) => onChange({ ...filtroFormVazio(), field: e.target.value as AudienciaCampo })}>
         {Object.entries(CAMPO_LABEL).filter(([valor]) => valor !== 'rfm' && valor !== 'todosClientes').map(([valor, label]) => (
           <option key={valor} value={valor}>{label}</option>
@@ -239,16 +239,16 @@ export function AudienceBuilder({ loja, state, onChange, onPreview }: AudienceBu
   }, [loja, apiPayload.match, JSON.stringify(apiPayload.filtros), JSON.stringify(apiPayload.exclusoes)]);
 
   return (
-    <div className="ad-segmento-form">
+    <div className="oa-segmento-form">
       {state.rfm && <RfmFiltroCard filtro={state.rfm} preview={preview} />}
       {state.rfm && <AvisoCorteDaAudiencia preview={preview} />}
       {preview?.rfmAproximado && (
         <RfmAproximadoCard info={preview.rfmAproximado} confirmado={state.aproximadoConfirmado} onConfirmar={(v) => onChange({ ...state, aproximadoConfirmado: v })} />
       )}
       {!state.rfm && state.filtros.length === 0 && (
-        <div className="ad-todos-card">
+        <div className="oa-todos-card">
           <p className="pc-nota">Nenhuma condição definida: até você adicionar uma condição (ou escolher um segmento), a audiência fica vazia — ela nunca vira "todos os clientes" por padrão.</p>
-          <label className="ad-checkbox-row">
+          <label className="oa-checkbox-row">
             <input type="checkbox" checked={state.todosClientes} onChange={(e) => onChange({ ...state, todosClientes: e.target.checked })} />
             Usar todos os clientes com pedido (as exclusões abaixo continuam valendo)
           </label>
@@ -262,7 +262,7 @@ export function AudienceBuilder({ loja, state, onChange, onPreview }: AudienceBu
         </select>
       </Field>
 
-      <div className="ad-filtros-lista">
+      <div className="oa-filtros-lista">
         {state.filtros.map((f, i) => (
           <FiltroRow
             key={i}
@@ -276,12 +276,12 @@ export function AudienceBuilder({ loja, state, onChange, onPreview }: AudienceBu
         </Button>
       </div>
 
-      <Card title="Exclusões" className="ad-segmento-exclusoes">
-        <label className="ad-checkbox-row">
+      <Card title="Exclusões" className="oa-segmento-exclusoes">
+        <label className="oa-checkbox-row">
           <input type="checkbox" checked={state.semOptIn} onChange={(e) => onChange({ ...state, semOptIn: e.target.checked })} />
           Sem opt-in de marketing
         </label>
-        <label className="ad-checkbox-row">
+        <label className="oa-checkbox-row">
           <input type="checkbox" checked={state.numeroInvalido} onChange={(e) => onChange({ ...state, numeroInvalido: e.target.checked })} />
           Números inválidos/sem telefone
         </label>

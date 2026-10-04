@@ -22,10 +22,10 @@ export function LoginPage() {
   }
 
   return (
-    <div className="ad-login-root">
-      <main className="ad-login">
-        <form className="ad-login__panel" onSubmit={handleSubmit}>
-          <h1 className="ad-login__title">Admin · Oria</h1>
+    <div className="oa-login-root">
+      <main className="oa-login">
+        <form className="oa-login__panel" onSubmit={handleSubmit}>
+          <h1 className="oa-login__title">Admin · Oria</h1>
           <Field label="E-mail">
             <Input
               type="email"
@@ -46,7 +46,7 @@ export function LoginPage() {
           <Button type="submit" block disabled={loading}>
             Entrar
           </Button>
-          <p className="ad-login__erro" role="alert">
+          <p className="oa-login__erro" role="alert">
             {error}
           </p>
         </form>

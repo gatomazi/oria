@@ -68,11 +68,11 @@ export function CampoCard({ chave, campo, recarregar }: { chave: string; campo: 
 
   // Linha da lista "Campos existentes" (não é um card: a lista já está dentro de um — DESIGN.md › No Nesting).
   return (
-    <div className="ad-campo-item">
-      <div className="ad-vinculo-topo">
+    <div className="oa-campo-item">
+      <div className="oa-vinculo-topo">
         <strong>{campo.label}</strong>
         <StatusBadge tone="neutral" label={`custom.${chave}`} />
-        <Button variant="ghost" size="sm" className="ad-vinculo-topo__acao" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}>
+        <Button variant="ghost" size="sm" className="oa-vinculo-topo__acao" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}>
           {aberto ? 'Esconder' : 'Editar'}
         </Button>
       </div>

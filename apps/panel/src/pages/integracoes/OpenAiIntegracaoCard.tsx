@@ -63,7 +63,7 @@ export function OpenAiIntegracaoCard() {
       {!erro && !status && <Skeleton rows={2} />}
       {status && (
         <>
-          <div className="ad-integracao-item__topo">
+          <div className="oa-integracao-item__topo">
             {!habilitado ? (
               <StatusBadge tone="neutral" label="Gerador de criativos desligado" />
             ) : chaveInfo?.configured ? (

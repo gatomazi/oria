@@ -187,7 +187,7 @@ function EnvioEmLotesCard({ campanha, resumo, onAtualizar }: { campanha: Campanh
   return (
     <Card title="Envio em lotes">
       <div className="ds-stack">
-      <p className="ad-campanha-lotes__resumo">
+      <p className="oa-campanha-lotes__resumo">
         Liberados <strong>{liberados}</strong> de <strong>{resumo.destinatarios}</strong>
         {' · '}Aguardando liberação <strong>{resumo.aguardandoLiberacao}</strong>
         {resumo.naFila > 0 && (
@@ -199,10 +199,10 @@ function EnvioEmLotesCard({ campanha, resumo, onAtualizar }: { campanha: Campanh
       {aviso && <p className="ds-form-note">{aviso}</p>}
 
       {gerenciavel && (
-        <div className="ad-campanha-lotes__controles">
+        <div className="oa-campanha-lotes__controles">
           {resumo.aguardandoLiberacao > 0 && (
             <Field label="Tamanho do próximo lote" hint="Só esse número entra na fila; o restante continua aguardando.">
-              <div className="ad-campanha-lotes__liberar">
+              <div className="oa-campanha-lotes__liberar">
                 <Input
                   type="number"
                   min={1}
@@ -221,7 +221,7 @@ function EnvioEmLotesCard({ campanha, resumo, onAtualizar }: { campanha: Campanh
               </div>
             </Field>
           )}
-          <div className="ad-campanha-lotes__pausa">
+          <div className="oa-campanha-lotes__pausa">
             {EM_ANDAMENTO.has(campanha.status) && (
               <Button variant="secondary" disabled={acaoPendente} onClick={alternarPausa}>
                 {acaoPendente ? 'Pausando…' : 'Pausar envio'}
@@ -388,7 +388,7 @@ export function CampanhaDetalhePage() {
 
       {resumo.destinatarios > 0 && (
         <Card title="Funil">
-          <ol className="ad-funil">
+          <ol className="oa-funil">
             {[
               { label: 'Destinatários', valor: resumo.destinatarios },
               { label: 'Enviados', valor: resumo.enviados },
@@ -396,10 +396,10 @@ export function CampanhaDetalhePage() {
               { label: 'Lidos', valor: resumo.lidos },
               { label: 'Cliques', valor: resumo.cliques },
             ].map((etapa) => (
-              <li key={etapa.label} className="ad-funil__etapa">
-                <span className="ad-funil__rotulo">{etapa.label}</span>
+              <li key={etapa.label} className="oa-funil__etapa">
+                <span className="oa-funil__rotulo">{etapa.label}</span>
                 <ProgressBar value={etapa.valor} max={resumo.destinatarios || 0} label={etapa.label} tone="info" />
-                <span className="ad-funil__valor">{etapa.valor.toLocaleString('pt-BR')}</span>
+                <span className="oa-funil__valor">{etapa.valor.toLocaleString('pt-BR')}</span>
               </li>
             ))}
           </ol>

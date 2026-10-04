@@ -1,5 +1,5 @@
 // DOM direto (não React), pra manter o mesmo comportamento de sempre (empilha no <body>, some
-// sozinho em 8s) sem precisar de um Provider. Visual em admin-shell.css (.ad-toast*): superfície
+// sozinho em 8s) sem precisar de um Provider. Visual em admin-shell.css (.oa-toast*): superfície
 // elevada + ícone semântico. Política de uso em api/client.ts: toast é pra resultado de ação, não
 // pra falha de carregamento.
 export type ToastTipo = 'erro' | 'sucesso';
@@ -39,7 +39,7 @@ export function toast(mensagem: string, tipo: ToastTipo = 'erro'): void {
   // espera o React pintar o catch() e só avisa se a mensagem não estiver visível na tela.
   if (tipo === 'erro') {
     window.setTimeout(() => {
-      const alvo = Array.from(document.querySelectorAll<HTMLElement>('#ad-content .ds-form-error, [role="dialog"] .ds-form-error, #ad-content [role="alert"]:not(.ad-toast)'));
+      const alvo = Array.from(document.querySelectorAll<HTMLElement>('#oa-content .ds-form-error, [role="dialog"] .ds-form-error, #oa-content [role="alert"]:not(.oa-toast)'));
       if (alvo.some((el) => el.textContent?.includes(mensagem))) return;
       mostrar(mensagem, tipo);
     }, 150);
@@ -51,37 +51,37 @@ export function toast(mensagem: string, tipo: ToastTipo = 'erro'): void {
 function mostrar(mensagem: string, tipo: ToastTipo): void {
   const chave = `${tipo}:${mensagem}`;
   if (visiveis.get(chave)?.isConnected) return;
-  let container = document.querySelector<HTMLDivElement>('.ad-toast-container');
+  let container = document.querySelector<HTMLDivElement>('.oa-toast-container');
   if (!container) {
     container = document.createElement('div');
-    container.className = 'ad-toast-container';
+    container.className = 'oa-toast-container';
     container.setAttribute('aria-live', 'polite');
     document.body.appendChild(container);
   }
 
   const item = document.createElement('div');
-  item.className = `ad-toast ad-toast--${tipo}`;
+  item.className = `oa-toast oa-toast--${tipo}`;
   item.setAttribute('role', tipo === 'erro' ? 'alert' : 'status');
 
   const iconWrap = document.createElement('span');
-  iconWrap.className = 'ad-toast__icon';
+  iconWrap.className = 'oa-toast__icon';
   iconWrap.appendChild(icon(tipo, 16));
   item.appendChild(iconWrap);
 
   const texto = document.createElement('span');
-  texto.className = 'ad-toast__texto';
+  texto.className = 'oa-toast__texto';
   texto.textContent = mensagem;
   item.appendChild(texto);
 
   const fechar = document.createElement('button');
   fechar.type = 'button';
-  fechar.className = 'ad-toast__fechar';
+  fechar.className = 'oa-toast__fechar';
   fechar.setAttribute('aria-label', 'Fechar aviso');
   fechar.appendChild(icon('close', 14));
   // Sai com fade curto; sem animação (movimento reduzido) o animationend não vem, então há um teto.
   const remover = () => {
-    if (!item.parentNode || item.classList.contains('ad-toast--saindo')) return;
-    item.classList.add('ad-toast--saindo');
+    if (!item.parentNode || item.classList.contains('oa-toast--saindo')) return;
+    item.classList.add('oa-toast--saindo');
     const tirar = () => item.parentNode?.removeChild(item);
     item.addEventListener('animationend', tirar, { once: true });
     window.setTimeout(tirar, 200);

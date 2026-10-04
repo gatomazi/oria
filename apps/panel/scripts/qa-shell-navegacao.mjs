@@ -60,12 +60,12 @@ try {
     await page.addInitScript((k) => { try { if (!sessionStorage.getItem('qa-shell-init')) { localStorage.removeItem(k); sessionStorage.setItem('qa-shell-init', '1'); } } catch { /* */ } }, CHAVE);
 
     await page.goto(`${BASE}/admin/dashboard`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.ad-topbar');
+    await page.waitForSelector('.oa-topbar');
 
     // ── 1. Cabeçalho: dois controles distintos ──────────────────────────────────────────────────────
     const gatilho = page.getByRole('button', { name: 'Abrir menu da conta e da loja' });
     ok('gatilho do menu com nome acessível "Abrir menu da conta e da loja"', (await gatilho.count()) === 1);
-    const seletor = page.locator('.ad-scope');
+    const seletor = page.locator('.oa-scope');
     ok('seletor de loja presente (usuário com 2 lojas) e à ESQUERDA do gatilho', (await seletor.count()) === 1 && (await seletor.boundingBox()).x < (await gatilho.boundingBox()).x);
     const textoSeletor = (await seletor.evaluate((el) => el.options[el.selectedIndex].text)).trim();
     const textoGatilho = (await gatilho.innerText()).trim();
@@ -76,52 +76,52 @@ try {
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-01-cabecalho.png`) });
 
     await clicar(gatilho);
-    await page.waitForSelector('.ad-store-menu__content');
-    const menu = await page.locator('.ad-store-menu__content').innerText();
+    await page.waitForSelector('.oa-store-menu__content');
+    const menu = await page.locator('.oa-store-menu__content').innerText();
     ok('menu aberto: organização atual, Configurações, Integrações, Campos personalizados e Sair', /Configurações/.test(menu) && /Integrações/.test(menu) && /Campos personalizados/.test(menu) && /Sair/.test(menu) && menu.split('\n')[0].trim().length > 0, menu.replace(/\n+/g, ' | ').slice(0, 140));
-    const caixa = await page.locator('.ad-store-menu__content').boundingBox();
+    const caixa = await page.locator('.oa-store-menu__content').boundingBox();
     ok('menu aberto dentro da viewport (sem sobreposição fora da tela)', caixa.x >= 0 && caixa.x + caixa.width <= vp.w + 0.5 && caixa.y + caixa.height <= vp.h + 0.5, `${caixa.x.toFixed(0)}+${caixa.width.toFixed(0)} de ${vp.w}`);
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-02-menu-aberto.png`) });
     await page.keyboard.press('Escape');
-    await page.waitForSelector('.ad-store-menu__content', { state: 'detached' });
+    await page.waitForSelector('.oa-store-menu__content', { state: 'detached' });
     ok('Esc fecha o menu e devolve o foco ao gatilho', await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Abrir menu da conta e da loja'));
     // item ativo: página de Integrações marca aria-current no menu
     await page.goto(`${BASE}/admin/integracoes`, { waitUntil: 'networkidle' });
     await clicar(page.getByRole('button', { name: 'Abrir menu da conta e da loja' }));
-    await page.waitForSelector('.ad-store-menu__content');
-    ok('aria-current="page" em "Integrações" com o menu aberto na própria página', (await page.locator('.ad-store-menu__content a[aria-current="page"]').innerText()).includes('Integrações'));
+    await page.waitForSelector('.oa-store-menu__content');
+    ok('aria-current="page" em "Integrações" com o menu aberto na própria página', (await page.locator('.oa-store-menu__content a[aria-current="page"]').innerText()).includes('Integrações'));
     await page.keyboard.press('Escape');
     await page.goto(`${BASE}/admin/dashboard`, { waitUntil: 'networkidle' });
 
     // ── 2. Sidebar ──────────────────────────────────────────────────────────────────────────────────
-    const toggles = page.locator('.ad-nav__group-toggle');
+    const toggles = page.locator('.oa-nav__group-toggle');
     const nGrupos = await toggles.count();
-    ok('grupos com botão (aria-expanded/aria-controls) e TODOS FECHADOS ao carregar o painel', nGrupos >= 6 && (await page.$$eval('.ad-nav__group-toggle', (b) => b.every((x) => x.getAttribute('aria-expanded') === 'false' && document.getElementById(x.getAttribute('aria-controls'))))), `${nGrupos} grupos`);
-    ok('fechados: nenhum item de grupo à vista (só "Visão geral", que é isolada)', (await page.locator('#ad-sidebar .ad-nav__group-items a').filter({ visible: true }).count()) === 0);
+    ok('grupos com botão (aria-expanded/aria-controls) e TODOS FECHADOS ao carregar o painel', nGrupos >= 6 && (await page.$$eval('.oa-nav__group-toggle', (b) => b.every((x) => x.getAttribute('aria-expanded') === 'false' && document.getElementById(x.getAttribute('aria-controls'))))), `${nGrupos} grupos`);
+    ok('fechados: nenhum item de grupo à vista (só "Visão geral", que é isolada)', (await page.locator('#oa-sidebar .oa-nav__group-items a').filter({ visible: true }).count()) === 0);
 
     if (desktop) {
       const botao = page.getByRole('button', { name: 'Recolher menu lateral' });
-      ok('desktop: botão "Recolher menu lateral" (aria-expanded=true, aria-controls=ad-sidebar)', (await botao.getAttribute('aria-expanded')) === 'true' && (await botao.getAttribute('aria-controls')) === 'ad-sidebar');
-      const larguraAntes = (await page.locator('#ad-sidebar').boundingBox()).width;
+      ok('desktop: botão "Recolher menu lateral" (aria-expanded=true, aria-controls=oa-sidebar)', (await botao.getAttribute('aria-expanded')) === 'true' && (await botao.getAttribute('aria-controls')) === 'oa-sidebar');
+      const larguraAntes = (await page.locator('#oa-sidebar').boundingBox()).width;
       await page.screenshot({ path: path.join(OUT, `${vp.nome}-03-sidebar-expandida.png`) });
       await botao.click();
       await page.waitForTimeout(350);
-      const larguraDepois = (await page.locator('#ad-sidebar').boundingBox()).width;
-      ok('recolher reduz a sidebar a ícones (~64 px) e o conteúdo ocupa o espaço', larguraAntes >= 230 && larguraDepois <= 70 && (await page.locator('.ad-main').evaluate((e) => parseFloat(getComputedStyle(e).marginLeft))) <= 70, `${larguraAntes.toFixed(0)} → ${larguraDepois.toFixed(0)} px`);
+      const larguraDepois = (await page.locator('#oa-sidebar').boundingBox()).width;
+      ok('recolher reduz a sidebar a ícones (~64 px) e o conteúdo ocupa o espaço', larguraAntes >= 230 && larguraDepois <= 70 && (await page.locator('.oa-main').evaluate((e) => parseFloat(getComputedStyle(e).marginLeft))) <= 70, `${larguraAntes.toFixed(0)} → ${larguraDepois.toFixed(0)} px`);
       const botaoExp = page.getByRole('button', { name: 'Expandir menu lateral' });
       ok('botão vira "Expandir menu lateral" (aria-expanded=false)', (await botaoExp.getAttribute('aria-expanded')) === 'false');
-      const links = await page.$$eval('#ad-sidebar .ad-nav__item', (els) => els.map((e) => ({ nome: e.innerText.trim(), href: e.getAttribute('href'), ativo: e.getAttribute('aria-current') === 'page', larguraTexto: e.querySelector('.ad-nav__label').getBoundingClientRect().width, icone: !!e.querySelector('.ad-nav__icon') })));
+      const links = await page.$$eval('#oa-sidebar .oa-nav__item', (els) => els.map((e) => ({ nome: e.innerText.trim(), href: e.getAttribute('href'), ativo: e.getAttribute('aria-current') === 'page', larguraTexto: e.querySelector('.oa-nav__label').getBoundingClientRect().width, icone: !!e.querySelector('.oa-nav__icon') })));
       ok('reduzida: todos os links continuam presentes, com nome acessível e ícone (sem texto na tela)', links.length >= 25 && links.every((l) => l.nome && l.href && l.icone && l.larguraTexto <= 2), `${links.length} links`);
       ok('reduzida: o item ativo (Visão geral) está indicado', links.filter((l) => l.ativo).length === 1 && links.find((l) => l.ativo).nome === 'Visão geral');
-      ok('reduzida: nenhum grupo fica escondido (todas as rotas alcançáveis)', (await page.locator('#ad-sidebar .ad-nav__group-items:not([hidden])').count()) === nGrupos);
+      ok('reduzida: nenhum grupo fica escondido (todas as rotas alcançáveis)', (await page.locator('#oa-sidebar .oa-nav__group-items:not([hidden])').count()) === nGrupos);
       // tooltip: mouse e teclado
-      await page.locator('#ad-sidebar .ad-nav__item', { hasText: 'Clientes' }).first().hover();
+      await page.locator('#oa-sidebar .oa-nav__item', { hasText: 'Clientes' }).first().hover();
       await page.waitForSelector('.ds-tooltip', { timeout: 3000 }).catch(() => {});
       ok('reduzida: tooltip com o nome ao passar o mouse', (await page.locator('.ds-tooltip').first().innerText().catch(() => '')).includes('Clientes'));
       await page.mouse.move(700, 500);
       await page.waitForFunction(() => document.querySelectorAll('.ds-tooltip').length === 0, null, { timeout: 4000 }).catch(() => {});
       // teclado: Tab até um item da sidebar reduzida (foco por teclado abre o tooltip)
-      await page.locator('#ad-sidebar .ad-nav__item').first().focus();
+      await page.locator('#oa-sidebar .oa-nav__item').first().focus();
       await page.keyboard.press('Tab');
       await page.keyboard.press('Tab');
       await page.waitForSelector('.ds-tooltip', { timeout: 4000 }).catch(() => {});
@@ -132,14 +132,14 @@ try {
       const c = await prefs();
       ok('a preferência foi gravada LOCALMENTE (chave versionada; sem dado sensível)', c && c.colapsada === true && Object.keys(c).sort().join() === 'colapsada');
       await page.reload({ waitUntil: 'networkidle' });
-      ok('recarregar mantém a sidebar reduzida', (await page.locator('#ad-sidebar').boundingBox()).width <= 70);
+      ok('recarregar mantém a sidebar reduzida', (await page.locator('#oa-sidebar').boundingBox()).width <= 70);
       await page.goto(`${BASE}/admin/clientes`, { waitUntil: 'networkidle' });
-      ok('navegar mantém a preferência e acende o item da página (Clientes)', (await page.locator('#ad-sidebar .ad-nav__item--active .ad-nav__label').innerText()) === 'Clientes' && (await page.locator('#ad-sidebar').boundingBox()).width <= 70);
+      ok('navegar mantém a preferência e acende o item da página (Clientes)', (await page.locator('#oa-sidebar .oa-nav__item--active .oa-nav__label').innerText()) === 'Clientes' && (await page.locator('#oa-sidebar').boundingBox()).width <= 70);
       await semRolagem('sidebar reduzida em Clientes');
       await page.screenshot({ path: path.join(OUT, `${vp.nome}-05-reduzida-clientes.png`) });
       await page.getByRole('button', { name: 'Expandir menu lateral' }).click();
       await page.waitForTimeout(350);
-      ok('expandir volta à sidebar completa', (await page.locator('#ad-sidebar').boundingBox()).width >= 230);
+      ok('expandir volta à sidebar completa', (await page.locator('#oa-sidebar').boundingBox()).width >= 230);
     } else {
       ok('mobile/tablet: NÃO há botão de recolher (o drawer não muda)', (await page.getByRole('button', { name: /(Recolher|Expandir) menu lateral/ }).isVisible().catch(() => false)) === false);
       // prefs colapsada gravadas antes NÃO afetam o drawer
@@ -147,23 +147,23 @@ try {
       await page.reload({ waitUntil: 'networkidle' });
       const abrir = page.getByRole('button', { name: 'Abrir menu de navegação' });
       await clicar(abrir);
-      await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open'));
+      await page.waitForFunction(() => document.querySelector('.oa-shell--nav-open'));
       await page.waitForTimeout(400);
-      const gaveta = await page.locator('#ad-sidebar').boundingBox();
-      ok('drawer com a preferência "reduzida" salva: continua completo, com rótulos (nada compacto por cima do drawer)', gaveta.width >= 250 && (await page.locator('#ad-sidebar .ad-nav__label').first().evaluate((e) => e.getBoundingClientRect().width)) > 20, `largura ${gaveta.width.toFixed(0)}`);
-      ok('drawer aberto: foco em "Fechar menu de navegação" e conteúdo inerte', (await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Fechar menu de navegação' && (await page.locator('.ad-main').getAttribute('inert')) !== null);
+      const gaveta = await page.locator('#oa-sidebar').boundingBox();
+      ok('drawer com a preferência "reduzida" salva: continua completo, com rótulos (nada compacto por cima do drawer)', gaveta.width >= 250 && (await page.locator('#oa-sidebar .oa-nav__label').first().evaluate((e) => e.getBoundingClientRect().width)) > 20, `largura ${gaveta.width.toFixed(0)}`);
+      ok('drawer aberto: foco em "Fechar menu de navegação" e conteúdo inerte', (await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Fechar menu de navegação' && (await page.locator('.oa-main').getAttribute('inert')) !== null);
       await page.screenshot({ path: path.join(OUT, `${vp.nome}-03-drawer-aberto.png`) });
       await semRolagem('drawer aberto');
       await page.keyboard.press('Escape');
       await page.waitForTimeout(400);
-      ok('Esc fecha o drawer e devolve o foco ao botão de menu', (await page.locator('.ad-shell--nav-open').count()) === 0 && (await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Abrir menu de navegação');
+      ok('Esc fecha o drawer e devolve o foco ao botão de menu', (await page.locator('.oa-shell--nav-open').count()) === 0 && (await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Abrir menu de navegação');
       await page.evaluate((k) => localStorage.removeItem(k), CHAVE);
       await page.reload({ waitUntil: 'networkidle' });
     }
 
     // ── 3. Grupos (todas as larguras; no mobile dentro do drawer): fechados ao carregar, abrem por clique/teclado só na sessão ─────────
-    if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open')); await page.waitForTimeout(350); }
-    const grupoCat = page.locator('.ad-nav__group-toggle', { hasText: 'Catálogo' });
+    if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.oa-shell--nav-open')); await page.waitForTimeout(350); }
+    const grupoCat = page.locator('.oa-nav__group-toggle', { hasText: 'Catálogo' });
     const itensCat = page.locator('[id^="nav-grupo-cat"][id$="-itens"] a');
     ok('Catálogo começa fechado (aria-expanded=false, nenhum item visível)', (await grupoCat.getAttribute('aria-expanded')) === 'false' && (await itensCat.filter({ visible: true }).count()) === 0);
     await page.screenshot({ path: path.join(OUT, `${vp.nome}-06-grupos-fechados.png`) });
@@ -183,48 +183,48 @@ try {
     ok('teclado: Espaço abre o grupo', (await grupoCat.getAttribute('aria-expanded')) === 'true');
     // Recarregar volta tudo a fechado (o painel "sempre vem fechado").
     await page.reload({ waitUntil: 'networkidle' });
-    if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open')); await page.waitForTimeout(350); }
-    ok('depois de recarregar, o grupo aberto volta a ficar fechado', (await page.locator('.ad-nav__group-toggle', { hasText: 'Catálogo' }).getAttribute('aria-expanded')) === 'false');
+    if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.oa-shell--nav-open')); await page.waitForTimeout(350); }
+    ok('depois de recarregar, o grupo aberto volta a ficar fechado', (await page.locator('.oa-nav__group-toggle', { hasText: 'Catálogo' }).getAttribute('aria-expanded')) === 'false');
     // grupo fechado que CONTÉM a página atual mostra só ela (orientação)
     await page.goto(`${BASE}/admin/produtos`, { waitUntil: 'networkidle' });
-    if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open')); await page.waitForTimeout(350); }
-    const visiveisCat = await page.locator('.ad-nav__group', { has: page.locator('.ad-nav__group-toggle', { hasText: 'Catálogo' }) }).locator('a').filter({ visible: true }).allInnerTexts();
+    if (!desktop) { await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.oa-shell--nav-open')); await page.waitForTimeout(350); }
+    const visiveisCat = await page.locator('.oa-nav__group', { has: page.locator('.oa-nav__group-toggle', { hasText: 'Catálogo' }) }).locator('a').filter({ visible: true }).allInnerTexts();
     ok('grupo fechado com a página atual (Produtos): só ela continua visível e marcada', visiveisCat.length === 1 && visiveisCat[0].trim() === 'Produtos', JSON.stringify(visiveisCat));
     await page.evaluate((k) => localStorage.removeItem(k), CHAVE);
 
     if (AXE) {
       await page.reload({ waitUntil: 'networkidle' });
       await page.addScriptTag({ path: AXE });
-      const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('.ad-shell'))).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
+      const viol = await page.evaluate(async () => (await window.axe.run(document.querySelector('.oa-shell'))).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => `${v.id}(${v.nodes.length})`));
       ok('axe-core no shell: nenhuma violação serious/critical', viol.length === 0, viol.join(', '));
     }
     // ── 4. Ordem final dos grupos e marca oficial ────────────────────────────────────────────────────────────────────────────────
     await page.goto(`${BASE}/admin/dashboard`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.ad-topbar');
+    await page.waitForSelector('.oa-topbar');
     await page.evaluate((k) => { try { localStorage.removeItem(k); } catch { /* */ } }, CHAVE);
     await page.reload({ waitUntil: 'networkidle' });
     const ORDEM = ['Comunicação', 'Marketing e dados', 'Criativos', 'Campanhas', 'Operação', 'Financeiro', 'Catálogo'];
-    const rotulos = await page.$$eval('.ad-nav__group-toggle', (b) => b.map((x) => x.textContent.trim()));
+    const rotulos = await page.$$eval('.oa-nav__group-toggle', (b) => b.map((x) => x.textContent.trim()));
     ok('sidebar: grupos na ordem final (Comunicação → Marketing e dados → Criativos → Campanhas → Operação → Financeiro → Catálogo)', JSON.stringify(rotulos.filter((r) => ORDEM.includes(r))) === JSON.stringify(ORDEM) && rotulos.filter((r) => !ORDEM.includes(r)).length === 0, rotulos.join(' → '));
-    const primeiro = await page.$eval('#ad-sidebar .ad-nav__item', (e) => e.textContent.trim());
-    ok('"Visão geral" vem isolada antes dos grupos', primeiro === 'Visão geral' && (await page.$$eval('#ad-sidebar .ad-nav > *', (els) => els[0].querySelector('.ad-nav__group-toggle') === null)), primeiro);
-    ok('nada de Conexões, Sistema, Webhooks e logs, Configurações, Integrações ou Campos personalizados na sidebar', !(await page.$$eval('#ad-sidebar .ad-nav__item, #ad-sidebar .ad-nav__group-toggle', (els) => els.map((e) => e.textContent.trim()))).some((t) => /^(Conexões|Sistema|Webhooks|Logs|Configurações|Integrações|Campos personalizados)/.test(t)));
-    const logo = await page.$eval('img.ad-sidebar__logo', (i) => ({ ok: i.complete && i.naturalWidth > 0, w: i.naturalWidth, h: i.naturalHeight, src: i.getAttribute('src'), rw: i.getBoundingClientRect().width, rh: i.getBoundingClientRect().height }));
-    ok('logo oficial (oria-simbolo.png) carregada, sem monograma "OR"', logo.ok && /oria-simbolo\.png$/.test(logo.src) && !(await page.locator('.ad-sidebar__brand').innerText()).match(/^OR\b/), `${logo.w}×${logo.h}`);
+    const primeiro = await page.$eval('#oa-sidebar .oa-nav__item', (e) => e.textContent.trim());
+    ok('"Visão geral" vem isolada antes dos grupos', primeiro === 'Visão geral' && (await page.$$eval('#oa-sidebar .oa-nav > *', (els) => els[0].querySelector('.oa-nav__group-toggle') === null)), primeiro);
+    ok('nada de Conexões, Sistema, Webhooks e logs, Configurações, Integrações ou Campos personalizados na sidebar', !(await page.$$eval('#oa-sidebar .oa-nav__item, #oa-sidebar .oa-nav__group-toggle', (els) => els.map((e) => e.textContent.trim()))).some((t) => /^(Conexões|Sistema|Webhooks|Logs|Configurações|Integrações|Campos personalizados)/.test(t)));
+    const logo = await page.$eval('img.oa-sidebar__logo', (i) => ({ ok: i.complete && i.naturalWidth > 0, w: i.naturalWidth, h: i.naturalHeight, src: i.getAttribute('src'), rw: i.getBoundingClientRect().width, rh: i.getBoundingClientRect().height }));
+    ok('logo oficial (oria-simbolo.png) carregada, sem monograma "OR"', logo.ok && /oria-simbolo\.png$/.test(logo.src) && !(await page.locator('.oa-sidebar__brand').innerText()).match(/^OR\b/), `${logo.w}×${logo.h}`);
     ok('proporção do símbolo preservada (sem distorção)', Math.abs(logo.rw / logo.rh - logo.w / logo.h) < 0.03 * (logo.w / logo.h), `${logo.rw.toFixed(1)}×${logo.rh.toFixed(1)} vs ${logo.w}×${logo.h}`);
     if (desktop) {
-      const marca = await page.locator('.ad-sidebar__brand').innerText();
+      const marca = await page.locator('.oa-sidebar__brand').innerText();
       ok('expandida: símbolo + "Oria" + "Central operacional" alinhados', /Oria/.test(marca) && /Central operacional/.test(marca));
-      const yl = await page.locator('img.ad-sidebar__logo').boundingBox(); const yt = await page.locator('.ad-sidebar__brand-text').boundingBox();
+      const yl = await page.locator('img.oa-sidebar__logo').boundingBox(); const yt = await page.locator('.oa-sidebar__brand-text').boundingBox();
       ok('expandida: símbolo e texto centrados na mesma linha', Math.abs((yl.y + yl.height / 2) - (yt.y + yt.height / 2)) <= 3, `${(yl.y + yl.height / 2).toFixed(1)} vs ${(yt.y + yt.height / 2).toFixed(1)}`);
       await page.screenshot({ path: path.join(OUT, `${vp.nome}-04-marca-ordem-expandida.png`), clip: { x: 0, y: 0, width: 280, height: vp.h } });
       await page.getByRole('button', { name: 'Recolher menu lateral' }).click();
       await page.waitForTimeout(400);
-      const bl = await page.locator('img.ad-sidebar__logo').boundingBox();
-      const largura = (await page.locator('#ad-sidebar').boundingBox()).width;
-      ok('recolhida: só o símbolo, centralizado no trilho', Math.abs((bl.x + bl.width / 2) - largura / 2) <= 2 && (await page.locator('.ad-sidebar__brand-text').evaluate((e) => e.getBoundingClientRect().width)) <= 2, `centro ${(bl.x + bl.width / 2).toFixed(1)} de ${largura}`);
-      ok('recolhida: o nome "Oria" continua acessível (texto só para leitores de tela)', /Oria/.test(await page.locator('.ad-sidebar__brand-text').evaluate((e) => e.textContent)));
-      await page.locator('img.ad-sidebar__logo').hover();
+      const bl = await page.locator('img.oa-sidebar__logo').boundingBox();
+      const largura = (await page.locator('#oa-sidebar').boundingBox()).width;
+      ok('recolhida: só o símbolo, centralizado no trilho', Math.abs((bl.x + bl.width / 2) - largura / 2) <= 2 && (await page.locator('.oa-sidebar__brand-text').evaluate((e) => e.getBoundingClientRect().width)) <= 2, `centro ${(bl.x + bl.width / 2).toFixed(1)} de ${largura}`);
+      ok('recolhida: o nome "Oria" continua acessível (texto só para leitores de tela)', /Oria/.test(await page.locator('.oa-sidebar__brand-text').evaluate((e) => e.textContent)));
+      await page.locator('img.oa-sidebar__logo').hover();
       await page.waitForSelector('.ds-tooltip', { timeout: 3000 }).catch(() => {});
       ok('recolhida: tooltip "Oria" no símbolo', (await page.locator('.ds-tooltip').allInnerTexts()).some((t) => /Oria/.test(t)));
       await page.mouse.move(700, 500);
@@ -232,18 +232,18 @@ try {
       await page.getByRole('button', { name: 'Expandir menu lateral' }).click();
       await page.waitForTimeout(350);
     } else {
-      await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.ad-shell--nav-open')); await page.waitForTimeout(350);
-      const bd = await page.locator('img.ad-sidebar__logo').boundingBox();
+      await clicar(page.getByRole('button', { name: 'Abrir menu de navegação' })); await page.waitForFunction(() => document.querySelector('.oa-shell--nav-open')); await page.waitForTimeout(350);
+      const bd = await page.locator('img.oa-sidebar__logo').boundingBox();
       ok('drawer: símbolo visível, com dimensões adequadas e dentro da tela', bd && bd.width >= 30 && bd.height >= 24 && bd.x >= 0 && bd.x + bd.width <= vp.w, bd ? `${bd.width.toFixed(0)}×${bd.height.toFixed(0)}` : 'sem caixa');
-      ok('drawer: "Oria" e "Central operacional" visíveis ao lado do símbolo', (await page.locator('.ad-sidebar__brand-text').innerText()).includes('Central operacional'));
+      ok('drawer: "Oria" e "Central operacional" visíveis ao lado do símbolo', (await page.locator('.oa-sidebar__brand-text').innerText()).includes('Central operacional'));
       await page.screenshot({ path: path.join(OUT, `${vp.nome}-04-drawer-marca-ordem.png`) });
       await page.keyboard.press('Escape'); await page.waitForTimeout(350);
     }
     // Rota de Marketing e de Campanhas: a página atual continua destacada no grupo certo.
     for (const [rota, item, grupo] of [['/admin/meta-ads', 'Meta Ads', 'Marketing e dados'], ['/admin/campanhas', 'Todas as campanhas', 'Campanhas']]) {
       await page.goto(`${BASE}${rota}`, { waitUntil: 'networkidle' });
-      await page.waitForSelector('.ad-topbar');
-      const ativo = await page.$$eval('#ad-sidebar .ad-nav__item[aria-current="page"]', (els) => els.map((e) => ({ t: e.textContent.trim(), g: e.closest('.ad-nav__group')?.querySelector('.ad-nav__group-toggle')?.textContent.trim() })));
+      await page.waitForSelector('.oa-topbar');
+      const ativo = await page.$$eval('#oa-sidebar .oa-nav__item[aria-current="page"]', (els) => els.map((e) => ({ t: e.textContent.trim(), g: e.closest('.oa-nav__group')?.querySelector('.oa-nav__group-toggle')?.textContent.trim() })));
       ok(`${item} continua destacado no grupo "${grupo}"`, ativo.length === 1 && ativo[0].t === item && ativo[0].g === grupo, JSON.stringify(ativo));
     }
     // Gerador de criativos: uma rota e um item de menu por seção; a URL antiga redireciona para Gerar.
@@ -251,14 +251,14 @@ try {
     ok('/admin/criativos redireciona para /admin/criativos/gerar', new URL(page.url()).pathname === '/admin/criativos/gerar', new URL(page.url()).pathname);
     const SECOES = [['gerar', 'Gerar'], ['lotes', 'Lotes'], ['historico', 'Histórico'], ['produtos', 'Produtos'], ['marca', 'Marca e nicho'], ['contextos', 'Contextos'], ['personas', 'Personas']];
     // Grupos começam fechados: abre o de Criativos (clique programático, vale também com o drawer fechado) para listar as 7 seções.
-    await page.evaluate(() => { const t = [...document.querySelectorAll('.ad-nav__group-toggle')].find((x) => x.textContent.trim() === 'Criativos'); if (t && t.getAttribute('aria-expanded') !== 'true') t.click(); });
+    await page.evaluate(() => { const t = [...document.querySelectorAll('.oa-nav__group-toggle')].find((x) => x.textContent.trim() === 'Criativos'); if (t && t.getAttribute('aria-expanded') !== 'true') t.click(); });
     await page.waitForTimeout(150);
-    const itensCri = await page.$$eval('#ad-sidebar .ad-nav__group', (gs) => { const g = gs.find((x) => x.querySelector('.ad-nav__group-toggle')?.textContent.trim() === 'Criativos'); return g ? [...g.querySelectorAll('a')].map((a) => [a.getAttribute('href'), a.textContent.trim()]) : []; });
+    const itensCri = await page.$$eval('#oa-sidebar .oa-nav__group', (gs) => { const g = gs.find((x) => x.querySelector('.oa-nav__group-toggle')?.textContent.trim() === 'Criativos'); return g ? [...g.querySelectorAll('a')].map((a) => [a.getAttribute('href'), a.textContent.trim()]) : []; });
     ok('menu Criativos: as 7 seções, cada uma com a sua rota', JSON.stringify(itensCri) === JSON.stringify(SECOES.map(([r, t]) => [`/admin/criativos/${r}`, t])), JSON.stringify(itensCri));
     for (const [rota, rotulo] of [['lotes', 'Lotes'], ['personas', 'Personas']]) {
       await page.goto(`${BASE}/admin/criativos/${rota}`, { waitUntil: 'networkidle' });
-      await page.waitForSelector('.ad-topbar');
-      const at = await page.$$eval('#ad-sidebar .ad-nav__item[aria-current="page"]', (els) => els.map((e) => ({ t: e.textContent.trim(), g: e.closest('.ad-nav__group')?.querySelector('.ad-nav__group-toggle')?.textContent.trim() })));
+      await page.waitForSelector('.oa-topbar');
+      const at = await page.$$eval('#oa-sidebar .oa-nav__item[aria-current="page"]', (els) => els.map((e) => ({ t: e.textContent.trim(), g: e.closest('.oa-nav__group')?.querySelector('.oa-nav__group-toggle')?.textContent.trim() })));
       ok(`/admin/criativos/${rota}: "${rotulo}" destacado no grupo "Criativos"`, at.length === 1 && at[0].t === rotulo && at[0].g === 'Criativos', JSON.stringify(at));
     }
     await page.goto(`${BASE}/admin/criativos/inexistente`, { waitUntil: 'networkidle' });

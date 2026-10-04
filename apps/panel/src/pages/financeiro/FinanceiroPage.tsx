@@ -153,7 +153,7 @@ export function FinanceiroPage() {
       {resumoErro ? (
         <ErrorState description={resumoErro} />
       ) : (
-        <KpiStrip label="Saldo na Reserva Ink" className="ad-kpi-strip--estreita">
+        <KpiStrip label="Saldo na Reserva Ink" className="oa-kpi-strip--estreita">
           <KpiCard title="Saldo disponível" value={resumo ? resumo.available || 'R$ 0,00' : '—'} />
           <KpiCard title="Saldo pendente" value={resumo ? resumo.pending || 'R$ 0,00' : '—'} />
         </KpiStrip>

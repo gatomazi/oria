@@ -25,30 +25,30 @@ export function PreviewWhatsapp({ headerTexto, headerChaves, headerMediaTipo, he
   const corpo = substituirVariaveis(corpoTexto, corpoChaves, overrides);
 
   return (
-    <div className="ad-wa-preview">
+    <div className="oa-wa-preview">
       <div className="pa-field-hint">Prévia — como a mensagem chega pro cliente (com dados de exemplo).</div>
-      <div className="ad-wa-preview__bolha">
+      <div className="oa-wa-preview__bolha">
         {headerMediaTipo && headerMediaTipo === 'IMAGE' && headerMediaPreviewUrl ? (
-          <img src={headerMediaPreviewUrl} alt="Amostra do cabeçalho" className="ad-wa-preview__media" />
+          <img src={headerMediaPreviewUrl} alt="Amostra do cabeçalho" className="oa-wa-preview__media" />
         ) : (
-          headerMediaTipo && <div className="ad-wa-preview__media-placeholder">{HEADER_MEDIA_LABEL[headerMediaTipo]}</div>
+          headerMediaTipo && <div className="oa-wa-preview__media-placeholder">{HEADER_MEDIA_LABEL[headerMediaTipo]}</div>
         )}
-        {header && <strong className="ad-wa-preview__header">{header}</strong>}
+        {header && <strong className="oa-wa-preview__header">{header}</strong>}
         {corpo ? (
-          <div className="ad-wa-preview__corpo">{corpo}</div>
+          <div className="oa-wa-preview__corpo">{corpo}</div>
         ) : (
-          <div className="ad-wa-preview__vazio">A mensagem aparece aqui conforme você escreve…</div>
+          <div className="oa-wa-preview__vazio">A mensagem aparece aqui conforme você escreve…</div>
         )}
-        {footer && <div className="ad-wa-preview__footer">{footer}</div>}
+        {footer && <div className="oa-wa-preview__footer">{footer}</div>}
         {(botoes || [])
           .filter((b) => b && b.texto)
           .map((b, i) => {
             const dinamico = b.tipo === 'URL' && b.valor && /\{\{[^{}]+\}\}/.test(b.valor);
             const valorFinal = dinamico ? substituirVariaveis(b.valor, b.chave ? [b.chave] : [], overrides) : null;
             return (
-              <div key={i} className="ad-wa-preview__botao">
+              <div key={i} className="oa-wa-preview__botao">
                 {b.texto}
-                {dinamico && <span className="ad-wa-preview__botao-hint">{valorFinal}</span>}
+                {dinamico && <span className="oa-wa-preview__botao-hint">{valorFinal}</span>}
               </div>
             );
           })}

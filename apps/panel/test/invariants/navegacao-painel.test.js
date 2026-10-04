@@ -122,7 +122,7 @@ test('cabeçalho · o gatilho do menu identifica a CONTA (iniciais de quem está
   assert.match(shell, /const rotulo = 'Abrir menu da conta e da loja';/);
   assert.match(shell, /aria-label=\{rotulo\} title=\{rotulo\}/);
   assert.match(shell, /initials\(usuario \|\| nome\)/);
-  assert.doesNotMatch(shell, /ad-store-menu__nome/, 'o nome da loja não é mais texto do gatilho');
+  assert.doesNotMatch(shell, /oa-store-menu__nome/, 'o nome da loja não é mais texto do gatilho');
   assert.doesNotMatch(shell, /aria-label=\{`Menu da loja \$\{nome\}`\}/);
   // o seletor de loja continua à esquerda dos controles do canto direito
   assert.ok(shell.indexOf('<WorkspaceSelect />') < shell.indexOf('<StoreMenu'), 'seletor de loja antes do menu da conta');
@@ -140,13 +140,13 @@ test('cabeçalho · o menu aberto mantém organização, plano (quando carregado
 test('sidebar · botão de recolher/expandir com nome acessível, aria-expanded e aria-controls; a redução só vale no desktop', () => {
   assert.match(shell, /aria-label=\{prefs\.colapsada \? 'Expandir menu lateral' : 'Recolher menu lateral'\}/);
   assert.match(shell, /aria-expanded=\{!prefs\.colapsada\}/);
-  assert.match(shell, /aria-controls="ad-sidebar"/);
+  assert.match(shell, /aria-controls="oa-sidebar"/);
   assert.match(shell, /useMediaQuery\('\(min-width: 1024px\)'\)/);
   assert.match(shell, /const reduzida = prefs\.colapsada && desktop;/);
 });
 
 test('sidebar · grupos recolhíveis: botão com aria-expanded + aria-controls; fechado mostra só a página atual; preferência só local', () => {
-  assert.match(shell, /className="ad-nav__group-toggle"/);
+  assert.match(shell, /className="oa-nav__group-toggle"/);
   assert.match(shell, /aria-expanded=\{aberto\}/);
   assert.match(shell, /aria-controls=\{listaId\}/);
   assert.match(shell, /itensVisiveis\(group\.items, aberto, routeInfo\.activeKey, reduzida\)/);
@@ -158,8 +158,8 @@ test('sidebar · grupos recolhíveis: botão com aria-expanded + aria-controls; 
 
 test('sidebar reduzida · ícones com tooltip (mouse e foco) e o rótulo continua sendo o nome acessível; sem ícone → inicial', () => {
   assert.match(shell, /reduzida \? <Tooltip content=\{item\.label\} side="right">\{link\}<\/Tooltip> : link/);
-  assert.match(shell, /<span className="ad-nav__label">\{item\.label\}<\/span>/);
-  assert.match(shell, /ad-nav__icon--inicial/);
+  assert.match(shell, /<span className="oa-nav__label">\{item\.label\}<\/span>/);
+  assert.match(shell, /oa-nav__icon--inicial/);
 });
 
 test('sidebar reduzida · as regras vivem SÓ no breakpoint de desktop (o drawer do mobile não recebe a versão compacta)', () => {
@@ -172,8 +172,8 @@ test('sidebar reduzida · as regras vivem SÓ no breakpoint de desktop (o drawer
   }
   const blocoDesktop = cssShell.slice(i, fim);
   const fora = cssShell.slice(0, i) + cssShell.slice(fim);
-  assert.match(blocoDesktop, /\.ad-shell--nav-reduzida \.ad-sidebar \{ width: var\(--sidebar-width-reduzida\); \}/);
-  assert.doesNotMatch(fora, /ad-shell--nav-reduzida/, 'nenhuma regra de sidebar reduzida fora do desktop');
+  assert.match(blocoDesktop, /\.oa-shell--nav-reduzida \.oa-sidebar \{ width: var\(--sidebar-width-reduzida\); \}/);
+  assert.doesNotMatch(fora, /oa-shell--nav-reduzida/, 'nenhuma regra de sidebar reduzida fora do desktop');
 });
 
 test('sidebar · o mapa de rotas e o gating dos itens não mudaram (quem decide é nav.ts e o servidor)', () => {
@@ -271,13 +271,13 @@ test('marca oficial: o símbolo do Oria (arquivo único do repositório) substit
   assert.match(shell, /const SIMBOLO_ORIA = '\/assets\/oria\/oria-simbolo\.png';/);
   assert.ok(fs.existsSync(path.join(h.RAIZ_SUJEITO, 'assets', 'oria', 'oria-simbolo.png')), 'o arquivo oficial existe e é servido pelo servidor (test/arquivos-publicos)');
   assert.match(fs.readFileSync(path.join(h.RAIZ_SUJEITO, 'test', 'arquivos-publicos.test.js'), 'utf8'), /'\/assets\/oria\/oria-simbolo\.png'/, 'rota pública já coberta');
-  const marca = shell.slice(shell.indexOf('className="ad-sidebar__brand"'), shell.indexOf('ad-sidebar__close'));
+  const marca = shell.slice(shell.indexOf('className="oa-sidebar__brand"'), shell.indexOf('oa-sidebar__close'));
   assert.doesNotMatch(marca, /initials\(nomeProduto\)/, 'sem monograma genérico');
-  assert.match(marca, /<img className="ad-sidebar__logo" src=\{SIMBOLO_ORIA\} alt="" width=\{35\} height=\{28\} \/>/, 'símbolo decorativo com proporção 256×202');
+  assert.match(marca, /<img className="oa-sidebar__logo" src=\{SIMBOLO_ORIA\} alt="" width=\{35\} height=\{28\} \/>/, 'símbolo decorativo com proporção 256×202');
   assert.match(marca, /reduzida \? \(\s*<Tooltip content=\{nomeProduto\} side="right">/, 'trilho recolhido: tooltip com o nome');
   const css = ler('admin/admin-shell.css');
-  assert.match(css, /\.ad-sidebar__logo \{[^}]*object-fit: contain;/, 'sem distorção');
-  const reduzido = css.slice(css.indexOf('.ad-shell--nav-reduzida .ad-sidebar__brand-text'));
+  assert.match(css, /\.oa-sidebar__logo \{[^}]*object-fit: contain;/, 'sem distorção');
+  const reduzido = css.slice(css.indexOf('.oa-shell--nav-reduzida .oa-sidebar__brand-text'));
   assert.match(reduzido.slice(0, 260), /clip: rect\(0 0 0 0\)/, 'o nome sai da tela mas continua para leitores de tela (não display:none)');
   assert.match(reduzido.slice(0, 140) || '', /position: absolute/);
 });

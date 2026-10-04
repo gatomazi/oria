@@ -636,11 +636,11 @@ try {
       ok('o gatilho da conta é só avatar + chevron (sem repetir o nome da loja)', (await conta.innerText()).trim().length <= 3);
       await foto(mp, `${vp.nome}-01-cabecalho`);
       await tocar(conta);
-      await mp.waitForSelector('.ad-store-menu__content');
-      await dentro(mp.locator('.ad-store-menu__content'), 'menu da conta aberto');
+      await mp.waitForSelector('.oa-store-menu__content');
+      await dentro(mp.locator('.oa-store-menu__content'), 'menu da conta aberto');
       await foto(mp, `${vp.nome}-02-menu-da-conta`);
       await mp.keyboard.press('Escape');
-      await mp.waitForSelector('.ad-store-menu__content', { state: 'detached' });
+      await mp.waitForSelector('.oa-store-menu__content', { state: 'detached' });
       await sem('cabeçalho');
     });
 
@@ -701,10 +701,10 @@ try {
     await cenario('Mobile · drawer e rolagem', async () => {
       await abrir(mp, '?provedor=ink');
       await tocar(mp.getByRole('button', { name: 'Abrir menu de navegação' }));
-      const gaveta = mp.locator('#ad-sidebar');
+      const gaveta = mp.locator('#oa-sidebar');
       await mp.waitForTimeout(400);
       await dentro(gaveta, 'drawer aberto');
-      ok('drawer aberto: foco em "Fechar menu de navegação" e o conteúdo fica inerte', await mp.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Fechar menu de navegação' && !!document.querySelector('.ad-main[inert], main[inert]')));
+      ok('drawer aberto: foco em "Fechar menu de navegação" e o conteúdo fica inerte', await mp.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Fechar menu de navegação' && !!document.querySelector('.oa-main[inert], main[inert]')));
       await sem('drawer aberto');
       await foto(mp, `${vp.nome}-07-drawer-aberto`);
       await mp.keyboard.press('Escape');

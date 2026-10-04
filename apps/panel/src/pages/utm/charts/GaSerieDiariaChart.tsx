@@ -18,7 +18,7 @@ function formatarDataCurta(iso: string): string {
 function TooltipContent({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
   if (!active || !payload || !payload.length) return null;
   return (
-    <div className="ad-chart-tooltip">
+    <div className="oa-chart-tooltip">
       <strong>{formatarDataCurta(label || '')}</strong>
       <div>{plural(payload[0]?.value ?? 0, 'sessão', 'sessões')}</div>
       <div>{formatValor(payload[1]?.value ?? 0)}</div>

@@ -12,7 +12,7 @@ import './admin/admin-shell.css';
 
 // CSS das telas carregado junto com a base, na mesma ordem em que as rotas o importavam antes do
 // code-splitting (Fase 9): as telas agora chegam sob demanda (React.lazy), mas várias classes são
-// compartilhadas entre telas (.pc-kv, .tn-form, .ad-vinculo-*) e a cascata não pode depender de qual
+// compartilhadas entre telas (.pc-kv, .tn-form, .oa-vinculo-*) e a cascata não pode depender de qual
 // tela foi aberta primeiro. São ~80 KB de CSS; o ganho do split está no JS.
 import './whatsapp-web.css';
 import './pedidos-central.css';

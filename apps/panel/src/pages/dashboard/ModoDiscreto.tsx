@@ -36,7 +36,7 @@ export function useModoDiscreto(): ModoDiscretoValor {
 // Marcador no lugar do valor: largura estável, sem o número em lugar nenhum (nem title, nem aria).
 export function ValorOculto({ moeda = true }: { moeda?: boolean }) {
   return (
-    <span className="ad-oculto">
+    <span className="oa-oculto">
       <span aria-hidden="true">{moeda ? 'R$ •••••' : '•••'}</span>
       <span className="ds-sr-only">valor oculto</span>
     </span>
@@ -49,7 +49,7 @@ export function BotaoModoDiscreto() {
   const rotulo = oculto ? 'Mostrar valores' : 'Ocultar valores';
   return (
     <Tooltip content={rotulo}>
-      <button type="button" className="ds-btn ds-btn--secondary ad-olho" onClick={alternar} aria-label={rotulo}>
+      <button type="button" className="ds-btn ds-btn--secondary oa-olho" onClick={alternar} aria-label={rotulo}>
         <Icon name={oculto ? 'eye-off' : 'eye'} size={18} />
       </button>
     </Tooltip>

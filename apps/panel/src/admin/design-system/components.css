@@ -57,7 +57,7 @@
 
 /* ── Campos ──────────────────────────────────────────────────────── */
 .ds-field { display: flex; flex-direction: column; gap: var(--space-1-5); min-width: 0; }
-.ds-field > .ds-btn, .ad-botoes-lista > .ds-btn { align-self: flex-start; }
+.ds-field > .ds-btn, .oa-botoes-lista > .ds-btn { align-self: flex-start; }
 .ds-field__label { font: var(--type-label); color: var(--text-secondary); }
 .ds-field__required { color: var(--danger); margin-left: 2px; }
 .ds-field__optional { color: var(--text-muted); font-weight: 400; }
@@ -788,7 +788,7 @@ button.ds-stepper__button:disabled { cursor: default; }
 .ds-dropdown__item--danger[data-highlighted] { background: var(--danger-tint); }
 .ds-dropdown__separator { height: 1px; background: var(--border-default); margin: var(--space-1) 4px; }
 
-/* ── Toast (mesmo visual/API de .ad-toast — nome novo pra código novo) */
+/* ── Toast (mesmo visual/API de .oa-toast — nome novo pra código novo) */
 .ds-toast-container {
   position: fixed;
   right: 16px;

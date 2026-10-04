@@ -70,7 +70,7 @@ export function ProdutoDrawer({
             </div>
           </div>
 
-          <div className="pc-kv ds-bloco-seguinte ad-produto-drawer__kv">
+          <div className="pc-kv ds-bloco-seguinte oa-produto-drawer__kv">
             <Row label="Tipo" value={produto.product_type?.name} />
             <Row label="Preço" value={formatValor(produto.price)} />
             <Row label="Preço promocional" value={produto.promotional_price ? formatValor(produto.promotional_price) : null} />

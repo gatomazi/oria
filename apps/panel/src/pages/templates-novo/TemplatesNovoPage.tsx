@@ -203,8 +203,8 @@ export function TemplatesNovoPage() {
     <>
       <PageHeader title="Novo template" back={{ to: '/admin/templates', label: 'Voltar pra lista' }} />
 
-      <div className="ad-template-novo-layout">
-        <Card className="ad-template-novo-layout__form">
+      <div className="oa-template-novo-layout">
+        <Card className="oa-template-novo-layout__form">
           <FormStack onSubmit={submit}>
             <p className="ds-note">O vínculo com evento e as variáveis usadas no envio são configurados depois em Automações — aqui é só a criação/envio pra aprovação da Meta.</p>
             {avisoDuplicado && <p className="ds-note">{avisoDuplicado}</p>}
@@ -362,7 +362,7 @@ export function TemplatesNovoPage() {
           </FormStack>
         </Card>
 
-        <Card className="ad-template-novo-layout__preview">
+        <Card className="oa-template-novo-layout__preview">
           <PreviewWhatsapp
             headerTexto={headerTipo === 'TEXT' ? headerTexto : null}
             headerChaves={[headerVariavel]}

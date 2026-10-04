@@ -76,37 +76,37 @@ function TemplateConteudo({ t }: { t: WhatsappTemplate }) {
   const headerComp = (t.components || []).find((c) => c.type === 'HEADER');
   const headerMediaTipo = headerComp && headerComp.format && headerComp.format !== 'TEXT' ? headerComp.format : null;
   return (
-    <div className="ad-template-detalhes">
+    <div className="oa-template-detalhes">
       {headerMediaTipo && (
         <>
-          <div className="ad-template-detalhes__label">Cabeçalho</div>
-          <div className="ad-template-detalhes__valor">{HEADER_MEDIA_LABEL_DETALHE[headerMediaTipo] || headerMediaTipo}</div>
+          <div className="oa-template-detalhes__label">Cabeçalho</div>
+          <div className="oa-template-detalhes__valor">{HEADER_MEDIA_LABEL_DETALHE[headerMediaTipo] || headerMediaTipo}</div>
         </>
       )}
       {textos.header && (
         <>
-          <div className="ad-template-detalhes__label">Cabeçalho</div>
-          <div className="ad-template-detalhes__valor">{textos.header}</div>
+          <div className="oa-template-detalhes__label">Cabeçalho</div>
+          <div className="oa-template-detalhes__valor">{textos.header}</div>
         </>
       )}
-      <div className="ad-template-detalhes__label">Corpo</div>
-      <div className="ad-template-detalhes__valor">{textos.corpo || ''}</div>
+      <div className="oa-template-detalhes__label">Corpo</div>
+      <div className="oa-template-detalhes__valor">{textos.corpo || ''}</div>
       {textos.footer && (
         <>
-          <div className="ad-template-detalhes__label">Rodapé</div>
-          <div className="ad-template-detalhes__valor">{textos.footer}</div>
+          <div className="oa-template-detalhes__label">Rodapé</div>
+          <div className="oa-template-detalhes__valor">{textos.footer}</div>
         </>
       )}
       {(textos.botoes || []).map((b, i) => (
         <Fragment key={i}>
-          <div className="ad-template-detalhes__label">Botão · {BOTAO_TIPO_LABEL[b.tipo] || b.tipo}</div>
-          <div className="ad-template-detalhes__valor">
+          <div className="oa-template-detalhes__label">Botão · {BOTAO_TIPO_LABEL[b.tipo] || b.tipo}</div>
+          <div className="oa-template-detalhes__valor">
             {b.texto}
             {b.valor ? ' — ' + b.valor : ''}
           </div>
         </Fragment>
       ))}
-      <div className="ad-template-detalhes__ressalva">
+      <div className="oa-template-detalhes__ressalva">
         Esse conteúdo é fixo, do jeito que foi aprovado pela Meta — mudar texto ou botão exige criar um template novo (editar um já aprovado e
         reenviar pra análise ainda não é suportado aqui).
       </div>
@@ -285,7 +285,7 @@ function AmostraModal({ nome, headerMediaTipo, open, onClose, onSalvo }: {
           <Field label="Endereço da amostra (opcional)">
             <Input type="text" placeholder="ex: Rua Exemplo, 123" value={sampleLocationEndereco} onChange={(e) => setSampleLocationEndereco(e.target.value)} />
           </Field>
-          <div className="ad-campo-linha">
+          <div className="oa-campo-linha">
             <Field label="Latitude">
               <Input type="number" step="any" placeholder="-27.5954" value={sampleLocationLat} onChange={(e) => setSampleLocationLat(e.target.value)} />
             </Field>
@@ -396,7 +396,7 @@ function VinculoForm({ t, loja, evento, configExistente, campos, recarregar, aoR
   }
 
   return (
-    <div className="ad-vinculo-form-inline">
+    <div className="oa-vinculo-form-inline">
       <PreviewWhatsapp
         headerTexto={textosTemplate.header}
         headerChaves={[camposVarsValue.headerVariavel]}
@@ -409,7 +409,7 @@ function VinculoForm({ t, loja, evento, configExistente, campos, recarregar, aoR
       <CamposVariaveis template={t} value={camposVarsValue} onChange={setCamposVarsValue} />
 
       {temCadencia && (
-        <div className="ad-vinculo-carrinho">
+        <div className="oa-vinculo-carrinho">
           <p className="pc-nota">Reenvia até o limite abaixo, respeitando o intervalo, e para de reenviar se o cliente já comprou (ou já pagou o Pix).</p>
           <FormGrid min={180}>
             <Field label="Espera antes do 1º envio" hint="Em horas.">
@@ -422,7 +422,7 @@ function VinculoForm({ t, loja, evento, configExistente, campos, recarregar, aoR
               <Input type="number" min={1} max={720} value={intervalo} onChange={(e) => setIntervalo(Number(e.target.value))} />
             </Field>
           </FormGrid>
-          <label className="ad-vinculo-checar">
+          <label className="oa-vinculo-checar">
             <input type="checkbox" checked={checarCompra} onChange={(e) => setCheckarCompra(e.target.checked)} /> Não reenviar se o cliente já
             comprou desde o último envio
           </label>
@@ -479,7 +479,7 @@ function EventoAutocompleteInput({ value, onChange, sugestoes }: { value: string
   }
 
   return (
-    <div className="ad-evento-autocomplete">
+    <div className="oa-evento-autocomplete">
       <Input
         type="text"
         role="combobox"
@@ -516,14 +516,14 @@ function EventoAutocompleteInput({ value, onChange, sugestoes }: { value: string
         }}
       />
       {aberta && (
-        <div className="ad-evento-autocomplete__lista" role="listbox" id={`${baseId}-lista`} aria-label="Eventos conhecidos">
+        <div className="oa-evento-autocomplete__lista" role="listbox" id={`${baseId}-lista`} aria-label="Eventos conhecidos">
           {filtrados.map((nome, i) => (
             <div
               key={nome}
               id={`${baseId}-op-${i}`}
               role="option"
               aria-selected={i === ativa}
-              className={'ad-evento-autocomplete__item' + (i === ativa ? ' ad-evento-autocomplete__item--ativa' : '')}
+              className={'oa-evento-autocomplete__item' + (i === ativa ? ' oa-evento-autocomplete__item--ativa' : '')}
               onMouseDown={(ev) => {
                 ev.preventDefault();
                 escolher(nome);
@@ -531,7 +531,7 @@ function EventoAutocompleteInput({ value, onChange, sugestoes }: { value: string
               onMouseEnter={() => setAtiva(i)}
             >
               {eventoLabel(nome)}
-              {eventoLabel(nome) !== nome && <code className="ad-evento-codigo">{nome}</code>}
+              {eventoLabel(nome) !== nome && <code className="oa-evento-codigo">{nome}</code>}
             </div>
           ))}
         </div>
@@ -578,14 +578,14 @@ function AutomacaoPanel({
   }
 
   return (
-    <div className="ad-template-automacao">
+    <div className="oa-template-automacao">
       {(t.eventos || []).map((v) => (
-        <div className="ad-vinculo-card" key={v.loja + '::' + v.evento}>
-          <div className="ad-vinculo-topo">
+        <div className="oa-vinculo-card" key={v.loja + '::' + v.evento}>
+          <div className="oa-vinculo-topo">
             <strong>
               {adminStores.name(v.loja)} → {eventoLabel(v.evento)}
             </strong>
-            {eventoLabel(v.evento) !== v.evento && <code className="ad-evento-codigo">{v.evento}</code>}
+            {eventoLabel(v.evento) !== v.evento && <code className="oa-evento-codigo">{v.evento}</code>}
           </div>
           <VinculoForm
             t={t}
@@ -598,7 +598,7 @@ function AutomacaoPanel({
         </div>
       ))}
 
-      <div className="ad-vinculo-add">
+      <div className="oa-vinculo-add">
         <EventoAutocompleteInput value={novoEvento} onChange={setNovoEvento} sugestoes={eventosConhecidos} />
         <Button variant="ghost" onClick={vincular}>
           + Vincular a um evento
