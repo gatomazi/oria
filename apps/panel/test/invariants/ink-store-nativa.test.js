@@ -48,7 +48,7 @@ const TOKEN = {
   C: `inkC${crypto.randomBytes(10).toString('hex')}`,
   D: `inkD${crypto.randomBytes(10).toString('hex')}`,
 };
-const SEGREDO_WEBHOOK = { C: `segredoC-${crypto.randomBytes(12).toString('hex')}`, D: `segredoD-${crypto.randomBytes(12).toString('hex')}` };
+const SEGREDO_WEBHOOK = Object.fromEntries(['A', 'C', 'D'].map((l) => [l, `segredo${l}-${crypto.randomBytes(12).toString('hex')}`]));
 
 let db;
 let sup;
@@ -544,6 +544,85 @@ test('webhook · cross-tenant: assinatura de D na URL de C é recusada e nada é
   assert.equal((await sup.query('SELECT count(*)::int AS n FROM pedidos_ink WHERE organization_id = $1 AND ink_order_id = 7004', [ORGS.C])).rows[0].n, 0);
 });
 
+test('webhook · pagamento aprovado gera a mensagem da Store nativa e da legada, sem duplicar nem cruzar tenants', async () => {
+  for (const l of ['C', 'A']) {
+    const nav = await entrar(l);
+    const provider = await nav.req('PUT', '/api/admin/whatsapp-web/config', { corpo: { provider: 'whatsapp_web' } });
+    assert.equal(provider.status, 200, provider.texto);
+    const settings = await nav.req('PATCH', '/api/admin/automation-settings', {
+      corpo: { modoEnvio: 'automatico', janelaEnvio: { inicio: 0, fim: 1 } },
+    });
+    assert.equal(settings.status, 200, settings.texto);
+    const mensagem = await nav.req('POST', '/api/admin/whatsapp-web/mensagens', {
+      corpo: { nome: `Pagamento ${l}`, tipo: 'pedido', corpo: '{{loja.nome}}: pagamento do pedido {{pedido.numero}} aprovado.' },
+    });
+    assert.equal(mensagem.status, 201, mensagem.texto);
+    const vinculo = await nav.req('PUT', '/api/admin/automacao-eventos/payment.approved/web', {
+      corpo: { mensagemWeb: mensagem.json.mensagem.id },
+    });
+    assert.equal(vinculo.status, 200, vinculo.texto);
+    const caminho = await urlDoWebhook(l);
+    const id = l === 'C' ? 7101 : 7102;
+    const chave = l === 'C' ? store.C : 'sul';
+    const evento = { event: 'payment.approved', order_id: id };
+    assert.equal(await entregar(caminho, SEGREDO_WEBHOOK[l], evento), 200);
+    const item = await ate(async () => (await sup.query(
+      'SELECT organization_id, loja, status, texto FROM whatsapp_web_outbox WHERE organization_id = $1 AND referencia = $2',
+      [ORGS[l], `${chave}:${id}:payment.approved`]
+    )).rows[0]);
+    assert.ok(item, `pagamento aprovado de ${l} não gerou mensagem: ${saida.slice(-2000)}`);
+    assert.equal(item.loja, chave);
+    assert.equal(item.status, 'pending', 'pagamento aprovado não espera a janela de envio');
+    assert.equal(item.texto, `${l === 'C' ? 'Loja Nativa C' : 'Use Sul'}: pagamento do pedido ${id} aprovado.`);
+
+    // O pedido continua com loja legada NULL; a chave da automação não contamina a coluna histórica.
+    const pedido = (await sup.query('SELECT loja, store_id FROM pedidos_ink WHERE organization_id = $1 AND ink_order_id = $2', [ORGS[l], id])).rows[0];
+    assert.equal(pedido.store_id, store[l]);
+    assert.equal(pedido.loja, l === 'C' ? null : 'sul');
+    assert.equal(await entregar(caminho, SEGREDO_WEBHOOK[l], evento), 200);
+    assert.equal(await entregar(caminho, SEGREDO_WEBHOOK.D, evento), 401);
+    await esperar(300);
+    assert.equal((await sup.query('SELECT count(*)::int AS n FROM whatsapp_web_outbox WHERE referencia = $1', [`${chave}:${id}:payment.approved`])).rows[0].n, 1);
+    assert.equal((await sup.query('SELECT count(*)::int AS n FROM whatsapp_web_outbox WHERE organization_id = $1', [ORGS.D])).rows[0].n, 0);
+  }
+});
+
+test('webhook · Pix pendente da Store nativa é registrado e encerrado pelo pagamento aprovado', async () => {
+  const nav = await entrar('C');
+  const mensagem = await nav.req('POST', '/api/admin/whatsapp-web/mensagens', {
+    corpo: { nome: 'Lembrete Pix C', tipo: 'pedido', corpo: 'O pagamento do pedido {{pedido.numero}} está pendente.' },
+  });
+  assert.equal(mensagem.status, 201, mensagem.texto);
+  const vinculo = await nav.req('PUT', '/api/admin/automacao-eventos/pix.pendente/web', {
+    corpo: { mensagemWeb: mensagem.json.mensagem.id, atrasoPrimeiroEnvioHoras: 1 },
+  });
+  assert.equal(vinculo.status, 200, vinculo.texto);
+  const caminho = await urlDoWebhook('C');
+  const chave = `${store.C}:1777`;
+  const lerLembrete = async () => (await sup.query("SELECT valor FROM app_config WHERE organization_id = $1 AND chave = 'pix-lembretes'", [ORGS.C])).rows[0]?.valor[chave];
+  assert.equal(await entregar(caminho, SEGREDO_WEBHOOK.C, { event: 'order.created', order_id: 1777 }), 200);
+  const lembrete = await ate(lerLembrete);
+  assert.ok(lembrete, 'o webhook não registrou o Pix pendente da Store nativa');
+  assert.equal(lembrete.loja, store.C);
+  assert.equal(lembrete.concluido, false);
+  assert.equal(await entregar(caminho, SEGREDO_WEBHOOK.C, { event: 'payment.approved', order_id: 1777 }), 200);
+  assert.ok(await ate(async () => (await lerLembrete())?.concluido), 'pagamento aprovado não encerrou o lembrete');
+});
+
+test('webhook · carrinho da Store nativa é persistido pelo store_id, sem depender do polling', async () => {
+  const caminho = await urlDoWebhook('C');
+  assert.equal(await entregar(caminho, SEGREDO_WEBHOOK.C, {
+    event: 'cart.abandoned', data: { id: 7301, buyer: { name: 'Cliente do teste', phone: '11988887777' }, items: [] },
+  }), 200);
+  const carrinho = await ate(async () => (await sup.query(
+    "SELECT valor FROM app_config WHERE organization_id = $1 AND chave = 'carrinho-envios'", [ORGS.C]
+  )).rows[0]?.valor[`${store.C}:7301`]);
+  assert.ok(carrinho, 'o webhook não persistiu o carrinho da Store nativa');
+  assert.equal(carrinho.loja, store.C);
+  assert.deepEqual(carrinho.envios, [], 'carrinho continua aguardando a cadência, sem envio imediato');
+  assert.equal((await sup.query("SELECT count(*)::int AS n FROM app_config WHERE organization_id = $1 AND chave = 'carrinho-envios'", [ORGS.D])).rows[0].n, 0);
+});
+
 // ── Segredos, logs e processo ─────────────────────────────────────────────────────────────────
 
 test('segurança · nenhum token, segredo ou URL de webhook aparece no log do processo', () => {
@@ -595,4 +674,17 @@ test('fonte · escritas do catálogo e dos jobs carregam store_id (nenhum write 
   assert.match(blocoDe(fonte, 'async function gravarLoteCatalogo('), /INSERT INTO produtos_ink \(store_id, loja,/);
   assert.match(blocoDe(fonte, 'async function sincronizarCatalogoInk()'), /INSERT INTO produtos_ink_sync \(store_id, loja,/);
   assert.match(blocoDe(fonte, "app.post('/api/admin/pedidos/backfill-historico'"), /INSERT INTO pedidos_backfill_jobs \(store_id, loja,/);
+});
+
+// O lembrete de Pix e a hotpage vinculada guardam a chave de ESCOPO (`store_id` na Store nativa).
+// Repassá-la ao caminho legado (`inkApiRequest(loja, …)`) dava "credencial Ink de <store_id> fora
+// do contexto da organization" a cada ciclo do follow-up, e o lembrete nunca saía nem encerrava.
+test('fonte · follow-up de Pix e sync da hotpage consultam a Ink pelo caminho canônico', () => {
+  const fonte = fs.readFileSync(SERVER, 'utf8');
+  for (const assinatura of ['async function processarFollowUpsPix(', "app.post('/api/admin/pedidos/:id/sync'"]) {
+    const bloco = blocoDe(fonte, assinatura);
+    assert.doesNotMatch(bloco, /inkApiRequest\(/, `${assinatura} voltou a usar o caminho legado da Ink`);
+    assert.match(bloco, /inkApiRequestDaStore\(/);
+    assert.match(bloco, /\.loja !== chave(DaStore\(\)|Store)/, `${assinatura} não confere que o registro é da Store do contexto`);
+  }
 });
