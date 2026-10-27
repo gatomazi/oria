@@ -111,11 +111,12 @@ function criarCollabs({ pool, relogio = () => new Date(), registry }) {
 
   async function encerrarCriador(ctx, collabId, creatorId, { motivo }) {
     const m = textoObrigatorio(motivo, { max: 500, nome: 'motivo' });
+    const agora = relogio();
     return db.tx(pool, async (c) => {
       const collab = await obterCollab(c, ctx, collabId, { travar: true });
       const { rows } = await c.query(
-        `UPDATE partner_collab_creators SET valid_to = GREATEST(now(), valid_from + interval '1 second') WHERE organization_id = $1 AND collab_id = $2 AND id = $3 AND valid_to IS NULL RETURNING *`,
-        [ctx.organizationId, collab.id, exigirUuid(creatorId, 'criador')]
+        `UPDATE partner_collab_creators SET valid_to = GREATEST($4::timestamptz, valid_from + interval '1 second') WHERE organization_id = $1 AND collab_id = $2 AND id = $3 AND valid_to IS NULL RETURNING *`,
+        [ctx.organizationId, collab.id, exigirUuid(creatorId, 'criador'), agora]
       );
       if (!rows[0]) throw naoEncontrado('criador vigente');
       await db.auditar(c, ctx, { entidade: 'collab', entidadeId: collab.id, acao: 'collab.creator.end', antes: { partnerId: rows[0].partner_id, shareBps: rows[0].share_bps }, motivo: m });
@@ -242,12 +243,13 @@ function criarCollabs({ pool, relogio = () => new Date(), registry }) {
   // Desvincular NÃO apaga: fecha a vigência. Vendas anteriores continuam atribuídas ao produto exato que compunha a collab na data.
   async function removerProduto(ctx, collabId, membershipId, { motivo }) {
     const m = textoObrigatorio(motivo, { max: 500, nome: 'motivo' });
+    const agora = relogio();
     return db.tx(pool, async (c) => {
       const collab = await obterCollab(c, ctx, collabId, { travar: true });
       const { rows } = await c.query(
-        `UPDATE partner_collab_product_memberships SET status = 'removed', valid_to = GREATEST(now(), valid_from), removed_by = $4
+        `UPDATE partner_collab_product_memberships SET status = 'removed', valid_to = GREATEST($5::timestamptz, valid_from), removed_by = $4
           WHERE organization_id = $1 AND collab_id = $2 AND id = $3 AND status = 'active' RETURNING *`,
-        [ctx.organizationId, collab.id, exigirUuid(membershipId, 'produto da collab'), ctx.userId || null]
+        [ctx.organizationId, collab.id, exigirUuid(membershipId, 'produto da collab'), ctx.userId || null, agora]
       );
       if (!rows[0]) throw naoEncontrado('produto ativo da collab');
       await db.auditar(c, ctx, { entidade: 'collab', entidadeId: collab.id, acao: 'collab.product.remove', antes: { inkProductId: String(rows[0].ink_product_id), validFrom: rows[0].valid_from }, depois: { validTo: rows[0].valid_to }, motivo: m });
