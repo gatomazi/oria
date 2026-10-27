@@ -641,11 +641,13 @@ async function processarEventoWebhook(loja, inkOrderId, eventName) {
     });
   }
 
-  if (!loja) return; // Store nativa: automações de WhatsApp/PIX e estoque ainda são por chave legada.
-  await registrarObservacoesEstoque(loja, data.order);
-  await registrarPixPendenteSeAplicavel(loja, eventName, data.order);
-  await encerrarPixPendenteSeTerminal(loja, eventName, data.order);
-  await dispararMensagemAutomatica(loja, eventName, data.order);
+  // Estoque ainda usa a chave legada; automações usam a mesma chave da tela de vínculos
+  // (legada quando existe, store_id nas Stores nativas).
+  if (loja) await registrarObservacoesEstoque(loja, data.order);
+  const chave = chaveDaStore();
+  await registrarPixPendenteSeAplicavel(chave, eventName, data.order);
+  await encerrarPixPendenteSeTerminal(chave, eventName, data.order);
+  await dispararMensagemAutomatica(chave, eventName, data.order);
 }
 
 // Monitor de conciliação: reforça o webhook consultando a API periodicamente para pedidos
@@ -1143,9 +1145,11 @@ app.post('/api/admin/pedidos/:id/sync', requireAdmin, async (req, res) => {
   const pedidos = await readPedidos();
   const pedido = pedidos[id];
   if (!pedido || pedido.origem !== 'ink') return res.status(404).json({ error: 'pedido não vinculado à Reserva Ink' });
+  // `pedido.loja` é a chave de escopo (legada ou `store_id`, ver /api/admin/pedidos/ink).
+  if (pedido.loja !== chaveDaStore()) return res.status(404).json({ error: 'pedido não vinculado à Reserva Ink' });
 
   try {
-    const data = await inkApiRequest(pedido.loja, `/v1/stores/orders/${pedido.inkOrderId}`);
+    const data = await inkApiRequestDaStore(`/v1/stores/orders/${pedido.inkOrderId}`);
     if (!data.order) return res.status(404).json({ error: 'pedido não encontrado na Reserva Ink' });
     await aplicarPedidoInk(pedidos, id, pedido, data.order);
     await writePedidos(pedidos);
@@ -12966,7 +12970,7 @@ async function variaveisDoPedido(order, loja) {
     'pedido.transportadora': (order.delivery && order.delivery.carrier) || '',
     'pedido.previsao_entrega': formatarDataBr(order.delivery && order.delivery.estimated_delivery_date),
     'pedido.rastreio': order.tracking_url || '',
-    'loja.nome': LOJAS[loja] || loja,
+    'loja.nome': LOJAS[loja] || (await nomeDaStoreDoContexto()) || loja,
     'produto.nome': (primeiroItem && primeiroItem.product_v2 && primeiroItem.product_v2.name) || '',
     'link': order.tracking_url || '',
   };
@@ -12982,7 +12986,7 @@ async function variaveisDoCarrinho(cart, loja) {
     'cliente.nome': (cart.buyer && cart.buyer.name) || '',
     'cliente.email': (cart.buyer && cart.buyer.email) || '',
     'cliente.telefone': (cart.buyer && cart.buyer.phone) || '',
-    'loja.nome': LOJAS[loja] || loja,
+    'loja.nome': LOJAS[loja] || (await nomeDaStoreDoContexto()) || loja,
     'carrinho.produto': (cart.items && cart.items[0] && cart.items[0].product_v2 && cart.items[0].product_v2.name) || '',
     'carrinho.itens': formatarListaItens(cart.items),
     'carrinho.quantidade_itens': String(cart.items_count || (cart.items && cart.items.length) || ''),
@@ -15464,9 +15468,13 @@ async function processarFollowUpsPix() {
   const lembretes = await readPixLembretes();
   const { provider } = await readWhatsappProviderConfig();
   const agora = Date.now();
+  // `registro.loja` é a chave de ESCOPO (`chaveDaStore()`: legada ou `store_id`), não a chave
+  // legada — por isso a consulta abaixo é canônica. Lembrete de outra Store não é desta rodada.
+  const chaveStore = chaveDaStore();
 
   for (const [chave, registro] of Object.entries(lembretes)) {
     if (registro.concluido) continue;
+    if (registro.loja !== chaveStore) continue;
     const eventoConfig = (eventos[registro.loja] || {})[EVENTO_PIX_PENDENTE];
     if (!vinculoConfigurado(eventoConfig, provider)) continue;
 
@@ -15481,7 +15489,7 @@ async function processarFollowUpsPix() {
     if (agora - new Date(desde).getTime() < horasEspera * 3600 * 1000) continue;
 
     try {
-      const data = await inkApiRequest(registro.loja, `/v1/stores/orders/${registro.inkOrderId}`);
+      const data = await inkApiRequestDaStore(`/v1/stores/orders/${registro.inkOrderId}`);
       // Fonte da verdade é `payment_status` (sempre presente e documentado), não o objeto de
       // conveniência `order.pix` — ver `pedidoPixPendente`. Pagou, cancelou, expirou ou falhou:
       // todos saem de PENDING_PAYMENT_STATUSES, então todos encerram o lembrete aqui.
@@ -17093,11 +17101,8 @@ app.post('/api/webhooks/ink/:token', async (req, res) => {
       body,
     });
     if (eventoEhDeCarrinho(eventName)) {
-      // Carrinho abandonado → automação de WhatsApp, ainda por chave legada: a Store nativa só
-      // registra o evento (acima).
-      if (!loja) return;
-      await dispararMensagemAutomaticaCarrinho(loja, eventName, body).catch((err) => {
-        console.error(`[INK_WEBHOOK] falha ao processar carrinho abandonado (${loja}, evento ${eventName || '?'}): ${err.message}`);
+      await dispararMensagemAutomaticaCarrinho(chaveDaStore(), eventName, body).catch((err) => {
+        console.error(`[INK_WEBHOOK] falha ao processar carrinho abandonado (store ${storeId}, evento ${eventName || '?'}): ${err.message}`);
       });
       return;
     }
