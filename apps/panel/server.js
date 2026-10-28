@@ -13392,8 +13392,10 @@ async function despacharWhatsapp({ origem, referencia, loja, evento, pedido, nom
     const payload = await montarPayloadMeta();
     if (modoEnvio === 'automatico') {
       await whatsappRequest('POST', '/send/template', payload);
+      console.log(`[AUTOMACAO] ${origem} evento=${evento || '-'} pedido=${pedido || '-'} → template ${payload.template} enviado (modo automático)`);
     } else {
       await whatsappRequest('POST', '/queue/add', { type: 'template', ...payload, pedido, loja: LOJAS[loja] || loja });
+      console.log(`[AUTOMACAO] ${origem} evento=${evento || '-'} pedido=${pedido || '-'} → template ${payload.template} na fila do serviço de WhatsApp (modo manual: aguarda envio pela fila)`);
     }
     return true;
   }
@@ -13409,6 +13411,7 @@ async function despacharWhatsapp({ origem, referencia, loja, evento, pedido, nom
     // fila do painel, não no dashboard do serviço Go.
     status: modoEnvio === 'automatico' ? 'pending' : 'aguardando_aprovacao',
   });
+  console.log(`[AUTOMACAO] ${origem} evento=${evento || '-'} pedido=${pedido || '-'} → mensagem "${mensagem.nome}" na fila do WhatsApp Web (${modoEnvio === 'automatico' ? 'liberada para o agente' : 'aguardando aprovação'})`);
   return true;
 }
 
@@ -14583,11 +14586,20 @@ function montarConfigEnvio(eventoConfig, templateInfo) {
 // `db/envios-pendentes-janela.json` até a janela abrir (`processarFilaDeJanela`).
 async function dispararMensagemAutomatica(loja, eventName, order) {
   if (!eventName) return;
-  const eventoConfig = ((await readAutomacaoEventos())[loja] || {})[eventName];
-  if (!vinculoConfigurado(eventoConfig, (await readWhatsappProviderConfig()).provider)) return;
+  const eventos = await readAutomacaoEventos();
+  const eventoConfig = (eventos[loja] || {})[eventName];
+  const { provider } = await readWhatsappProviderConfig();
+  const pedido = order.rsv_factory_id || order.id;
+  if (!vinculoConfigurado(eventoConfig, provider)) {
+    // Silencioso até 2026-10-28: sem isto não dava pra distinguir "evento sem vínculo" de vínculo
+    // salvo sob outra chave de Store (as chaves listadas mostram qual escopo tem vínculo).
+    console.log(`[AUTOMACAO] pedido ${pedido} evento=${eventName} sem vínculo para provider=${provider} na chave ${loja} (chaves com vínculo: ${Object.keys(eventos).join(', ') || 'nenhuma'})`);
+    return;
+  }
 
   if (respeitaJanelaDeEnvio(eventName) && !(await dentroDaJanelaDeEnvio())) {
     await enfileirarParaJanela(loja, eventName, order);
+    console.log(`[AUTOMACAO] pedido ${pedido} evento=${eventName} fora da janela de envio — aguardando a janela abrir`);
     return;
   }
   await enviarMensagemDePedido(loja, eventName, order, eventoConfig);
@@ -14597,7 +14609,10 @@ async function dispararMensagemAutomatica(loja, eventName, order) {
 // job que libera a fila de espera da janela de horário.
 async function enviarMensagemDePedido(loja, eventName, order, eventoConfig) {
   const to = formatarTelefoneWhatsapp(order.buyer && order.buyer.phone);
-  if (!to) return;
+  if (!to) {
+    console.log(`[AUTOMACAO] pedido ${order.rsv_factory_id || order.id} evento=${eventName} sem telefone do comprador — nada enviado`);
+    return;
+  }
 
   const vars = await variaveisDoPedido(order, loja);
   await despacharWhatsapp({
