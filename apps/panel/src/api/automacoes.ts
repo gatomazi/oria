@@ -34,6 +34,10 @@ export interface AutomacaoEventoConfig {
   // Vínculo da API da Meta e do WhatsApp Web convivem no mesmo evento — cada modo usa o seu.
   template?: string;
   mensagemWeb?: string;
+  // Mapeamento {{n}} → campo, feito em Templates (aqui só é lido para avisar quando falta campo).
+  headerToken?: string | null;
+  headerVariavel?: string | null;
+  corpoVariaveis?: (string | null)[];
   atrasoPrimeiroEnvioHoras?: number;
   maxEnvios?: number;
   intervaloHoras?: number;

@@ -14558,7 +14558,30 @@ async function montarComponentesEnvio(config, vars) {
       parameters: [{ type: 'text', text: vars[config.botaoDinamico.variavel] != null ? String(vars[config.botaoDinamico.variavel]) : '' }],
     });
   }
+  exigirVariaveisPreenchidas(config, vars);
   return components.length ? components : undefined;
+}
+
+// A Meta recusa parâmetro de texto vazio (#131008) e o erro dela não diz qual {{n}} foi. Entre
+// 18/10 e 28/10/2026 todo envio automático saiu assim: o vínculo foi salvo em Automações sem campo
+// nas posições (o mapeamento é feito em Templates) e nada avisava. Aqui a falha é nossa e nomeia a
+// posição e o motivo; quem chama já loga o erro com pedido/evento.
+function exigirVariaveisPreenchidas(config, vars) {
+  const vazio = (chave) => !chave || vars[chave] == null || !String(vars[chave]).trim();
+  const motivo = (posicao, chave) => (chave ? `${posicao} (campo ${chave} vazio neste envio)` : `${posicao} sem campo escolhido em Templates`);
+  const faltando = [];
+  const headerDeTexto = !['IMAGE', 'VIDEO', 'DOCUMENT', 'LOCATION'].includes(config.headerTipo);
+  if (headerDeTexto && config.headerToken && vazio(config.headerVariavel)) {
+    faltando.push(motivo(`cabeçalho {{${config.headerToken}}}`, config.headerVariavel));
+  }
+  (config.corpoVariaveis || []).forEach((chave, i) => {
+    if (vazio(chave)) faltando.push(motivo(`corpo {{${(config.corpoTokens && config.corpoTokens[i]) || i + 1}}}`, chave));
+  });
+  if (config.botaoDinamico && vazio(config.botaoDinamico.variavel)) faltando.push(motivo('botão de link', config.botaoDinamico.variavel));
+  if (!faltando.length) return;
+  const err = new Error(`template não enviado — variável sem valor: ${faltando.join('; ')}`);
+  err.codigo = 'TEMPLATE_VARIABLE_EMPTY';
+  throw err;
 }
 
 // Repassa o vínculo do evento pra `montarComponentesEnvio` — a posição do botão dinâmico
@@ -16776,6 +16799,16 @@ app.put('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) =
       ? (botaoVariavel || null)
       : (mesmoTemplate ? (existente.botaoVariavel || null) : null);
 
+    // Quem manda o mapeamento (tela de Templates) manda ele inteiro: posição sem campo vira texto
+    // vazio e a Meta recusa o envio. Sem mapeamento no corpo (Automações só escolhe o template), o
+    // vínculo é salvo e a tela avisa que faltam campos.
+    const posicoesSemCampo = [
+      ...(headerVariavel !== undefined && headerToken && !headerVariavelFinal ? [`cabeçalho {{${headerToken}}}`] : []),
+      ...(corpoVariaveis !== undefined ? corpoVariaveisFinal.flatMap((v, i) => (v ? [] : [`corpo {{${corpoTokens[i]}}}`])) : []),
+    ];
+    if (posicoesSemCampo.length) {
+      return res.status(400).json({ error: `escolha um campo para: ${posicoesSemCampo.join(', ')}` });
+    }
     if (headerVariavelFinal && !permitidas.includes(headerVariavelFinal)) {
       return res.status(400).json({ error: 'variável do cabeçalho não é válida pro tipo deste template' });
     }
