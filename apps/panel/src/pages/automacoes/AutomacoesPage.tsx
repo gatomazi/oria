@@ -207,6 +207,10 @@ function VinculoCard({
   const [templateNome, setTemplateNome] = useState(configExistente?.template || '');
   const [cadencia, setCadencia] = useState(() => cadenciaInicial(eventName, configExistente));
   const configurado = !!configExistente?.template;
+  // Vínculo salvo aqui sem o mapeamento de Templates manda {{n}} vazio e a Meta recusa o envio.
+  const faltamCampos =
+    configurado &&
+    (!!(configExistente?.headerToken && !configExistente.headerVariavel) || (configExistente?.corpoVariaveis || []).some((v) => !v));
   const [msg, setMsg] = useState<{ tipo: 'nota' | 'erro'; texto: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [confirmandoRemocao, setConfirmandoRemocao] = useState(false);
@@ -243,10 +247,19 @@ function VinculoCard({
         <strong>{eventoLabel(eventName)}</strong>
         {eventoLabel(eventName) !== eventName && <code className="oa-evento-codigo">{eventName}</code>}
         <StatusBadge tone={configurado ? 'success' : 'neutral'} label={configurado ? `Template: ${configExistente?.template}` : 'Não configurado'} />
+        {faltamCampos && <StatusBadge tone="warning" label="Faltam campos" />}
         <Button variant="ghost" onClick={() => setAberto((v) => !v)}>
           {aberto ? 'Esconder' : configurado ? 'Editar' : 'Configurar'}
         </Button>
       </div>
+      {faltamCampos && (
+        <Callout tone="warning" title="Esta automação não está enviando">
+          <p className="pc-nota">
+            Há variáveis do template sem campo escolhido, e a Meta recusa a mensagem.{' '}
+            <Link to={`/admin/templates/detalhe?nome=${encodeURIComponent(configExistente?.template || '')}`}>Escolher os campos em Templates</Link>
+          </p>
+        </Callout>
+      )}
 
       {aberto && (
         <div className="oa-vinculo-form">

@@ -13392,8 +13392,10 @@ async function despacharWhatsapp({ origem, referencia, loja, evento, pedido, nom
     const payload = await montarPayloadMeta();
     if (modoEnvio === 'automatico') {
       await whatsappRequest('POST', '/send/template', payload);
+      console.log(`[AUTOMACAO] ${origem} evento=${evento || '-'} pedido=${pedido || '-'} → template ${payload.template} enviado (modo automático)`);
     } else {
       await whatsappRequest('POST', '/queue/add', { type: 'template', ...payload, pedido, loja: LOJAS[loja] || loja });
+      console.log(`[AUTOMACAO] ${origem} evento=${evento || '-'} pedido=${pedido || '-'} → template ${payload.template} na fila do serviço de WhatsApp (modo manual: aguarda envio pela fila)`);
     }
     return true;
   }
@@ -13409,6 +13411,7 @@ async function despacharWhatsapp({ origem, referencia, loja, evento, pedido, nom
     // fila do painel, não no dashboard do serviço Go.
     status: modoEnvio === 'automatico' ? 'pending' : 'aguardando_aprovacao',
   });
+  console.log(`[AUTOMACAO] ${origem} evento=${evento || '-'} pedido=${pedido || '-'} → mensagem "${mensagem.nome}" na fila do WhatsApp Web (${modoEnvio === 'automatico' ? 'liberada para o agente' : 'aguardando aprovação'})`);
   return true;
 }
 
@@ -14555,7 +14558,30 @@ async function montarComponentesEnvio(config, vars) {
       parameters: [{ type: 'text', text: vars[config.botaoDinamico.variavel] != null ? String(vars[config.botaoDinamico.variavel]) : '' }],
     });
   }
+  exigirVariaveisPreenchidas(config, vars);
   return components.length ? components : undefined;
+}
+
+// A Meta recusa parâmetro de texto vazio (#131008) e o erro dela não diz qual {{n}} foi. Entre
+// 18/10 e 28/10/2026 todo envio automático saiu assim: o vínculo foi salvo em Automações sem campo
+// nas posições (o mapeamento é feito em Templates) e nada avisava. Aqui a falha é nossa e nomeia a
+// posição e o motivo; quem chama já loga o erro com pedido/evento.
+function exigirVariaveisPreenchidas(config, vars) {
+  const vazio = (chave) => !chave || vars[chave] == null || !String(vars[chave]).trim();
+  const motivo = (posicao, chave) => (chave ? `${posicao} (campo ${chave} vazio neste envio)` : `${posicao} sem campo escolhido em Templates`);
+  const faltando = [];
+  const headerDeTexto = !['IMAGE', 'VIDEO', 'DOCUMENT', 'LOCATION'].includes(config.headerTipo);
+  if (headerDeTexto && config.headerToken && vazio(config.headerVariavel)) {
+    faltando.push(motivo(`cabeçalho {{${config.headerToken}}}`, config.headerVariavel));
+  }
+  (config.corpoVariaveis || []).forEach((chave, i) => {
+    if (vazio(chave)) faltando.push(motivo(`corpo {{${(config.corpoTokens && config.corpoTokens[i]) || i + 1}}}`, chave));
+  });
+  if (config.botaoDinamico && vazio(config.botaoDinamico.variavel)) faltando.push(motivo('botão de link', config.botaoDinamico.variavel));
+  if (!faltando.length) return;
+  const err = new Error(`template não enviado — variável sem valor: ${faltando.join('; ')}`);
+  err.codigo = 'TEMPLATE_VARIABLE_EMPTY';
+  throw err;
 }
 
 // Repassa o vínculo do evento pra `montarComponentesEnvio` — a posição do botão dinâmico
@@ -14583,11 +14609,20 @@ function montarConfigEnvio(eventoConfig, templateInfo) {
 // `db/envios-pendentes-janela.json` até a janela abrir (`processarFilaDeJanela`).
 async function dispararMensagemAutomatica(loja, eventName, order) {
   if (!eventName) return;
-  const eventoConfig = ((await readAutomacaoEventos())[loja] || {})[eventName];
-  if (!vinculoConfigurado(eventoConfig, (await readWhatsappProviderConfig()).provider)) return;
+  const eventos = await readAutomacaoEventos();
+  const eventoConfig = (eventos[loja] || {})[eventName];
+  const { provider } = await readWhatsappProviderConfig();
+  const pedido = order.rsv_factory_id || order.id;
+  if (!vinculoConfigurado(eventoConfig, provider)) {
+    // Silencioso até 2026-10-28: sem isto não dava pra distinguir "evento sem vínculo" de vínculo
+    // salvo sob outra chave de Store (as chaves listadas mostram qual escopo tem vínculo).
+    console.log(`[AUTOMACAO] pedido ${pedido} evento=${eventName} sem vínculo para provider=${provider} na chave ${loja} (chaves com vínculo: ${Object.keys(eventos).join(', ') || 'nenhuma'})`);
+    return;
+  }
 
   if (respeitaJanelaDeEnvio(eventName) && !(await dentroDaJanelaDeEnvio())) {
     await enfileirarParaJanela(loja, eventName, order);
+    console.log(`[AUTOMACAO] pedido ${pedido} evento=${eventName} fora da janela de envio — aguardando a janela abrir`);
     return;
   }
   await enviarMensagemDePedido(loja, eventName, order, eventoConfig);
@@ -14597,7 +14632,10 @@ async function dispararMensagemAutomatica(loja, eventName, order) {
 // job que libera a fila de espera da janela de horário.
 async function enviarMensagemDePedido(loja, eventName, order, eventoConfig) {
   const to = formatarTelefoneWhatsapp(order.buyer && order.buyer.phone);
-  if (!to) return;
+  if (!to) {
+    console.log(`[AUTOMACAO] pedido ${order.rsv_factory_id || order.id} evento=${eventName} sem telefone do comprador — nada enviado`);
+    return;
+  }
 
   const vars = await variaveisDoPedido(order, loja);
   await despacharWhatsapp({
@@ -16761,6 +16799,16 @@ app.put('/api/admin/automacao-eventos/:evento', requireAdmin, async (req, res) =
       ? (botaoVariavel || null)
       : (mesmoTemplate ? (existente.botaoVariavel || null) : null);
 
+    // Quem manda o mapeamento (tela de Templates) manda ele inteiro: posição sem campo vira texto
+    // vazio e a Meta recusa o envio. Sem mapeamento no corpo (Automações só escolhe o template), o
+    // vínculo é salvo e a tela avisa que faltam campos.
+    const posicoesSemCampo = [
+      ...(headerVariavel !== undefined && headerToken && !headerVariavelFinal ? [`cabeçalho {{${headerToken}}}`] : []),
+      ...(corpoVariaveis !== undefined ? corpoVariaveisFinal.flatMap((v, i) => (v ? [] : [`corpo {{${corpoTokens[i]}}}`])) : []),
+    ];
+    if (posicoesSemCampo.length) {
+      return res.status(400).json({ error: `escolha um campo para: ${posicoesSemCampo.join(', ')}` });
+    }
     if (headerVariavelFinal && !permitidas.includes(headerVariavelFinal)) {
       return res.status(400).json({ error: 'variável do cabeçalho não é válida pro tipo deste template' });
     }
